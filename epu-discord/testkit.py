@@ -14,9 +14,9 @@ Then, with the bot running, act out the game side:
   python testkit.py request "Brenna Ashford" "Linen Cloth" 20 [note]   (add  --to "Pip Quickfoot"  to mail an alt)
   python testkit.py approve 1   |  reject 1 [reason]  |  fill 1
   python testkit.py need "Silk Cloth" 60 [goal]
-  python testkit.py stock "Linen Cloth" 120
-  python testkit.py donate "Brenna Ashford" "Wool Cloth" 40
-  python testkit.py gold 250                  set gold on hand (in gold)
+  python testkit.py stock "Linen Cloth" 120   [--guild]   set a count (your bank, or the guild bank)
+  python testkit.py donate "Brenna Ashford" "Wool Cloth" 40 [--guild]
+  python testkit.py gold 250 [--guild]        set gold on hand (in gold)
 
 Each change saves the file, just like a /reload in game, and the bot picks it up
 within about 15 seconds. Restart the bot after `use` or `unuse`.
@@ -93,13 +93,29 @@ def member(db: dict, text: str) -> str:
     sys.exit(f"'{text}' isn't in the fake roster: " + ", ".join(gd.members))
 
 
-def bank_items(db: dict) -> dict:
-    return guild(db)["bank"][me(db)]["items"]
+GB_KEY = "Guild Bank"
 
 
-def touch_bank(db: dict):
-    snap = guild(db)["bank"][me(db)]
+def holder(db: dict, use_guild: bool) -> str:
+    """Your bank character, or the in-game guild bank (created on first use)."""
+    if not use_guild:
+        return me(db)
+    guild(db)["bank"].setdefault(GB_KEY, {"v": now(), "money": 0, "items": {}, "bankTime": now(), "guild": True})
+    return GB_KEY
+
+
+def take_flag(args: list, flag: str) -> tuple[list, bool]:
+    return [a for a in args if a != flag], flag in args
+
+
+def bank_items(db: dict, who: str | None = None) -> dict:
+    return guild(db)["bank"][who or me(db)]["items"]
+
+
+def touch_bank(db: dict, who: str | None = None):
+    snap = guild(db)["bank"][who or me(db)]
     snap["v"] = max(now(), int(snap.get("v", 0)) + 1)
+    snap["bankTime"] = now()
 
 
 def numbered_requests(db: dict) -> list[tuple[str, dict]]:
@@ -188,7 +204,10 @@ def cmd_show(_args):
     db = load()
     gd = core.GuildData(db, GUILD)
     st = gd.status_summary()
-    print(f"You: {me(db)}    Gold: {core.money_text(st['gold'])}")
+    print(f"You: {me(db)}    Gold (all banks): {core.money_text(st['gold'])}")
+    for name, snap in guild(db)["bank"].items():
+        stock = ", ".join(f"{gd.item_name(i)} {c}" for i, c in sorted(snap.get("items", {}).items(), key=lambda kv: gd.item_name(kv[0])))
+        print(f"  {name}: {core.money_text(snap.get('money'))} | {stock or 'empty'}")
     print("\nNeeds:")
     for n in st["needs"]:
         print(f"  {n['name']}: {n['have']}/{n['target']}{' (goal)' if n['kind'] == 'goal' else ''}")
@@ -286,39 +305,50 @@ def cmd_need(args):
 
 
 def cmd_stock(args):
+    args, use_guild = take_flag(args, "--guild")
     if len(args) < 2:
-        sys.exit('Usage: python testkit.py stock "Item" <count>')
+        sys.exit('Usage: python testkit.py stock "Item" <count> [--guild]')
     db = load()
-    bank_items(db)[item_id(db, args[0])] = int(args[1])
-    touch_bank(db)
+    who = holder(db, use_guild)
+    i, n = item_id(db, args[0]), int(args[1])
+    if n > 0:
+        bank_items(db, who)[i] = n
+    else:
+        bank_items(db, who).pop(i, None)
+    touch_bank(db, who)
     save(db)
-    print("Bank count updated.")
+    print(f"{who} now holds {n}x {CATALOG.get(i, i)}.")
 
 
 def cmd_donate(args):
+    args, use_guild = take_flag(args, "--guild")
     if len(args) < 2:
-        sys.exit('Usage: python testkit.py donate "Member Name" "Item" [qty]')
+        sys.exit('Usage: python testkit.py donate "Member Name" "Item" [qty] [--guild]')
     db = load()
     who, item = member(db, args[0]), item_id(db, args[1])
     n = int(args[2]) if len(args) > 2 else 1
-    items = bank_items(db)
+    to = holder(db, use_guild)
+    items = bank_items(db, to)
     items[item] = int(items.get(item, 0)) + n
-    touch_bank(db)
+    touch_bank(db, to)
     t = now()
     guild(db)["donations"][f"{me(db)}:{t}:{len(guild(db)['donations']) + 1}"] = {
-        "t": t, "who": who, "item": item, "n": n, "money": 0, "to": me(db)}
+        "t": t, "who": who, "item": item, "n": n, "money": 0, "to": to}
     save(db)
-    print(f"{who} mailed you {n}x {CATALOG.get(item, item)}.")
+    print(f"{who} {'deposited' if use_guild else 'mailed you'} {n}x {CATALOG.get(item, item)}"
+          f"{' in the guild bank' if use_guild else ''}.")
 
 
 def cmd_gold(args):
+    args, use_guild = take_flag(args, "--guild")
     if not args:
-        sys.exit("Usage: python testkit.py gold <amount in gold>")
+        sys.exit("Usage: python testkit.py gold <amount in gold> [--guild]")
     db = load()
-    guild(db)["bank"][me(db)]["money"] = int(float(args[0]) * 10000)
-    touch_bank(db)
+    who = holder(db, use_guild)
+    guild(db)["bank"][who]["money"] = int(float(args[0]) * 10000)
+    touch_bank(db, who)
     save(db)
-    print("Gold updated.")
+    print(f"{who} now has {args[0]}g.")
 
 
 COMMANDS = {
