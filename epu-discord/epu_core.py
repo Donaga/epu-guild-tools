@@ -256,6 +256,27 @@ class GuildData:
             return firsts[0], []
         return None, firsts
 
+    def group_of(self, name: str) -> dict | None:
+        """The main/alt group a character belongs to (newest claim wins)."""
+        best = None
+        for rec in (self.g.get("alts") or {}).values():
+            if not isinstance(rec, dict):
+                continue
+            chars = rec.get("chars") or {}
+            chars = list(chars.values()) if isinstance(chars, dict) else list(chars)
+            if name in chars and (best is None or rec.get("t", 0) > best["t"]):
+                best = {"t": rec.get("t", 0), "main": rec.get("main") or name,
+                        "chars": [rec.get("main")] + sorted(c for c in chars if c != rec.get("main"))}
+        return best
+
+    def main_of(self, name: str) -> str:
+        g = self.group_of(name)
+        return g["main"] if g else name
+
+    def label(self, name: str) -> str:
+        main = self.main_of(name)
+        return f"{name} ({main})" if main and main != name else name
+
     @property
     def requests(self) -> dict:
         return self.g.get("requests") or {}
@@ -370,18 +391,42 @@ class State:
             json.dump(self.data, f, indent=2)
         os.replace(tmp, self.path)
 
-    # Discord user -> WoW character
-    def link(self, discord_id: int, character: str):
-        self.data["links"][str(discord_id)] = character
+    # Discord user -> WoW characters (first one is their main)
+    def characters_for(self, discord_id: int) -> list[str]:
+        v = self.data["links"].get(str(discord_id))
+        if isinstance(v, str):          # links saved by an older version
+            return [v]
+        return list(v or [])
+
+    def link(self, discord_id: int, *characters: str, main: str | None = None) -> list[str]:
+        chars = self.characters_for(discord_id)
+        for c in characters:
+            if c and c not in chars:
+                chars.append(c)
+        if main and main in chars:
+            chars.remove(main)
+            chars.insert(0, main)
+        self.data["links"][str(discord_id)] = chars
         self.save()
+        return chars
+
+    def unlink(self, discord_id: int, character: str) -> list[str]:
+        chars = [c for c in self.characters_for(discord_id) if c.lower() != character.lower()]
+        self.data["links"][str(discord_id)] = chars
+        self.save()
+        return chars
 
     def character_for(self, discord_id: int) -> str | None:
-        return self.data["links"].get(str(discord_id))
+        chars = self.characters_for(discord_id)
+        return chars[0] if chars else None
 
     # Inbox
-    def queue_request(self, who: str, item_id: int | None, item_name: str, qty: int, note: str, discord_name: str) -> dict:
+    def queue_request(self, who: str, item_id: int | None, item_name: str, qty: int, note: str, discord_name: str,
+                      to: str | None = None) -> dict:
         e = {"id": uuid.uuid4().hex[:10], "kind": "request", "who": who, "item": item_id, "itemName": item_name,
              "qty": qty, "note": note[:80], "discord": discord_name, "t": int(time.time())}
+        if to and to != who:
+            e["to"] = to
         self.data["inbox"].append(e)
         self.save()
         return e

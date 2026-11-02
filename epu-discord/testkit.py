@@ -11,7 +11,7 @@ the bot runs. The bot can't tell the difference.
 Then, with the bot running, act out the game side:
   python testkit.py show                      what the fake game has right now
   python testkit.py reload                    an officer /reload: applies Discord requests/approvals
-  python testkit.py request "Brenna Ashford" "Linen Cloth" 20 [note]
+  python testkit.py request "Brenna Ashford" "Linen Cloth" 20 [note]   (add  --to "Pip Quickfoot"  to mail an alt)
   python testkit.py approve 1   |  reject 1 [reason]  |  fill 1
   python testkit.py need "Silk Cloth" 60 [goal]
   python testkit.py stock "Linen Cloth" 120
@@ -43,7 +43,7 @@ CATALOG = {
     118: "Minor Healing Potion", 858: "Lesser Healing Potion", 929: "Healing Potion",
     2770: "Copper Ore", 2840: "Copper Bar", 2318: "Light Leather", 2447: "Peacebloom", 765: "Silverleaf",
 }
-FAKE_MEMBERS = ["Brenna Ashford", "Torvik Emberforge", "Lysa Moonbrook", "Donlock Stone"]
+FAKE_MEMBERS = ["Brenna Ashford", "Torvik Emberforge", "Lysa Moonbrook", "Donlock Stone", "Pip Quickfoot"]
 
 
 def now() -> int:
@@ -148,6 +148,9 @@ def cmd_setup(args):
             },
             "donations": {},
             "crafters": {FAKE_MEMBERS[1]: {"t": t, "lvl": 34, "profs": {"Blacksmithing": 165, "Mining": 170}}},
+            # Brenna plays Pip as an alt (the addon learns this from their account)
+            "alts": {"acct-brenna": {"t": t, "main": "Brenna Ashford", "chars": ["Brenna Ashford", "Pip Quickfoot"]},
+                     "acct-me": {"t": t, "main": name, "chars": [name]}},
         }},
     }
     save(db)
@@ -192,7 +195,8 @@ def cmd_show(_args):
     print("\nRequests:")
     for i, (rid, r) in enumerate(numbered_requests(db), 1):
         via = " (via Discord)" if r.get("via") == "discord" else ""
-        print(f"  {i}. {gd.item_name(r['item'])} x{r['qty']} for {r['who']}{via}: {core.status_of(r)}")
+        to = f", mail to {r['to']}" if r.get("to") else ""
+        print(f"  {i}. {gd.item_name(r['item'])} x{r['qty']} for {gd.label(r['who'])}{to}{via}: {core.status_of(r)}")
     pending = [e for e in core.State(os.path.join(HERE, "state.json")).data.get("inbox", [])
                if e["id"] not in db.get("inboxDone", {})]
     if pending:
@@ -215,7 +219,7 @@ def cmd_reload(_args):
             rid = "d-" + e["id"]
             g["requests"].setdefault(rid, {"who": who, "item": e["item"], "qty": e["qty"], "note": e.get("note", ""),
                                            "status": "pending", "t": now(), "u": now(), "via": "discord",
-                                           "discord": e.get("discord", "")})
+                                           "discord": e.get("discord", ""), **({"to": e["to"]} if e.get("to") else {})})
         elif e["kind"] == "status" and e["rid"] in g["requests"]:
             r = g["requests"][e["rid"]]
             if core.status_of(r) in ("pending", "approved"):
@@ -232,15 +236,20 @@ def cmd_reload(_args):
 def cmd_request(args):
     if len(args) < 2:
         sys.exit('Usage: python testkit.py request "Member Name" "Item" [qty] [note]')
+    to = None
+    if "--to" in args:
+        i = args.index("--to")
+        to, args = args[i + 1], args[:i] + args[i + 2:]
     db = load()
     who, item = member(db, args[0]), item_id(db, args[1])
+    to = member(db, to) if to else None
     qty = int(args[2]) if len(args) > 2 else 1
     t = now()
     rid = f"{who}-{t}-{t % 900 + 100}"
     officer = who == me(db)
     guild(db)["requests"][rid] = {"who": who, "item": item, "qty": qty, "note": " ".join(args[3:]),
                                   "status": "approved" if officer else "pending", "t": t, "u": t,
-                                  **({"by": who} if officer else {})}
+                                  **({"by": who} if officer else {}), **({"to": to} if to and to != who else {})}
     save(db)
     print(f"{who} requested {CATALOG.get(item, item)} x{qty} in game.")
 

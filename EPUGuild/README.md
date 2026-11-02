@@ -34,6 +34,8 @@ Adding an item: click into the item box, then shift-click the item in your bags.
 /epu who <item or name>      who in the guild can craft this?
 /epu post                    post the top 5 open needs to guild chat
 /epu bankalt on|off          mark/unmark this character as a bank alt
+/epu main <name>             choose which of your characters is your main
+/epu alts                    list your characters the addon knows about
 /epu officerrank <n>         ranks 0..n are trusted
 /epu sync                    ask online officers for a full resync (also: right-click minimap button)
 /epu save                    save now (a /reload) so the Discord companion sees the latest
@@ -45,6 +47,14 @@ Adding an item: click into the item box, then shift-click the item in your bags.
 - When you log in, the addon asks for anything new. One online officer answers, and the others stand down.
 - Only trusted ranks can publish needs, bank contents and donation records, or approve, reject and fill requests. Anyone can post (or cancel) their own requests and their own professions.
 - Recipe lists stay on each crafter's own PC. A "Who crafts?" question is answered live by whoever is online and has opened that profession window since installing.
+
+## Mains and alts
+The addon notices every character you log in with, since its saved data is shared across your WoW account, and tells the guild which characters are one player.
+- Alts show as **"Pip Quickfoot (Brenna Ashford)"** in tooltips.
+- The donor list counts a player's alts together.
+- Your main is the first character you used with the addon. Change it with `/epu main <name>`.
+- When you request something, the **For:** button on the Requests tab picks which of your characters it gets mailed to. Officers see that character under **Mail to**. Mailing the item to that character marks the request filled.
+- A character joins your group once it has logged in with the addon at least once.
 
 ## Discord
 The **EPU Discord companion** (a separate download) posts requests to a Discord channel and lets members `/request` and officers Approve or Reject from Discord. Because addons can't reach the internet, changes pass through files when an officer types /reload or logs in or out. See the companion's README.

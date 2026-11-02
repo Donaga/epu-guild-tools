@@ -79,7 +79,10 @@ local function RowEnter(self)
     GameTooltip:SetText(d.title or d.cols[1] or "")
   end
   if d.tip then
-    for _, line in ipairs(d.tip) do GameTooltip:AddLine(line, 1, 1, 1, true) end
+    -- tip lists may contain nil gaps for optional lines; skip them
+    for i = 1, table.maxn(d.tip) do
+      if d.tip[i] then GameTooltip:AddLine(d.tip[i], 1, 1, 1, true) end
+    end
   end
   GameTooltip:Show()
 end
@@ -219,6 +222,32 @@ UI.kindBtn:SetScript("OnEnter", function(self)
   GameTooltip:Show()
 end)
 UI.kindBtn:SetScript("OnLeave", GameTooltip_Hide)
+
+-- Requests tab: which of my characters the item should be mailed to
+UI.forIndex = 1
+UI.forBtn = CreateFrame("Button", nil, UI, "UIPanelButtonTemplate")
+UI.forBtn:SetSize(100, 22)
+UI.forBtn:SetPoint("LEFT", UI.noteBox, "RIGHT", 6, 0)
+function UI:ForTarget()
+  local chars = ns.MyChars()
+  if self.forIndex > #chars then self.forIndex = 1 end
+  return chars[self.forIndex]
+end
+function UI:UpdateForButton()
+  local target = self:ForTarget() or ns.me or "me"
+  self.forBtn:SetText("For: " .. (target:match("^(%S+)") or target))
+end
+UI.forBtn:SetScript("OnClick", function(self)
+  UI.forIndex = UI.forIndex + 1
+  UI:UpdateForButton()
+end)
+UI.forBtn:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_TOP")
+  GameTooltip:SetText("Mail it to: " .. tostring(UI:ForTarget()))
+  GameTooltip:AddLine("Click to cycle through your characters in the guild. Characters show up here once they've logged in with the addon.", 1, 1, 1, true)
+  GameTooltip:Show()
+end)
+UI.forBtn:SetScript("OnLeave", GameTooltip_Hide)
 
 UI.action = CreateFrame("Button", nil, UI, "UIPanelButtonTemplate")
 UI.action:SetSize(92, 22)
@@ -381,13 +410,13 @@ local STATUS_TEXT = {
 local STATUS_ORDER = { pending = 1, open = 1, approved = 2, filled = 3, rejected = 4 }
 
 Tabs.Requests = {
-  headers = { "Item", "Qty (bank)", "Requested by", "Status" },
+  headers = { "Item", "Qty (bank)", "Mail to", "Status" },
   inputs = { item = "Item you need", qty = true, note = true },
   action = "Request",
   onAction = function()
     local id = ns.ItemID(UI.itemBox:GetText())
     if not id then return ns.Print("Shift-click or drag the item you need into the box first.") end
-    ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText())
+    ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), UI:ForTarget())
     ClearInputs()
   end,
   rows = function(g)
@@ -406,12 +435,14 @@ Tabs.Requests = {
       local r, rid = e.r, e.rid
       local st = r.status
       local pending = (st == "pending" or st == "open")
-      local who = r.who
-      if ns.roster[who] and ns.roster[who].online then who = "|cff00ff00" .. who .. "|r" end
+      local to = r.to or r.who
+      local who = to
+      if ns.roster[to] and ns.roster[to].online then who = "|cff00ff00" .. to .. "|r" end
       local row = {
         item = r.item, icon = ns.ItemIcon(r.item),
         cols = { ns.ItemName(r.item), r.qty .. " (" .. ns.BankCount(r.item) .. ")", who, STATUS_TEXT[st] or st },
-        tip = { " ", "Requested " .. Ago(r.t) .. " by " .. r.who .. ((r.via == "discord") and " (via Discord)" or ""),
+        tip = { " ", "Requested " .. Ago(r.t) .. " by " .. ns.WhoLabel(r.who) .. ((r.via == "discord") and " (via Discord)" or ""),
+          (r.to and r.to ~= r.who) and ("Mail to: " .. r.to) or nil,
           (r.note and r.note ~= "") and ("Note: " .. r.note) or nil,
           (r.by and not pending) and (st .. " by " .. r.by .. " " .. Ago(r.u)) or nil,
           (st == "rejected" and r.reason and r.reason ~= "") and ("Reason: " .. r.reason) or nil },
@@ -451,7 +482,7 @@ Tabs.Donations = {
     for _, d in ipairs(list) do
       if d.item then
         rows[#rows + 1] = { item = d.item, icon = ns.ItemIcon(d.item), cols = { ns.ItemName(d.item), d.n, d.who, Ago(d.t) },
-          tip = { " ", "Received by " .. tostring(d.to) .. " on " .. date("%b %d %H:%M", d.t) } }
+          tip = { " ", "From " .. ns.WhoLabel(d.who or "?"), "Received by " .. tostring(d.to) .. " on " .. date("%b %d %H:%M", d.t) } }
       else
         rows[#rows + 1] = { icon = "Interface\\Icons\\INV_Misc_Coin_01", title = "Gold donation",
           cols = { Money(d.money), "", d.who, Ago(d.t) }, tip = { "Received by " .. tostring(d.to) .. " on " .. date("%b %d %H:%M", d.t) } }
@@ -462,7 +493,10 @@ Tabs.Donations = {
   status = function(g)
     local cutoff, counts = ns.Now() - 30 * 86400, {}
     for _, d in pairs(g.donations) do
-      if (d.t or 0) > cutoff then counts[d.who] = (counts[d.who] or 0) + 1 end
+      if (d.t or 0) > cutoff and d.who then
+        local player = ns.MainOf(d.who)
+        counts[player] = (counts[player] or 0) + 1
+      end
     end
     local top = {}
     for who, n in pairs(counts) do top[#top + 1] = { who = who, n = n } end
@@ -470,7 +504,7 @@ Tabs.Donations = {
     local names = {}
     for i = 1, math.min(5, #top) do names[#names + 1] = top[i].who .. " (" .. top[i].n .. ")" end
     if #names == 0 then return "Mail or trade to a bank alt is logged automatically." end
-    return "Top donors, last 30 days: " .. table.concat(names, ", ") .. ". Thank you!"
+    return "Top donors, last 30 days (alts count toward their main): " .. table.concat(names, ", ") .. ". Thank you!"
   end,
   empty = "No donations logged yet. Mail or trades from guild members to a bank alt show up here.",
 }
@@ -513,7 +547,9 @@ Tabs.Crafters = {
     for _, e in ipairs(list) do
       local name = e.who
       if ns.roster[e.who] and ns.roster[e.who].online then name = "|cff00ff00" .. name .. "|r" end
-      rows[#rows + 1] = { title = e.who, cols = { name, e.prof, e.skill, e.lvl }, tip = { "Updated " .. Ago(e.t) } }
+      local main = ns.MainOf(e.who)
+      rows[#rows + 1] = { title = e.who, cols = { name, e.prof, e.skill, e.lvl },
+        tip = { (main ~= e.who) and ("Alt of " .. main) or nil, "Updated " .. Ago(e.t) } }
     end
     return rows
   end,
@@ -539,6 +575,11 @@ function UI:SetTab(name)
   self.qtyBox:SetShown(inp.qty == true)
   self.noteBox:SetShown(inp.note == true)
   self.kindBtn:SetShown(inp.kind == true)
+  local wantFor = inp.note == true and #ns.MyChars() > 1
+  self.forBtn:SetShown(wantFor)
+  self.itemBox:SetWidth(wantFor and 180 or 220)
+  self.noteBox:SetWidth(wantFor and 110 or 170)
+  if wantFor then self.forIndex = 1; self:UpdateForButton() end
   self.action:SetShown(t.action ~= nil)
   self.action:SetText(t.action or "")
   self.action:SetScript("OnClick", t.onAction)

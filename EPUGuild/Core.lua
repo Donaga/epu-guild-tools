@@ -210,6 +210,10 @@ ns.On("ADDON_LOADED", function(name)
   EPUGuildDB.guilds = EPUGuildDB.guilds or {}
   EPUGuildDB.settings = EPUGuildDB.settings or {}
   if EPUGuildDB.settings.minimapAngle == nil then EPUGuildDB.settings.minimapAngle = 200 end
+  -- Random per-account ID for publishing this player's main/alt group.
+  if not EPUGuildDB.accountId then
+    EPUGuildDB.accountId = string.format("%x%05x", time(), math.random(0, 0xFFFFF))
+  end
   EPUGuildCharDB = EPUGuildCharDB or {}
   EPUGuildCharDB.recipes = EPUGuildCharDB.recipes or {}
   ns.db = EPUGuildDB
@@ -227,6 +231,8 @@ local HELP = {
   "|cffffd100/epu post|r - post the top open needs to guild chat",
   "|cffffd100/epu shop|r - save the shopping list to Auctionator",
   "|cffffd100/epu bankalt on|off|r - mark this character as a guild bank alt",
+  "|cffffd100/epu main <name>|r - choose which of your characters is your main",
+  "|cffffd100/epu alts|r - list your characters the addon knows about",
   "|cffffd100/epu officerrank <n>|r - ranks 0..n are trusted (default 1: GM + officers)",
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
@@ -258,6 +264,11 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.ExportAuctionator()
   elseif cmd == "post" then
     ns.PostNeeds()
+  elseif cmd == "main" then
+    if args == "" then return ns.Print("Your main is " .. tostring(ns.MyMain()) .. ". Change it with /epu main <name>.") end
+    ns.SetMain(args)
+  elseif cmd == "alts" then
+    ns.Print("Your characters here: " .. table.concat(ns.MyChars(), ", ") .. " (main: " .. tostring(ns.MyMain()) .. ")")
   elseif cmd == "bankalt" then
     ns.SetBankAlt(args:lower() ~= "off")
   elseif cmd == "officerrank" then

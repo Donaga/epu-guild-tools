@@ -53,12 +53,14 @@ end
 
 -- A request made on someone's behalf (from Discord). rid is fixed by the
 -- companion ("d-<entry id>") so it can tie its Discord message to it.
-function ns.CreateRequestFor(who, item, qty, note, discord, rid)
+function ns.CreateRequestFor(who, item, qty, note, discord, rid, to)
   local g = ns.G()
   if not g or g.requests[rid] then return end
   local now = ns.Now()
   local r = { who = ns.Member(who) or ns.Short(who), item = item, qty = tonumber(qty) or 1, note = (note or ""):sub(1, 80),
     status = "pending", t = now, u = now, via = "discord", discord = discord }
+  to = to and (ns.Member(to) or ns.Short(to))
+  if to and to ~= r.who then r.to = to end
   g.requests[rid] = r
   ns.Send("D", { req = { [rid] = r } })
   ns.Changed()
@@ -89,7 +91,7 @@ function ns.ProcessInbox()
       if e.kind == "request" then
         local item = ResolveItem(e)
         if item and e.who then
-          ns.CreateRequestFor(e.who, item, e.qty, e.note, e.discord, "d-" .. e.id)
+          ns.CreateRequestFor(e.who, item, e.qty, e.note, e.discord, "d-" .. e.id, e.to)
           ok = true
         elseif now - (tonumber(e.t) or now) > 7 * DAY then
           ok = true    -- item never resolved; give up

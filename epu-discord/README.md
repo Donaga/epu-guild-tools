@@ -67,8 +67,11 @@ If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program 
 
 ## Using it
 **Members (in Discord)**
-- `/link` once with your character's full name, e.g. `/link character:Tyler Stonefist`. The list autocompletes from the guild roster. A first name works if only one member has it.
-- `/request item:<start typing> qty:5 note:for bags`. The item list comes from items the guild has seen. You can also paste a Wowhead link or item ID.
+- `/link` with your character's full name, e.g. `/link character:Tyler Stonefist`. The list autocompletes from the guild roster, and a first name works if only one member has it. Your first link is your main.
+  - If the addon already knows your alts (they've logged in with it), linking one character links all of them.
+  - Otherwise `/link` each alt yourself. `/unlink` removes one.
+- `/request item:<start typing> qty:5 note:for bags character:<alt>`. `character` is optional and picks which of your characters gets the mail (default: your main).
+- The item list comes from items the guild has seen. You can also paste a Wowhead link or item ID.
 - `/needs`, `/bank search:cloth`, `/requests`
 
 **Officers**

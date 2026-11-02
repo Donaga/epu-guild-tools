@@ -118,10 +118,12 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
     e = discord.Embed(title=f"{name} x{r.get('qty', 1)}", color=STATUS_COLOR.get(st, discord.Color.blurple()))
     if r.get("item"):
         e.url = f"https://www.wowhead.com/item={r['item']}"
-    who = r.get("who", "?")
+    who = gd.label(r.get("who", "?")) if gd else r.get("who", "?")
     if r.get("discord"):
-        who += f" ({r['discord']} on Discord)"
+        who += f" via Discord ({r['discord']})"
     e.add_field(name="Requested by", value=who, inline=True)
+    if r.get("to") and r.get("to") != r.get("who"):
+        e.add_field(name="Mail to", value=r["to"], inline=True)
     e.add_field(name="Status", value=st.capitalize(), inline=True)
     if gd and r.get("item"):
         e.add_field(name="In bank", value=str(gd.bank_count(r["item"])), inline=True)
@@ -335,8 +337,22 @@ async def member_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=n, value=n) for n in names]
 
 
-@tree.command(name="link", description="Link your Discord account to your WoW character", guild=GUILD)
-@app_commands.describe(character="Your character's full name, e.g. Drie Stonefist")
+async def my_chars_autocomplete(interaction: discord.Interaction, current: str):
+    cur = current.lower()
+    return [app_commands.Choice(name=c, value=c) for c in state.characters_for(interaction.user.id) if cur in c.lower()][:25]
+
+
+@tree.command(name="unlink", description="Remove a character from your Discord account", guild=GUILD)
+@app_commands.describe(character="One of your linked characters")
+@app_commands.autocomplete(character=my_chars_autocomplete)
+async def unlink_cmd(interaction: discord.Interaction, character: str):
+    chars = state.unlink(interaction.user.id, character)
+    left = ", ".join(chars) if chars else "none"
+    await interaction.response.send_message(f"Unlinked {character}. Your characters now: {left}.", ephemeral=True)
+
+
+@tree.command(name="link", description="Link a WoW character (main or alt) to your Discord account", guild=GUILD)
+@app_commands.describe(character="Your character's full name, e.g. Drie Stonefist. Your first link is your main.")
 @app_commands.autocomplete(character=member_autocomplete)
 async def link_cmd(interaction: discord.Interaction, character: str):
     gd = read_latest()
@@ -351,8 +367,15 @@ async def link_cmd(interaction: discord.Interaction, character: str):
                 f"I can't find **{character}** in the guild roster. Pick your name from the list, or check the spelling.", ephemeral=True)
             return
         name = " ".join(w[:1].upper() + w[1:] for w in character.split())   # no roster saved yet
-    state.link(interaction.user.id, name)
-    await interaction.response.send_message(f"Linked you to **{name}**. Requests you make here will be under that name.", ephemeral=True)
+    group = gd.group_of(name) if gd else None
+    if group:   # the addon already knows this player's main and alts
+        chars = state.link(interaction.user.id, *group["chars"], main=group["main"])
+    else:
+        chars = state.link(interaction.user.id, name)
+    extra = ""
+    if len(chars) > 1:
+        extra = f"\nYour characters: **{chars[0]}** (main), " + ", ".join(chars[1:]) + ". Use `/request ... for:` to pick who gets the mail."
+    await interaction.response.send_message(f"Linked **{name}**.{extra}", ephemeral=True)
 
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):
@@ -364,13 +387,24 @@ async def item_autocomplete(interaction: discord.Interaction, current: str):
 
 
 @tree.command(name="request", description="Ask the guild bank for an item", guild=GUILD)
-@app_commands.describe(item="Start typing an item name, or paste a Wowhead link", qty="How many", note="Anything the officers should know")
-@app_commands.autocomplete(item=item_autocomplete)
-async def request_cmd(interaction: discord.Interaction, item: str, qty: app_commands.Range[int, 1, 1000] = 1, note: str = ""):
-    who = state.character_for(interaction.user.id)
-    if not who:
+@app_commands.describe(item="Start typing an item name, or paste a Wowhead link", qty="How many",
+                       note="Anything the officers should know", character="Which of your characters to mail it to (default: your main)")
+@app_commands.autocomplete(item=item_autocomplete, character=my_chars_autocomplete)
+async def request_cmd(interaction: discord.Interaction, item: str, qty: app_commands.Range[int, 1, 1000] = 1,
+                      note: str = "", character: str = ""):
+    chars = state.characters_for(interaction.user.id)
+    if not chars:
         await interaction.response.send_message("First tell me your character with `/link character:<name>`.", ephemeral=True)
         return
+    who = chars[0]
+    to = None
+    if character:
+        match = [c for c in chars if c.lower() == character.lower()]
+        if not match:
+            await interaction.response.send_message(
+                f"{character} isn't linked to you. Your characters: {', '.join(chars)}. Add one with `/link`.", ephemeral=True)
+            return
+        to = match[0] if match[0] != who else None
     gd = read_latest()
     known = gd.known_items() if gd else {}
     item_id, name = core.resolve_item(item, known)
@@ -379,12 +413,14 @@ async def request_cmd(interaction: discord.Interaction, item: str, qty: app_comm
             "I don't know that item yet. Pick one from the list, or paste its Wowhead link (or item ID).", ephemeral=True)
         return
     name = name or f"item {item_id}"
-    e = state.queue_request(who, item_id, name, int(qty), note, interaction.user.display_name)
+    e = state.queue_request(who, item_id, name, int(qty), note, interaction.user.display_name, to)
     flush_inbox()
     rid = "d-" + e["id"]
     r = {"who": who, "item": item_id, "itemName": name, "qty": int(qty), "note": note,
-         "discord": interaction.user.display_name, "status": "pending"}
-    await interaction.response.send_message(f"Got it. Your request for {name} x{qty} is queued and reaches the game at the next officer login or /reload.", ephemeral=True)
+         "discord": interaction.user.display_name, "status": "pending", **({"to": to} if to else {})}
+    await interaction.response.send_message(
+        f"Got it. Your request for {name} x{qty}{f' (mail to {to})' if to else ''} is queued and reaches the game at the next officer login or /reload.",
+        ephemeral=True)
     await post_or_edit(rid, r, gd, "Queued from Discord.")
 
 
@@ -422,7 +458,7 @@ async def requests_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("No open requests.", ephemeral=True)
         return
     rows.sort(key=lambda x: x[1].get("t", 0))
-    lines = [f"{core.status_of(r).capitalize()}: **{gd.item_name(r.get('item'))}** x{r.get('qty', 1)} for {r.get('who', '?')}" for _, r in rows[:25]]
+    lines = [f"{core.status_of(r).capitalize()}: **{gd.item_name(r.get('item'))}** x{r.get('qty', 1)} for {gd.label(r.get('to') or r.get('who', '?'))}" for _, r in rows[:25]]
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 

@@ -80,6 +80,25 @@ tick(6)
 check("mail from Chris Stone credited to him, ambiguous 'Chris' skipped",
       A.ev("(function() local w = {} for _, d in pairs(__ns.G().donations) do if d.item == 4306 then w[#w+1] = d.who .. ':' .. d.n end end return table.concat(w, ',') end)()") == "Chris Stone:2")
 
+# Alts: Tyler also plays Pip Baker on the same account
+B.ex('local key = __ns.GuildKey(); __ns.db.accountChars[key]["Pip Baker"] = __now + 100; __ns.PublishAlts()'); tick(3)
+check("alt group synced", A.ev('__ns.MainOf("Pip Baker")') == "Tyler Baker" and A.ev('__ns.WhoLabel("Pip Baker")') == "Pip Baker (Tyler Baker)")
+check("my chars main first", B.ev('table.concat(__ns.MyChars(), ",")') == "Tyler Baker,Pip Baker")
+B.ex('SlashCmdList.EPUGUILD("main pip baker")'); tick(3)
+check("/epu main switches main guild-wide", A.ev('__ns.MainOf("Tyler Baker")') == "Pip Baker")
+B.ex('SlashCmdList.EPUGUILD("main Tyler Baker")'); tick(3)
+B.ex('__ns.Send("D", {alts = {fake = {t = 9e9, main = "Chris Baker", chars = {"Chris Baker", "Chris Stone"}}}})'); tick(2)
+check("can't publish a group you're not in", A.ev('__ns.MainOf("Chris Stone")') == "Chris Stone")
+# Deliver-to: Tyler requests from his main, for his alt
+B.ex('__ns.NewRequest(2996, 3, "for Pip", "Pip Baker")'); tick(3)
+ridp = A.ev("(function() for k, r in pairs(__ns.G().requests) do if r.item == 2996 then return k end end end)()")
+check("deliver-to synced", A.ev(f'__ns.G().requests["{ridp}"].to') == "Pip Baker")
+A.ex(f'__ns.SetRequestStatus("{ridp}", "approved")'); tick(2)
+A.ex('__sendItems = {2996}; SendMail("Tyler Baker")'); tick(3)
+check("mailing the requester's main doesn't fill an alt delivery", B.ev(f'__ns.G().requests["{ridp}"].status') == "approved")
+A.ex('__sendItems = {2996}; SendMail("Pip Baker")'); tick(3)
+check("mailing the deliver-to character fills it", B.ev(f'__ns.G().requests["{ridp}"].status') == "filled")
+
 # Crafters
 check("officer sees Tyler's tailoring", A.ev('__ns.G().crafters["Tyler Baker"] and __ns.G().crafters["Tyler Baker"].profs.Tailoring') == 150)
 

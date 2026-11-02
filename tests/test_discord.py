@@ -91,13 +91,30 @@ check("/link full name any case", gd.resolve_member("tyler baker") == ("Tyler Ba
 check("/link unique first name", gd.resolve_member("Newbie")[0] == "Newbie Stone")
 check("/link shared first name asks for full", gd.resolve_member("chris") == (None, ["Chris Baker", "Chris Stone"]))
 
+# --- multiple linked characters and deliver-to from Discord ---
+B.ex('local key = __ns.GuildKey(); __ns.db.accountChars[key]["Pip Baker"] = __now + 100; __ns.PublishAlts()'); tick(3)
+A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
+gd = core.load_guild_data(paths[0], "E Pluribus Unum")
+grp = gd.group_of("Pip Baker")
+check("companion sees alt group", grp and grp["main"] == "Tyler Baker" and grp["chars"] == ["Tyler Baker", "Pip Baker"])
+check("companion labels alts", gd.label("Pip Baker") == "Pip Baker (Tyler Baker)")
+st.data["links"]["42"] = "Tyler Baker"                     # a link saved by the older version
+check("old single link still read", st.characters_for(42) == ["Tyler Baker"])
+chars = st.link(42, *grp["chars"], main=grp["main"])
+check("linking pulls in the alt group, main first", chars == ["Tyler Baker", "Pip Baker"])
+e2 = st.queue_request(chars[0], 2589, "Linen Cloth", 5, "", "tyler", to="Pip Baker")
+core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+check("Discord deliver-to reaches the game", B.ev(f'__ns.G().requests["d-{e2['id']}"].to') == "Pip Baker")
+check("unlink", st.unlink(42, "pip baker") == ["Tyler Baker"])
+
 # --- status post summary ---
 sm = gd.status_summary()
 check("status: needs listed", [n["name"] for n in sm["needs"]] == ["Linen Cloth"])
 check("status: gold from guild bank", sm["gold"] == 5000000)
 addon_shop = A.ev('(function() local t = {} for _, r in ipairs(__ns.ShoppingList()) do t[#t+1] = r.id .. "=" .. r.buy end return table.concat(t, ",") end)()')
 check("status: shopping matches the addon's Shopping tab (%s)" % addon_shop, ",".join(f"{r['id']}={r['buy']}" for r in sm["shopping"]) == addon_shop)
-check("status: request counts", sm["requests"] == {"pending": 1, "approved": 1})
+check("status: request counts", sm["requests"] == {"pending": 1, "approved": 1} or print(sm["requests"]))
 import importlib, json as _j
 cfgdir = tempfile.mkdtemp()
 _j.dump({"token": "x.y.z", "server_id": "1", "channel_id": "2", "wow_path": WOW}, open(os.path.join(cfgdir, "config.json"), "w"))

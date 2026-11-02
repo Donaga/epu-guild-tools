@@ -10,6 +10,7 @@
 Core.lua
 Comm.lua
 Data.lua
+Alts.lua
 Bank.lua
 GuildBank.lua
 Discord.lua

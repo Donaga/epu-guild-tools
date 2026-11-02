@@ -2,7 +2,7 @@ import lupa.lua51 as L, sys
 import os
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDON = os.path.join(HERE, "..", "EPUGuild").replace(os.sep, "/")
-ROSTER = [("Chris Baker","Officer",1),("Tyler Baker","Member",3),("Epu Bank","Bank",4),("Newbie Stone","Initiate",4),("Chris Stone","Member",3)]
+ROSTER = [("Chris Baker","Officer",1),("Tyler Baker","Member",3),("Epu Bank","Bank",4),("Newbie Stone","Initiate",4),("Chris Stone","Member",3),("Pip Baker","Member",3)]
 
 class Client:
     def __init__(self, name):

@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Mains and alts: the addon groups each player's characters (shared with the guild), labels alts, and counts donors per player. `/epu main`, `/epu alts`.
+- Requests can be delivered to any of your characters (**For:** button; Discord `/request ... character:`). Auto-fill matches that character.
+- Discord: link several characters (linking one pulls in the rest of your group), `/unlink`.
 - Discord companion: `testkit.py` for testing the bot against a fake WoW folder before you can log in.
 - WoW: Forever two-part names: characters are tracked by "First Surname" everywhere (sync, trust, requests, donations), so two members with the same first name are never mixed up. Mail, trade and guild bank log names fall back to a first name only when exactly one member has it.
 - Discord `/link` autocompletes from the guild roster and resolves full or unique first names.

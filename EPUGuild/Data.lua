@@ -27,6 +27,7 @@ function ns.G()
   g.requests = g.requests or {}  -- [id] = { who, item, qty, note, status, t, u, by }
   g.donations = g.donations or {}-- [id] = { t, who, item, n, money, to }
   g.crafters = g.crafters or {}  -- [member] = { t, lvl, profs = {[name] = skill} }
+  g.alts = g.alts or {}          -- [accountId] = { t, main, chars = { names } }
   return g
 end
 
@@ -108,6 +109,9 @@ function ns.Prune(g)
   for who, c in pairs(g.crafters) do
     if now - (c.t or 0) > 90 * DAY then g.crafters[who] = nil end
   end
+  for id, a in pairs(g.alts) do
+    if now - (a.t or 0) > 90 * DAY then g.alts[id] = nil end
+  end
   local ids = {}
   for id in pairs(g.donations) do ids[#ids + 1] = id end
   if #ids > 500 then
@@ -177,11 +181,30 @@ function ns.Merge(sender, b)
     end
   end
 
-  if changed then
+  -- Alt groups: a player can only publish a group that includes themselves.
+  local altsChanged = false
+  if type(b.alts) == "table" then
+    for id, a in pairs(b.alts) do
+      if type(a) == "table" and type(a.t) == "number" and type(a.chars) == "table" and type(a.main) == "string" then
+        local mine = trusted
+        for _, n in pairs(a.chars) do if n == sender then mine = true end end
+        local cur = g.alts[id]
+        if mine and (not cur or a.t > cur.t) then
+          local list = {}
+          for _, n in ipairs(a.chars) do if type(n) == "string" then list[#list + 1] = n end end
+          g.alts[id] = { t = a.t, main = a.main, chars = list }
+          altsChanged = true
+        end
+      end
+    end
+  end
+  if altsChanged then ns.RebuildAlts() end
+
+  if changed or altsChanged then
     ns.Prune(g)
     ns.Changed()
   end
-  return changed
+  return changed or altsChanged
 end
 
 ---------------------------------------------------------------------------
@@ -224,6 +247,9 @@ function ns.Delta(d)
   end
   for who, c in pairs(g.crafters) do
     if c.t > since then b.craft = b.craft or {}; b.craft[who] = c end
+  end
+  for id, a in pairs(g.alts) do
+    if (a.t or 0) > since then b.alts = b.alts or {}; b.alts[id] = a end
   end
   return b
 end
@@ -283,6 +309,8 @@ function ns.BroadcastMine()
   if not g then return end
   local b, any = {}, false
   if g.crafters[ns.me] then b.craft = { [ns.me] = g.crafters[ns.me] }; any = true end
+  local id = ns.db and ns.db.accountId
+  if id and g.alts[id] then b.alts = { [id] = g.alts[id] }; any = true end
   for id, r in pairs(g.requests) do
     if r.who == ns.me and ns.IsActiveRequest(r) then
       b.req = b.req or {}
@@ -300,6 +328,7 @@ ns.On("PLAYER_ENTERING_WORLD", function(isLogin, isReload)
     if not IsInGuild() then return end
     ns.RequestRoster()
     ns.ScanProfessions()
+    ns.PublishAlts()
     ns.SendHello()
     C_Timer.After(4, ns.BroadcastMine)
   end)
@@ -490,7 +519,8 @@ end
 ---------------------------------------------------------------------------
 -- Requests
 ---------------------------------------------------------------------------
-function ns.NewRequest(id, qty, note)
+-- to: which of my characters to mail it to (defaults to the one asking)
+function ns.NewRequest(id, qty, note, to)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
   local now = ns.Now()
@@ -499,13 +529,15 @@ function ns.NewRequest(id, qty, note)
   local r = { who = ns.me, item = id, qty = qty or 1, note = (note or ""):sub(1, 80),
     status = officer and "approved" or "pending", t = now, u = now }
   if officer then r.by = ns.me end
+  to = ns.Short(to)
+  if to and to ~= ns.me then r.to = to end
   g.requests[rid] = r
   ns.Send("D", { req = { [rid] = r } })
   ns.Changed()
   if officer then
-    ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. " (auto-approved, since you're an officer).")
+    ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. (r.to and (" for " .. r.to) or "") .. " (auto-approved, since you're an officer).")
   else
-    ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. ". An officer will review it.")
+    ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. (r.to and (" for " .. r.to) or "") .. ". An officer will review it.")
   end
 end
 
@@ -536,7 +568,7 @@ function ns.AutoFillFor(recipient, items)
   local sent = {}
   for _, it in ipairs(items) do sent[it[1]] = true end
   for rid, r in pairs(g.requests) do
-    if r.who == recipient and r.status == "approved" and sent[r.item] then
+    if (r.to or r.who) == recipient and r.status == "approved" and sent[r.item] then
       ns.SetRequestStatus(rid, "filled")
       ns.Print("Marked " .. recipient .. "'s request for " .. ns.ItemLink(r.item) .. " as filled.")
     end
