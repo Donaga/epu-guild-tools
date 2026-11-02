@@ -234,19 +234,39 @@ async def update_status(gd: core.GuildData):
 polled_mtime = 0.0
 
 
+def explain(e: Exception, what: str, channel_id) -> None:
+    if isinstance(e, discord.Forbidden):
+        log.error("Discord refused to let me %s in channel %s (%s). If the channel is private, add the bot under "
+                  "Edit Channel > Permissions with View Channel, Send Messages, Embed Links, Read Message History "
+                  "and Manage Messages. Also check that channel_id is on the same server as server_id. "
+                  "I'll retry on the next refresh.", what, channel_id, e.text or e)
+    else:
+        log.exception("Couldn't %s in channel %s; will retry on the next refresh", what, channel_id)
+
+
 @tasks.loop(seconds=15)
 async def poll():
     global polled_mtime
     gd = read_latest()
     if gd is None or latest_mtime == polled_mtime:
         return
-    polled_mtime = latest_mtime
+    try:
+        await refresh(gd)
+        polled_mtime = latest_mtime          # only once everything went through
+    except Exception as e:                   # never let one failure stop the loop
+        explain(e, "post", cfg["channel_id"])
+
+
+async def refresh(gd: core.GuildData):
     if state.prune_inbox(gd.inbox_done):
         flush_inbox()
     changes = core.diff(gd, state)
     for rid, r in changes["new_requests"] + changes["changed_requests"]:
         await post_or_edit(rid, r, gd)
-    await update_status(gd)
+    try:
+        await update_status(gd)
+    except Exception as e:
+        explain(e, "update the status post", cfg["status_channel_id"])
     if cfg["post_donations"] and changes["new_donations"]:
         ch = channel()
         for d in changes["new_donations"][:10]:
@@ -407,15 +427,31 @@ async def requests_cmd(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------------------------
+def check_channel(cid) -> None:
+    ch = client.get_channel(int(cid))
+    if ch is None:
+        log.error("I can't see channel %s. Either it's private and I haven't been added to it, or the ID is "
+                  "from another server. (Right-click the channel > Copy Channel ID.)", cid)
+        return
+    perms = ch.permissions_for(ch.guild.me)
+    needed = (("View Channel", perms.view_channel), ("Send Messages", perms.send_messages),
+              ("Embed Links", perms.embed_links), ("Read Message History", perms.read_message_history),
+              ("Manage Messages (to pin)", perms.manage_messages))
+    missing = [name for name, ok in needed if not ok]
+    if missing:
+        log.warning("In #%s I'm missing: %s", ch.name, ", ".join(missing))
+    else:
+        log.info("Posting in #%s: permissions OK", ch.name)
+
+
 @client.event
 async def on_ready():
     await tree.sync(guild=GUILD)
     path = sv_path()
     log.info("Logged in as %s. Watching %s", client.user, path or "(no EPUGuild SavedVariables yet - log in once with the addon)")
     flush_inbox()
-    gd = read_latest()
-    if gd is not None:
-        await update_status(gd)
+    for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
+        check_channel(cid)
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()
