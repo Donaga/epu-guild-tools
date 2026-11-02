@@ -4,6 +4,7 @@ Connects the **EPU Guild Tools** addon to a Discord channel.
 
 - **Game → Discord:** new guild bank requests are posted to a channel, and each post updates as the request is approved, rejected or filled. Donations get a thank-you post (you can turn this off).
 - **Discord → game:** members can `/request` items from Discord. Officers can **Approve** or **Reject** from the request post.
+- **Pinned status post:** one "Guild Bank Status" message that the bot edits in place on every refresh. It shows each need's stock (red under half, yellow below target, green stocked), the shopping list, gold on hand, open request counts and who holds the stock.
 - **Lookups:** `/needs` shows what the bank is short on. `/bank <search>` shows what it holds. `/requests` lists open requests.
 
 ## How it works (and the one catch)
@@ -25,7 +26,7 @@ It must run on an **officer's** PC. Members' addons ignore the inbox file, so no
 2. Open **Bot** → **Reset Token** → copy the token. Keep it secret; it's the bot's password.
 3. Open **OAuth2 → URL Generator**:
    - Scopes: `bot` and `applications.commands`
-   - Bot permissions: View Channels, Send Messages, Embed Links, Read Message History
+   - Bot permissions: View Channels, Send Messages, Embed Links, Read Message History, Manage Messages (only used to pin the status post)
    - Open the generated URL and add the bot to your server.
 
 This needs its own bot. Don't reuse your One Ring bot's token, because two programs can't log in as the same bot.
@@ -48,10 +49,13 @@ Copy `config.example.json` to `config.json` and fill it in:
   "guild_key": "E Pluribus Unum",
   "account": "",
   "post_donations": true,
-  "poll_seconds": 15
+  "poll_seconds": 15,
+  "status_post": true,
+  "status_channel_id": ""
 }
 ```
 - `officer_role`: the Discord role allowed to Approve or Reject. Server admins can always do it.
+- `status_channel_id`: where the pinned status post lives. Leave it blank to use the request channel, or point it at a read-only `#bank-status` channel. Set `status_post` to `false` to turn it off. If you delete the post, the bot makes and pins a new one at the next refresh.
 - `account`: leave blank unless you have several WoW accounts. Otherwise set it to the folder name under `WTF\Account`.
 
 ### 4. Run it

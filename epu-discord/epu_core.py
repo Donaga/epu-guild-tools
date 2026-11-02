@@ -289,6 +289,42 @@ class GuildData:
             names.setdefault(row["id"], row["name"])
         return names
 
+    def shopping_list(self) -> list[dict]:
+        """Same rule as the addon's Shopping tab: need target plus approved
+        requests, minus what's banked."""
+        demand: dict = {}
+        for row in self.needs():
+            demand.setdefault(row["id"], {"need": 0, "req": 0})["need"] = row["target"]
+        for r in self.requests.values():
+            if isinstance(r, dict) and r.get("status") == "approved" and r.get("item"):
+                demand.setdefault(r["item"], {"need": 0, "req": 0})["req"] += int(r.get("qty") or 0)
+        rows = []
+        for item_id, d in demand.items():
+            have = self.bank_count(item_id)
+            buy = max(0, d["need"] + d["req"] - have)
+            if buy > 0:
+                rows.append({"id": item_id, "name": self.item_name(item_id), "buy": buy, "have": have, **d})
+        rows.sort(key=lambda r: (-r["buy"], r["name"]))
+        return rows
+
+    def status_summary(self) -> dict:
+        """Everything the pinned status post shows."""
+        banks = [(name, s) for name, s in self.bank.items() if isinstance(s, dict) and not s.get("retired")]
+        counts = {"pending": 0, "approved": 0}
+        for r in self.requests.values():
+            if isinstance(r, dict):
+                st = status_of(r)
+                if st in counts:
+                    counts[st] += 1
+        return {
+            "needs": self.needs(),
+            "shopping": self.shopping_list(),
+            "gold": sum(int(s.get("money") or 0) for _, s in banks),
+            "banks": [name for name, _ in banks],
+            "requests": counts,
+            "updated": max([int(s.get("v") or 0) for _, s in banks] + [int((self.g.get("needs") or {}).get("v") or 0)]),
+        }
+
 
 def load_guild_data(sv_path: str, guild_key: str | None = None) -> GuildData:
     with open(sv_path, encoding="utf-8", errors="replace") as f:

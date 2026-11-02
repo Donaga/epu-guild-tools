@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Discord companion: pinned "Guild Bank Status" post, edited in place on every refresh (needs with stock levels, shopping list, gold, open requests).
+
 ## 0.3.0
 - Reads the in-game guild bank (all viewable tabs and gold) when an officer opens it, and counts it alongside bank alts.
 - Guild bank deposit log becomes donation records, without duplicates.

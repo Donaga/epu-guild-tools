@@ -7,5 +7,7 @@
   "guild_key": "E Pluribus Unum",
   "account": "",
   "post_donations": true,
-  "poll_seconds": 15
+  "poll_seconds": 15,
+  "status_post": true,
+  "status_channel_id": ""
 }

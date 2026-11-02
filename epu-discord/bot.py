@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 import os
 import sys
 
@@ -47,6 +48,8 @@ def load_config() -> dict:
     cfg.setdefault("post_donations", True)
     cfg.setdefault("guild_key", "E Pluribus Unum")
     cfg.setdefault("poll_seconds", 15)
+    cfg.setdefault("status_post", True)
+    cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     return cfg
 
 
@@ -165,6 +168,67 @@ async def post_or_edit(rid: str, r: dict, gd: core.GuildData | None, note_extra:
 
 
 # ---------------------------------------------------------------------------
+# Pinned status post: one message, edited in place on every refresh
+# ---------------------------------------------------------------------------
+def _clip(lines: list[str], limit: int = 1000) -> str:
+    out, used = [], 0
+    for i, line in enumerate(lines):
+        if used + len(line) + 1 > limit:
+            out.append(f"...and {len(lines) - i} more")
+            break
+        out.append(line)
+        used += len(line) + 1
+    return "\n".join(out) or "-"
+
+
+def status_embed(gd: core.GuildData) -> discord.Embed:
+    st = gd.status_summary()
+    e = discord.Embed(title="Guild Bank Status", color=discord.Color.blurple())
+    need_lines = []
+    for n in st["needs"]:
+        frac = n["have"] / n["target"]
+        mark = "\U0001F534" if frac < 0.5 else ("\U0001F7E1" if frac < 1 else "\u2705")
+        goal = " *(goal)*" if n["kind"] == "goal" else ""
+        need_lines.append(f"{mark} **{n['name']}** {n['have']}/{n['target']}{goal}")
+    e.add_field(name="Needs", value=_clip(need_lines) if need_lines else "No targets set.", inline=False)
+    shop_lines = [f"{r['name']}: {r['buy']}" for r in st["shopping"][:15]]
+    e.add_field(name="Shopping list", value=_clip(shop_lines) if shop_lines else "Nothing to buy.", inline=False)
+    e.add_field(name="Gold", value=core.money_text(st["gold"]), inline=True)
+    e.add_field(name="Requests", value=f"{st['requests']['pending']} pending, {st['requests']['approved']} approved", inline=True)
+    if st["banks"]:
+        e.add_field(name="Held by", value=", ".join(st["banks"]), inline=True)
+    e.set_footer(text="\U0001F534 under half  \U0001F7E1 below target  \u2705 stocked. Updates when an officer /reloads or logs out.")
+    if st["updated"]:
+        e.timestamp = datetime.fromtimestamp(st["updated"], tz=timezone.utc)
+    return e
+
+
+async def update_status(gd: core.GuildData):
+    if not cfg["status_post"]:
+        return
+    ch = client.get_channel(int(cfg["status_channel_id"]))
+    if ch is None:
+        log.error("Status channel %s not found", cfg["status_channel_id"])
+        return
+    embed = status_embed(gd)
+    mid = state.data.get("status_message_id")
+    if mid:
+        try:
+            msg = await ch.fetch_message(mid)
+            await msg.edit(embed=embed)
+            return
+        except discord.NotFound:
+            pass
+    msg = await ch.send(embed=embed)
+    state.data["status_message_id"] = msg.id
+    state.save()
+    try:
+        await msg.pin()
+    except discord.Forbidden:
+        log.warning("Posted the status message but couldn't pin it; give the bot Manage Messages (Pin Messages) or pin it by hand.")
+
+
+# ---------------------------------------------------------------------------
 # Polling the SavedVariables file
 # ---------------------------------------------------------------------------
 polled_mtime = 0.0
@@ -182,6 +246,7 @@ async def poll():
     changes = core.diff(gd, state)
     for rid, r in changes["new_requests"] + changes["changed_requests"]:
         await post_or_edit(rid, r, gd)
+    await update_status(gd)
     if cfg["post_donations"] and changes["new_donations"]:
         ch = channel()
         for d in changes["new_donations"][:10]:
@@ -329,6 +394,9 @@ async def on_ready():
     path = sv_path()
     log.info("Logged in as %s. Watching %s", client.user, path or "(no EPUGuild SavedVariables yet - log in once with the addon)")
     flush_inbox()
+    gd = read_latest()
+    if gd is not None:
+        await update_status(gd)
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

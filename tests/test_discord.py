@@ -85,6 +85,26 @@ ch = core.diff(gd, st)
 check("status change detected for Discord edit", [r for r, _ in ch["changed_requests"]] == [rid_game])
 check("Discord-made request shows as new for posting", [r for r, _ in ch["new_requests"]] == [rid_d])
 
+# --- status post summary ---
+sm = gd.status_summary()
+check("status: needs listed", [n["name"] for n in sm["needs"]] == ["Linen Cloth"])
+check("status: gold from guild bank", sm["gold"] == 5000000)
+addon_shop = A.ev('(function() local t = {} for _, r in ipairs(__ns.ShoppingList()) do t[#t+1] = r.id .. "=" .. r.buy end return table.concat(t, ",") end)()')
+check("status: shopping matches the addon's Shopping tab (%s)" % addon_shop, ",".join(f"{r['id']}={r['buy']}" for r in sm["shopping"]) == addon_shop)
+check("status: request counts", sm["requests"] == {"pending": 1, "approved": 1})
+import importlib, json as _j
+cfgdir = tempfile.mkdtemp()
+_j.dump({"token": "x.y.z", "server_id": "1", "channel_id": "2", "wow_path": WOW}, open(os.path.join(cfgdir, "config.json"), "w"))
+import shutil as _s
+for f in ("bot.py", "epu_core.py"):
+    _s.copy(os.path.join(os.path.dirname(core.__file__), f), cfgdir)
+sys.path.insert(0, cfgdir)
+bot = importlib.import_module("bot")
+emb = bot.status_embed(gd)
+check("status embed builds", emb.title == "Guild Bank Status" and [f.name for f in emb.fields][:4] == ["Needs", "Shopping list", "Gold", "Requests"])
+check("status channel falls back to request channel", bot.cfg["status_channel_id"] == "2")
+print("   ", emb.fields[0].value, "|", emb.fields[2].value)
+
 # --- a member's client doesn't apply the inbox ---
 st.queue_status(rid_d, "approved", "x"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 B.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(2)
