@@ -1,0 +1,28 @@
+name: Release
+# Push a tag like v0.4.0 and this builds the two zips and publishes a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install lupa "discord.py>=2.3"
+      - run: python tests/test_sync.py && python tests/test_discord.py
+      - name: Build zips
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/^## Version: .*/## Version: ${VERSION}/" EPUGuild/EPUGuild.toc
+          mkdir -p dist
+          zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
+          zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true

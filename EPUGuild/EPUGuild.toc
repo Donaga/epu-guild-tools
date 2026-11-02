@@ -1,0 +1,17 @@
+## Interface: 16001, 11509
+## Title: EPU Guild Tools
+## Notes: Guild bank wish list, item requests, donation log, crafter directory and recipe lookup for E Pluribus Unum.
+## Author: Chris Baker
+## Version: 0.3.0
+## SavedVariables: EPUGuildDB
+## SavedVariablesPerCharacter: EPUGuildCharDB
+## IconTexture: Interface\Icons\INV_Misc_Bag_10
+
+Core.lua
+Comm.lua
+Data.lua
+Bank.lua
+GuildBank.lua
+Discord.lua
+Inbox.lua
+UI.lua

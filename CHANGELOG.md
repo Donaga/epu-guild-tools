@@ -1,0 +1,15 @@
+# Changelog
+
+## 0.3.0
+- Reads the in-game guild bank (all viewable tabs and gold) when an officer opens it, and counts it alongside bank alts.
+- Guild bank deposit log becomes donation records, without duplicates.
+- Discord companion (`epu-discord/`): request posts that update as requests change, `/request` from Discord, officer Approve/Reject buttons, `/needs`, `/bank`, `/requests`, donation thank-yous.
+- `/epu save` to push the latest to the Discord companion.
+
+## 0.2.0
+- Needs: restock minimums vs one-time goals (goals close themselves); red flag under 50%.
+- Shopping tab: shortfalls plus approved requests, exportable to an Auctionator shopping list.
+- Requests: pending, approved or rejected, then filled; officers' requests auto-approve; mailing or trading the item auto-fills.
+
+## 0.1.0
+- Needs, Bank, Requests, Donations and Crafters tabs; recipe lookup; guild sync over addon messages.

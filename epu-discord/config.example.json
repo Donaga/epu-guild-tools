@@ -1,0 +1,11 @@
+{
+  "token": "PASTE-YOUR-BOT-TOKEN-HERE",
+  "server_id": "123456789012345678",
+  "channel_id": "123456789012345678",
+  "officer_role": "Officer",
+  "wow_path": "C:\\Program Files (x86)\\World of Warcraft\\_forever_",
+  "guild_key": "E Pluribus Unum",
+  "account": "",
+  "post_donations": true,
+  "poll_seconds": 15
+}
