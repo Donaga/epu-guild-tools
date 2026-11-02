@@ -14,9 +14,9 @@ Download `EPUGuild-x.y.z.zip` from the latest [Release](../../releases/latest). 
 ## Making a release
 1. Commit changes to `main`. The **Tests** workflow runs on every push.
 2. Add a line to `CHANGELOG.md`.
-3. Tag and push: `git tag v0.4.0 && git push origin v0.4.0`
+3. On GitHub: **Releases → Draft a new release**. Type a new tag such as `v0.4.0` (target `main`), paste the changelog lines, then **Publish release**.
 
-The **Release** workflow runs the tests, stamps the version into the `.toc`, and attaches `EPUGuild-0.4.0.zip` and `epu-discord-0.4.0.zip` to a new GitHub Release.
+The **Release** workflow then runs the tests, stamps the version into the `.toc`, and attaches `EPUGuild-0.4.0.zip` and `epu-discord-0.4.0.zip` to the release. It takes about a minute.
 
 ## Running the tests locally
 ```

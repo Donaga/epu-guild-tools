@@ -1,8 +1,9 @@
 name: Release
-# Push a tag like v0.4.0 and this builds the two zips and publishes a GitHub Release.
+# Publish a release on GitHub (Releases -> Draft a new release, tag like v0.4.0)
+# and this runs the tests, builds the two zips and attaches them to it.
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 permissions:
   contents: write
 jobs:
@@ -17,7 +18,8 @@ jobs:
       - run: python tests/test_sync.py && python tests/test_discord.py
       - name: Build zips
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
           sed -i "s/^## Version: .*/## Version: ${VERSION}/" EPUGuild/EPUGuild.toc
           mkdir -p dist
           zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
@@ -25,4 +27,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
-          generate_release_notes: true
+          tag_name: ${{ github.event.release.tag_name }}
