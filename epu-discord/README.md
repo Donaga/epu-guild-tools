@@ -6,6 +6,10 @@ Connects the **EPU Guild Tools** addon to a Discord channel.
 - **Discord → game:** members can `/request` items from Discord. Officers can **Approve** or **Reject** from the request post.
 - **Pinned status post:** one "Guild Bank Status" message that the bot edits in place on every refresh. It shows each need's stock (red under half, yellow below target, green stocked), the shopping list, gold on hand, open request counts and who holds the stock.
 - **Pinned how-to post:** a "How to use the Guild Bank bot" guide, pinned in the request channel and refreshed each time the bot starts. `/help` shows it privately. Turn it off with `"help_post": false`. `addon_url` sets its download link.
+- **Every item, by name:** `/request` autocompletes from the whole WoW Forever item list. The bot downloads the game's item table (`ItemSparse`) for the newest Forever build from [wago.tools](https://wago.tools), a community site that publishes the game's data files. It keeps a copy in `items.json` and refreshes weekly. Items your guild has dealt with are listed first.
+  - If the download ever fails, the bot says so in its window and keeps working with guild items, Wowhead links and IDs.
+  - To load the list by hand: open https://wago.tools/db2/ItemSparse, pick the newest 1.60.x build, download it as CSV, and save it in this folder as `items.csv`.
+  - Turn it off with `"item_db": false`.
 - **Lookups:** `/needs` shows what the bank is short on. `/bank <search>` shows what it holds. `/requests` lists open requests.
 
 ## How it works (and the one catch)

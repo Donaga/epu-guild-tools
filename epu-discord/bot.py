@@ -11,6 +11,7 @@ Run on the officer PC that plays WoW: python bot.py
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -51,6 +52,9 @@ def load_config() -> dict:
     cfg.setdefault("status_post", True)
     cfg.setdefault("help_post", True)
     cfg.setdefault("wowhead", "https://www.wowhead.com/forever")
+    cfg.setdefault("item_db", True)               # download the full Forever item list from wago.tools
+    cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
+    cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
     cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     return cfg
@@ -63,6 +67,7 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 GUILD = discord.Object(id=int(cfg["server_id"]))
 
+items_db = core.ItemDB(HERE)
 latest: core.GuildData | None = None
 latest_mtime = 0.0
 
@@ -248,8 +253,8 @@ def help_embed() -> discord.Embed:
         "Your first link is your **main**. If your alts have logged in with the addon, they're linked too; "
         "otherwise `/link` each alt. `/unlink` removes one."))
     e.add_field(name="2. Ask for something", inline=False, value=(
-        "`/request item:` start typing the name and pick it, then set `qty:`. If it isn't in the list, paste its "
-        "Wowhead link instead (wowhead.com/forever). Add a `note:` for the officers, "
+        "`/request item:` start typing the name and pick it from the list (every item in the game is there), then "
+        "set `qty:`. A Wowhead Forever link or item ID works too. Add a `note:` for the officers, "
         "and `character:` if it should be mailed to an alt.\n"
         "Your request is posted here. An officer approves it and mails it to you, and the post updates as it goes: "
         "**Pending, Approved, Filled** (or **Rejected** with a reason)."))
@@ -459,8 +464,25 @@ async def item_autocomplete(interaction: discord.Interaction, current: str):
     gd = read_latest()
     known = gd.known_items() if gd else {}
     cur = current.lower()
+    # items the guild has dealt with first, then everything else in the game
     hits = sorted((name, i) for i, name in known.items() if cur in name.lower())[:25]
+    seen = {i for _, i in hits}
+    for i, name in items_db.search(current, 25):
+        if len(hits) >= 25:
+            break
+        if i not in seen:
+            hits.append((name, i))
+            seen.add(i)
     return [app_commands.Choice(name=name[:100], value=f"id:{i}") for name, i in hits]
+
+
+def load_items():
+    try:
+        log.info("Item list: %s", items_db.load(cfg["item_build_prefix"], cfg["item_csv_url"]))
+    except Exception as e:
+        log.warning("Couldn't load the full item list (%s). /request still works with items the guild has seen, "
+                    "Wowhead links and item IDs. To fix it by hand, download ItemSparse as CSV for the newest "
+                    "1.60.x build from https://wago.tools/db2/ItemSparse and save it here as items.csv.", e)
 
 
 @tree.command(name="request", description="Ask the guild bank for an item", guild=GUILD)
@@ -567,6 +589,8 @@ async def on_ready():
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
     await ensure_help_post()
+    if cfg["item_db"]:
+        await asyncio.to_thread(load_items)
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

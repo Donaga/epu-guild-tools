@@ -7,11 +7,14 @@
 """
 from __future__ import annotations
 
+import csv
 import glob
+import io
 import json
 import os
 import re
 import time
+import urllib.request
 import uuid
 
 # ---------------------------------------------------------------------------
@@ -291,7 +294,7 @@ class GuildData:
 
     def item_name(self, item_id) -> str:
         try:
-            return self.item_names.get(int(item_id)) or f"item {item_id}"
+            return self.item_names.get(int(item_id)) or EXTRA_NAMES.get(int(item_id)) or f"item {item_id}"
         except (TypeError, ValueError):
             return str(item_id)
 
@@ -509,16 +512,19 @@ def resolve_item(text: str, known: dict[int, str]) -> tuple[int | None, str | No
     text = (text or "").strip()
     if text.startswith("id:") and text[3:].isdigit():
         i = int(text[3:])
-        return i, known.get(i)
+        return i, known.get(i) or EXTRA_NAMES.get(i)
     if text.isdigit():
         i = int(text)
-        return i, known.get(i)
+        return i, known.get(i) or EXTRA_NAMES.get(i)
     m = ITEM_ID_RE.search(text)
     if m:
         i = int(m.group(1))
-        return i, known.get(i) or name_from_slug(m.group(2))
+        return i, known.get(i) or EXTRA_NAMES.get(i) or name_from_slug(m.group(2))
     want = text.strip("[]").lower()
     for i, name in known.items():
+        if name.lower() == want:
+            return i, name
+    for i, name in EXTRA_NAMES.items():          # the full game item list, if loaded
         if name.lower() == want:
             return i, name
     return None, None
@@ -529,3 +535,136 @@ def money_text(copper) -> str:
     g, s, c = copper // 10000, (copper // 100) % 100, copper % 100
     parts = [f"{g}g" if g else "", f"{s}s" if s else "", f"{c}c" if c and not g else ""]
     return " ".join(p for p in parts if p) or "0c"
+
+
+# ---------------------------------------------------------------------------
+# Full item list from the game's own data (ItemSparse table, via wago.tools)
+# ---------------------------------------------------------------------------
+
+EXTRA_NAMES: dict[int, str] = {}      # filled by ItemDB.load(); used when the guild hasn't seen an item
+_JUNK = ("deprecated", "[ph]", "test ", " test", "qa ", "monster -", "(old)", "old ", "unused", "zzold", "[dnt]", "dnd ")
+
+
+def parse_itemsparse_csv(text: str) -> dict[int, str]:
+    """ID -> English name from an ItemSparse CSV export."""
+    reader = csv.reader(io.StringIO(text))
+    header = next(reader)
+    cols = {h.strip(): i for i, h in enumerate(header)}
+    id_col = cols.get("ID")
+    name_col = next((cols[c] for c in ("Display_lang", "Display_lang_enUS", "Display") if c in cols), None)
+    if id_col is None or name_col is None:
+        raise ValueError(f"unexpected ItemSparse columns: {header[:12]}")
+    out = {}
+    for row in reader:
+        try:
+            i, name = int(row[id_col]), row[name_col].strip()
+        except (ValueError, IndexError):
+            continue
+        if name and not any(j in name.lower() for j in _JUNK):
+            out[i] = name
+    return out
+
+
+def _vtuple(v: str):
+    return tuple(int(x) for x in re.findall(r"\d+", v or ""))
+
+
+def newest_version(builds: dict | list, prefix: str = "1.60.") -> str | None:
+    """Newest build version starting with prefix (1.60. = WoW Forever) in wago.tools' build list."""
+    found = []
+    groups = builds.values() if isinstance(builds, dict) else [builds]
+    for group in groups:
+        for b in group if isinstance(group, list) else []:
+            v = b.get("version") if isinstance(b, dict) else None
+            if isinstance(v, str) and v.startswith(prefix):
+                found.append(v)
+    return max(found, key=_vtuple) if found else None
+
+
+class ItemDB:
+    """Every item in the game, cached as items.json next to the bot."""
+    BUILDS_URL = "https://wago.tools/api/builds"
+    CSV_URL = "https://wago.tools/db2/ItemSparse/csv?build={version}"
+    UA = "EPU-Guild-Tools Discord companion (guild bank bot)"
+
+    def __init__(self, folder: str):
+        self.folder = folder
+        self.cache = os.path.join(folder, "items.json")
+        self.manual = os.path.join(folder, "items.csv")
+        self.items: dict[int, str] = {}
+        self.version = None
+        self._lower: list[tuple[str, int, str]] = []
+
+    def _set(self, items: dict[int, str], version):
+        self.items, self.version = items, version
+        self._lower = sorted((n.lower(), i, n) for i, n in items.items())
+        EXTRA_NAMES.clear()
+        EXTRA_NAMES.update(items)
+
+    def _get(self, url: str, timeout=60) -> bytes:
+        req = urllib.request.Request(url, headers={"User-Agent": self.UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read()
+
+    def load(self, prefix: str = "1.60.", url_override: str = "", max_age_days: float = 7) -> str:
+        """Load items; returns a one-line description of where they came from."""
+        if os.path.exists(self.manual):                       # a CSV you downloaded yourself wins
+            with open(self.manual, encoding="utf-8-sig", errors="replace") as f:
+                self._set(parse_itemsparse_csv(f.read()), "items.csv")
+            return f"{len(self.items)} items from items.csv"
+        cached = None
+        if os.path.exists(self.cache):
+            with open(self.cache, encoding="utf-8") as f:
+                cached = json.load(f)
+            self._set({int(k): v for k, v in cached["items"].items()}, cached.get("version"))
+            if time.time() - cached.get("fetched", 0) < max_age_days * 86400:
+                return f"{len(self.items)} items (cached, build {self.version})"
+        try:
+            if url_override:
+                version, url = "custom", url_override
+            else:
+                version = newest_version(json.loads(self._get(self.BUILDS_URL)), prefix)
+                if not version:
+                    raise ValueError(f"no build starting with {prefix} in wago.tools' build list")
+                if cached and cached.get("version") == version:
+                    cached["fetched"] = time.time()
+                    self._save(cached)
+                    return f"{len(self.items)} items (build {version}, still current)"
+                url = self.CSV_URL.format(version=version)
+            items = parse_itemsparse_csv(self._get(url, timeout=180).decode("utf-8-sig", errors="replace"))
+            if len(items) < 1000:
+                raise ValueError(f"only {len(items)} items came back; keeping what I had")
+            self._set(items, version)
+            self._save({"version": version, "fetched": time.time(), "items": {str(k): v for k, v in items.items()}})
+            return f"{len(items)} items downloaded (build {version})"
+        except Exception as e:
+            if self.items:
+                return f"{len(self.items)} items (cached; refresh failed: {e})"
+            raise
+
+    def _save(self, data: dict):
+        tmp = self.cache + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, self.cache)
+
+    def search(self, text: str, limit: int = 25) -> list[tuple[int, str]]:
+        q = " ".join((text or "").lower().split())
+        if len(q) < 2:
+            return []
+        starts, contains = [], []
+        for low, i, name in self._lower:
+            if low.startswith(q):
+                starts.append((i, name))
+            elif q in low:
+                contains.append((i, name))
+            if len(starts) >= limit:
+                break
+        return (starts + contains)[:limit]
+
+    def find(self, name: str) -> int | None:
+        want = name.strip().strip("[]").lower()
+        for low, i, _ in self._lower:
+            if low == want:
+                return i
+        return None

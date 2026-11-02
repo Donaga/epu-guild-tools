@@ -23,4 +23,5 @@ The **Release** workflow then runs the tests, stamps the version into the `.toc`
 pip install lupa "discord.py>=2.3"
 python tests/test_sync.py
 python tests/test_discord.py
+python tests/test_itemdb.py
 ```

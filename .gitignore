@@ -1,6 +1,8 @@
 # Discord companion secrets and local state
 epu-discord/config.json
 epu-discord/state.json
+epu-discord/items.json
+epu-discord/items.csv
 epu-discord/.venv/
 __pycache__/
 *.pyc

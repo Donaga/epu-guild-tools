@@ -15,3 +15,5 @@ jobs:
         run: python tests/test_sync.py
       - name: Guild bank + Discord round trip
         run: python tests/test_discord.py
+      - name: Full item list
+        run: python tests/test_itemdb.py
