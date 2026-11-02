@@ -5,6 +5,7 @@ Connects the **EPU Guild Tools** addon to a Discord channel.
 - **Game → Discord:** new guild bank requests are posted to a channel, and each post updates as the request is approved, rejected or filled. Donations get a thank-you post (you can turn this off).
 - **Discord → game:** members can `/request` items from Discord. Officers can **Approve** or **Reject** from the request post.
 - **Pinned status post:** one "Guild Bank Status" message that the bot edits in place on every refresh. It shows each need's stock (red under half, yellow below target, green stocked), the shopping list, gold on hand, open request counts and who holds the stock.
+- **Pinned how-to post:** a "How to use the Guild Bank bot" guide, pinned in the request channel and refreshed each time the bot starts. `/help` shows it privately. Turn it off with `"help_post": false`. `addon_url` sets its download link.
 - **Lookups:** `/needs` shows what the bank is short on. `/bank <search>` shows what it holds. `/requests` lists open requests.
 
 ## How it works (and the one catch)

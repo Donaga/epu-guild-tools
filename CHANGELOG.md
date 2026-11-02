@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Discord: pinned "How to use the Guild Bank bot" post (kept current on each bot start) and `/help`.
 - Mains and alts: the addon groups each player's characters (shared with the guild), labels alts, and counts donors per player. `/epu main`, `/epu alts`.
 - Requests can be delivered to any of your characters (**For:** button; Discord `/request ... character:`). Auto-fill matches that character.
 - Discord: link several characters (linking one pulls in the rest of your group), `/unlink`.

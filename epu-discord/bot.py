@@ -49,6 +49,8 @@ def load_config() -> dict:
     cfg.setdefault("guild_key", "E Pluribus Unum")
     cfg.setdefault("poll_seconds", 15)
     cfg.setdefault("status_post", True)
+    cfg.setdefault("help_post", True)
+    cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     return cfg
 
@@ -228,6 +230,79 @@ async def update_status(gd: core.GuildData):
         await msg.pin()
     except discord.Forbidden:
         log.warning("Posted the status message but couldn't pin it; give the bot Manage Messages (Pin Messages) or pin it by hand.")
+
+
+# ---------------------------------------------------------------------------
+# Pinned "how to use" post
+# ---------------------------------------------------------------------------
+def help_embed() -> discord.Embed:
+    officer = cfg["officer_role"]
+    e = discord.Embed(
+        title="How to use the Guild Bank bot",
+        description="Ask the guild bank for items, see what it needs, and check what it holds, all from Discord. "
+                    "Everything here also works in game with the **EPU Guild Tools** addon (`/epu`).",
+        color=discord.Color.blurple())
+    e.add_field(name="1. Link your character (once)", inline=False, value=(
+        "`/link character:` and pick your name from the list. Use your full name, e.g. *Donlock Gaeilge*.\n"
+        "Your first link is your **main**. If your alts have logged in with the addon, they're linked too; "
+        "otherwise `/link` each alt. `/unlink` removes one."))
+    e.add_field(name="2. Ask for something", inline=False, value=(
+        "`/request item:` start typing the name and pick it, then set `qty:`. Add a `note:` for the officers, "
+        "and `character:` if it should be mailed to an alt.\n"
+        "Your request is posted here. An officer approves it and mails it to you, and the post updates as it goes: "
+        "**Pending, Approved, Filled** (or **Rejected** with a reason)."))
+    e.add_field(name="3. See what the bank needs or has", inline=False, value=(
+        "`/needs`: what the bank is short on. Donations of these are the most help.\n"
+        "`/bank search:` look up an item, e.g. `/bank search:potion`.\n"
+        "`/requests`: all open requests.\n"
+        "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
+    e.add_field(name="Donating", inline=False, value=(
+        "Mail items or gold to the bank character, or deposit them in the guild bank once we have one. "
+        "They're logged automatically, and you'll get a thank-you here."))
+    e.add_field(name=f"Officers ({officer} role)", inline=False, value=(
+        "Use the **Approve** and **Reject** buttons on request posts. Reject asks for an optional reason.\n"
+        "Mailing or trading an approved item to the requester marks it filled automatically."))
+    e.add_field(name="Why isn't it instant?", inline=False, value=(
+        "WoW addons can't use the internet, so the bot and the game swap notes through files. Those are written when an "
+        "officer types `/reload` or `/epu save`, or logs in or out. Requests made here reach the game, and changes made "
+        "in game reach Discord, at the next one of those, usually within the same play session."))
+    e.add_field(name="Get the addon", inline=False, value=(
+        f"[Download EPU Guild Tools]({cfg['addon_url']}). Unzip it into `World of Warcraft\\_forever_\\Interface\\AddOns`, "
+        "then `/reload`. Type `/epu` in game to open it."))
+    e.set_footer(text="Type /help any time to see this again.")
+    return e
+
+
+async def ensure_help_post():
+    if not cfg["help_post"]:
+        return
+    ch = client.get_channel(int(cfg["channel_id"]))
+    if ch is None:
+        return
+    embed = help_embed()
+    mid = state.data.get("help_message_id")
+    try:
+        if mid:
+            try:
+                msg = await ch.fetch_message(mid)
+                await msg.edit(embed=embed)          # keep the text current after updates
+                return
+            except discord.NotFound:
+                pass
+        msg = await ch.send(embed=embed)
+        state.data["help_message_id"] = msg.id
+        state.save()
+        try:
+            await msg.pin()
+        except discord.Forbidden:
+            log.warning("Posted the how-to message but couldn't pin it; give the bot Manage Messages or pin it by hand.")
+    except Exception as e:
+        explain(e, "post the how-to message", cfg["channel_id"])
+
+
+@tree.command(name="help", description="How to use the Guild Bank bot", guild=GUILD)
+async def help_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message(embed=help_embed(), ephemeral=True)
 
 
 # ---------------------------------------------------------------------------
@@ -488,6 +563,7 @@ async def on_ready():
     flush_inbox()
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
+    await ensure_help_post()
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

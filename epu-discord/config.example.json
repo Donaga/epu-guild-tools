@@ -9,5 +9,7 @@
   "post_donations": true,
   "poll_seconds": 15,
   "status_post": true,
-  "status_channel_id": ""
+  "status_channel_id": "",
+  "help_post": true,
+  "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest"
 }
