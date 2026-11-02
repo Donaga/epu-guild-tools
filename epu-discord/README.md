@@ -76,6 +76,17 @@ If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program 
 - In game, Discord requests appear on the Requests tab marked "(via Discord)". Approve, Reject or Fill them as usual.
 - Mailing the item still marks it filled automatically. The Discord post updates after your next `/epu save` or logout.
 
+## Trying it without WoW
+`testkit.py` builds a fake WoW folder with you and a few made-up guildmates, so you can test the whole Discord side before you can log in:
+
+```
+.venv\Scripts\python testkit.py setup "Donlock Gaeilge"
+.venv\Scripts\python testkit.py use        (then restart the bot)
+.venv\Scripts\python testkit.py show       (and request / approve / fill / donate / stock / need / gold / reload)
+.venv\Scripts\python testkit.py unuse      (back to real WoW; restart the bot)
+```
+`reload` plays the part of an officer typing /reload: it applies anything done in Discord. Run `testkit.py` with no arguments for the full list.
+
 ## Files
 - `bot.py`: the Discord bot
 - `epu_core.py`: reads and writes the addon's files (no Discord code)

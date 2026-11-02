@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Discord companion: `testkit.py` for testing the bot against a fake WoW folder before you can log in.
 - WoW: Forever two-part names: characters are tracked by "First Surname" everywhere (sync, trust, requests, donations), so two members with the same first name are never mixed up. Mail, trade and guild bank log names fall back to a first name only when exactly one member has it.
 - Discord `/link` autocompletes from the guild roster and resolves full or unique first names.
 - Discord companion: pinned "Guild Bank Status" post, edited in place on every refresh (needs with stock levels, shopping list, gold, open requests).
