@@ -62,12 +62,18 @@ ns.On("GUILD_ROSTER_UPDATE", function()
   local n = GetNumGuildMembers()
   if not n or n == 0 then return end
   wipe(ns.roster)
+  local names = {}
   for i = 1, n do
     local name, rankName, rankIndex, level, _, _, _, _, online = GetGuildRosterInfo(i)
+    name = ns.Short(name)
     if name then
-      ns.roster[ns.Short(name)] = { rank = rankIndex, rankName = rankName, level = level, online = online }
+      ns.roster[name] = { rank = rankIndex, rankName = rankName, level = level, online = online }
+      names[#names + 1] = name
     end
   end
+  -- Saved so the Discord companion can match /link names to real characters.
+  local g = ns.G()
+  if g then g.members = names end
   ns.Changed()
 end)
 
@@ -525,7 +531,7 @@ end
 function ns.AutoFillFor(recipient, items)
   local g = ns.G()
   if not g or not ns.IsTrusted(ns.me) then return end
-  recipient = ns.Short(recipient)
+  recipient = ns.Member(recipient) or ns.Short(recipient)
   if not recipient then return end
   local sent = {}
   for _, it in ipairs(items) do sent[it[1]] = true end

@@ -5,10 +5,10 @@ WOW = tempfile.mkdtemp().replace(os.sep, "/")
 STATE = os.path.join(WOW, "state.json")
 import epu_core as core
 
-for n in ["Chrisb","Tyler"]:
+for n in ["Chris Baker","Tyler Baker"]:
     clients[n] = Client(n)
 tick(20)
-A, B = clients["Chrisb"], clients["Tyler"]
+A, B = clients["Chris Baker"], clients["Tyler Baker"]
 
 # --- guild bank scanning ---
 A.ex('__gb[1] = {{2589, 20}, {2589, 15}, {14047, 3}}; __gb[2] = {{4306, 8}}')
@@ -24,13 +24,13 @@ check("member's scan not accepted by officer", A.ev("__ns.BankCount(2589)") == 3
 A.ex('__fire("GUILDBANKFRAME_CLOSED")'); B.ex('__fire("GUILDBANKFRAME_CLOSED")')
 
 # --- deposit log -> donations, no duplicates on rescan ---
-A.ex('__gblog[1] = {{"Tyler-Forever", 2589, 20, 2}, {"Tyler-Forever", 2589, 20, 2}, {"Newbie-Forever", 14047, 3, 0}}; __gbmoneylog = {{"Tyler-Forever", 50000, 1}}')
+A.ex('__gblog[1] = {{"Tyler Baker", 2589, 20, 2}, {"Tyler Baker", 2589, 20, 2}, {"Newbie Stone", 14047, 3, 0}}; __gbmoneylog = {{"Tyler Baker", 50000, 1}}')
 A.ex('__fire("GUILDBANKFRAME_OPENED"); __fire("GUILDBANKLOG_UPDATE")'); tick(4)
 cnt = "(function() local n=0 for _, d in pairs(__ns.G().donations) do if d.to == 'Guild Bank' then n=n+1 end end return n end)()"
 check("4 guild bank deposits logged", A.ev(cnt) == 4)
 A.ex('__now = __now + 1800; __fire("GUILDBANKLOG_UPDATE")'); tick(4)
 check("rescan adds no duplicates", A.ev(cnt) == 4)
-A.ex('__gblog[1][4] = {"Tyler-Forever", 2589, 20, 0}; __fire("GUILDBANKLOG_UPDATE")'); tick(4)
+A.ex('__gblog[1][4] = {"Tyler Baker", 2589, 20, 0}; __fire("GUILDBANKLOG_UPDATE")'); tick(4)
 check("a genuinely new identical deposit is logged", A.ev(cnt) == 5)
 check("member received guild bank donations", B.ev(cnt) == 5)
 A.ex('__fire("GUILDBANKFRAME_CLOSED")')
@@ -61,14 +61,14 @@ st.set_posted(rid_game, 111, "pending")
 
 # --- companion -> game: Discord request + approval of the in-game request ---
 item_id, name = core.resolve_item("id:2996", gd.known_items() | {2996: "Bolt of Linen Cloth"})
-e = st.queue_request("Tyler", item_id, name, 2, 'needs "quotes" \\ and\nnewline', "tyler")
+e = st.queue_request("tyler", item_id, name, 2, 'needs "quotes" \\ and\nnewline', "tyler")
 st.queue_status(rid_game, "approved", "Chris (Discord)")
 wl = core.resolve_item("https://www.wowhead.com/forever/item=14047/runecloth", gd.known_items())
 check("wowhead link resolves", wl[0] == 14047)
 core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(4)
 rid_d = "d-" + e["id"]
-check("Discord request created in game", A.ev(f'__ns.G().requests["{rid_d}"].who') == "Tyler")
+check("Discord request created in game", A.ev(f'__ns.G().requests["{rid_d}"].who') == "Tyler Baker")
 check("tricky note survived Lua round trip", A.ev(f'__ns.G().requests["{rid_d}"].note') == 'needs "quotes" \\ and\nnewline')
 check("Discord request synced to member", B.ev(f'__ns.G().requests["{rid_d}"] ~= nil'))
 check("Discord approval applied", B.ev(f'__ns.G().requests["{rid_game}"].status') == "approved")
@@ -84,6 +84,12 @@ check("inbox pruned after game applied it", st.prune_inbox(gd.inbox_done) and st
 ch = core.diff(gd, st)
 check("status change detected for Discord edit", [r for r, _ in ch["changed_requests"]] == [rid_game])
 check("Discord-made request shows as new for posting", [r for r, _ in ch["new_requests"]] == [rid_d])
+
+# --- /link name matching against the saved roster ---
+check("roster saved for companion", "Tyler Baker" in gd.members and "Chris Stone" in gd.members)
+check("/link full name any case", gd.resolve_member("tyler baker") == ("Tyler Baker", []))
+check("/link unique first name", gd.resolve_member("Newbie")[0] == "Newbie Stone")
+check("/link shared first name asks for full", gd.resolve_member("chris") == (None, ["Chris Baker", "Chris Stone"]))
 
 # --- status post summary ---
 sm = gd.status_summary()

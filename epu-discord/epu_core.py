@@ -236,6 +236,27 @@ class GuildData:
         self.inbox_done = self.db.get("inboxDone") or {}
 
     @property
+    def members(self) -> list[str]:
+        """Guild roster names as the addon saw them ("First Surname" on Forever)."""
+        m = self.g.get("members") or {}
+        names = list(m.values()) if isinstance(m, dict) else list(m)
+        return sorted(n for n in names if isinstance(n, str))
+
+    def resolve_member(self, text: str) -> tuple[str | None, list[str]]:
+        """Match typed text to a member: full name (any case), or a first name
+        only one member has. Returns (name or None, candidates if ambiguous)."""
+        want = " ".join((text or "").split()).lower()
+        if not want:
+            return None, []
+        exact = [n for n in self.members if n.lower() == want]
+        if exact:
+            return exact[0], []
+        firsts = [n for n in self.members if n.split(" ")[0].lower() == want]
+        if len(firsts) == 1:
+            return firsts[0], []
+        return None, firsts
+
+    @property
     def requests(self) -> dict:
         return self.g.get("requests") or {}
 

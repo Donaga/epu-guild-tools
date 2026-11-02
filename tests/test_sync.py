@@ -1,9 +1,9 @@
 from simcore import *
 
-for n in ["Chrisb","Tyler","Epubank"]:
+for n in ["Chris Baker","Tyler Baker","Epu Bank"]:
     clients[n] = Client(n)
 tick(20)
-A, B, C = clients["Chrisb"], clients["Tyler"], clients["Epubank"]
+A, B, C = clients["Chris Baker"], clients["Tyler Baker"], clients["Epu Bank"]
 
 # Officer sets needs (with real link syntax)
 A.ex('SlashCmdList.EPUGUILD("need " .. __link(2589) .. " 200")')
@@ -26,7 +26,7 @@ C.ex('SlashCmdList.EPUGUILD("bankalt on")'); tick(8); C.ex('__fire("BANKFRAME_OP
 tick(10)
 check("bank count synced to member", B.ev("__ns.BankCount(2589)") == 40)
 check("big snapshot synced", B.ev("__ns.BankCount(30150)") == 150)
-check("bank money synced", A.ev("__ns.G().bank.Epubank.money") == 123456)
+check("bank money synced", A.ev('__ns.G().bank["Epu Bank"].money') == 123456)
 
 # Request flow with approval
 B.ex('SlashCmdList.EPUGUILD("request " .. __link(4306) .. " 10 for tailoring; thanks|pipe")')
@@ -60,7 +60,7 @@ A.ex('SlashCmdList.EPUGUILD("need 14047 50 goal")'); tick(6)
 check("unmet goal stays, critical", B.ev("__ns.G().needs.list[14047].k") == "g" and B.ev('(function() for _, n in ipairs(__ns.OpenNeeds()) do if n.id == 14047 then return n.critical end end end)()') == True)
 
 # Mail donation from Tyler to the bank alt
-C.ex('__inbox[1] = {sender = "Tyler-Forever", money = 5000, items = {{2589, 20}}}')
+C.ex('__inbox[1] = {sender = "Tyler Baker", money = 5000, items = {{2589, 20}}}')
 C.ex('TakeInboxItem(1, 1); TakeInboxMoney(1)')
 C.ex('__inbox[2] = {sender = "Auction House", money = 9999, items = {{2589, 1}}}')
 C.ex('TakeInboxItem(2, 1); TakeInboxMoney(2)')
@@ -68,23 +68,35 @@ tick(6)
 n = A.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()")
 check("2 donations logged, AH mail ignored (got %s)" % n, n == 2)
 
+# Forever two-part names
+check("own name is First Surname", A.ev("__ns.me") == "Chris Baker" and B.ev("__ns.me") == "Tyler Baker")
+check("same first name, different trust", A.ev('__ns.IsTrusted("Chris Baker")') == True and A.ev('__ns.IsTrusted("Chris Stone")') == False)
+check("unique first name resolves", A.ev('__ns.Member("tyler")') == "Tyler Baker")
+check("shared first name is ambiguous", A.ev('__ns.Member("Chris")') is None)
+check("realm suffix still stripped", A.ev('__ns.Short("Tyler Baker-Forever")') == "Tyler Baker")
+C.ex('__inbox[3] = {sender = "Chris Stone", money = 0, items = {{4306, 2}}}; TakeInboxItem(3, 1)')
+C.ex('__inbox[4] = {sender = "Chris", money = 0, items = {{4306, 9}}}; TakeInboxItem(4, 1)')
+tick(6)
+check("mail from Chris Stone credited to him, ambiguous 'Chris' skipped",
+      A.ev("(function() local w = {} for _, d in pairs(__ns.G().donations) do if d.item == 4306 then w[#w+1] = d.who .. ':' .. d.n end end return table.concat(w, ',') end)()") == "Chris Stone:2")
+
 # Crafters
-check("officer sees Tyler's tailoring", A.ev('__ns.G().crafters.Tyler and __ns.G().crafters.Tyler.profs.Tailoring') == 150)
+check("officer sees Tyler's tailoring", A.ev('__ns.G().crafters["Tyler Baker"] and __ns.G().crafters["Tyler Baker"].profs.Tailoring') == 150)
 
 # Recipe lookup: Tyler opens tailoring window, officer asks
 B.ex('__fire("TRADE_SKILL_SHOW")'); tick(2)
 A.ex('SlashCmdList.EPUGUILD("who " .. __link(2996))'); tick(3)
-check("who-crafts answered", A.ev("#__ns.whoResults.list") == 1 and A.ev("__ns.whoResults.list[1].who") == "Tyler")
+check("who-crafts answered", A.ev("#__ns.whoResults.list") == 1 and A.ev("__ns.whoResults.list[1].who") == "Tyler Baker")
 A.ex('SlashCmdList.EPUGUILD("who bolt of linen")'); tick(3)
 check("who-crafts by name", A.ev("#__ns.whoResults.list") == 1)
 
 # Late joiner with empty data gets everything
-clients["Newbie"] = D = Client("Newbie")
+clients["Newbie Stone"] = D = Client("Newbie Stone")
 tick(30)
 check("late joiner got needs", D.ev("__ns.G().needs.list[2589]") == 200)
 check("late joiner got big bank", D.ev("__ns.BankCount(30150)") == 150)
-check("late joiner got donations", D.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()") == 2)
-check("late joiner got crafters", D.ev("__ns.G().crafters.Tyler ~= nil"))
+check("late joiner got all donations", D.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()") == A.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()") == 3)
+check("late joiner got crafters", D.ev('__ns.G().crafters["Tyler Baker"] ~= nil'))
 
 # Post needs + UI smoke test on every tab
 A.ex('SlashCmdList.EPUGUILD("post")')

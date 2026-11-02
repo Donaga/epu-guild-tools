@@ -69,14 +69,20 @@ C_ChatInfo = {
 C_AddOns = { GetAddOnMetadata = function() return "0.1.0" end }
 function GetServerTime() return math.floor(__now) end
 function GetTime() return __now end
-function UnitName(u) if u == "player" then return __name end if u == "NPC" then return __npc end end
+-- Forever-style names: UnitName returns (first, surname); roster and addon
+-- message senders use "First Surname" with no realm.
+local function split(full) if not full then return nil end local f, s = full:match("^(%S+)%s+(.+)$"); if f then return f, s end return full end
+function UnitName(u) if u == "player" then return split(__name) end if u == "NPC" then return split(__npc) end end
+UnitFullName = UnitName
+function GetUnitName(u) if u == "player" then return __name end if u == "NPC" then return __npc end end
+function RegionalUniqueNamesEnabled() return true end
 function UnitLevel() return 20 end
 function GetGuildInfo() return "E Pluribus Unum", __rankName, __rankIndex end
 function GetRealmName() return "Forever" end
 function IsInGuild() return true end
 __roster = {}
 function GetNumGuildMembers() return #__roster end
-function GetGuildRosterInfo(i) local r = __roster[i]; return r[1] .. "-Forever", r[2], r[3], 20, nil, nil, nil, nil, true end
+function GetGuildRosterInfo(i) local r = __roster[i]; return r[1], r[2], r[3], 20, nil, nil, nil, nil, true end
 C_GuildInfo = { GuildRoster = function() __fire("GUILD_ROSTER_UPDATE") end }
 function Ambiguate(n) return n end
 local ITEMS = { [2589] = "Linen Cloth", [2996] = "Bolt of Linen Cloth", [14047] = "Runecloth", [4306] = "Silk Cloth" }

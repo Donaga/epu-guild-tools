@@ -308,12 +308,31 @@ async def on_interaction(interaction: discord.Interaction):
 # ---------------------------------------------------------------------------
 # Slash commands
 # ---------------------------------------------------------------------------
+async def member_autocomplete(interaction: discord.Interaction, current: str):
+    gd = read_latest()
+    cur = current.lower()
+    names = [n for n in (gd.members if gd else []) if cur in n.lower()][:25]
+    return [app_commands.Choice(name=n, value=n) for n in names]
+
+
 @tree.command(name="link", description="Link your Discord account to your WoW character", guild=GUILD)
-@app_commands.describe(character="Your main character's name in the guild")
+@app_commands.describe(character="Your character's full name, e.g. Drie Stonefist")
+@app_commands.autocomplete(character=member_autocomplete)
 async def link_cmd(interaction: discord.Interaction, character: str):
-    character = character.strip().capitalize()
-    state.link(interaction.user.id, character)
-    await interaction.response.send_message(f"Linked you to **{character}**. Requests you make here will be under that name.", ephemeral=True)
+    gd = read_latest()
+    name, candidates = gd.resolve_member(character) if gd else (None, [])
+    if name is None and candidates:
+        await interaction.response.send_message(
+            "More than one guild member has that first name: " + ", ".join(candidates) + ". Use your full name.", ephemeral=True)
+        return
+    if name is None:
+        if gd and gd.members:
+            await interaction.response.send_message(
+                f"I can't find **{character}** in the guild roster. Pick your name from the list, or check the spelling.", ephemeral=True)
+            return
+        name = " ".join(w[:1].upper() + w[1:] for w in character.split())   # no roster saved yet
+    state.link(interaction.user.id, name)
+    await interaction.response.send_message(f"Linked you to **{name}**. Requests you make here will be under that name.", ephemeral=True)
 
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):

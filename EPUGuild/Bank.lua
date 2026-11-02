@@ -156,8 +156,8 @@ end
 
 local function MailSender(i)
   local _, _, sender, _, money, cod = GetInboxHeaderInfo(i)
-  sender = ns.Short(sender)
-  if not sender or not ns.roster[sender] then return nil end   -- AH, NPCs, non-guild mail
+  sender = ns.Member(sender)
+  if not sender then return nil end                             -- AH, NPCs, non-guild mail
   if cod and cod > 0 then return nil end                        -- COD is a purchase, not a gift
   return sender, money or 0
 end
@@ -231,8 +231,8 @@ local tradeSnap
 ns.On("TRADE_ACCEPT_UPDATE", function()
   local bankAlt, officer = ns.IsBankAlt(), ns.IsTrusted(ns.me)
   if not bankAlt and not officer then return end
-  local who = ns.Short(UnitName("NPC"))
-  if not who or not ns.roster[who] then tradeSnap = nil return end
+  local who = ns.Member(ns.UnitFullName("NPC"))
+  if not who then tradeSnap = nil return end
   local snap = { who = who, money = GetTargetTradeMoney() or 0, items = {}, mine = {}, bankAlt = bankAlt }
   for slot = 1, 6 do
     local id = ns.ItemID(GetTradeTargetItemLink(slot))

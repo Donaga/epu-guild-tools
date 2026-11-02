@@ -85,7 +85,7 @@ function ns.ParseGuildBankLogs()
       for i = 1, (GetNumGuildBankTransactions(tab) or 0) do
         local kind, who, link, count, _, _, y, mo, d, h = GetGuildBankTransaction(tab, i)
         local id = ns.ItemID(link)
-        who = ns.Short(who)
+        who = ns.Member(who) or ns.Short(who)
         if kind == "deposit" and id and who then
           entries[#entries + 1] = { who = who, item = id, n = tonumber(count) or 1, money = 0, t = LogTime(y, mo, d, h) }
         end
@@ -95,7 +95,7 @@ function ns.ParseGuildBankLogs()
   if GetNumGuildBankMoneyTransactions then
     for i = 1, (GetNumGuildBankMoneyTransactions() or 0) do
       local kind, who, amount, y, mo, d, h = GetGuildBankMoneyTransaction(i)
-      who = ns.Short(who)
+      who = ns.Member(who) or ns.Short(who)
       if kind == "deposit" and who and (tonumber(amount) or 0) > 0 then
         entries[#entries + 1] = { who = who, n = 0, money = tonumber(amount), t = LogTime(y, mo, d, h) }
       end

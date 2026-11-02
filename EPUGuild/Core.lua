@@ -2,7 +2,6 @@
 local ADDON, ns = ...
 
 ns.PREFIX = "EPUGuild"            -- addon message prefix (max 16 chars)
-ns.me = UnitName("player")
 ns.comm = {}                      -- message handlers, keyed by one-letter kind
 
 local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
@@ -52,12 +51,67 @@ function ns.NextVersion(prev)
   return prev + 1
 end
 
--- "Name-Realm" -> "Name"
-function ns.Short(name)
-  if not name then return nil end
-  if Ambiguate then name = Ambiguate(name, "none") end
-  return (name:gsub("%-.*$", ""))
+---------------------------------------------------------------------------
+-- Character names
+--   WoW: Forever: "First Surname". The pair is unique per region and there
+--     are no realms. Roster entries and addon-message senders already use it.
+--   Other clients: "Name" (realm stripped; a guild lives on one realm).
+-- On Forever, UnitName() returns (first, surname), not (name, realm), and
+-- names can be "secret" values, so every read goes through these helpers.
+---------------------------------------------------------------------------
+local function Plain(s)
+  return type(s) == "string" and s ~= "" and not (issecretvalue and issecretvalue(s))
 end
+
+function ns.RegionalNames()
+  return RegionalUniqueNamesEnabled ~= nil and RegionalUniqueNamesEnabled() == true
+end
+
+-- Normalise a name from any API: "First Surname", "Name-Realm", extra spaces.
+function ns.Short(name)
+  if not Plain(name) then return nil end
+  if Ambiguate then
+    local ok, a = pcall(Ambiguate, name, "none")
+    if ok and Plain(a) then name = a end
+  end
+  name = name:gsub("%-.*$", ""):gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+  if name == "" then return nil end
+  return name
+end
+
+-- Full name of a unit ("player", "NPC" for the trade partner, ...).
+function ns.UnitFullName(unit)
+  if GetUnitName then
+    local ok, n = pcall(GetUnitName, unit, true)
+    if ok and Plain(n) then return ns.Short(n) end
+  end
+  local n, second = UnitName(unit)
+  if not Plain(n) then return nil end
+  if ns.RegionalNames() and Plain(second) then return ns.Short(n .. " " .. second) end
+  return ns.Short(n)
+end
+
+-- Match a name to a guild member. Some places may only give a first name,
+-- so a first name counts if exactly one member has it. Returns nil if the
+-- name is ambiguous or not in the guild.
+function ns.Member(name)
+  name = ns.Short(name)
+  if not name or not ns.roster then return nil end
+  if ns.roster[name] then return name end
+  local lower, hit = name:lower(), nil
+  for full in pairs(ns.roster) do
+    if full:lower() == lower then return full end
+    local first = full:match("^(%S+)")
+    if first and first:lower() == lower then
+      if hit then return nil end
+      hit = full
+    end
+  end
+  return hit
+end
+
+ns.me = ns.UnitFullName("player")
+ns.On("PLAYER_LOGIN", function() ns.me = ns.UnitFullName("player") or ns.me end)
 
 local pending = {}
 -- Run fn once, `delay` seconds after the first call; extra calls meanwhile are folded in.

@@ -67,7 +67,7 @@ If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program 
 
 ## Using it
 **Members (in Discord)**
-- `/link character:Tyler` once, so requests are filed under your character.
+- `/link` once with your character's full name, e.g. `/link character:Tyler Stonefist`. The list autocompletes from the guild roster. A first name works if only one member has it.
 - `/request item:<start typing> qty:5 note:for bags`. The item list comes from items the guild has seen. You can also paste a Wowhead link or item ID.
 - `/needs`, `/bank search:cloth`, `/requests`
 

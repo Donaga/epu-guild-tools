@@ -57,7 +57,7 @@ function ns.CreateRequestFor(who, item, qty, note, discord, rid)
   local g = ns.G()
   if not g or g.requests[rid] then return end
   local now = ns.Now()
-  local r = { who = ns.Short(who), item = item, qty = tonumber(qty) or 1, note = (note or ""):sub(1, 80),
+  local r = { who = ns.Member(who) or ns.Short(who), item = item, qty = tonumber(qty) or 1, note = (note or ""):sub(1, 80),
     status = "pending", t = now, u = now, via = "discord", discord = discord }
   g.requests[rid] = r
   ns.Send("D", { req = { [rid] = r } })
