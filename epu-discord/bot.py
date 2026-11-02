@@ -50,6 +50,7 @@ def load_config() -> dict:
     cfg.setdefault("poll_seconds", 15)
     cfg.setdefault("status_post", True)
     cfg.setdefault("help_post", True)
+    cfg.setdefault("wowhead", "https://www.wowhead.com/forever")
     cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     return cfg
@@ -119,7 +120,7 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
     name = r.get("itemName") or (gd.item_name(r.get("item")) if gd else f"item {r.get('item')}")
     e = discord.Embed(title=f"{name} x{r.get('qty', 1)}", color=STATUS_COLOR.get(st, discord.Color.blurple()))
     if r.get("item"):
-        e.url = f"https://www.wowhead.com/item={r['item']}"
+        e.url = f"{cfg['wowhead'].rstrip('/')}/item={r['item']}"
     who = gd.label(r.get("who", "?")) if gd else r.get("who", "?")
     if r.get("discord"):
         who += f" via Discord ({r['discord']})"
@@ -247,7 +248,8 @@ def help_embed() -> discord.Embed:
         "Your first link is your **main**. If your alts have logged in with the addon, they're linked too; "
         "otherwise `/link` each alt. `/unlink` removes one."))
     e.add_field(name="2. Ask for something", inline=False, value=(
-        "`/request item:` start typing the name and pick it, then set `qty:`. Add a `note:` for the officers, "
+        "`/request item:` start typing the name and pick it, then set `qty:`. If it isn't in the list, paste its "
+        "Wowhead link instead (wowhead.com/forever). Add a `note:` for the officers, "
         "and `character:` if it should be mailed to an alt.\n"
         "Your request is posted here. An officer approves it and mails it to you, and the post updates as it goes: "
         "**Pending, Approved, Filled** (or **Rejected** with a reason)."))
@@ -485,7 +487,8 @@ async def request_cmd(interaction: discord.Interaction, item: str, qty: app_comm
     item_id, name = core.resolve_item(item, known)
     if item_id is None:
         await interaction.response.send_message(
-            "I don't know that item yet. Pick one from the list, or paste its Wowhead link (or item ID).", ephemeral=True)
+            "I don't know that item yet. Pick one from the list, or paste its Wowhead link "
+            "(e.g. https://www.wowhead.com/forever/item=253668/pattern-woolen-reagent-bag) or its item ID.", ephemeral=True)
         return
     name = name or f"item {item_id}"
     e = state.queue_request(who, item_id, name, int(qty), note, interaction.user.display_name, to)

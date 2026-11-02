@@ -492,7 +492,16 @@ def diff(gd: GuildData, state: State) -> dict:
     return out
 
 
-ITEM_ID_RE = re.compile(r"item[=:](\d+)")
+ITEM_ID_RE = re.compile(r"item[=:](\d+)(?:/([A-Za-z0-9\-]+))?")
+
+
+def name_from_slug(slug: str | None) -> str | None:
+    """'pattern-woolen-reagent-bag' -> 'Pattern Woolen Reagent Bag' (Wowhead URL text)."""
+    if not slug:
+        return None
+    words = [w for w in slug.split("-") if w]
+    small = {"of", "the", "and", "a", "an", "to", "in", "on"}
+    return " ".join(w if (i and w in small) else w[:1].upper() + w[1:] for i, w in enumerate(words)) or None
 
 
 def resolve_item(text: str, known: dict[int, str]) -> tuple[int | None, str | None]:
@@ -507,7 +516,7 @@ def resolve_item(text: str, known: dict[int, str]) -> tuple[int | None, str | No
     m = ITEM_ID_RE.search(text)
     if m:
         i = int(m.group(1))
-        return i, known.get(i)
+        return i, known.get(i) or name_from_slug(m.group(2))
     want = text.strip("[]").lower()
     for i, name in known.items():
         if name.lower() == want:

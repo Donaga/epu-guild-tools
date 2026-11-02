@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Discord: requests by Wowhead link show the item name from the link until the game has seen it; posts link to Wowhead's Forever pages.
 - Discord: pinned "How to use the Guild Bank bot" post (kept current on each bot start) and `/help`.
 - Mains and alts: the addon groups each player's characters (shared with the guild), labels alts, and counts donors per player. `/epu main`, `/epu alts`.
 - Requests can be delivered to any of your characters (**For:** button; Discord `/request ... character:`). Auto-fill matches that character.
