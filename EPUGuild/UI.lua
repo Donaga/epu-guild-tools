@@ -195,6 +195,65 @@ local function Online(name)
   return ns.roster[name] ~= nil and ns.roster[name].online == true
 end
 
+-- Dropdown menu: a flat list that opens under a button.
+-- items = { { label =, value =, right = } ... }; onPick(value) runs on click.
+local Menu
+local function OpenMenu(anchor, items, current, onPick)
+  if not Menu then
+    Menu = CreateFrame("Frame", "EPUGuildMenu", UIParent)
+    Menu:SetFrameStrata("DIALOG")
+    Menu:SetClampedToScreen(true)
+    Menu:EnableMouse(true)
+    Menu.bg = Tex(Menu, "BACKGROUND", C.panel); Menu.bg:SetAllPoints()
+    Edges(Menu, C.line)
+    Menu.rows = {}
+    -- a clear frame behind the menu: clicking anywhere else closes it
+    Menu.catch = CreateFrame("Button", nil, UIParent)
+    Menu.catch:SetFrameStrata("DIALOG")
+    Menu.catch:SetAllPoints(UIParent)
+    Menu.catch:RegisterForClicks("AnyUp")
+    Menu.catch:SetScript("OnClick", function() Menu:Hide() end)
+    Menu.catch:Hide()
+    Menu:SetScript("OnShow", function(self) self.catch:Show(); self:Raise() end)
+    Menu:SetScript("OnHide", function(self) self.catch:Hide() end)
+    tinsert(UISpecialFrames, "EPUGuildMenu")   -- Escape closes it
+  end
+  if Menu:IsShown() and Menu.anchor == anchor then Menu:Hide(); return end
+  Menu.anchor = anchor
+  local w = math.max(anchor:GetWidth(), 170)
+  for i, it in ipairs(items) do
+    local r = Menu.rows[i]
+    if not r then
+      r = CreateFrame("Button", nil, Menu)
+      r:SetHeight(22)
+      r.hl = Tex(r, "BACKGROUND", C.hover); r.hl:SetAllPoints(); r.hl:Hide()
+      r.mark = Tex(r, "ARTWORK", C.gold); r.mark:SetPoint("TOPLEFT"); r.mark:SetPoint("BOTTOMLEFT"); r.mark:SetWidth(2)
+      r.text = Font(r, 11); r.text:SetPoint("LEFT", 10, 0)
+      r.right = Font(r, 11, C.muted); r.right:SetPoint("RIGHT", -8, 0); r.right:SetJustifyH("RIGHT")
+      r:SetScript("OnEnter", function(self) self.hl:Show() end)
+      r:SetScript("OnLeave", function(self) self.hl:Hide() end)
+      r:SetScript("OnClick", function(self) Menu:Hide(); if Menu.onPick then Menu.onPick(self.value) end end)
+      Menu.rows[i] = r
+    end
+    r:ClearAllPoints()
+    r:SetPoint("TOPLEFT", 1, -1 - (i - 1) * 22); r:SetPoint("TOPRIGHT", -1, -1 - (i - 1) * 22)
+    r.value = it.value
+    local on = it.value == current
+    r.text:SetText(it.label); SetColor(r.text, on and C.white or C.text)
+    r.right:SetText(it.right or "")
+    r.mark:SetShown(on)
+    r:Show()
+  end
+  for i = #items + 1, #Menu.rows do Menu.rows[i]:Hide() end
+  Menu.onPick = onPick
+  Menu:SetScale(UI and UI:GetEffectiveScale() / UIParent:GetEffectiveScale() or 1)
+  Menu:SetSize(w, #items * 22 + 2)
+  Menu:ClearAllPoints()
+  Menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
+  Menu:Show()
+end
+ns.OpenMenu = OpenMenu
+
 ---------------------------------------------------------------------------
 -- Window
 ---------------------------------------------------------------------------
@@ -1045,13 +1104,30 @@ local MAX_LIST = 250   -- long lists: show the first 250 and ask people to searc
 Views.recipes = {
   label = "Recipes", icon = "Interface\\Icons\\INV_Misc_Book_09",
   tools = function(bar)
-    UI.profChip = bar:Add(Btn(bar, "All professions", 120, 22), "left", function()
-      local st, profs = UI.state.recipes, RecipeProfs()
-      local idx = 0
-      for i, p in ipairs(profs) do if p == st.prof then idx = i end end
-      st.prof = profs[idx + 1]          -- past the end wraps back to "All"
-      UI:Refresh()
-    end, "Click to show one profession at a time")
+    UI.profChip = bar:Add(Btn(bar, "All professions", 140, 22), "left", function(self)
+      local st = UI.state.recipes
+      local counts = {}
+      for _, e in ipairs(ns.RecipeIndex()) do
+        local seen = {}
+        for _, c in ipairs(e.crafters) do
+          if not seen[c.prof] then seen[c.prof] = true; counts[c.prof] = (counts[c.prof] or 0) + 1 end
+        end
+      end
+      local items = { { label = "All professions", value = false } }
+      for _, p in ipairs(RecipeProfs()) do items[#items + 1] = { label = p, value = p, right = tostring(counts[p] or 0) } end
+      OpenMenu(UI.profChip, items, st.prof or false, function(v)
+        st.prof = v or nil
+        UI:Refresh()
+      end)
+    end, "Pick a profession")
+    do -- make it look like a dropdown: text on the left, arrow on the right
+      local b = UI.profChip
+      b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
+      b.arrow = b:CreateTexture(nil, "ARTWORK")
+      b.arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+      b.arrow:SetSize(12, 12); b.arrow:SetPoint("RIGHT", -5, -2)
+      b.arrow:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
+    end
     UI.onlineChip = bar:Add(Btn(bar, "Online", 56, 22), "left", function()
       UI.state.recipes.online = not UI.state.recipes.online; UI:Refresh()
     end, "Only recipes someone online right now can make")

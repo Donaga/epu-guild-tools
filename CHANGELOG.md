@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- Recipes: the profession filter is now a dropdown menu showing every profession with its recipe count, instead of clicking through them one at a time. Click outside or press Escape to close it.
+
 ## 0.6.0
 - Recipes section: every craftable (non-BoP) recipe in the guild, searchable, filterable by profession, online and guild crafters; details list who can make it with Whisper buttons.
 - Crafters share their recipe lists when they open a profession window (and again only when it changes).

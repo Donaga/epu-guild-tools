@@ -188,6 +188,19 @@ A.ex('__ns.UI.search:SetText(""); __ns.UI.state.recipes.designated = true; __ns.
 check("guild crafters filter", A.ev(shown) == 2)
 A.ex('__ns.UI.state.recipes.designated = false; __ns.UI.state.recipes.prof = "Mining"; __ns.UI:Refresh()')
 check("profession filter", A.ev(shown) == 0)
+A.ex('__ns.UI.state.recipes.prof = nil; __ns.UI:Refresh(); __ns.UI.profChip:GetScript("OnClick")(__ns.UI.profChip)')
+check("profession dropdown opens with All + each profession",
+      A.ev('EPUGuildMenu:IsShown()') == True and A.ev('EPUGuildMenu.rows[1].text:GetText()') == "All professions"
+      and A.ev('EPUGuildMenu.rows[2].text:GetText()') == "Tailoring" and A.ev('EPUGuildMenu.rows[2].right:GetText()') == "2"
+      and A.ev('EPUGuildMenu.rows[3] == nil or not EPUGuildMenu.rows[3]:IsShown()') == True)
+A.ex('EPUGuildMenu.rows[2]:GetScript("OnClick")(EPUGuildMenu.rows[2])')
+check("picking from the dropdown filters and closes it",
+      A.ev('__ns.UI.state.recipes.prof') == "Tailoring" and A.ev(shown) == 2 and A.ev('EPUGuildMenu:IsShown()') == False
+      and A.ev('__ns.UI.profChip.text:GetText()') == "Tailoring")
+A.ex('__ns.UI.profChip:GetScript("OnClick")(__ns.UI.profChip); EPUGuildMenu.catch:GetScript("OnClick")(EPUGuildMenu.catch)')
+check("clicking outside closes the dropdown", A.ev('EPUGuildMenu:IsShown()') == False)
+A.ex('__ns.UI.profChip:GetScript("OnClick")(__ns.UI.profChip); EPUGuildMenu.rows[1]:GetScript("OnClick")(EPUGuildMenu.rows[1])')
+check("All professions clears it", A.ev('__ns.UI.state.recipes.prof') is None)
 A.ex('__ns.UI.state.recipes.prof = nil; __ns.UI.state.recipes.crafter = "Chris Stone"; __ns.UI:Refresh()')
 check("crafter filter", A.ev(shown) == 0)
 A.ex('__ns.UI.state.recipes.crafter = nil; __ns.UI:Refresh(); __ns.UI:OpenDetails("recipe", "item:2996")')
