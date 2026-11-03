@@ -105,6 +105,13 @@ A.ex(f'__ns.UI:SetView("donations"); __ns.UI:OpenDetails("donation", "{did}")')
 A.ex('__ns.UI:SetView("crafters"); __ns.UI:OpenDetails("crafter", "Tyler Baker")')
 A.ex('__ns.UI:CloseDetails()')
 A.ex('SlashCmdList.EPUGUILD("scale 0.9"); SlashCmdList.EPUGUILD("resetwindow")')
+# --- update notice: a guildmate with a newer version logs in ---
+A.ex('__ns.Send("H", {needs = 0, bank = {}, since = 0, ver = "9.9.9"})'); tick(3)
+check("newer version shows the popup once", B.ev("#__popups") == 1 and B.ev("__popups[1][2]") == "9.9.9")
+A.ex('__ns.Send("H", {needs = 0, bank = {}, since = 0, ver = "9.9.9"})'); tick(3)
+check("no repeat popup for the same version", B.ev("#__popups") == 1)
+check("older version: no popup", A.ev("#__popups") == 0)
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

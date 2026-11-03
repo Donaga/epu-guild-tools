@@ -265,14 +265,27 @@ function ns.Delta(d)
 end
 
 ns.pendingHello = {}
-local warnedVersion = false
+
+-- A guildmate's addon is newer than ours: tell the player once per session.
+StaticPopupDialogs = StaticPopupDialogs or {}
+StaticPopupDialogs["EPUGUILD_UPDATE"] = {
+  text = "EPU Guild Tools %s is out (you have %s).\n\nDouble-click \"Update EPU Guild Tools\" from the updater, or get it with /download in the guild Discord. Then type /reload.",
+  button1 = OKAY or "Okay",
+  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+function ns.NoteVersion(sender, ver)
+  if type(ver) ~= "string" or ns.VersionNumber(ver) <= ns.VersionNumber(ns.VERSION) then return end
+  if ns.newestVersion and ns.VersionNumber(ns.newestVersion) >= ns.VersionNumber(ver) then return end
+  ns.newestVersion = ver
+  ns.Print("|cfff2c14eUpdate available:|r version " .. ver .. " (you have " .. ns.VERSION .. "). Run the EPU updater or use /download in the guild Discord.")
+  if StaticPopup_Show then StaticPopup_Show("EPUGUILD_UPDATE", ver, ns.VERSION) end
+  ns.Changed()
+end
 
 ns.comm.H = function(sender, d)
   if type(d) ~= "table" then return end
-  if not warnedVersion and ns.VersionNumber(d.ver) > ns.VersionNumber(ns.VERSION) then
-    warnedVersion = true
-    ns.Print(sender .. " has a newer version (" .. tostring(d.ver) .. "). Ask an officer for the update.")
-  end
+  ns.NoteVersion(sender, d.ver)
   if not ns.IsTrusted(ns.me) then return end
   ns.pendingHello[sender] = d
   C_Timer.After(1 + math.random() * 5, function()
@@ -282,12 +295,14 @@ ns.comm.H = function(sender, d)
     local b = ns.Delta(dd)
     if not b then return end
     b.sync = sender
+    b.ver = ns.VERSION
     ns.Send("D", b)
   end)
 end
 
 ns.comm.D = function(sender, b, channel)
   if type(b) ~= "table" then return end
+  if b.ver then ns.NoteVersion(sender, b.ver) end
   ns.Merge(sender, b)
   if b.sync and channel == "GUILD" and ns.IsTrusted(sender) then
     if b.sync == ns.me then

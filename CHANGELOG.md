@@ -1,6 +1,7 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+- Updates without CurseForge: a one-click Windows updater (optionally runs at startup), an in-game popup when a guildmate has a newer version, Discord release announcements and `/download`, and WowUp support (Install from URL).
 - New window: flat dark style, sidebar with counts, search, request filters (status, Mine, sort), real item icons with quality borders, status pills, progress bars, resizable (`/epu scale`, `/epu resetwindow`).
 - Details panel on every row: edit requests (quantity, note, deliver-to, any status incl. reopening), edit needs, void mistaken donations.
 - Mail it: fills in a mail for an approved request from your bags (splitting stacks); Send marks it filled.

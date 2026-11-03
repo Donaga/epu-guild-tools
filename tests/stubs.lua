@@ -225,3 +225,7 @@ C_Container.SplitContainerItem = function(b, s, n) local x = __bags[b][s]; x[2] 
 function ClickSendMailItemButton(i) __mailSlots[i] = __cursor; __cursor = nil end
 function GuildControlGetNumRanks() return 5 end
 function GuildControlGetRankName(i) return ({"Guild Master", "Officer", "Veteran", "Member", "Initiate"})[i] end
+
+__popups = {}
+function StaticPopup_Show(name, a, b) table.insert(__popups, {name, a, b}) end
+OKAY = "Okay"

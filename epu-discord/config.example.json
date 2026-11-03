@@ -11,5 +11,7 @@
   "status_post": true,
   "status_channel_id": "",
   "help_post": true,
+  "github_repo": "Donaga/epu-guild-tools",
+  "announce_releases": true,
   "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest"
 }

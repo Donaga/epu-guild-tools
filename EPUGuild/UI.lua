@@ -1492,7 +1492,11 @@ function UI:Refresh()
   local gold = 0
   for _, s in pairs(g.bank) do if not s.retired then gold = gold + (s.money or 0) end end
   goldText:SetText(Money(gold))
-  syncText:SetText("on hand  ·  v" .. ns.VERSION)
+  if ns.newestVersion then
+    syncText:SetText("|cfff2c14eUpdate available: v" .. ns.newestVersion .. "|r")
+  else
+    syncText:SetText("on hand  ·  v" .. ns.VERSION)
+  end
 
   local v = Views[self.view]
   -- toolbar chip states

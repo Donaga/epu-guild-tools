@@ -51,4 +51,10 @@ check("offline: keeps cached list", "refresh failed" in db4.load() and db4.find(
 open(os.path.join(d, "items.csv"), "w").write(CSV)
 db5 = core.ItemDB(d); db5._get = offline
 check("items.csv you saved yourself wins", "items.csv" in db5.load() and len(db5.items) == 4)
+rel = core.release_info({"tag_name": "v0.4.0", "html_url": "https://github.com/x/y/releases/tag/v0.4.0", "body": "notes",
+    "assets": [{"name": "EPUGuild-0.4.0.zip", "browser_download_url": "https://dl/addon"},
+               {"name": "epu-discord-0.4.0.zip", "browser_download_url": "https://dl/bot"},
+               {"name": "EPU-Updater-0.4.0.zip", "browser_download_url": "https://dl/updater"},
+               {"name": "release.json", "browser_download_url": "https://dl/json"}]})
+check("release info picks the right downloads", rel["version"] == "0.4.0" and rel["addon"] == "https://dl/addon" and rel["updater"] == "https://dl/updater")
 sys.exit(1 if failed else 0)

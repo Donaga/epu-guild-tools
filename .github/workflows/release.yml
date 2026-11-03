@@ -23,8 +23,16 @@ jobs:
           sed -i "s/^## Version: .*/## Version: ${VERSION}/" EPUGuild/EPUGuild.toc
           mkdir -p dist
           zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
-          zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json"
+          zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json" "epu-discord/items.*"
+          (cd updater && zip -r "../dist/EPU-Updater-${VERSION}.zip" .)
+          # WowUp reads release.json to find the right zip (Install from URL with the repo link)
+          cat > dist/release.json <<JSON
+          {"releases":[{"name":"EPU Guild Tools","version":"${VERSION}","filename":"EPUGuild-${VERSION}.zip","nolib":false,
+            "metadata":[{"flavor":"mainline","interface":16001},{"flavor":"camelot","interface":16001}]}]}
+          JSON
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/release.json
           tag_name: ${{ github.event.release.tag_name }}

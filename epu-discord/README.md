@@ -10,6 +10,7 @@ Connects the **EPU Guild Tools** addon to a Discord channel.
   - If the download ever fails, the bot says so in its window and keeps working with guild items, Wowhead links and IDs.
   - To load the list by hand: open https://wago.tools/db2/ItemSparse, pick the newest 1.60.x build, download it as CSV, and save it in this folder as `items.csv`.
   - Turn it off with `"item_db": false`.
+- **Release announcements:** checks GitHub every 30 minutes and posts when you publish a new release, with download links. `/download` shows the links any time (the updater, the addon zip, and WowUp instructions). Turn announcements off with `"announce_releases": false`.
 - **Lookups:** `/needs` shows what the bank is short on. `/bank <search>` shows what it holds. `/requests` lists open requests.
 
 ## How it works (and the one catch)

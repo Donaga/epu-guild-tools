@@ -669,3 +669,34 @@ class ItemDB:
             if low == want:
                 return i
         return None
+
+
+# ---------------------------------------------------------------------------
+# GitHub releases (announcements and /download)
+# ---------------------------------------------------------------------------
+def release_info(rel: dict) -> dict:
+    """The parts of a GitHub 'latest release' response the bot uses."""
+    assets = {a.get("name", ""): a.get("browser_download_url") for a in rel.get("assets") or []}
+    def find(prefix):
+        for name, url in assets.items():
+            if name.lower().startswith(prefix.lower()) and name.lower().endswith(".zip"):
+                return url
+        return None
+    tag = rel.get("tag_name") or ""
+    return {
+        "tag": tag,
+        "version": tag[1:] if tag.lower().startswith("v") else tag,
+        "page": rel.get("html_url"),
+        "addon": find("EPUGuild-"),
+        "updater": find("EPU-Updater"),
+        "notes": (rel.get("body") or "").strip(),
+        "draft": bool(rel.get("draft")),
+        "prerelease": bool(rel.get("prerelease")),
+    }
+
+
+def fetch_latest_release(repo: str, timeout: int = 30) -> dict:
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/latest",
+                                 headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return release_info(json.loads(r.read()))

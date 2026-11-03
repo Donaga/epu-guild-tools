@@ -52,6 +52,8 @@ def load_config() -> dict:
     cfg.setdefault("status_post", True)
     cfg.setdefault("help_post", True)
     cfg.setdefault("wowhead", "https://www.wowhead.com/forever")
+    cfg.setdefault("github_repo", "Donaga/epu-guild-tools")
+    cfg.setdefault("announce_releases", True)
     cfg.setdefault("item_db", True)               # download the full Forever item list from wago.tools
     cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
@@ -273,9 +275,10 @@ def help_embed() -> discord.Embed:
         "WoW addons can't use the internet, so the bot and the game swap notes through files. Those are written when an "
         "officer types `/reload` or `/epu save`, or logs in or out. Requests made here reach the game, and changes made "
         "in game reach Discord, at the next one of those, usually within the same play session."))
-    e.add_field(name="Get the addon", inline=False, value=(
-        f"[Download EPU Guild Tools]({cfg['addon_url']}). Unzip it into `World of Warcraft\\_forever_\\Interface\\AddOns`, "
-        "then `/reload`. Type `/epu` in game to open it."))
+    e.add_field(name="Get the addon (and keep it updated)", inline=False, value=(
+        "Type `/download`. The easy way is the **updater**: unzip it, double-click *Update EPU Guild Tools*, and "
+        "it installs the addon and updates it whenever there's a new version. Run *Update automatically at startup* "
+        "once and you never have to think about it. Type `/epu` in game to open the addon."))
     e.set_footer(text="Type /help any time to see this again.")
     return e
 
@@ -305,6 +308,76 @@ async def ensure_help_post():
             log.warning("Posted the how-to message but couldn't pin it; give the bot Manage Messages or pin it by hand.")
     except Exception as e:
         explain(e, "post the how-to message", cfg["channel_id"])
+
+
+# ---------------------------------------------------------------------------
+# Releases: announce new versions, /download
+# ---------------------------------------------------------------------------
+latest_release: dict | None = None
+
+
+def download_embed(rel: dict | None) -> discord.Embed:
+    e = discord.Embed(title="Get EPU Guild Tools", color=discord.Color.gold())
+    if not rel:
+        e.description = f"[Latest release]({cfg['addon_url']})"
+        return e
+    e.description = f"Current version: **{rel['version']}**"
+    if rel.get("updater"):
+        e.add_field(name="Recommended: the updater", inline=False, value=(
+            f"[Download the updater]({rel['updater']}). Unzip it somewhere you'll keep (like Documents), double-click "
+            "**Update EPU Guild Tools**, and it installs the addon for you. Double-click **Update automatically at "
+            "startup** once and it keeps itself updated."))
+    if rel.get("addon"):
+        e.add_field(name="Or install it by hand", inline=False, value=(
+            f"[Download the addon]({rel['addon']}) and unzip it into "
+            "`World of Warcraft\\_forever_\\Interface\\AddOns`, then type `/reload` in game."))
+    e.add_field(name="Use WowUp?", inline=False, value=(
+        f"Get Addons, then Install from URL, and paste `https://github.com/{cfg['github_repo']}`. WowUp keeps it updated."))
+    if rel.get("page"):
+        e.add_field(name="\u200b", value=f"[Release notes]({rel['page']})", inline=False)
+    return e
+
+
+async def check_release(announce: bool = True):
+    global latest_release
+    try:
+        rel = await asyncio.to_thread(core.fetch_latest_release, cfg["github_repo"])
+    except Exception as e:
+        log.debug("Release check failed: %s", e)
+        return
+    if rel["draft"] or not rel["tag"]:
+        return
+    latest_release = rel
+    seen = state.data.get("last_release")
+    if seen == rel["tag"]:
+        return
+    state.data["last_release"] = rel["tag"]
+    state.save()
+    if seen is None or not announce or not cfg["announce_releases"]:
+        return                          # first run: remember the current version without announcing it
+    ch = channel()
+    if ch is None:
+        return
+    e = download_embed(rel)
+    e.title = f"EPU Guild Tools {rel['version']} is out"
+    notes = rel["notes"][:900] + ("..." if len(rel["notes"]) > 900 else "")
+    if notes:
+        e.description = notes
+    e.set_footer(text="Already have the updater set to run at startup? You'll get it automatically. Then /reload in game.")
+    try:
+        await ch.send(embed=e)
+    except Exception as ex:
+        explain(ex, "announce the new release", cfg["channel_id"])
+
+
+@tasks.loop(minutes=30)
+async def release_loop():
+    await check_release()
+
+
+@tree.command(name="download", description="Get the EPU Guild Tools addon and its updater", guild=GUILD)
+async def download_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message(embed=download_embed(latest_release), ephemeral=True)
 
 
 @tree.command(name="help", description="How to use the Guild Bank bot", guild=GUILD)
@@ -591,6 +664,8 @@ async def on_ready():
     await ensure_help_post()
     if cfg["item_db"]:
         await asyncio.to_thread(load_items)
+    if not release_loop.is_running():
+        release_loop.start()
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()
