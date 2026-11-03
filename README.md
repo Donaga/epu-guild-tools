@@ -24,4 +24,5 @@ pip install lupa "discord.py>=2.3"
 python tests/test_sync.py
 python tests/test_discord.py
 python tests/test_itemdb.py
+python tests/test_ui.py
 ```

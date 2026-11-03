@@ -286,7 +286,8 @@ class GuildData:
 
     @property
     def donations(self) -> dict:
-        return self.g.get("donations") or {}
+        """Donation records, minus ones an officer voided as mistakes."""
+        return {k: d for k, d in (self.g.get("donations") or {}).items() if not (isinstance(d, dict) and d.get("void"))}
 
     @property
     def bank(self) -> dict:

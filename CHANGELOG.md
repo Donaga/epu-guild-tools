@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- New window: flat dark style, sidebar with counts, search, request filters (status, Mine, sort), real item icons with quality borders, status pills, progress bars, resizable (`/epu scale`, `/epu resetwindow`).
+- Details panel on every row: edit requests (quantity, note, deliver-to, any status incl. reopening), edit needs, void mistaken donations.
+- Mail it: fills in a mail for an approved request from your bags (splitting stacks); Send marks it filled.
+- Officer page: trusted ranks, bank toggle, per-player open request limit (synced), Discord inbox, post needs, full sync, tidy finished requests.
 - Discord: `/request` autocompletes every WoW Forever item by name, from the game's item table (via wago.tools), cached weekly with an `items.csv` fallback.
 - Discord: requests by Wowhead link show the item name from the link until the game has seen it; posts link to Wowhead's Forever pages.
 - Discord: pinned "How to use the Guild Bank bot" post (kept current on each bot start) and `/help`.

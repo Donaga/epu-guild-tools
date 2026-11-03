@@ -17,3 +17,5 @@ jobs:
         run: python tests/test_discord.py
       - name: Full item list
         run: python tests/test_itemdb.py
+      - name: Window, details, mail helper, officer page
+        run: python tests/test_ui.py

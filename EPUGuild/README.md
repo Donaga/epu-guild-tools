@@ -13,6 +13,19 @@ Everyone in the guild should install it. The more members who have it, the more 
 - **Bank alt:** log onto the bank character and type `/epu bankalt on`, then open its bank once. Give the bank alt a guild rank with "Bank" in its name (e.g. *Bank*), or an officer rank. Otherwise other members' addons ignore its updates.
 - **Trust:** by default ranks 0–1 (GM + officers) are trusted. If officers sit at rank 2, type `/epu officerrank 2`. Each player sets this locally, so it's easiest to keep officers at rank 0–1.
 
+## The window
+Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts on each section: red for low-stock needs, gold for requests waiting on an officer. The search box at the top filters whatever section you're in. Drag the bottom-right corner to resize; `/epu scale 0.9` makes everything smaller and `/epu resetwindow` puts it back.
+
+**Click any row for details.** From there you can fix mistakes:
+- Requests: change the quantity, note or which character it's mailed to. Officers can also set any status (including reopening something filled by mistake) and give a reason when rejecting.
+- Needs: change the target or switch between Restock and One-time goal.
+- Donations: officers can void one that was logged by mistake.
+- Bank and shopping items: request them, or add them as a need.
+
+**Mail it.** With a mailbox open, an officer clicks the mail icon on an approved request (or **Mail it** in its details). The addon fills in the recipient and subject and attaches the right number of the item from your bags, splitting a stack if needed. Check it and press Send; the request turns Filled when the mail goes.
+
+**Officer page** (officers only): which ranks can manage the bank, whether this character is a bank, a per-player limit on open requests, the Discord inbox, and tools to post needs to guild chat, force a sync, or tidy finished requests away.
+
 ## What it does
 | Tab | What it's for |
 |---|---|

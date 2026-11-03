@@ -237,6 +237,8 @@ local HELP = {
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
+  "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
+  "|cffffd100/epu resetwindow|r - put the window back in the middle at its normal size",
 }
 
 SLASH_EPUGUILD1 = "/epu"
@@ -282,6 +284,17 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
+  elseif cmd == "scale" then
+    local s = tonumber(args)
+    if not s or s < 0.6 or s > 1.5 then return ns.Print("Usage: /epu scale 0.9  (between 0.6 and 1.5)") end
+    ns.db.settings.scale = s
+    ns.UI:SetScale(s)
+  elseif cmd == "resetwindow" then
+    ns.db.settings.window, ns.db.settings.scale = nil, nil
+    ns.UI:SetScale(1)
+    ns.UI:SetSize(700, 470)
+    ns.UI:ClearAllPoints()
+    ns.UI:SetPoint("CENTER")
   elseif cmd == "minimap" then
     ns.db.settings.hideMinimap = not ns.db.settings.hideMinimap
     ns.UpdateMinimapButton()

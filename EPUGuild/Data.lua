@@ -28,6 +28,7 @@ function ns.G()
   g.donations = g.donations or {}-- [id] = { t, who, item, n, money, to }
   g.crafters = g.crafters or {}  -- [member] = { t, lvl, profs = {[name] = skill} }
   g.alts = g.alts or {}          -- [accountId] = { t, main, chars = { names } }
+  g.policy = g.policy or { v = 0, maxOpen = 0 }   -- officer settings shared with the guild
   return g
 end
 
@@ -162,11 +163,18 @@ function ns.Merge(sender, b)
 
   if trusted and type(b.don) == "table" then
     for id, d in pairs(b.don) do
-      if type(d) == "table" and not g.donations[id] then
-        g.donations[id] = d
+      local cur = g.donations[id]
+      if type(d) == "table" and (not cur or (tonumber(d.u) or 0) > (tonumber(cur.u) or 0)) then
+        g.donations[id] = d          -- new, or corrected/voided by an officer
         changed = true
       end
     end
+  end
+
+  local pol = b.policy
+  if trusted and type(pol) == "table" and type(pol.v) == "number" and pol.v > (g.policy.v or 0) then
+    g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0 }
+    changed = true
   end
 
   if type(b.craft) == "table" then
@@ -222,6 +230,7 @@ function ns.Digest()
   local d = ns.EmptyDigest()
   if not g then return d end
   d.needs = g.needs.v
+  d.policy = g.policy.v
   for alt, s in pairs(g.bank) do d.bank[alt] = s.v end
   d.since = g.syncedAt or 0
   return d
@@ -233,6 +242,7 @@ function ns.Delta(d)
   local b = {}
   local since = tonumber(d.since) or 0
   if g.needs.v > (tonumber(d.needs) or 0) then b.needs = g.needs end
+  if (g.policy.v or 0) > (tonumber(d.policy) or 0) then b.policy = g.policy end
   for alt, s in pairs(g.bank) do
     if s.v > ((type(d.bank) == "table" and tonumber(d.bank[alt])) or 0) then
       b.bank = b.bank or {}
@@ -243,7 +253,7 @@ function ns.Delta(d)
     if r.u > since then b.req = b.req or {}; b.req[id] = r end
   end
   for id, x in pairs(g.donations) do
-    if (x.t or 0) > since then b.don = b.don or {}; b.don[id] = x end
+    if math.max(x.t or 0, tonumber(x.u) or 0) > since then b.don = b.don or {}; b.don[id] = x end
   end
   for who, c in pairs(g.crafters) do
     if c.t > since then b.craft = b.craft or {}; b.craft[who] = c end
@@ -523,9 +533,14 @@ end
 function ns.NewRequest(id, qty, note, to)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
+  local officer = ns.IsTrusted(ns.me)
+  local limit = tonumber(g.policy.maxOpen) or 0
+  if not officer and limit > 0 and ns.OpenCountFor(ns.me) >= limit then
+    return ns.Print("You already have " .. limit .. " open request" .. (limit == 1 and "" or "s")
+      .. " (the guild's limit, counting alts). Cancel one or wait for it to be filled.")
+  end
   local now = ns.Now()
   local rid = ns.me .. "-" .. now .. "-" .. math.random(100, 999)
-  local officer = ns.IsTrusted(ns.me)
   local r = { who = ns.me, item = id, qty = qty or 1, note = (note or ""):sub(1, 80),
     status = officer and "approved" or "pending", t = now, u = now }
   if officer then r.by = ns.me end
@@ -556,6 +571,91 @@ function ns.SetRequestStatus(rid, status, reason, by)
   r.u = ns.NextVersion(r.u)
   ns.Send("D", { req = { [rid] = r } })
   ns.Changed()
+end
+
+-- Fix a request. Officers can change anything, including moving it back to
+-- pending or approved. The requester can change quantity, note and
+-- deliver-to while it's still pending, or cancel it.
+--   changes: { qty, note, to, status, reason }
+function ns.EditRequest(rid, changes)
+  local g = ns.G()
+  local r = g and g.requests[rid]
+  if not r then return false end
+  local officer = ns.IsTrusted(ns.me)
+  local own = (r.who == ns.me)
+  local pending = (r.status == "pending" or r.status == "open")
+  if not officer then
+    if not own then ns.Print("Only officers can change other members' requests.") return false end
+    if changes.status and changes.status ~= "cancelled" then ns.Print("Only officers can approve, reject or fill requests.") return false end
+    if not pending and (changes.qty or changes.note or changes.to) then ns.Print("This request is already being handled; ask an officer to change it.") return false end
+  end
+  if changes.qty then r.qty = math.max(1, math.floor(tonumber(changes.qty) or r.qty)) end
+  if changes.note then r.note = changes.note:sub(1, 80) end
+  if changes.to then
+    local to = ns.Short(changes.to)
+    r.to = (to and to ~= r.who) and to or nil
+  end
+  if changes.status and changes.status ~= r.status then
+    r.status = changes.status
+    r.by = ns.me
+    if changes.status == "rejected" then r.reason = (changes.reason or ""):sub(1, 80) else r.reason = nil end
+    r.archived = nil
+  elseif changes.reason and r.status == "rejected" then
+    r.reason = changes.reason:sub(1, 80)
+  end
+  r.u = ns.NextVersion(r.u)
+  ns.Send("D", { req = { [rid] = r } })
+  ns.Changed()
+  return true
+end
+
+-- Officers: hide finished (filled, rejected, cancelled) requests from the default views.
+function ns.ArchiveFinished()
+  local g = ns.G()
+  if not g or not ns.IsTrusted(ns.me) then return 0 end
+  local batch, n = {}, 0
+  for rid, r in pairs(g.requests) do
+    if not ns.IsActiveRequest(r) and not r.archived then
+      r.archived = true
+      r.u = ns.NextVersion(r.u)
+      batch[rid] = r
+      n = n + 1
+    end
+  end
+  if n > 0 then ns.Send("D", { req = batch }); ns.Changed() end
+  return n
+end
+
+-- Officers: mark a donation record as a mistake (kept, but no longer counted).
+function ns.VoidDonation(id, void)
+  local g = ns.G()
+  local d = g and g.donations[id]
+  if not d or not ns.IsTrusted(ns.me) then return end
+  d.void = (void ~= false) or nil
+  d.u = ns.NextVersion(math.max(d.u or 0, d.t or 0))
+  ns.Send("D", { don = { [id] = d } })
+  ns.Changed()
+end
+
+-- Officer settings shared with the guild.
+function ns.SetPolicy(key, value)
+  local g = ns.G()
+  if not g or not ns.IsTrusted(ns.me) then return ns.Print("Only officers can change guild bank settings.") end
+  g.policy[key] = value
+  g.policy.v = ns.NextVersion(g.policy.v)
+  ns.Send("D", { policy = g.policy })
+  ns.Changed()
+end
+
+-- Open (pending or approved) requests for a player, counting all their alts.
+function ns.OpenCountFor(name)
+  local g = ns.G()
+  if not g then return 0 end
+  local player, n = ns.MainOf(name), 0
+  for _, r in pairs(g.requests) do
+    if ns.IsActiveRequest(r) and ns.MainOf(r.who) == player then n = n + 1 end
+  end
+  return n
 end
 
 -- Called when a trusted character mails or trades items to someone:

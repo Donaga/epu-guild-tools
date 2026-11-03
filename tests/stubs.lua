@@ -16,7 +16,7 @@ M.__index = function(t, k)
   if k:sub(1,1):match("%u") then return function(self) return nil end end
   return nil
 end
-function M:SetText(s) self._text = s end
+function M:SetText(s) self._text = s; local f = self._scripts and self._scripts.OnTextChanged; if f then f(self, false) end end
 function M:GetText() return self._text or "" end
 function M:Show() local was = self._shown; self._shown = true; if not was and self._scripts.OnShow then self._scripts.OnShow(self) end end
 function M:Hide() self._shown = false end
@@ -27,15 +27,29 @@ function M:HasFocus() return false end
 function M:SetScript(k, fn) self._scripts[k] = fn end
 function M:GetScript(k) return self._scripts[k] end
 function M:RegisterEvent(e) self._events[e] = true end
-function M:CreateFontString() return NewMock() end
-function M:CreateTexture() return NewMock() end
 function M:Click() if self._scripts.OnClick then self._scripts.OnClick(self) end end
 function M:GetCenter() return 0, 0 end
 function M:GetEffectiveScale() return 1 end
+function M:SetSize(w, h) self._w, self._h = w, h end
+function M:SetWidth(w) self._w = w end
+function M:SetHeight(h) self._h = h end
+function M:GetWidth() return self._w or 400 end
+function M:GetHeight() return self._h or 300 end
+function M:GetStringWidth() return #(self._text or "") * 6 end
+function M:GetStringHeight() return 14 end
+function M:GetVerticalScroll() return self._vs or 0 end
+function M:SetVerticalScroll(v) self._vs = v end
+function M:GetFrameLevel() return 1 end
+function M:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
+function M:GetParent() return self._parent end
+function M:SetParent(p) self._parent = p end
+function M:CreateFontString() local f = NewMock(); f._parent = self; return f end
+function M:CreateTexture() local t = NewMock(); t._parent = self; return t end
 function NewMock() local o = setmetatable({ _scripts = {}, _events = {} }, M); return o end
 
 function CreateFrame(kind, name, parent, template)
   local f = NewMock()
+  f._parent = parent
   if kind == "Frame" or kind == "Button" or kind == "EditBox" or kind == "ScrollFrame" then f._shown = (name ~= "EPUGuildFrame") end
   table.insert(__frames, f)
   if name then _G[name] = f end
@@ -199,3 +213,15 @@ function __dumpSV(path)
   out[#out+1] = "\nEPUGuildCharDB = nil\n"
   local f = io.open(path, "w"); f:write(table.concat(out)); f:close()
 end
+
+-- mailbox
+__mailSlots = {}
+MailFrame = NewMock(); MailFrame._shown = false
+SendMailFrame = NewMock(); SendMailFrame._shown = true
+SendMailNameEditBox = NewMock(); SendMailSubjectEditBox = NewMock()
+__cursor = nil
+C_Container.PickupContainerItem = function(b, s) local x = __bags[b][s]; __cursor = {x[1], x[2]}; __bags[b][s] = nil end
+C_Container.SplitContainerItem = function(b, s, n) local x = __bags[b][s]; x[2] = x[2] - n; __cursor = {x[1], n} end
+function ClickSendMailItemButton(i) __mailSlots[i] = __cursor; __cursor = nil end
+function GuildControlGetNumRanks() return 5 end
+function GuildControlGetRankName(i) return ({"Guild Master", "Officer", "Veteran", "Member", "Initiate"})[i] end

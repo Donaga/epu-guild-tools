@@ -261,3 +261,68 @@ end)
 ns.On("TRADE_CLOSED", function()
   C_Timer.After(2, function() tradeSnap = nil end)
 end)
+
+---------------------------------------------------------------------------
+-- Mail helper: with the mailbox open, fill in a request's mail (recipient,
+-- subject, the right number of the item from your bags). You press Send;
+-- the send itself marks the request filled (see AutoFillFor above).
+---------------------------------------------------------------------------
+function ns.MailboxOpen()
+  return SendMailFrame ~= nil and MailFrame ~= nil and MailFrame:IsShown()
+end
+
+local function Pickup(bag, slot)
+  if C_Container and C_Container.PickupContainerItem then return C_Container.PickupContainerItem(bag, slot) end
+  return PickupContainerItem(bag, slot)
+end
+
+local function Split(bag, slot, n)
+  if C_Container and C_Container.SplitContainerItem then return C_Container.SplitContainerItem(bag, slot, n) end
+  return SplitContainerItem(bag, slot, n)
+end
+
+function ns.MailRequest(rid)
+  local g = ns.G()
+  local r = g and g.requests[rid]
+  if not r then return end
+  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers and the bank character send requested items.") end
+  if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail it again.") end
+  if r.status ~= "approved" then return ns.Print("Approve the request before mailing it.") end
+
+  if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
+  local to = r.to or r.who
+  local name = ns.ItemName(r.item, true)
+  if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
+  if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Guild bank: " .. name .. " x" .. r.qty) end
+  if ClearCursor then ClearCursor() end
+
+  -- Attach whole stacks, then split off the remainder.
+  local need, slotIndex = tonumber(r.qty) or 1, 1
+  local maxSlots = ATTACHMENTS_MAX_SEND or 12
+  for _, bag in ipairs(BagList()) do
+    for slot = 1, (NumSlots(bag) or 0) do
+      if need <= 0 or slotIndex > maxSlots then break end
+      local id, count = SlotItem(bag, slot)
+      if id == r.item then
+        if count <= need then
+          Pickup(bag, slot)
+          need = need - count
+        else
+          Split(bag, slot, need)
+          need = 0
+        end
+        ClickSendMailItemButton(slotIndex)
+        slotIndex = slotIndex + 1
+      end
+    end
+  end
+  local attached = (tonumber(r.qty) or 1) - need
+  if attached == 0 then
+    return ns.Print("You don't have any " .. ns.ItemLink(r.item) .. " in your bags. Take it out of the bank first.")
+  end
+  if need > 0 then
+    ns.Print("Attached " .. attached .. " of " .. r.qty .. " " .. ns.ItemLink(r.item) .. " (that's all you're carrying). Check the mail, then click Send.")
+  else
+    ns.Print("Mail ready for " .. to .. ": " .. ns.ItemLink(r.item) .. " x" .. r.qty .. ". Check it, then click Send. The request is marked filled when it goes.")
+  end
+end
