@@ -24,6 +24,11 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 
 **Mail it.** With a mailbox open, an officer clicks the mail icon on an approved request (or **Mail it** in its details). The addon fills in the recipient and subject and attaches the right number of the item from your bags, splitting a stack if needed. Check it and press Send; the request turns Filled when the mail goes.
 
+**Crafters and recipes**
+- **Crafters** lists everyone's professions and skill. Officers can mark **guild crafters** (for example, our Tailor) from a crafter's details. Guild crafters get a star and are listed first everywhere.
+- **Recipes** lists every recipe guild members can make. It's searchable, and you can filter by profession, *Online* (someone who can make it is on now) or *Guild crafters*. Click a recipe to see who can make it, with a Whisper button for each. BoP items are left out, since they can't be passed on.
+- A crafter's recipes are shared the first time they open their profession window with the addon, and again only when they learn something new.
+
 **Helping out without opening the window**
 - **Tooltips:** hover any item and you'll see "Guild bank needs 40 more" (or how many the bank holds, or your request's status).
 - **Bag coins:** items the bank needs get a small gold coin in your bags. It works in Blizzard's bags and in Baganator; in Baganator you can move it under its icon corner settings.

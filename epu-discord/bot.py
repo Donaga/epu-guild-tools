@@ -264,6 +264,7 @@ def help_embed() -> discord.Embed:
         "`/needs`: what the bank is short on. Donations of these are the most help.\n"
         "`/bank search:` look up an item, e.g. `/bank search:potion`.\n"
         "`/requests`: all open requests.\n"
+        "`/craft item:` who in the guild can make something (\u2b50 = guild crafter).\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
     e.add_field(name="Donating", inline=False, value=(
         "Items the bank needs show a gold coin in your bags and a line on their tooltip. At any mailbox the addon's "
@@ -596,6 +597,37 @@ async def request_cmd(interaction: discord.Interaction, item: str, qty: app_comm
         f"Got it. Your request for {name} x{qty}{f' (mail to {to})' if to else ''} is queued and reaches the game at the next officer login or /reload.",
         ephemeral=True)
     await post_or_edit(rid, r, gd, "Queued from Discord.")
+
+
+async def craftable_autocomplete(interaction: discord.Interaction, current: str):
+    gd = read_latest()
+    cur = current.lower()
+    hits = sorted((n, i) for i, n in (gd.craftable_items() if gd else {}).items() if cur in n.lower())[:25]
+    return [app_commands.Choice(name=n[:100], value=f"id:{i}") for n, i in hits]
+
+
+@tree.command(name="craft", description="Who in the guild can craft an item", guild=GUILD)
+@app_commands.describe(item="Start typing a recipe or item name")
+@app_commands.autocomplete(item=craftable_autocomplete)
+async def craft_cmd(interaction: discord.Interaction, item: str):
+    gd = read_latest()
+    if gd is None:
+        await interaction.response.send_message("I don't have the guild's data yet.", ephemeral=True)
+        return
+    item_id, name = core.resolve_item(item, gd.craftable_items() or gd.known_items())
+    crafters = gd.crafters_for(item_id=item_id) if item_id else gd.crafters_for(spell=item)
+    name = name or (gd.item_name(item_id) if item_id else item)
+    if not crafters:
+        await interaction.response.send_message(
+            f"Nobody has shared a recipe for **{name}** yet. Crafters share theirs by opening their profession window in game.",
+            ephemeral=True)
+        return
+    lines = [("\u2b50 " if c["designated"] else "") + f"**{c['who']}** ({c['prof']} {c['rank'] or '?'})" for c in crafters[:15]]
+    e = discord.Embed(title=f"Who can craft {name}", description="\n".join(lines), color=discord.Color.blurple())
+    if item_id:
+        e.url = f"{cfg['wowhead'].rstrip('/')}/item={item_id}"
+    e.set_footer(text="\u2b50 = guild crafter. Whisper them in game, or /request it from the guild bank.")
+    await interaction.response.send_message(embed=e)
 
 
 @tree.command(name="needs", description="What the guild bank is short on", guild=GUILD)

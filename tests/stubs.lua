@@ -106,7 +106,7 @@ function GetItemInfo(x)
   local id = tonumber(x)
   if not id then for k, v in pairs(ITEMS) do if v == x then id = k end end end
   if not id or not ITEMS[id] then return nil end
-  return ITEMS[id], __link(id), 1, 1, 1, "Trade Goods", "Cloth", 20, "", "icon" .. id
+  return ITEMS[id], __link(id), 1, 1, 1, "Trade Goods", "Cloth", 20, "", "icon" .. id, 1, 7, 0, (__bop and __bop[id]) and 1 or 0
 end
 function GetItemInfoInstant(id) return id, nil, nil, nil, "icon" .. id end
 ITEM_QUALITY_COLORS = { [1] = { hex = "|cffffffff" } }
@@ -146,10 +146,10 @@ function GetCoinTextureString(c) return c .. "c" end
 function GetCursorInfo() end
 function ClearCursor() end
 function GetTradeSkillLine() return "Tailoring", 150, 300 end
-function GetNumTradeSkills() return 2 end
-local TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "easy" } }
-function GetTradeSkillInfo(i) return unpack(TS[i]) end
-function GetTradeSkillItemLink(i) if i == 2 then return __link(2996) end end
+__TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "easy", 2996 } }
+function GetNumTradeSkills() return #__TS end
+function GetTradeSkillInfo(i) return __TS[i][1], __TS[i][2] end
+function GetTradeSkillItemLink(i) if __TS[i][3] then return __link(__TS[i][3]) end end
 ERR_TRADE_COMPLETE = "Trade complete."
 
 function __load(dir)

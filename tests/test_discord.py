@@ -108,6 +108,15 @@ A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'
 check("Discord deliver-to reaches the game", B.ev(f'__ns.G().requests["d-{e2['id']}"].to') == "Pip Baker")
 check("unlink", st.unlink(42, "pip baker") == ["Tyler Baker"])
 
+# --- /craft lookup from shared recipes ---
+B.ex('__fire("TRADE_SKILL_SHOW")'); tick(6)
+A.ex('__ns.SetDesignated("Tailoring", "Tyler Baker", true)'); tick(3)
+A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
+gd2 = core.load_guild_data(paths[0], "E Pluribus Unum")
+cr = gd2.crafters_for(item_id=2996)
+check("companion finds who can craft (%s)" % cr, cr and cr[0]["who"] == "Tyler Baker" and cr[0]["designated"] is True)
+check("craftable items for autocomplete", 2996 in gd2.craftable_items())
+
 # --- status post summary ---
 sm = gd.status_summary()
 check("status: needs listed", [n["name"] for n in sm["needs"]] == ["Linen Cloth"])

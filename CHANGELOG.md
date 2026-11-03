@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+- Recipes section: every craftable (non-BoP) recipe in the guild, searchable, filterable by profession, online and guild crafters; details list who can make it with Whisper buttons.
+- Crafters share their recipe lists when they open a profession window (and again only when it changes).
+- Officers can mark guild crafters per profession; they get a star and are listed first.
+- Discord: `/craft` shows who can make an item.
+
 ## 0.5.0
 - Item tooltips show what the guild bank needs or holds, and your own request's status.
 - Gold coin on items in your bags that the bank needs (Blizzard bags and Baganator).

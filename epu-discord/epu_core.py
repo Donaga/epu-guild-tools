@@ -329,6 +329,34 @@ class GuildData:
                     totals[item_id] = totals.get(item_id, 0) + int(c or 0)
         return sorted(({"id": i, "name": self.item_name(i), "count": c} for i, c in totals.items()), key=lambda r: r["name"])
 
+    def is_designated(self, who: str, prof: str) -> bool:
+        des = ((self.g.get("policy") or {}).get("designated") or {}).get(prof) or {}
+        names = des.values() if isinstance(des, dict) else des
+        return who in names
+
+    def crafters_for(self, item_id: int | None = None, spell: str | None = None) -> list[dict]:
+        """Who can craft an item (or an enchant by name): guild crafters first, then by skill."""
+        out = []
+        for who, rec in (self.g.get("recipes") or {}).items():
+            for prof, p in ((rec or {}).get("profs") or {}).items():
+                items = p.get("items") or {}
+                items = list(items.values()) if isinstance(items, dict) else list(items)
+                spells = p.get("spells") or {}
+                spells = list(spells.values()) if isinstance(spells, dict) else list(spells)
+                if (item_id is not None and item_id in items) or (spell and spell.lower() in (s.lower() for s in spells)):
+                    out.append({"who": who, "prof": prof, "rank": p.get("rank"), "designated": self.is_designated(who, prof)})
+        out.sort(key=lambda c: (not c["designated"], -(c["rank"] or 0), c["who"]))
+        return out
+
+    def craftable_items(self) -> dict[int, str]:
+        names = {}
+        for rec in (self.g.get("recipes") or {}).values():
+            for p in ((rec or {}).get("profs") or {}).values():
+                items = p.get("items") or {}
+                for i in (items.values() if isinstance(items, dict) else items):
+                    names[int(i)] = self.item_name(i)
+        return names
+
     def known_items(self) -> dict[int, str]:
         names = dict(self.item_names)
         for row in self.needs():

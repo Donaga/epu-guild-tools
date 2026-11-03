@@ -29,6 +29,8 @@ function ns.G()
   g.crafters = g.crafters or {}  -- [member] = { t, lvl, profs = {[name] = skill} }
   g.alts = g.alts or {}          -- [accountId] = { t, main, chars = { names } }
   g.policy = g.policy or { v = 0, maxOpen = 0 }   -- officer settings shared with the guild
+  g.policy.designated = g.policy.designated or {}  -- [profession] = { names } (guild crafters)
+  g.recipes = g.recipes or {}    -- [member] = { t, profs = {[prof] = { rank, items = {ids}, spells = {names} }} }
   return g
 end
 
@@ -114,6 +116,9 @@ function ns.Prune(g)
   for id, a in pairs(g.alts) do
     if now - (a.t or 0) > 90 * DAY then g.alts[id] = nil end
   end
+  for who, rec in pairs(g.recipes) do
+    if now - (rec.t or 0) > 90 * DAY then g.recipes[who] = nil; ns.recipeIndex = nil end
+  end
   local ids = {}
   for id in pairs(g.donations) do ids[#ids + 1] = id end
   if #ids > 500 then
@@ -177,8 +182,31 @@ function ns.Merge(sender, b, catchingUp)
 
   local pol = b.policy
   if trusted and type(pol) == "table" and type(pol.v) == "number" and pol.v > (g.policy.v or 0) then
-    g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0 }
+    local designated = {}
+    if type(pol.designated) == "table" then
+      for prof, names in pairs(pol.designated) do
+        if type(prof) == "string" and type(names) == "table" then
+          local list = {}
+          for _, n in ipairs(names) do if type(n) == "string" then list[#list + 1] = n end end
+          designated[prof] = list
+        end
+      end
+    end
+    g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0, designated = designated }
     changed = true
+  end
+
+  if type(b.recipes) == "table" then
+    for who, rec in pairs(b.recipes) do
+      if type(rec) == "table" and type(rec.t) == "number" and type(rec.profs) == "table" and (trusted or who == sender) then
+        local cur = g.recipes[who]
+        if not cur or rec.t > cur.t then
+          g.recipes[who] = rec
+          changed = true
+          ns.recipeIndex = nil
+        end
+      end
+    end
   end
 
   if type(b.craft) == "table" then
@@ -265,6 +293,9 @@ function ns.Delta(d)
   for id, a in pairs(g.alts) do
     if (a.t or 0) > since then b.alts = b.alts or {}; b.alts[id] = a end
   end
+  for who, rec in pairs(g.recipes) do
+    if (rec.t or 0) > since then b.recipes = b.recipes or {}; b.recipes[who] = rec end
+  end
   return b
 end
 
@@ -340,6 +371,7 @@ function ns.BroadcastMine()
   if g.crafters[ns.me] then b.craft = { [ns.me] = g.crafters[ns.me] }; any = true end
   local id = ns.db and ns.db.accountId
   if id and g.alts[id] then b.alts = { [id] = g.alts[id] }; any = true end
+  if g.recipes[ns.me] then b.recipes = { [ns.me] = g.recipes[ns.me] }; any = true end
   for id, r in pairs(g.requests) do
     if r.who == ns.me and ns.IsActiveRequest(r) then
       b.req = b.req or {}
@@ -740,25 +772,105 @@ end)
 -- profession window opens). "Who can craft X?" is asked live, and anyone
 -- who knows it answers by whisper, so no big recipe lists are synced.
 ---------------------------------------------------------------------------
-local function SaveRecipes(prof, rank, ids, names)
+local function SaveRecipes(prof, rank, ids, names, spells)
   if not prof or not ns.cdb then return end
-  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, t = ns.Now() }
+  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, spells = spells, t = ns.Now() }
+  ns.Debounce("publishRecipes", 2, function() ns.PublishRecipes() end)
+end
+
+-- Is this item bind-on-pickup? (nil while the client hasn't loaded the item)
+function ns.IsBoP(id)
+  local bind = select(14, GetItemInfo(id))
+  if bind == nil then return nil end
+  return bind == 1
+end
+
+-- Share this character's craftable (non-BoP) recipes with the guild.
+function ns.PublishRecipes()
+  local g = ns.G()
+  if not g or not ns.cdb then return end
+  local profs, sig = {}, {}
+  for prof, r in pairs(ns.cdb.recipes or {}) do
+    local items, spells = {}, {}
+    for id in pairs(r.ids or {}) do
+      if ns.IsBoP(id) ~= true then items[#items + 1] = id end
+    end
+    for _, name in ipairs(r.spells or {}) do spells[#spells + 1] = name end
+    table.sort(items)
+    table.sort(spells)
+    profs[prof] = { rank = r.rank, items = items, spells = spells }
+    sig[#sig + 1] = prof .. ":" .. tostring(r.rank) .. ":" .. table.concat(items, ",") .. ":" .. table.concat(spells, ",")
+  end
+  table.sort(sig)
+  local signature = table.concat(sig, "|")
+  local cur = g.recipes[ns.me]
+  if cur and ns.cdb.recipeSig == signature then return end
+  ns.cdb.recipeSig = signature
+  g.recipes[ns.me] = { t = ns.NextVersion(cur and cur.t), profs = profs }
+  ns.recipeIndex = nil
+  ns.Send("D", { recipes = { [ns.me] = g.recipes[ns.me] } })
+  ns.Changed()
+end
+
+-- Officers: mark (or unmark) a member as a guild crafter for a profession.
+function ns.SetDesignated(prof, name, on)
+  local g = ns.G()
+  if not g or not ns.IsTrusted(ns.me) then return ns.Print("Only officers can choose guild crafters.") end
+  local list = g.policy.designated[prof] or {}
+  local out = {}
+  for _, n in ipairs(list) do if n ~= name then out[#out + 1] = n end end
+  if on then out[#out + 1] = name end
+  g.policy.designated[prof] = (#out > 0) and out or nil
+  g.policy.v = ns.NextVersion(g.policy.v)
+  ns.Send("D", { policy = g.policy })
+  ns.Changed()
+end
+
+function ns.IsDesignated(name, prof)
+  local g = ns.G()
+  local list = g and g.policy.designated and g.policy.designated[prof]
+  for _, n in ipairs(list or {}) do if n == name then return true end end
+  return false
+end
+
+-- Every craftable recipe in the guild: { key, item, name, crafters = { {who, prof, rank} } }
+function ns.RecipeIndex()
+  if ns.recipeIndex then return ns.recipeIndex end
+  local g = ns.G()
+  local byKey, list = {}, {}
+  for who, rec in pairs((g and g.recipes) or {}) do
+    for prof, p in pairs(rec.profs or {}) do
+      local function add(key, item, name)
+        local e = byKey[key]
+        if not e then
+          e = { key = key, item = item, name = name, prof = prof, crafters = {} }
+          byKey[key] = e
+          list[#list + 1] = e
+        end
+        e.crafters[#e.crafters + 1] = { who = who, prof = prof, rank = p.rank }
+      end
+      for _, id in ipairs(p.items or {}) do add("item:" .. id, id, nil) end
+      for _, sp in ipairs(p.spells or {}) do add("spell:" .. sp, nil, sp) end
+    end
+  end
+  ns.recipeIndex = list
+  return list
 end
 
 local function ScanTradeSkill()
   if not GetTradeSkillLine or not GetNumTradeSkills then return end
   local prof, rank = GetTradeSkillLine()
   if not prof or prof == "UNKNOWN" then return end
-  local ids, names = {}, {}
+  local ids, names, spells = {}, {}, {}
   for i = 1, GetNumTradeSkills() do
     local name, kind = GetTradeSkillInfo(i)
     if name and kind ~= "header" then
       names[name:lower()] = true
       local id = ns.ItemID(GetTradeSkillItemLink and GetTradeSkillItemLink(i))
-      if id then ids[id] = true end
+      if id then ids[id] = true else spells[#spells + 1] = name end
     end
   end
-  SaveRecipes(prof, rank, ids, names)
+  SaveRecipes(prof, rank, ids, names, spells)
 end
 
 -- Enchanting (and Beast Training) use the separate Craft window in vanilla.
@@ -766,16 +878,16 @@ local function ScanCraft()
   if not GetNumCrafts or not GetCraftDisplaySkillLine then return end
   local prof, rank = GetCraftDisplaySkillLine()
   if not prof then return end
-  local ids, names = {}, {}
+  local ids, names, spells = {}, {}, {}
   for i = 1, GetNumCrafts() do
     local name, _, kind = GetCraftInfo(i)
     if name and kind ~= "header" then
       names[name:lower()] = true
       local id = ns.ItemID(GetCraftItemLink and GetCraftItemLink(i))
-      if id then ids[id] = true end
+      if id then ids[id] = true else spells[#spells + 1] = name end   -- enchants are services, not items
     end
   end
-  SaveRecipes(prof, rank, ids, names)
+  SaveRecipes(prof, rank, ids, names, spells)
 end
 
 ns.On("TRADE_SKILL_SHOW", function() C_Timer.After(0.5, ScanTradeSkill) end)

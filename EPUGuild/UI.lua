@@ -722,6 +722,7 @@ UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
   crafters = { filter = "all" },
+  recipes = { prof = nil, online = false, designated = false, crafter = nil },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
 
@@ -736,7 +737,8 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "needs", "shopping", "bank", "requests", "donations", "crafters", "officer" }
+local ORDER = { "needs", "shopping", "bank", "requests", "donations", "crafters", "recipes", "officer" }
+local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 -- Needs ---------------------------------------------------------------------
 Views.needs = {
@@ -969,7 +971,7 @@ Views.donations = {
 -- Crafters ------------------------------------------------------------------
 Views.crafters = {
   label = "Crafters", icon = "Interface\\Icons\\Trade_BlackSmithing",
-  chips = { { "all", "All" }, { "online", "Online" } },
+  chips = { { "all", "All" }, { "online", "Online" }, { "designated", "Guild crafters" } },
   tools = function(bar)
     bar:Add(Btn(bar, "Who can craft...?", 120, 22), "right", function()
       local text = UI.search:GetText()
@@ -990,21 +992,29 @@ Views.crafters = {
     local list = {}
     for who, c in pairs(g.crafters) do
       for prof, skill in pairs(c.profs or {}) do
-        if (UI.state.crafters.filter == "all" or Online(who)) and Match(q, who, prof, ns.MainOf(who)) then
-          list[#list + 1] = { who = who, prof = prof, skill = skill, lvl = c.lvl }
+        local f = UI.state.crafters.filter
+        local des = ns.IsDesignated(who, prof)
+        if (f == "all" or (f == "online" and Online(who)) or (f == "designated" and des)) and Match(q, who, prof, ns.MainOf(who)) then
+          list[#list + 1] = { who = who, prof = prof, skill = skill, lvl = c.lvl, des = des }
         end
       end
     end
     table.sort(list, function(a, b)
       if a.prof ~= b.prof then return a.prof < b.prof end
+      if a.des ~= b.des then return a.des end
       if a.skill ~= b.skill then return a.skill > b.skill end
       return a.who < b.who
     end)
     for _, e in ipairs(list) do
       local who = e.who
+      local nrec = 0
+      local rec = g.recipes[who] and g.recipes[who].profs and g.recipes[who].profs[e.prof]
+      if rec then nrec = #(rec.items or {}) + #(rec.spells or {}) end
       out[#out + 1] = {
-        key = "craft:" .. who .. e.prof, dot = Online(who), title = ns.WhoLabel(who),
-        sub = e.prof .. "  ·  level " .. tostring(e.lvl or "?"), right = tostring(e.skill),
+        key = "craft:" .. who .. e.prof, dot = Online(who),
+        title = (e.des and (STAR .. " ") or "") .. ns.WhoLabel(who) .. (e.des and ("  |cfff2c14eguild " .. e.prof:lower() .. "|r") or ""),
+        sub = e.prof .. "  ·  level " .. tostring(e.lvl or "?") .. (nrec > 0 and ("  ·  " .. nrec .. " recipes") or ""),
+        right = tostring(e.skill),
         frac = nil, onClick = function() UI:OpenDetails("crafter", who) end,
       }
     end
@@ -1013,9 +1023,100 @@ Views.crafters = {
   footer = function(g)
     local n = 0
     for _ in pairs(g.crafters) do n = n + 1 end
-    return n .. " members reporting. Green dot = online now."
+    return n .. " members reporting. Green dot = online now. " .. STAR .. " = guild crafter (officers set these in a crafter's details)."
   end,
   empty = "No profession data yet. It fills in as members with the addon log in.",
+}
+
+-- Recipes ---------------------------------------------------------------------
+local function RecipeProfs()
+  local set, list = {}, {}
+  for _, e in ipairs(ns.RecipeIndex()) do
+    for _, c in ipairs(e.crafters) do
+      if not set[c.prof] then set[c.prof] = true; list[#list + 1] = c.prof end
+    end
+  end
+  table.sort(list)
+  return list
+end
+
+local MAX_LIST = 250   -- long lists: show the first 250 and ask people to search
+
+Views.recipes = {
+  label = "Recipes", icon = "Interface\\Icons\\INV_Misc_Book_09",
+  tools = function(bar)
+    UI.profChip = bar:Add(Btn(bar, "All professions", 120, 22), "left", function()
+      local st, profs = UI.state.recipes, RecipeProfs()
+      local idx = 0
+      for i, p in ipairs(profs) do if p == st.prof then idx = i end end
+      st.prof = profs[idx + 1]          -- past the end wraps back to "All"
+      UI:Refresh()
+    end, "Click to show one profession at a time")
+    UI.onlineChip = bar:Add(Btn(bar, "Online", 56, 22), "left", function()
+      UI.state.recipes.online = not UI.state.recipes.online; UI:Refresh()
+    end, "Only recipes someone online right now can make")
+    UI.desChip = bar:Add(Btn(bar, "Guild crafters", 96, 22), "left", function()
+      UI.state.recipes.designated = not UI.state.recipes.designated; UI:Refresh()
+    end, "Only recipes a designated guild crafter can make")
+    UI.crafterChip = bar:Add(Btn(bar, "", 110, 22), "right", function()
+      UI.state.recipes.crafter = nil; UI:Refresh()
+    end, "Click to show everyone's recipes again")
+  end,
+  rows = function(g, q)
+    local st, out = UI.state.recipes, {}
+    for _, e in ipairs(ns.RecipeIndex()) do
+      local name = e.item and ns.ItemName(e.item, true) or e.name
+      if (not st.prof or e.prof == st.prof) and ns.IsBoP(e.item or 0) ~= true then
+        local crafters, anyOnline, anyDes, hasCrafter = {}, false, false, st.crafter == nil
+        for _, c in ipairs(e.crafters) do
+          local des = ns.IsDesignated(c.who, c.prof)
+          local on = Online(c.who)
+          anyOnline = anyOnline or on
+          anyDes = anyDes or des
+          if c.who == st.crafter then hasCrafter = true end
+          crafters[#crafters + 1] = { who = c.who, des = des, on = on }
+        end
+        local names = {}
+        for _, c in ipairs(crafters) do names[#names + 1] = c.who end
+        if hasCrafter and (not st.online or anyOnline) and (not st.designated or anyDes)
+          and Match(q, name, e.prof, table.concat(names, " ")) then
+          table.sort(crafters, function(a, b)
+            if a.des ~= b.des then return a.des end
+            if a.on ~= b.on then return a.on end
+            return a.who < b.who
+          end)
+          local shown = {}
+          for i = 1, math.min(4, #crafters) do
+            local c = crafters[i]
+            shown[#shown + 1] = (c.des and STAR or "") .. (c.on and ("|cff4ade80" .. c.who .. "|r") or c.who)
+          end
+          if #crafters > 4 then shown[#shown + 1] = "+" .. (#crafters - 4) .. " more" end
+          local key = e.key
+          out[#out + 1] = {
+            key = "rec:" .. key, item = e.item,
+            icon = e.item and ns.ItemIcon(e.item) or "Interface\\Icons\\Trade_Engraving",
+            qcolor = e.item and QColor(Quality(e.item)) or C.line,
+            titleColor = e.item and QColor(Quality(e.item)) or C.white,
+            title = name, sub = e.prof .. "  ·  " .. table.concat(shown, ", "),
+            right = #crafters .. (#crafters == 1 and " crafter" or " crafters"), sort = name,
+            onClick = function() UI:OpenDetails("recipe", key) end,
+          }
+        end
+      end
+    end
+    table.sort(out, function(a, b) return a.sort < b.sort end)
+    UI.recipeTotal = #out
+    if #out > MAX_LIST then
+      for i = #out, MAX_LIST + 1, -1 do out[i] = nil end
+    end
+    return out
+  end,
+  footer = function()
+    local n = UI.recipeTotal or 0
+    if n > MAX_LIST then return "Showing " .. MAX_LIST .. " of " .. n .. " recipes. Search or pick a profession to narrow it down." end
+    return n .. " recipes. Recipes appear when a crafter opens their profession window with the addon. BoP items are left out."
+  end,
+  empty = "No recipes match. Crafters share theirs by opening their profession window once.",
 }
 
 -- Officer -------------------------------------------------------------------
@@ -1371,15 +1472,62 @@ function UI:FillDetails()
     if not c then return UI:CloseDetails() end
     det:Reset(nil, nil, ns.WhoLabel(key), "Level " .. tostring(c.lvl or "?") .. (Online(key) and "  ·  |cff4ade80online|r" or ""))
     local profs = {}
-    for p, s in pairs(c.profs or {}) do profs[#profs + 1] = p .. ": " .. s end
+    for p in pairs(c.profs or {}) do profs[#profs + 1] = p end
     table.sort(profs)
-    for _, p in ipairs(profs) do det:Text(p) end
+    local rec = g.recipes[key] and g.recipes[key].profs or {}
+    for _, p in ipairs(profs) do
+      local n = rec[p] and (#(rec[p].items or {}) + #(rec[p].spells or {})) or 0
+      det:Text((ns.IsDesignated(key, p) and (STAR .. " ") or "") .. p .. ": " .. c.profs[p]
+        .. (n > 0 and ("  |cff7e8590(" .. n .. " recipes shared)|r") or "  |cff7e8590(recipes not shared yet)|r"))
+      if officer then
+        local des = ns.IsDesignated(key, p)
+        det:Buttons({ { des and ("Remove as guild " .. p:lower()) or ("Make guild " .. p:lower()), function()
+          ns.SetDesignated(p, key, not des)
+        end, tip = "Guild crafters get a star and are listed first for everyone." } })
+      end
+    end
     local alts = ns.AltsOf(ns.MainOf(key))
     if #alts > 0 then det:Text("Characters: " .. ns.MainOf(key) .. ", " .. table.concat(alts, ", "), C.muted) end
     det:Gap()
     det:Buttons({ { "Whisper", function()
       if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. key .. " ") end
-    end, accent = true } })
+    end, accent = true }, { "Show recipes", function()
+      UI.state.recipes.crafter = key
+      UI:SetView("recipes")
+    end } })
+
+  elseif kind == "recipe" then
+    local e
+    for _, x in ipairs(ns.RecipeIndex()) do if x.key == key then e = x end end
+    if not e then return UI:CloseDetails() end
+    local name = e.item and ns.ItemName(e.item, true) or e.name
+    det:Reset(e.item and ns.ItemIcon(e.item) or "Interface\\Icons\\Trade_Engraving", e.item and Quality(e.item) or 1,
+      name, e.prof .. "  ·  " .. #e.crafters .. (#e.crafters == 1 and " crafter" or " crafters"))
+    if e.item then det:Text("In bank: " .. ns.BankCount(e.item), C.muted) end
+    local list = {}
+    for _, cr in ipairs(e.crafters) do list[#list + 1] = cr end
+    table.sort(list, function(a, b)
+      local da, db = ns.IsDesignated(a.who, a.prof), ns.IsDesignated(b.who, b.prof)
+      if da ~= db then return da end
+      local oa, ob = Online(a.who), Online(b.who)
+      if oa ~= ob then return oa end
+      return a.who < b.who
+    end)
+    for _, cr in ipairs(list) do
+      local who = cr.who
+      det:Text((ns.IsDesignated(who, cr.prof) and (STAR .. " ") or "") .. ns.WhoLabel(who)
+        .. "  |cff7e8590" .. cr.prof .. " " .. tostring(cr.rank or "?") .. "|r" .. (Online(who) and "  |cff4ade80online|r" or ""))
+      det.y = det.y + 2
+      det:Buttons({ { "Whisper " .. (who:match("^(%S+)") or who), function()
+        if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. who .. " ") end
+      end } })
+    end
+    if e.item then
+      det:Gap()
+      det:Buttons({ { "Request this", function()
+        UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(e.item)); UI.qtyBox:SetFocus()
+      end, accent = true } })
+    end
   end
   det:Finish()
 end
@@ -1539,8 +1687,17 @@ function UI:Refresh()
   -- toolbar chip states
   local bar = v.bar
   if bar then
-    local stKey = (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters")
+    local stKey = (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
+    if v == Views.recipes then
+      local st = self.state.recipes
+      self.profChip:SetLabel(st.prof or "All professions")
+      self.profChip:SetOn(st.prof ~= nil)
+      self.onlineChip:SetOn(st.online)
+      self.desChip:SetOn(st.designated)
+      self.crafterChip:SetShown(st.crafter ~= nil)
+      if st.crafter then self.crafterChip:SetLabel((st.crafter:match("^(%S+)") or st.crafter) .. "  x") self.crafterChip:SetOn(true) end
+    end
     if v == Views.requests then
       self.mineChip:SetOn(self.state.requests.mine)
       for _, s in ipairs(SORTS) do if s[1] == self.state.requests.sort then self.sortChip:SetLabel("Sort: " .. s[2]) end end
