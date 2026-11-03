@@ -309,6 +309,15 @@ def help_embed() -> discord.Embed:
         "Type `/download`. The easy way is the **updater**: unzip it, double-click *Update EPU Guild Tools*, and "
         "it installs the addon and updates it whenever there's a new version. Run *Update automatically at startup* "
         "once and you never have to think about it. Type `/epu` in game to open the addon."))
+    e.add_field(name="Or use WowUp", inline=False, value=(
+        "1. Download WowUp from https://wowup.io (the free *WowUp* is fine) and install it. If Windows says it "
+        "protected your PC, click *More info*, then *Run anyway*.\n"
+        "2. Open WowUp and pick **World of Warcraft Forever** in the dropdown at the top. If it's missing, add "
+        "`World of Warcraft\\_forever_\\Wow.exe` in WowUp's options.\n"
+        f"3. **Get Addons**, then **Install from URL**, paste `https://github.com/{cfg['github_repo']}`, then **Import** "
+        "and **Install**.\n"
+        "4. WowUp shows an **Update** button under *My Addons* when there's a new version (or turn on auto-update). "
+        "Use WowUp *or* the updater, not both."))
     e.set_footer(text="Type /help any time to see this again.")
     return e
 
@@ -362,7 +371,8 @@ def download_embed(rel: dict | None) -> discord.Embed:
             f"[Download the addon]({rel['addon']}) and unzip it into "
             "`World of Warcraft\\_forever_\\Interface\\AddOns`, then type `/reload` in game."))
     e.add_field(name="Use WowUp?", inline=False, value=(
-        f"Get Addons, then Install from URL, and paste `https://github.com/{cfg['github_repo']}`. WowUp keeps it updated."))
+        "Get it from https://wowup.io, pick **World of Warcraft Forever** at the top, then Get Addons > Install from URL "
+        f"and paste `https://github.com/{cfg['github_repo']}`. WowUp keeps it updated."))
     if rel.get("page"):
         e.add_field(name="\u200b", value=f"[Release notes]({rel['page']})", inline=False)
     return e
