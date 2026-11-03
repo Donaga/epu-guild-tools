@@ -25,10 +25,11 @@ jobs:
           zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
           zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json" "epu-discord/items.*"
           (cd updater && zip -r "../dist/EPU-Updater-${VERSION}.zip" .)
-          # WowUp reads release.json to find the right zip (Install from URL with the repo link)
+          # WowUp reads release.json to find the right zip (Install from URL with the repo link).
+          # WowUp asks for flavor "forever" on a WoW: Forever install (BigWigs packager naming).
           cat > dist/release.json <<JSON
           {"releases":[{"name":"EPU Guild Tools","version":"${VERSION}","filename":"EPUGuild-${VERSION}.zip","nolib":false,
-            "metadata":[{"flavor":"mainline","interface":16001},{"flavor":"camelot","interface":16001}]}]}
+            "metadata":[{"flavor":"forever","interface":16001},{"flavor":"mainline","interface":16001}]}]}
           JSON
       - uses: softprops/action-gh-release@v2
         with:

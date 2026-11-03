@@ -9,6 +9,7 @@
 - **Officer review:** join date, recent levels, donations and requests, *Inactive* and *Promote?* tags, a review filter on the Roster, and a promotion reminder on the Officer page (labeled boxes plus the rule in plain words).
 - **Officer notes and log:** private notes on members, and a log of officer actions. Both stay on the officer channel, so members never receive them.
 - The Officer page scrolls, and its tools wrap onto a second line.
+- WowUp: releases now tell WowUp they're for WoW: Forever, so Install from URL finds the right download.
 - **Pulls in existing announcements:** posts in the Discord announcements channel (recent ones too) are copied into News and pop up in game; edits and deletions follow. The in-game guild message of the day and guild info show at the top of News, the message of the day pops up when it changes, and the bot mirrors it to Discord.
 - Discord: milestones post to a feed channel, announcements to an announcements channel, `/announce` for officers, and the how-to post covers the new pages.
 

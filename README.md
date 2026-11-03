@@ -11,7 +11,7 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 
 ## Getting the addon (guildmates)
 - **Easiest:** download `EPU-Updater-x.y.z.zip` from the latest [Release](../../releases/latest), unzip it somewhere you'll keep it, and double-click **Update EPU Guild Tools**. It finds WoW: Forever, installs the addon, and updates it whenever you run it. Double-click **Update automatically at startup** once and it keeps itself current.
-- **WowUp:** Get Addons, then Install from URL, and paste this repo's link.
+- **WowUp:** pick your *Forever* install from the dropdown at the top, then Get Addons > Install from URL, paste `https://github.com/Donaga/epu-guild-tools` and click Install. WowUp updates it like any other addon.
 - **By hand:** unzip `EPUGuild-x.y.z.zip` into `World of Warcraft\_forever_\Interface\AddOns\`, then `/reload`.
 
 In game, the addon tells you when a guildmate has a newer version. On Discord, the bot announces each release and `/download` gives the links.
