@@ -146,6 +146,7 @@ function ns.AddDonation(who, item, n, money, to, t)
   local d = { t = t, who = who, item = item, n = n or 0, money = money or 0, to = to or ns.me }
   g.donations[id] = d
   ns.pendingDon[id] = d
+  if ns.DonationMilestone then pcall(ns.DonationMilestone, id, d) end
   ns.Changed()
   ns.Debounce("donBroadcast", 3, function()
     local p = ns.pendingDon

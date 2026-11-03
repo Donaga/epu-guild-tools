@@ -32,6 +32,8 @@ def route():
                 for d in clients.values():
                     if d is c: continue
                     if chan == "WHISPER" and d.name != tgt: continue
+                    # officer chat: only ranks that can read it (Officer and above here)
+                    if chan == "OFFICER" and [r for r in ROSTER if r[0] == d.name][0][2] > 1: continue
                     d.rt.globals()["__fire"]("CHAT_MSG_ADDON", p, msg, chan, c.name)
 
 def tick(sec, step=0.25):

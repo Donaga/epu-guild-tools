@@ -137,6 +137,29 @@ check("status embed builds", emb.title == "Guild Bank Status" and [f.name for f 
 check("status channel falls back to request channel", bot.cfg["status_channel_id"] == "2")
 print("   ", emb.fields[0].value, "|", emb.fields[2].value)
 
+# --- milestones and announcements, both ways ---
+B.ex('__fire("PLAYER_LEVEL_UP", 20)'); tick(3)
+A.ex('__ns.PostNews("Welcome", "Mail donations to the bank")'); tick(3)
+A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
+gd3 = core.load_guild_data(paths[0], "E Pluribus Unum")
+ch3 = core.diff(gd3, st)
+check("bot sees the new milestone", [e["text"] for e in ch3["new_feed"]] == ["reached level 20"])
+check("milestone line", bot.milestone_line(gd3, ch3["new_feed"][0]).endswith("**Tyler Baker** reached level 20!"))
+check("bot sees the new announcement", len(ch3["news"]) == 1 and ch3["news"][0][1]["title"] == "Welcome")
+nid3 = ch3["news"][0][0]
+st.data.setdefault("news_posted", {})[nid3] = {"message_id": 5, "u": ch3["news"][0][1]["u"]}
+check("posted milestones and announcements aren't repeated", core.diff(gd3, st)["new_feed"] == [] and core.diff(gd3, st)["news"] == [])
+A.ex('__ns.RemoveNews("%s")' % nid3); tick(2)
+A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
+gd4 = core.load_guild_data(paths[0], "E Pluribus Unum")
+rm = core.diff(gd4, st)["news"]
+check("removed announcement comes back so the post can be deleted", len(rm) == 1 and rm[0][1].get("removed") is True)
+ne = st.queue_news("Raid night", "Deadmines Friday 8pm", "Donaga")
+core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+check("/announce reaches the game and members", B.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "Raid night" then return e.by end end end)()') == "Donaga (Discord)")
+check("announcement embed", bot.news_embed({"title": "Raid night", "text": "x", "by": "Donaga"}).title == "Raid night")
+
 # --- a member's client doesn't apply the inbox ---
 st.queue_status(rid_d, "approved", "x"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 B.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(2)

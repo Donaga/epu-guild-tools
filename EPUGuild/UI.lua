@@ -38,6 +38,9 @@ local PILL = {
   craft_rejected = { "Declined", C.redBg,   C.red },
   craft_cancelled= { "Cancelled",C.panel2,  C.muted },
 }
+PILL.news_new = { "New", C.goldBg, C.gold }
+PILL.roster_inactive = { "Inactive", C.redBg, C.red }
+PILL.roster_promote = { "Promote?", C.goldBg, C.gold }
 local function PillKey(r) return (r.crafter and "craft_" or "") .. (r.status or "pending") end
 
 -- Skill-up colors: orange always gives a point, yellow usually, green sometimes.
@@ -798,6 +801,7 @@ UI.state = {
   needs = { filter = "all" },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
+  roster = { filter = "all", role = nil, review = nil },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
 local REQ_FILTERS = { { "open", "Open" }, { "pending", "Pending" }, { "approved", "Approved / accepted" }, { "filled", "Filled / made" },
@@ -814,7 +818,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "needs", "shopping", "bank", "requests", "donations", "crafters", "recipes", "officer" }
+local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 -- A toolbar button that opens a dropdown menu.
@@ -1266,6 +1270,121 @@ Views.recipes = {
   empty = "No recipes match. Crafters share theirs by opening their profession window once.",
 }
 
+-- News: announcements and milestones -------------------------------------
+local FEED_ICON = {
+  level = "Interface\\Icons\\Spell_Holy_SurgeOfLight", prof = "Interface\\Icons\\INV_Misc_Note_01",
+  mount = "Interface\\Icons\\Ability_Mount_RidingHorse", donation = "Interface\\Icons\\INV_Misc_Coin_01",
+  join = "Interface\\Icons\\INV_Misc_Head_Human_01",
+}
+Views.news = {
+  label = "News", icon = "Interface\\Icons\\INV_Scroll_03",
+  count = function() return #ns.UnreadNews(), C.goldBg, C.gold end,
+  tools = function(bar)
+    UI.newsBtn = bar:Add(Btn(bar, "New announcement", 130, 22, "accent"), "right", function() UI:OpenDetails("newnews", "new") end,
+      "Pops up for everyone the next time they log in, and posts to Discord.")
+  end,
+  rows = function(g, q)
+    local out, read = {}, (ns.cdb and ns.cdb.newsRead) or {}
+    for _, e in ipairs(ns.NewsEntries()) do
+      if Match(q, e.title, e.text, e.by) then
+        out[#out + 1] = {
+          key = "news:" .. e.id, icon = "Interface\\Icons\\INV_Letter_15", qcolor = C.gold,
+          title = (e.title and e.title ~= "") and e.title or (e.text or ""):sub(1, 60), titleColor = C.gold,
+          sub = (e.text or ""):gsub("\n", " ") .. "  ·  " .. tostring(e.by) .. ", " .. Ago(e.t),
+          pill = (not read[e.id]) and "news_new" or nil,
+          onClick = function() ns.MarkNewsRead(e.id); UI:OpenDetails("news", e.id) end,
+        }
+      end
+    end
+    for _, e in ipairs(ns.FeedEntries(30)) do
+      if Match(q, e.who, e.text) then
+        out[#out + 1] = {
+          key = "feed:" .. e.id, icon = FEED_ICON[e.kind] or "Interface\\Icons\\INV_Misc_Note_01", qcolor = C.line,
+          title = ns.WhoLabel(e.who or "?") .. " " .. (e.text or ""), sub = Ago(e.t), dot = Online(e.who or ""),
+          onClick = function() if e.who and ns.roster[e.who] then UI:OpenDetails("member", e.who) end end,
+        }
+      end
+    end
+    return out
+  end,
+  footer = function() return "Announcements from officers, then the last 30 days of guild milestones." end,
+  empty = "Nothing yet. Level-ups, first mounts, profession ranks and big donations show up here.",
+}
+
+-- Roster --------------------------------------------------------------------
+local function ClassColor(file)
+  local c = file and RAID_CLASS_COLORS and RAID_CLASS_COLORS[file]
+  if c and c.r then return { c.r, c.g, c.b } end
+  return C.white
+end
+
+Views.roster = {
+  label = "Roster", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", stateKey = "roster",
+  chips = { { "all", "All" }, { "online", "Online" }, { "near", "Near my level" } },
+  tools = function(bar)
+    UI.roleChip = DropChip(bar, 84, "Show one role", function()
+      local items = { { label = "Any role", value = false } }
+      for _, r in ipairs({ "t", "h", "d" }) do items[#items + 1] = { label = ns.ROLES[r], value = r } end
+      return items
+    end, function() return UI.state.roster.role or false end, function(v) UI.state.roster.role = v or nil end)
+    UI.reviewChip = DropChip(bar, 84, "Officers: members worth a look", function()
+      return { { label = "Everyone", value = false }, { label = "Inactive " .. ns.INACTIVE_DAYS .. "+ days", value = "inactive" },
+        { label = "Ready for promotion", value = "promote" }, { label = "Has an officer note", value = "note" } }
+    end, function() return UI.state.roster.review or false end, function(v) UI.state.roster.review = v or nil end)
+    bar:Add(Btn(bar, "My profile", 80, 22), "right", function() UI:OpenDetails("profile", ns.me) end,
+      "Your role and what you're looking for, shown to the guild")
+  end,
+  rows = function(g, q)
+    local st, out, officer = UI.state.roster, {}, ns.IsTrusted(ns.me)
+    local myLevel = UnitLevel("player") or 1
+    for name, r in pairs(ns.roster) do
+      local prof = ns.ProfileOf(name)
+      local roles = prof and prof.roles or ""
+      local ok = (st.filter == "all") or (st.filter == "online" and r.online)
+        or (st.filter == "near" and r.online and name ~= ns.me and math.abs((r.level or 0) - myLevel) <= 3)
+      if ok and st.role then ok = roles:find(st.role, 1, true) ~= nil end
+      local rv = (officer and st.review) and ns.Review(name) or nil
+      if ok and rv then
+        ok = (st.review == "inactive" and rv.inactive) or (st.review == "promote" and rv.promote)
+          or (st.review == "note" and rv.note and rv.note.text ~= "")
+      end
+      if ok and Match(q, name, r.zone, r.class, ns.MainOf(name), prof and prof.lf, ns.RoleText(roles)) then
+        local parts = { "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or "") }
+        if r.online then
+          if r.zone and r.zone ~= "" then parts[#parts + 1] = r.zone end
+        else
+          parts[#parts + 1] = r.away and (r.away < 1 and "seen today" or ("seen " .. math.floor(r.away) .. "d ago")) or "offline"
+        end
+        if prof and prof.lf then parts[#parts + 1] = "|cfff2c14e" .. prof.lf .. "|r" end
+        local pill
+        if officer then
+          local rev = rv or ns.Review(name)
+          if rev.inactive then pill = "roster_inactive" elseif rev.promote then pill = "roster_promote" end
+        end
+        out[#out + 1] = {
+          key = "member:" .. name, dot = r.online,
+          title = ns.WhoLabel(name), titleColor = ClassColor(r.classFile),
+          sub = table.concat(parts, "  ·  "), right = ns.RoleText(roles), pill = pill,
+          sortOnline = r.online and 1 or 0, sortLevel = r.level or 0, sortName = name,
+          onClick = function() UI:OpenDetails("member", name) end,
+        }
+      end
+    end
+    table.sort(out, function(a, b)
+      if a.sortOnline ~= b.sortOnline then return a.sortOnline > b.sortOnline end
+      if a.sortLevel ~= b.sortLevel then return a.sortLevel > b.sortLevel end
+      return a.sortName < b.sortName
+    end)
+    return out
+  end,
+  footer = function()
+    local n, on = 0, 0
+    for _, r in pairs(ns.roster) do n = n + 1; if r.online then on = on + 1 end end
+    return n .. " members, " .. on .. " online. Set your role and what you're looking for under My profile."
+  end,
+  empty = "Nobody matches. Try another filter.",
+}
+
 -- Officer -------------------------------------------------------------------
 local function InboxWaiting()
   local n = 0
@@ -1309,7 +1428,7 @@ local function NewBar(view)
   bar.chips = {}
   for _, ch in ipairs(view.chips or {}) do
     local key = ch[1]
-    local stateKey = (view == Views.requests and "requests") or (view == Views.needs and "needs") or "crafters"
+    local stateKey = view.stateKey or (view == Views.requests and "requests") or (view == Views.needs and "needs") or "crafters"
     local probe = Btn(bar, ch[2], 60, 22)
     probe:SetWidth(math.max(36, (probe.text:GetStringWidth() or 40) + 18))
     local b = bar:Add(probe, "left", function()
@@ -1390,9 +1509,20 @@ end)
 ---------------------------------------------------------------------------
 -- Officer page (custom content, built once)
 ---------------------------------------------------------------------------
-local officerPage = CreateFrame("Frame", nil, listArea)
-officerPage:SetAllPoints()
-officerPage:Hide()
+-- The officer page scrolls, so it fits even the smallest window.
+local officerScroll = CreateFrame("ScrollFrame", nil, listArea)
+officerScroll:SetAllPoints()
+officerScroll:Hide()
+local officerPage = CreateFrame("Frame", nil, officerScroll)
+officerPage:SetSize(480, 400)
+officerScroll:SetScrollChild(officerPage)
+officerScroll:EnableMouseWheel(true)
+officerScroll:SetScript("OnMouseWheel", function(self, delta)
+  local maxV = math.max(0, (officerPage:GetHeight() or 0) - (self:GetHeight() or 0))
+  self:SetVerticalScroll(math.min(maxV, math.max(0, (self:GetVerticalScroll() or 0) - delta * 40)))
+end)
+officerScroll:SetScript("OnSizeChanged", function(self, w) if w and w > 0 then officerPage:SetWidth(w) end end)
+UI.officerPage = officerPage
 do
   local y = -12
   local function Row(labelText, height)
@@ -1446,6 +1576,21 @@ do
   saveDiscord.tip = "Reloads your UI so WoW saves everything and the Discord bot picks it up."
   saveDiscord:SetScript("OnClick", function() pcall(ns.CacheItemNames); ReloadUI() end)
 
+  local _, h6 = Row("Promotion check")
+  h6:SetText("Lowest rank only: days in guild, minimum level (0 = off)")
+  UI.promoDays = Box(officerPage, 40, "days", true)
+  UI.promoDays:SetPoint("TOPRIGHT", -126, -188)
+  UI.promoLevel = Box(officerPage, 40, "lvl", true)
+  UI.promoLevel:SetPoint("TOPRIGHT", -80, -188)
+  local promoSave = Btn(officerPage, "Save", 62, 22)
+  promoSave:SetPoint("TOPRIGHT", -14, -188)
+  promoSave.tip = "Members at the lowest rank who meet both get a \"Promote?\" tag on the Roster page (officers only)."
+  promoSave:SetScript("OnClick", function()
+    ns.SetPolicy("promoDays", tonumber(UI.promoDays:GetText()) or 0)
+    ns.SetPolicy("promoLevel", tonumber(UI.promoLevel:GetText()) or 0)
+    UI.promoDays:ClearFocus(); UI.promoLevel:ClearFocus()
+  end)
+
   local _, h5 = Row("Tools", 40)
   h5:SetText("")
   local tools = {
@@ -1456,11 +1601,13 @@ do
         ns.Print("Tidied " .. n .. " finished request" .. (n == 1 and "" or "s") .. ". They're still under the All filter.")
       end, "Hides filled, rejected and cancelled requests from the default views, for everyone." },
     { "Profession coverage", function() UI:OpenDetails("coverage", "all") end, "Which professions the guild has, who's best, and the gaps." },
+    { "Officer log", function() UI:OpenDetails("log", "all") end, "Who approved, rejected, voided or changed what, and when." },
   }
   local x = 14
   for _, t in ipairs(tools) do
     local b = Btn(officerPage, t[1], 10, 22)
     b:SetWidth((b.text:GetStringWidth() or 80) + 20)
+    if x + b:GetWidth() > 460 then x = 14; y = y - 28 end     -- wrap onto a second line
     b:SetPoint("TOPLEFT", x, y + 8)
     b:SetScript("OnClick", t[2])
     b.tip = t[3]
@@ -1471,6 +1618,7 @@ do
   UI.officerStats:SetPoint("TOPLEFT", 14, y)
   UI.officerStats:SetPoint("RIGHT", -14, 0)
   UI.officerStats:SetWordWrap(true)
+  officerPage:SetHeight(-y + 90)
 end
 
 local function RefreshOfficerPage(g)
@@ -1484,6 +1632,14 @@ local function RefreshOfficerPage(g)
   UI.bankToggle:SetLabel(ns.IsBankAlt() and "On" or "Off")
   UI.bankToggle:SetOn(ns.IsBankAlt())
   if not UI.limitBox:HasFocus() then UI.limitBox:SetText(tostring(g.policy.maxOpen or 0)) end
+  if not UI.promoDays:HasFocus() then UI.promoDays:SetText(tostring(g.policy.promoDays or 0)) end
+  if not UI.promoLevel:HasFocus() then UI.promoLevel:SetText(tostring(g.policy.promoLevel or 0)) end
+  local inactive, promote = 0, 0
+  for name in pairs(ns.roster) do
+    local rv = ns.Review(name)
+    if rv.inactive then inactive = inactive + 1 end
+    if rv.promote then promote = promote + 1 end
+  end
   local waiting = InboxWaiting()
   UI.inboxHint:SetText(waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
   local open, pending, members = 0, 0, 0
@@ -1499,6 +1655,7 @@ local function RefreshOfficerPage(g)
   end
   UI.officerStats:SetText(open .. " open requests (" .. pending .. " pending)  ·  " .. members
     .. " members using the addon  ·  addon version " .. ns.VERSION
+    .. ((inactive + promote > 0) and ("\n" .. inactive .. " inactive " .. ns.INACTIVE_DAYS .. "+ days, " .. promote .. " ready for promotion (Roster > Review)") or "")
     .. ((members > 0 and #gaps > 0) and ("\n|cffff6b6bNobody has:|r " .. table.concat(gaps, ", ")) or "")
     .. ((members > 0 and #noGuild > 0) and ("\n|cfff2c14eNo guild crafter yet:|r " .. table.concat(noGuild, ", ")) or ""))
 end
@@ -1578,6 +1735,118 @@ function UI:FillDetails()
     det:Buttons({ { "Whisper " .. (other:match("^(%S+)") or other), function()
       if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. other .. " ") end
     end } })
+
+  elseif kind == "member" then
+    local r = ns.roster[key]
+    if not r then return UI:CloseDetails() end
+    det:Reset(nil, nil, ns.WhoLabel(key), "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or "")
+      .. "  ·  " .. tostring(r.rankName or ""))
+    SetColor(det.title, ClassColor(r.classFile))
+    if r.online then
+      det:Text("|cff4ade80Online|r" .. ((r.zone and r.zone ~= "") and ("  ·  " .. r.zone) or ""))
+    else
+      det:Text("Offline" .. (r.away and ("  ·  last seen " .. (r.away < 1 and "today" or (math.floor(r.away) .. " days ago"))) or ""), C.muted)
+    end
+    local prof = ns.ProfileOf(key)
+    if prof and prof.roles then det:Text("Plays: " .. ns.RoleText(prof.roles)) end
+    if prof and prof.lf then det:Text("Looking for: |cfff2c14e" .. prof.lf .. "|r") end
+    local main, alts = ns.MainOf(key), ns.AltsOf(ns.MainOf(key))
+    if #alts > 0 then det:Text("Characters: " .. main .. ", " .. table.concat(alts, ", "), C.muted) end
+    local c = g.crafters[key]
+    if c and c.profs and next(c.profs) then
+      local parts = {}
+      for p2, v in pairs(c.profs) do parts[#parts + 1] = p2 .. " " .. v end
+      table.sort(parts)
+      det:Text("Professions: " .. table.concat(parts, ", "), C.muted)
+    end
+    det:Gap()
+    local specs = { { "Whisper", function() if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. key .. " ") end end, accent = true } }
+    if key ~= ns.me then
+      specs[#specs + 1] = { "Invite to group", function()
+        local inv = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
+        if inv then inv(key) end
+      end }
+    end
+    det:Buttons(specs)
+    if officer then
+      local rv = ns.Review(key)
+      det:Gap()
+      det:Text("|cfff2c14eOfficer review|r")
+      if rv.joined then
+        det:Text((rv.joinedSeed and "In the guild since before " or "Joined ") .. date("%b %d", rv.joined)
+          .. " (" .. rv.daysIn .. (rv.daysIn == 1 and " day" or " days") .. ")")
+      end
+      if rv.gained ~= nil then det:Text("Levels gained, last 14 days: " .. rv.gained) end
+      det:Text("Last 30 days: " .. rv.donations .. " donations, " .. rv.requests .. " requests (all characters)")
+      if rv.inactive then det:Text("Inactive for " .. math.floor(rv.away) .. " days", C.red) end
+      if rv.promote then det:Text("Meets the promotion check", C.gold) end
+      local note = det:Field("Note", rv.note and rv.note.text or "", 160)
+      if rv.note and rv.note.text ~= "" then det:Text("Last edited by " .. tostring(rv.note.by) .. " " .. Ago(rv.note.t), C.muted) end
+      det:Buttons({ { "Save note", function() ns.SetNote(key, note:GetText()) end,
+        tip = "Officer notes are shared with other officers only, never shown to members." } })
+    end
+
+  elseif kind == "profile" then
+    det:Reset(nil, nil, "My profile", "Shown to the guild on the Roster page")
+    local prof = (ns.GuildStore() or {}).profiles and ns.GuildStore().profiles[ns.me]
+    det.prof = det.prof or {}
+    if det.prof.loaded ~= ns.me then
+      det.prof = { loaded = ns.me, roles = prof and prof.roles or "", lf = prof and prof.lf or "" }
+    end
+    local P = det.prof
+    det:Text("What do you play? (pick any)", C.muted)
+    local specs = {}
+    for _, r in ipairs({ "t", "h", "d" }) do
+      local on = P.roles:find(r, 1, true) ~= nil
+      specs[#specs + 1] = { (on and "|cff4ade80[x]|r " or "[ ] ") .. ns.ROLES[r], function()
+        if P.roles:find(r, 1, true) then P.roles = P.roles:gsub(r, "") else P.roles = P.roles .. r end
+        UI:FillDetails()
+      end }
+    end
+    det:Buttons(specs)
+    local lf = det:Field("Looking for", P.lf, 160)
+    lf.onChange = function(b) P.lf = b:GetText() end
+    det:Text("e.g. \"LF Deadmines\", \"leveling buddy\", \"selling Linen Bags\"", C.muted)
+    det:Buttons({ { "Save", function() ns.SetProfile(P.roles, P.lf); ns.Print("Profile saved.") end, accent = true } })
+    det:Text("Applies to this character. Alts without their own profile show your main's.", C.muted)
+
+  elseif kind == "news" then
+    local e = (ns.GuildStore() or {}).news and ns.GuildStore().news[key]
+    if not e or e.removed then return UI:CloseDetails() end
+    det:Reset("Interface\\Icons\\INV_Letter_15", 1, (e.title and e.title ~= "") and e.title or "Announcement",
+      tostring(e.by) .. "  ·  " .. Ago(e.t) .. (e.via == "discord" and "  ·  from Discord" or ""))
+    det:Text(e.text or "")
+    det:Gap()
+    if officer then
+      det:Buttons({ { "Edit", function() UI:OpenDetails("newnews", key) end },
+        { "Remove", function() ns.RemoveNews(key); UI:CloseDetails() end } })
+    end
+
+  elseif kind == "newnews" then
+    local e = key ~= "new" and (ns.GuildStore() or {}).news[key] or nil
+    det:Reset("Interface\\Icons\\INV_Letter_15", 1, e and "Edit announcement" or "New announcement",
+      "Pops up for everyone at their next login, and goes to Discord")
+    if not officer then det:Text("Only officers can post announcements.", C.muted) det:Finish() return end
+    local title = det:Field("Title", e and e.title or "", 160)
+    title:SetMaxLetters(60)
+    local text = det:Field("Message", e and e.text or "", 160)
+    text:SetMaxLetters(400)
+    det:Text("Up to 400 characters. Keep it short: it appears as a pop-up.", C.muted)
+    det:Buttons({ { e and "Save" or "Post", function()
+      local id = ns.PostNews(title:GetText(), text:GetText(), e and key or nil)
+      if id then UI:OpenDetails("news", id) end
+    end, accent = true }, { "Cancel", function() UI:CloseDetails() end } })
+
+  elseif kind == "log" then
+    det:Reset("Interface\\Icons\\INV_Misc_Note_01", 1, "Officer log", "What officers changed, newest first (90 days)")
+    local list = ns.LogEntries()
+    for i = 1, math.min(100, #list) do
+      local e = list[i]
+      det:Text("|cff7e8590" .. date("%b %d %H:%M", e.t) .. "  " .. tostring(e.by) .. "|r\n" .. tostring(e.text))
+      det.y = det.y + 2
+    end
+    if #list == 0 then det:Text("Nothing logged yet.", C.muted) end
+    if #list > 100 then det:Text("Showing the newest 100 of " .. #list .. ".", C.muted) end
 
   elseif kind == "craftask" then
     -- key = recipeKey .. "\n" .. crafter
@@ -1929,7 +2198,8 @@ function UI:SetView(key)
   local v = Views[key]
   if not v.bar then v.bar = NewBar(v); UI.bars = UI.bars or {}; UI.bars[key] = v.bar end
   v.bar:Show()
-  officerPage:SetShown(v.custom == true)
+  officerScroll:SetShown(v.custom == true)
+  officerPage:Show()
   scroll:SetShown(not v.custom)
   scroll:SetVerticalScroll(0)
   self:Layout()
@@ -1992,9 +2262,19 @@ function UI:Refresh()
   -- toolbar chip states
   local bar = v.bar
   if bar then
-    local stKey = (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
+    local stKey = v.stateKey or (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
     if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
+    if v == Views.roster then
+      local st = self.state.roster
+      self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Any role")
+      self.roleChip:SetOn(st.role ~= nil)
+      local labels = { inactive = "Inactive", promote = "Promote?", note = "Has note" }
+      self.reviewChip:SetLabel(st.review and labels[st.review] or "Review")
+      self.reviewChip:SetOn(st.review ~= nil)
+      self.reviewChip:SetShown(ns.IsTrusted(ns.me))
+    end
+    if v == Views.news then self.newsBtn:SetShown(ns.IsTrusted(ns.me)) end
     if v == Views.crafters then
       local pf = self.state.crafters.prof
       self.crafterProfChip:SetLabel(pf or "All professions")

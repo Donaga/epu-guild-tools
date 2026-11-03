@@ -85,19 +85,33 @@ end
 ns.On("GUILD_ROSTER_UPDATE", function()
   local n = GetNumGuildMembers()
   if not n or n == 0 then return end
+  -- Offline members are only listed when "Show offline members" is on; the
+  -- roster page and member review need everyone, so turn it on once.
+  if SetGuildRosterShowOffline and GetGuildRosterShowOffline and not GetGuildRosterShowOffline() and not ns.askedOffline then
+    ns.askedOffline = true
+    SetGuildRosterShowOffline(true)
+    return
+  end
   wipe(ns.roster)
   local names = {}
   for i = 1, n do
-    local name, rankName, rankIndex, level, _, _, _, _, online = GetGuildRosterInfo(i)
+    local name, rankName, rankIndex, level, class, zone, _, _, online, _, classFile = GetGuildRosterInfo(i)
     name = ns.Short(name)
     if name then
-      ns.roster[name] = { rank = rankIndex, rankName = rankName, level = level, online = online }
+      local away
+      if not online and GetGuildRosterLastOnline then
+        local y, m, d, h = GetGuildRosterLastOnline(i)
+        if y or m or d or h then away = (y or 0) * 365 + (m or 0) * 30 + (d or 0) + (h or 0) / 24 end
+      end
+      ns.roster[name] = { rank = rankIndex, rankName = rankName, level = level, online = online,
+        class = class, classFile = classFile, zone = zone, away = away }
       names[#names + 1] = name
     end
   end
   -- Saved so the Discord companion can match /link names to real characters.
   local g = ns.G()
   if g then g.members = names end
+  if ns.TrackRoster then pcall(ns.TrackRoster, ns.roster) end
   ns.Changed()
 end)
 
@@ -138,6 +152,7 @@ function ns.Prune(g)
   for who, rec in pairs(g.recipes) do
     if now - (rec.t or 0) > 90 * DAY then g.recipes[who] = nil; ns.recipeIndex = nil end
   end
+  if ns.PruneGuild then ns.PruneGuild(g) end
   local ids = {}
   for id in pairs(g.donations) do ids[#ids + 1] = id end
   if #ids > 500 then
@@ -211,7 +226,8 @@ function ns.Merge(sender, b, catchingUp)
         end
       end
     end
-    g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0, designated = designated }
+    g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0, designated = designated,
+      promoDays = tonumber(pol.promoDays) or 0, promoLevel = tonumber(pol.promoLevel) or 0 }
     changed = true
   end
 
@@ -269,6 +285,7 @@ function ns.Merge(sender, b, catchingUp)
     end
   end
   if altsChanged then ns.RebuildAlts() end
+  if ns.MergeGuild and ns.MergeGuild(sender, b, trusted, catchingUp) then changed = true end
 
   if changed or altsChanged then
     ns.Prune(g)
@@ -329,6 +346,7 @@ function ns.Delta(d)
   for key, m in pairs(g.mats) do
     if (m.t or 0) > since then b.mats = b.mats or {}; b.mats[key] = m end
   end
+  if ns.DeltaGuild then ns.DeltaGuild(b, since) end
   return b
 end
 
@@ -365,6 +383,7 @@ ns.comm.H = function(sender, d)
     b.sync = sender
     b.ver = ns.VERSION
     ns.Send("D", b)
+    if ns.IsTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
   end)
 end
 
@@ -405,6 +424,7 @@ function ns.BroadcastMine()
   local id = ns.db and ns.db.accountId
   if id and g.alts[id] then b.alts = { [id] = g.alts[id] }; any = true end
   if g.recipes[ns.me] then b.recipes = { [ns.me] = g.recipes[ns.me] }; any = true end
+  if g.profiles and g.profiles[ns.me] then b.profiles = { [ns.me] = g.profiles[ns.me] }; any = true end
   for id, r in pairs(g.requests) do
     if r.who == ns.me and ns.IsActiveRequest(r) then
       b.req = b.req or {}
@@ -493,6 +513,8 @@ function ns.SetNeed(id, qty, kind)
   g.needs.v = ns.NextVersion(g.needs.v)
   ns.Send("D", { needs = g.needs })
   ns.Changed()
+  if ns.Log then ns.Log((qty and qty > 0) and ("Set need: " .. ns.ItemName(id, true) .. " x" .. qty .. ((kind == "goal") and " (goal)" or ""))
+    or ("Removed need: " .. ns.ItemName(id, true))) end
   if qty and qty > 0 then
     ns.Print(((kind == "goal") and "Goal set: " or "Restock minimum set: ") .. ns.ItemLink(id) .. " x" .. qty)
   else
@@ -695,6 +717,10 @@ function ns.SetRequestStatus(rid, status, reason, by)
   r.u = ns.NextVersion(r.u)
   ns.Send("D", { req = { [rid] = r } })
   ns.Changed()
+  if officer and r.who ~= ns.me and ns.Log then
+    ns.Log(status:gsub("^%l", string.upper) .. " " .. r.who .. "'s request for " .. ns.RequestName(r, true) .. " x" .. tostring(r.qty)
+      .. ((by and by ~= ns.me) and (" (from Discord, by " .. by .. ")") or ""))
+  end
 end
 
 -- Fix a request. Officers can change anything, including moving it back to
@@ -724,6 +750,10 @@ function ns.EditRequest(rid, changes)
     r.to = (to and to ~= r.who) and to or nil
   end
   if changes.status and changes.status ~= r.status then
+    if officer and not own and ns.Log then
+      ns.Log(changes.status:gsub("^%l", string.upper) .. " " .. r.who .. "'s " .. (r.crafter and "craft " or "") .. "request for "
+        .. ns.RequestName(r, true) .. " x" .. tostring(r.qty) .. ((changes.reason and changes.reason ~= "") and (": " .. changes.reason) or ""))
+    end
     r.status = changes.status
     r.by = ns.me
     if changes.status == "rejected" then r.reason = (changes.reason or ""):sub(1, 80) else r.reason = nil end
@@ -750,7 +780,7 @@ function ns.ArchiveFinished()
       n = n + 1
     end
   end
-  if n > 0 then ns.Send("D", { req = batch }); ns.Changed() end
+  if n > 0 then ns.Send("D", { req = batch }); ns.Changed(); if ns.Log then ns.Log("Tidied " .. n .. " finished requests") end end
   return n
 end
 
@@ -763,6 +793,8 @@ function ns.VoidDonation(id, void)
   d.u = ns.NextVersion(math.max(d.u or 0, d.t or 0))
   ns.Send("D", { don = { [id] = d } })
   ns.Changed()
+  if ns.Log then ns.Log((d.void and "Voided" or "Restored") .. " a donation from " .. tostring(d.who) .. ": "
+    .. (d.item and (ns.ItemName(d.item, true) .. " x" .. (d.n or 1)) or (math.floor((d.money or 0) / 10000) .. "g"))) end
 end
 
 -- Officer settings shared with the guild.
@@ -773,6 +805,7 @@ function ns.SetPolicy(key, value)
   g.policy.v = ns.NextVersion(g.policy.v)
   ns.Send("D", { policy = g.policy })
   ns.Changed()
+  if ns.Log then ns.Log("Changed setting " .. tostring(key) .. " to " .. tostring(value)) end
 end
 
 -- Open (pending or approved) requests for a player, counting all their alts.
@@ -820,18 +853,25 @@ function ns.ScanProfessions()
   local g = ns.G()
   if not g or not GetNumSkillLines then return end
   local profs = {}
-  local inProf = false
+  local inProf, riding = false, false
   for i = 1, GetNumSkillLines() do
     local name, isHeader, _, rank = GetSkillLineInfo(i)
     if isHeader then
       inProf = (name == "Professions" or name == "Secondary Skills"
         or (TRADE_SKILLS ~= nil and name == TRADE_SKILLS)
         or (SECONDARY_SKILLS ~= nil and name == SECONDARY_SKILLS))
+    elseif name == "Riding" or (RIDING ~= nil and name == RIDING) then
+      riding = true
     elseif name and (inProf or KNOWN_PROFS[name]) then
       profs[name] = rank
     end
   end
   local cur = g.crafters[ns.me]
+  if ns.ProfessionMilestones and cur then pcall(ns.ProfessionMilestones, cur.profs, profs) end
+  if ns.RidingMilestone and ns.cdb then
+    if ns.cdb.riding ~= nil then pcall(ns.RidingMilestone, ns.cdb.riding, riding) end
+    ns.cdb.riding = riding
+  end
   local lvl = UnitLevel("player")
   if not cur and not next(profs) then return end
   if cur and ns.SameCounts(cur.profs, profs) and cur.lvl == lvl then return end
@@ -934,6 +974,7 @@ function ns.SetDesignated(prof, name, on)
   g.policy.v = ns.NextVersion(g.policy.v)
   ns.Send("D", { policy = g.policy })
   ns.Changed()
+  if ns.Log then ns.Log((on and "Made " or "Removed ") .. name .. (on and " guild " or " as guild ") .. prof:lower()) end
 end
 
 function ns.IsDesignated(name, prof)
@@ -1044,6 +1085,7 @@ function ns.StockMatsFor(key, crafts)
   g.needs.v = ns.NextVersion(g.needs.v)
   ns.Send("D", { needs = g.needs })
   ns.Changed()
+  if ns.Log then ns.Log("Stocked materials for " .. crafts .. " crafts: " .. table.concat(added, ", "):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|H.-|h", ""):gsub("|h", ""):gsub("|r", "")) end
   ns.Print("Bank needs updated: " .. table.concat(added, ", "))
 end
 

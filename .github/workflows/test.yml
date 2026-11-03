@@ -19,3 +19,5 @@ jobs:
         run: python tests/test_itemdb.py
       - name: Window, details, mail helper, officer page
         run: python tests/test_ui.py
+      - name: Roster, milestones, review, officer log, announcements
+        run: python tests/test_guild.py

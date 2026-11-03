@@ -61,6 +61,8 @@ Copy `config.example.json` to `config.json` and fill it in:
 }
 ```
 - `officer_role`: the Discord role allowed to Approve or Reject. Server admins can always do it.
+- `feed_channel_id`: where guild milestones go (level-ups every 10 levels, first mounts, profession ranks, big donations, new members). Blank means the request channel. Set `post_milestones` to `false` to turn them off.
+- `announce_channel_id`: where announcements go, both ones posted in game and ones posted with `/announce`. Blank means the request channel. A `#announcements` channel works well.
 - `status_channel_id`: where the pinned status post lives. Leave it blank to use the request channel, or point it at a read-only `#bank-status` channel. Set `status_post` to `false` to turn it off. If you delete the post, the bot makes and pins a new one at the next refresh.
 - `account`: leave blank unless you have several WoW accounts. Otherwise set it to the folder name under `WTF\Account`.
 

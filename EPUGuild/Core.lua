@@ -241,6 +241,8 @@ local HELP = {
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
+  "|cffffd100/epu milestones|r - guildmates' milestone pop-ups on/off;  |cffffd100/epu milestonechat|r - also announce your own in guild chat",
+  "|cffffd100/epu news|r - show unread guild announcements",
   "|cffffd100/epu welcome|r - show the welcome tips again",
   "|cffffd100/epu resetwindow|r - put the window back in the middle at its normal size",
 }
@@ -288,12 +290,17 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
-  elseif cmd == "tooltips" or cmd == "markers" or cmd == "notices" or cmd == "donate" or cmd == "officernotices" then
-    local key = ({ tooltips = "tooltips", markers = "bagMarkers", notices = "notices", donate = "donatePanel", officernotices = "officerNotices" })[cmd]
+  elseif cmd == "news" then
+    if #ns.UnreadNews() == 0 then ns.Print("No unread announcements.") else ns.ShowUnreadNews() end
+  elseif cmd == "milestonechat" then
+    ns.db.settings.milestoneChat = not ns.db.settings.milestoneChat
+    ns.Print("Announcing your milestones in guild chat: " .. (ns.db.settings.milestoneChat and "on" or "off"))
+  elseif cmd == "tooltips" or cmd == "markers" or cmd == "notices" or cmd == "donate" or cmd == "officernotices" or cmd == "milestones" then
+    local key = ({ tooltips = "tooltips", markers = "bagMarkers", notices = "notices", donate = "donatePanel", officernotices = "officerNotices", milestones = "milestones" })[cmd]
     local on = ns.db.settings[key] == false
     ns.db.settings[key] = on
     ns.Print(({ tooltips = "Tooltip lines", markers = "Bag coins for needed items", notices = "Pop-up notices",
-      donate = "Mailbox donate panel", officernotices = "New-request pop-ups for officers" })[cmd] .. (on and " on." or " off."))
+      donate = "Mailbox donate panel", officernotices = "New-request pop-ups for officers", milestones = "Milestone pop-ups" })[cmd] .. (on and " on." or " off."))
     if ns.RefreshBagMarkers then ns.RefreshBagMarkers() end
   elseif cmd == "welcome" then
     ns.UI:Show()

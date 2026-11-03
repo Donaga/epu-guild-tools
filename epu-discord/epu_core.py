@@ -368,6 +368,16 @@ class GuildData:
         out.sort(key=lambda c: (not c["designated"], -(c["rank"] or 0), c["who"]))
         return out
 
+    def feed(self) -> list[dict]:
+        """Guild milestones, oldest first."""
+        rows = [{"id": k, **v} for k, v in (self.g.get("feed") or {}).items() if isinstance(v, dict)]
+        rows.sort(key=lambda e: e.get("t", 0))
+        return rows
+
+    def news(self) -> dict:
+        """Announcements by id (including removed ones, so their posts can be taken down)."""
+        return {k: v for k, v in (self.g.get("news") or {}).items() if isinstance(v, dict)}
+
     def mats_for(self, key) -> list[tuple[int, int]]:
         """Reagents for a recipe key ("item:123" or "spell:Name") as (item id, count)."""
         m = (self.g.get("mats") or {}).get(key) if key else None
@@ -506,6 +516,13 @@ class State:
         self.save()
         return e
 
+    def queue_news(self, title: str, text: str, by: str) -> dict:
+        """An officer's /announce: the game picks it up and shows it to everyone."""
+        e = {"id": uuid.uuid4().hex[:10], "kind": "news", "title": title[:60], "text": text[:400], "by": by, "t": int(time.time())}
+        self.data["inbox"].append(e)
+        self.save()
+        return e
+
     def queue_status(self, rid: str, status: str, by: str, reason: str = "") -> dict:
         e = {"id": uuid.uuid4().hex[:10], "kind": "status", "rid": rid, "status": status,
              "by": by, "reason": reason[:80], "t": int(time.time())}
@@ -539,7 +556,7 @@ def diff(gd: GuildData, state: State) -> dict:
     The first run only records what already exists (plus any still-open
     requests), so connecting the bot doesn't flood the channel with history.
     """
-    out = {"new_requests": [], "changed_requests": [], "new_donations": []}
+    out = {"new_requests": [], "changed_requests": [], "new_donations": [], "new_feed": [], "news": []}
     primed = state.data.get("primed", False)
     for rid, r in gd.requests.items():
         if not isinstance(r, dict):
@@ -561,6 +578,27 @@ def diff(gd: GuildData, state: State) -> dict:
             out["new_donations"].append(d)
     if new_seen:
         state.data["donations_seen"] = (state.data.get("donations_seen", []) + new_seen)[-2000:]
+    # milestones: post each once; skip old ones (first run, or the bot was off for a while)
+    feed_seen = set(state.data.get("feed_seen", []))
+    fresh = []
+    now = time.time()
+    for e in gd.feed():
+        if e["id"] in feed_seen:
+            continue
+        fresh.append(e["id"])
+        if primed and now - (e.get("t") or 0) < 2 * 86400:
+            out["new_feed"].append(e)
+    if fresh:
+        state.data["feed_seen"] = (state.data.get("feed_seen", []) + fresh)[-2000:]
+    # announcements: new, edited or removed
+    posted = state.data.setdefault("news_posted", {})
+    for nid, e in gd.news().items():
+        p = posted.get(nid)
+        if p is None:
+            if not e.get("removed") and (primed or now - (e.get("t") or 0) < 7 * 86400):
+                out["news"].append((nid, e))
+        elif (e.get("u") or 0) > (p.get("u") or 0):
+            out["news"].append((nid, e))
     if not primed:
         state.data["primed"] = True
     out["new_donations"].sort(key=lambda d: d.get("t", 0))

@@ -102,7 +102,18 @@ function GetRealmName() return "Forever" end
 function IsInGuild() return true end
 __roster = {}
 function GetNumGuildMembers() return #__roster end
-function GetGuildRosterInfo(i) local r = __roster[i]; return r[1], r[2], r[3], 20, nil, nil, nil, nil, true end
+__rosterExtra = {}   -- [name] = { level, class, classFile, zone, online (bool), awayDays }
+function GetGuildRosterInfo(i)
+  local r = __roster[i]
+  local x = __rosterExtra[r[1]] or {}
+  local online = true
+  if x[5] == false then online = false end
+  return r[1], r[2], r[3], x[1] or 20, x[2], x[4], nil, nil, online, nil, x[3]
+end
+function GetGuildRosterLastOnline(i)
+  local x = __rosterExtra[__roster[i][1]]
+  if x and x[6] then return 0, 0, x[6], 0 end
+end
 C_GuildInfo = { GuildRoster = function() __fire("GUILD_ROSTER_UPDATE") end }
 function Ambiguate(n) return n end
 local ITEMS = { [2589] = "Linen Cloth", [2996] = "Bolt of Linen Cloth", [14047] = "Runecloth", [4306] = "Silk Cloth" }
@@ -240,7 +251,7 @@ function GuildControlGetNumRanks() return 5 end
 function GuildControlGetRankName(i) return ({"Guild Master", "Officer", "Veteran", "Member", "Initiate"})[i] end
 
 __popups = {}
-function StaticPopup_Show(name, a, b) table.insert(__popups, {name, a, b}) end
+function StaticPopup_Show(name, a, b, data) table.insert(__popups, {name, a, b, data}) end
 OKAY = "Okay"
 
 -- tooltips, sounds, Baganator

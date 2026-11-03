@@ -58,7 +58,10 @@ def load_config() -> dict:
     cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
     cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
+    cfg.setdefault("post_milestones", True)       # level-ups, first mounts, new members... in Discord
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
+    cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
+    cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
     return cfg
 
 
@@ -283,7 +286,12 @@ def help_embed() -> discord.Embed:
         "Items the bank needs show a gold coin in your bags and a line on their tooltip. At any mailbox the addon's "
         "Donate panel lets you pick what to give and fills the mail to the bank character for you. Deposits in the "
         "guild bank count too. Donations are logged automatically, and you'll get a thank-you here."))
+    e.add_field(name="Guild news", inline=False, value=(
+        "Level-ups every 10 levels, first mounts, profession ranks, big donations and new members are posted here "
+        "automatically. In game, the addon's **Roster** page shows who's online, their level and role, and who's "
+        "near your level. Set your role and what you're looking for under **My profile**."))
     e.add_field(name=f"Officers ({officer} role)", inline=False, value=(
+        "`/announce` posts a guild announcement here and as a pop-up in game.\n"
         "Use the **Approve** and **Reject** buttons on request posts. Reject asks for an optional reason.\n"
         "Mailing or trading an approved item to the requester marks it filled automatically."))
     e.add_field(name="Why isn't it instant?", inline=False, value=(
@@ -439,6 +447,9 @@ async def refresh(gd: core.GuildData):
         await update_status(gd)
     except Exception as e:
         explain(e, "update the status post", cfg["status_channel_id"])
+    await post_milestones(gd, changes["new_feed"])
+    for nid, e in changes["news"]:
+        await post_news(nid, e)
     if cfg["post_donations"] and changes["new_donations"]:
         ch = channel()
         for d in changes["new_donations"][:10]:
@@ -446,6 +457,79 @@ async def refresh(gd: core.GuildData):
             if ch:
                 await ch.send(f"Thanks **{d.get('who', '?')}** for donating {what} to the guild bank!")
     state.save()
+
+
+# ---------------------------------------------------------------------------
+# Milestones and announcements
+# ---------------------------------------------------------------------------
+FEED_EMOJI = {"level": "\U0001F389", "mount": "\U0001F40E", "prof": "\U0001F528", "donation": "\U0001F4B0", "join": "\U0001F44B"}
+
+
+def milestone_line(gd: core.GuildData, e: dict) -> str:
+    emoji = FEED_EMOJI.get(e.get("kind"), "\u2b50")
+    return f"{emoji} **{gd.label(e.get('who', '?'))}** {e.get('text', '')}!"
+
+
+async def post_milestones(gd: core.GuildData, entries: list[dict]):
+    if not cfg["post_milestones"] or not entries:
+        return
+    ch = client.get_channel(int(cfg["feed_channel_id"]))
+    if ch is None:
+        return
+    try:
+        await ch.send("\n".join(milestone_line(gd, e) for e in entries[:15]))
+    except Exception as ex:
+        explain(ex, "post guild milestones", cfg["feed_channel_id"])
+
+
+def news_embed(e: dict) -> discord.Embed:
+    em = discord.Embed(title=e.get("title") or "Guild announcement", description=e.get("text") or "", color=discord.Color.gold())
+    em.set_footer(text=f"Posted by {e.get('by', '?')}. Shows as a pop-up in game at everyone's next login.")
+    return em
+
+
+async def post_news(nid: str, e: dict):
+    ch = client.get_channel(int(cfg["announce_channel_id"]))
+    if ch is None:
+        return
+    posted = state.data.setdefault("news_posted", {})
+    p = posted.get(nid)
+    try:
+        if p:
+            try:
+                msg = await ch.fetch_message(p["message_id"])
+                if e.get("removed"):
+                    await msg.delete()
+                else:
+                    await msg.edit(embed=news_embed(e))
+                posted[nid] = {"message_id": p["message_id"], "u": e.get("u") or 0}
+                return
+            except discord.NotFound:
+                if e.get("removed"):
+                    posted[nid] = {"message_id": p["message_id"], "u": e.get("u") or 0}
+                    return
+        msg = await ch.send(embed=news_embed(e))
+        posted[nid] = {"message_id": msg.id, "u": e.get("u") or 0}
+    except Exception as ex:
+        explain(ex, "post an announcement", cfg["announce_channel_id"])
+
+
+@tree.command(name="announce", description="Officers: post a guild announcement (also pops up in game)", guild=GUILD)
+@app_commands.describe(title="Short title", message="The announcement (up to 400 characters)")
+async def announce_cmd(interaction: discord.Interaction, title: app_commands.Range[str, 1, 60], message: app_commands.Range[str, 1, 400]):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message(f"Only members with the **{cfg['officer_role']}** role can post announcements.", ephemeral=True)
+        return
+    e = state.queue_news(title, message, interaction.user.display_name)
+    flush_inbox()
+    shown = {"title": title, "text": message, "by": interaction.user.display_name}
+    ch = client.get_channel(int(cfg["announce_channel_id"]))
+    if ch is not None:
+        msg = await ch.send(embed=news_embed(shown))
+        state.data.setdefault("news_posted", {})["d-" + e["id"]] = {"message_id": msg.id, "u": 0}
+        state.save()
+    await interaction.response.send_message(
+        "Posted. It pops up in game for everyone once an officer next logs in or types `/reload`.", ephemeral=True)
 
 
 # ---------------------------------------------------------------------------

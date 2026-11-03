@@ -41,6 +41,14 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 - **Pop-ups:** you get a notice when your request is approved, filled or declined. Officers also get one for each new request.
 - Turn any of these off with `/epu tooltips`, `/epu markers`, `/epu donate`, `/epu notices` (officers: `/epu officernotices`). `/epu welcome` shows the welcome tips again.
 
+**Roster and News**
+- **Roster** lists every member with level, class, zone (when online) or when they were last seen. Filters: *Online*, *Near my level* (online and within 3 levels, for finding leveling partners) and a role dropdown. Click someone to whisper or invite them.
+- **My profile** (on the Roster page): tick Tank, Healer and/or DPS and add a short "looking for" note, like "LF Deadmines". Alts without their own profile show their main's.
+- **News** shows officer announcements, then guild milestones: every 10 levels, first mount, profession ranks (75/150/225/300), big donations (5g+, or 20+ of something the bank needs) and new members. Guildmates online get a pop-up; turn them off with `/epu milestones`. `/epu milestonechat` also announces your own in guild chat.
+- **Announcements** pop up for everyone the next time they log in, until they click Got it. Officers post them from News, or from Discord with `/announce`.
+
+**Officer review** (officers only, on the Roster page and each member's details): join date, levels gained in the last 14 days, donations and requests in the last 30 days (across alts), an *Inactive* tag after 30 days away, and a *Promote?* tag for members at the lowest rank who meet the promotion check you set on the Officer page. Officers can leave **notes** on a member. Notes and the **Officer log** (who approved, rejected, voided or changed what, and when) only travel on the officer channel, so members never receive them.
+
 **Officer page** (officers only): which ranks can manage the bank, whether this character is a bank, a per-player limit on open requests, the Discord inbox, and tools to post needs to guild chat, force a sync, or tidy finished requests away.
 
 ## What it does
@@ -78,6 +86,9 @@ Adding an item: click into the item box, then shift-click the item in your bags.
 - Only trusted ranks can publish needs, bank contents and donation records, or approve, reject and fill requests. Anyone can post (or cancel) their own requests and their own professions.
 - Each crafter's recipe list is shared with the guild (only theirs; nobody else can publish it). The older "Who can craft...?" button still asks online members live, for anyone who hasn't opened their profession window yet.
 - Craft requests can only be accepted, made or declined by the crafter they were sent to (or an officer).
+
+- Join dates start when an officer first runs 0.8.0, so everyone already in the guild shows "in the guild since before" that day. Levels gained come from each officer's own PC, so they start counting from when that officer installed it.
+- The Roster page turns on "Show offline members" in the guild list once, so it can see everyone.
 
 ## Mains and alts
 The addon notices every character you log in with, since its saved data is shared across your WoW account, and tells the guild which characters are one player.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0
+
+- **Roster:** everyone in the guild with level, class, zone or last seen. Filters for online, *near my level* and role. Whisper or invite from a member's details.
+- **My profile:** set your roles (tank/healer/DPS) and a "looking for" note.
+- **News:** officer announcements plus guild milestones (every 10 levels, first mount, profession ranks, big donations, new members), with pop-ups for guildmates online.
+- **Announcements:** pop up for everyone at their next login until read. Post from News or Discord's `/announce`; mirrored to Discord, including edits and removals.
+- **Officer review:** join date, recent levels, donations and requests, *Inactive* and *Promote?* tags, a review filter on the Roster, and a promotion check on the Officer page.
+- **Officer notes and log:** private notes on members, and a log of officer actions. Both stay on the officer channel, so members never receive them.
+- The Officer page scrolls, and its tools wrap onto a second line.
+- Discord: milestones post to a feed channel, announcements to an announcements channel, `/announce` for officers, and the how-to post covers the new pages.
+
 ## 0.7.0
 
 - **Craft requests:** ask a guildmate to craft a recipe from its details, choosing who provides the materials. The crafter gets a pop-up and accepts or declines; mailing or trading what they made marks it made. Shown under Requests (*Crafts* filter) and in Discord. **Mail materials** fills the mail to the crafter.

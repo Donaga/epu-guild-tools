@@ -111,6 +111,13 @@ function ns.ProcessInbox()
         elseif now - (tonumber(e.t) or now) > 7 * DAY then
           ok = true
         end
+      elseif e.kind == "news" then
+        local g2 = ns.GuildStore()
+        if g2 and not g2.news["d-" .. e.id] then
+          ns.PostNews(e.title, e.text, "d-" .. e.id, e.by and (e.by .. " (Discord)") or nil)
+          if g2.news["d-" .. e.id] then g2.news["d-" .. e.id].via = "discord" end
+        end
+        ok = true
       else
         ok = true      -- unknown kind from a newer companion
       end
