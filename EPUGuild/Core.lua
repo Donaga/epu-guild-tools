@@ -18,7 +18,9 @@ function ns.On(event, fn)
   if not list then
     list = {}
     ns.handlers[event] = list
-    frame:RegisterEvent(event)
+    -- Some events (CRAFT_SHOW, TRADE_SKILL_LIST_UPDATE...) only exist in some
+    -- clients, and registering an unknown one is an error. Skip those quietly.
+    if not pcall(frame.RegisterEvent, frame, event) then return end
   end
   list[#list + 1] = fn
 end

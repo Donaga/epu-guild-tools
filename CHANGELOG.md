@@ -11,6 +11,9 @@
 - Crafters gets the same profession dropdown as Recipes.
 - Discord: craft request posts, crafts count on the status post, `/craft` shows materials and skill-ups, and a how-to section on getting things crafted.
 - Profession scanning also understands the modern profession window, in case Forever uses it.
+- Requests: status filter and sort are dropdowns, so the toolbar no longer runs into itself on smaller windows. Toolbar buttons size to their labels.
+- Fixed: dropdown choices could sit under the "click outside to close" layer.
+- Fixed: the addon could error at load if the game doesn't have the old Classic crafting events.
 
 ## 0.6.1
 

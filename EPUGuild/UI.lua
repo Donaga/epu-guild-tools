@@ -227,7 +227,10 @@ local function OpenMenu(anchor, items, current, onPick)
     Menu.catch:RegisterForClicks("AnyUp")
     Menu.catch:SetScript("OnClick", function() Menu:Hide() end)
     Menu.catch:Hide()
-    Menu:SetScript("OnShow", function(self) self.catch:Show(); self:Raise() end)
+    Menu:SetScript("OnShow", function(self)
+      self.catch:Show()
+      self:SetFrameLevel(self.catch:GetFrameLevel() + 10)   -- rows must sit above the click-anywhere-to-close layer
+    end)
     Menu:SetScript("OnHide", function(self) self.catch:Hide() end)
     tinsert(UISpecialFrames, "EPUGuildMenu")   -- Escape closes it
   end
@@ -797,6 +800,8 @@ UI.state = {
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
+local REQ_FILTERS = { { "open", "Open" }, { "pending", "Pending" }, { "approved", "Approved / accepted" }, { "filled", "Filled / made" },
+  { "rejected", "Rejected / declined" }, { "all", "All, including tidied" } }
 
 local function Q() return (UI.search:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "") end
 local function Match(q, ...)
@@ -814,9 +819,9 @@ local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- 
 
 -- A toolbar button that opens a dropdown menu.
 --   items() -> { {label, value, right} }, current() -> value, set(value)
-local function DropChip(bar, w, tip, items, current, set)
+local function DropChip(bar, w, tip, items, current, set, side)
   local b
-  b = bar:Add(Btn(bar, "", w, 22), "left", function()
+  b = bar:Add(Btn(bar, "", w, 22), side or "left", function()
     OpenMenu(b, items(), current(), function(v) set(v); UI:Refresh() end)
   end, tip)
   b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
@@ -939,7 +944,6 @@ end
 
 Views.requests = {
   label = "Requests", icon = "Interface\\Icons\\INV_Letter_15",
-  chips = { { "open", "Open" }, { "pending", "Pending" }, { "approved", "Approved" }, { "filled", "Filled" }, { "rejected", "Rejected" }, { "all", "All" } },
   composer = "request",
   count = function(g)
     local n = 0
@@ -953,6 +957,17 @@ Views.requests = {
     return n, C.goldBg, C.gold
   end,
   tools = function(bar)
+    UI.statusChip = DropChip(bar, 120, "Which requests to show", function()
+      local g, counts = ns.G(), {}
+      for _, r in pairs((g and g.requests) or {}) do
+        for _, f in ipairs(REQ_FILTERS) do
+          if RequestMatchesFilter(r, f[1]) then counts[f[1]] = (counts[f[1]] or 0) + 1 end
+        end
+      end
+      local items = {}
+      for _, f in ipairs(REQ_FILTERS) do items[#items + 1] = { label = f[2], value = f[1], right = tostring(counts[f[1]] or 0) } end
+      return items
+    end, function() return UI.state.requests.filter end, function(v) UI.state.requests.filter = v end)
     UI.mineChip = bar:Add(Btn(bar, "Mine", 50, 22), "left", function()
       UI.state.requests.mine = not UI.state.requests.mine
       UI:Refresh()
@@ -961,13 +976,11 @@ Views.requests = {
       UI.state.requests.crafts = not UI.state.requests.crafts
       UI:Refresh()
     end, "Only craft requests (asked of a crafter, not the bank). Ask for one from the Recipes page.")
-    UI.sortChip = bar:Add(Btn(bar, "Sort: Newest", 100, 22), "right", function()
-      local st = UI.state.requests
-      for i, s in ipairs(SORTS) do
-        if s[1] == st.sort then st.sort = SORTS[i % #SORTS + 1][1] break end
-      end
-      UI:Refresh()
-    end, "Change the order")
+    UI.sortChip = DropChip(bar, 112, "Change the order", function()
+      local items = {}
+      for _, s in ipairs(SORTS) do items[#items + 1] = { label = s[2], value = s[1] } end
+      return items
+    end, function() return UI.state.requests.sort end, function(v) UI.state.requests.sort = v end, "right")
   end,
   rows = function(g, q)
     local st, officer, out = UI.state.requests, ns.IsTrusted(ns.me), {}
@@ -1083,7 +1096,7 @@ Views.crafters = {
   label = "Crafters", icon = "Interface\\Icons\\Trade_BlackSmithing",
   chips = { { "all", "All" }, { "online", "Online" }, { "designated", "Guild crafters" } },
   tools = function(bar)
-    UI.crafterProfChip = DropChip(bar, 130, "Pick a profession", function()
+    UI.crafterProfChip = DropChip(bar, 120, "Pick a profession", function()
       local counts = {}
       for _, c in pairs((ns.G() or {}).crafters or {}) do
         for p in pairs(c.profs or {}) do counts[p] = (counts[p] or 0) + 1 end
@@ -1170,7 +1183,7 @@ local MAX_LIST = 250   -- long lists: show the first 250 and ask people to searc
 Views.recipes = {
   label = "Recipes", icon = "Interface\\Icons\\INV_Misc_Book_09",
   tools = function(bar)
-    UI.profChip = DropChip(bar, 140, "Pick a profession", function()
+    UI.profChip = DropChip(bar, 116, "Pick a profession", function()
       local counts = {}
       for _, e in ipairs(ns.RecipeIndex()) do
         local seen = {}
@@ -1191,7 +1204,7 @@ Views.recipes = {
     UI.skillChip = bar:Add(Btn(bar, "Skill-ups", 68, 22), "left", function()
       UI.state.recipes.skillup = not UI.state.recipes.skillup; UI:Refresh()
     end, "Only recipes that still give someone a skill point. Send these to them so they level up!")
-    UI.crafterChip = bar:Add(Btn(bar, "", 110, 22), "right", function()
+    UI.crafterChip = bar:Add(Btn(bar, "", 84, 22), "right", function()
       UI.state.recipes.crafter = nil; UI:Refresh()
     end, "Click to show everyone's recipes again")
   end,
@@ -1278,6 +1291,9 @@ local function NewBar(view)
   bar.leftX, bar.rightX = 10, 10
   function bar:Add(w, side, onClick, tip)
     w:SetParent(self)
+    if w.text and not w.arrow and (w.text:GetText() or "") ~= "" then   -- fit plain buttons to their label
+      w:SetWidth(math.max(36, (w.text:GetStringWidth() or 40) + 18))
+    end
     w:ClearAllPoints()
     if side == "right" then
       w:SetPoint("RIGHT", self, "RIGHT", -self.rightX, 0)
@@ -1294,7 +1310,9 @@ local function NewBar(view)
   for _, ch in ipairs(view.chips or {}) do
     local key = ch[1]
     local stateKey = (view == Views.requests and "requests") or (view == Views.needs and "needs") or "crafters"
-    local b = bar:Add(Btn(bar, ch[2], 60, 22), "left", function()
+    local probe = Btn(bar, ch[2], 60, 22)
+    probe:SetWidth(math.max(36, (probe.text:GetStringWidth() or 40) + 18))
+    local b = bar:Add(probe, "left", function()
       UI.state[stateKey].filter = key
       UI:Refresh()
     end)
@@ -1909,7 +1927,7 @@ function UI:SetView(key)
   end
   for _, v in pairs(Views) do if v.bar then v.bar:Hide() end end
   local v = Views[key]
-  if not v.bar then v.bar = NewBar(v) end
+  if not v.bar then v.bar = NewBar(v); UI.bars = UI.bars or {}; UI.bars[key] = v.bar end
   v.bar:Show()
   officerPage:SetShown(v.custom == true)
   scroll:SetShown(not v.custom)
@@ -1995,6 +2013,10 @@ function UI:Refresh()
     if v == Views.requests then
       self.mineChip:SetOn(self.state.requests.mine)
       for _, s in ipairs(SORTS) do if s[1] == self.state.requests.sort then self.sortChip:SetLabel("Sort: " .. s[2]) end end
+      for _, f in ipairs(REQ_FILTERS) do
+        if f[1] == self.state.requests.filter then self.statusChip:SetLabel((f[2]:match("^([^/,]+)") or f[2]):gsub("%s+$", "")) end
+      end
+      self.statusChip:SetOn(self.state.requests.filter ~= "open")
     end
   end
 

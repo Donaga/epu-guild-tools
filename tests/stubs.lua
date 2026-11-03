@@ -26,7 +26,12 @@ function M:SetShown(v) if v then self:Show() else self:Hide() end end
 function M:HasFocus() return false end
 function M:SetScript(k, fn) self._scripts[k] = fn end
 function M:GetScript(k) return self._scripts[k] end
-function M:RegisterEvent(e) self._events[e] = true end
+-- Like a real client, registering an event this client doesn't have is an error.
+__missingEvents = { CRAFT_SHOW = true, CRAFT_UPDATE = true, TRADE_SKILL_LIST_UPDATE = true }
+function M:RegisterEvent(e)
+  if __missingEvents[e] then error("Attempt to register unknown event \"" .. e .. "\"") end
+  self._events[e] = true
+end
 function M:Click() if self._scripts.OnClick then self._scripts.OnClick(self) end end
 function M:GetCenter() return 0, 0 end
 function M:GetEffectiveScale() return 1 end
@@ -39,7 +44,8 @@ function M:GetStringWidth() return #(self._text or "") * 6 end
 function M:GetStringHeight() return 14 end
 function M:GetVerticalScroll() return self._vs or 0 end
 function M:SetVerticalScroll(v) self._vs = v end
-function M:GetFrameLevel() return 1 end
+function M:GetFrameLevel() return self._level or 1 end
+function M:SetFrameLevel(l) self._level = l end
 function M:GetPoint() return "CENTER", nil, "CENTER", 0, 0 end
 function M:GetParent() return self._parent end
 function M:SetParent(p) self._parent = p end
