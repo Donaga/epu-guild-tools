@@ -29,6 +29,12 @@ function ns.CacheItemNames()
   for _, s in pairs(g.bank) do for id in pairs(s.items or {}) do add(id) end end
   for _, r in pairs(g.requests) do add(r.item) end
   for _, d in pairs(g.donations) do add(d.item) end
+  for _, rec in pairs(g.recipes or {}) do
+    for _, p in pairs(rec.profs or {}) do for _, id in ipairs(p.items or {}) do add(id) end end
+  end
+  for _, m in pairs(g.mats or {}) do
+    for i = 1, #(m.r or {}), 2 do add(m.r[i]) end
+  end
 end
 
 ns.On("PLAYER_LOGOUT", function()

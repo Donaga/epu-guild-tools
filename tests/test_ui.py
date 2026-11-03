@@ -210,6 +210,92 @@ clients["Newbie Stone"].ex('');  tick(1)
 F = Client("Chris Stone"); clients["Chris Stone"] = F; tick(30)
 check("late joiner gets recipes and guild crafters", F.ev('#__ns.RecipeIndex()') == 2 and F.ev('__ns.IsDesignated("Tyler Baker", "Tailoring")') == True)
 
+# ===================== 0.7.0 crafting features =====================
+# Tyler rescans: Linen Bag is orange for him, the bolt is gray; reagents come along.
+B.ex('__TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "trivial", 2996 }, { "Linen Bag", "optimal", 30001 }, { "BoP Robe", "easy", 30002 } }')
+B.ex('__TSR = { [2] = { {2589, 2} }, [3] = { {2996, 3}, {2589, 1} } }')
+B.ex('__fire("TRADE_SKILL_SHOW")'); tick(6)
+check("reagents shared with the guild", A.ev('#__ns.MatsFor("item:30001")') == 2 and A.ev('__ns.MatsFor("item:30001")[1].n') == 3
+      and F.ev('#__ns.MatsFor("item:2996")') == 1)
+check("skill-up colors shared (orange; gray left out)", A.ev('__ns.RecipeFor("item:30001").crafters[1].diff') == "o"
+      and A.ev('__ns.RecipeFor("item:2996").crafters[1].diff') is None)
+check("recipes carry when they were scanned", (A.ev('__ns.RecipeFor("item:30001").crafters[1].at') or 0) > 0)
+bolts = A.ev('__ns.BankCount(2996)'); linen = A.ev('__ns.BankCount(2589)')
+check("bank coverage for a recipe (%s)" % A.ev('__ns.CraftsCovered("item:30001")'),
+      A.ev('__ns.CraftsCovered("item:30001")') == min(bolts // 3, linen // 1))
+
+# Recipes view: skill-up filter, details with reagents, stock button
+A.ex('__ns.UI:CloseDetails(); __ns.UI:SetView("recipes"); __ns.UI.search:SetText(""); __ns.UI.state.recipes = { skillup = true }; __ns.UI:Refresh()')
+check("skill-ups filter", A.ev(shown) == 1)
+A.ex('__ns.UI.state.recipes.skillup = false; __ns.UI:Refresh(); __ns.UI:OpenDetails("recipe", "item:30001")')
+check("recipe details list reagents", A.ev('(function() for _, f in ipairs(__ns.UI.details.pools.text) do if f:IsShown() and (f:GetText() or ""):find("Bolt of Linen Cloth x3", 1, true) then return true end end return false end)()') == True)
+B.ex('__ns.StockMatsFor("item:30001", 5)'); tick(2)
+check("members can't stock materials", A.ev('(__ns.NeedEntry(__ns.G().needs.list[2996]))') < 15)
+A.ex('__ns.StockMatsFor("item:30001", 5)'); tick(3)
+check("officer stocks mats for 5 crafts (synced)", B.ev('(__ns.NeedEntry(__ns.G().needs.list[2996]))') == 15)
+
+# Tooltips
+tt = 'local t = { lines = {} }; function t:AddLine(x) table.insert(self.lines, x) end; function t:Show() end; __tt = t'
+lines = "(function() return table.concat(__tt.lines, ' | ') end)()"
+A.ex('__ITEMS[30001] = "Linen Bag"; __ITEMS[30100] = "Pattern: Linen Bag"; __ITEMS[30101] = "Pattern: Silk Hat"; __cls = { [30100] = {9, "Tailoring"}, [30101] = {9, "Tailoring"} }')
+A.ex(tt + '; __ns.TooltipLines(__tt, 30001)')
+check("crafted item tooltip names the guild crafters (%s)" % A.ev(lines), "Guild crafters:" in A.ev(lines) and "Tyler" in A.ev(lines))
+A.ex(tt + '; __ns.TooltipLines(__tt, 30100)')
+check("pattern tooltip: someone knows it", "Known in the guild by" in A.ev(lines))
+A.ex(tt + '; __ns.TooltipLines(__tt, 30101)')
+check("pattern tooltip: nobody knows it (%s)" % A.ev(lines), "Nobody in the guild knows" in A.ev(lines))
+
+# Craft requests: Pip asks Tyler for 2 Linen Bags, bank sends the mats
+for c in (A, B, E):
+    c.ex('__toasts = {}; __ns.Notify = function(t) table.insert(__toasts, t) end')
+open_before = A.ev('__ns.OpenCountFor("Pip Baker")')
+crid = E.ev('__ns.NewCraftRequest("item:30001", "Tyler Baker", 2, "bank", "for my alt")'); tick(3)
+check("craft request reaches the crafter", B.ev('__ns.G().requests["%s"].crafter' % crid) == "Tyler Baker" and A.ev('__ns.G().requests["%s"].status' % crid) == "pending")
+check("crafter gets a pop-up", B.ev('__toasts[1]') == "Craft request")
+check("craft requests don't count toward the bank limit", A.ev('__ns.OpenCountFor("Pip Baker")') == open_before)
+D.ex('__ns.EditRequest("%s", { status = "approved" })' % crid); tick(2)
+check("someone else can't accept it", A.ev('__ns.G().requests["%s"].status' % crid) == "pending")
+B.ex('__ns.EditRequest("%s", { status = "approved", qty = 50 })' % crid); tick(3)
+check("crafter accepts (synced), and can't change the amount", A.ev('__ns.G().requests["%s"].status' % crid) == "approved"
+      and E.ev('__ns.G().requests["%s"].qty' % crid) == 2)
+check("requester told it was accepted", "Craft accepted" in [E.ev('__toasts[%d]' % i) for i in range(1, 4)])
+check("officer told the bank sends mats", "Bank materials needed" in [A.ev('__toasts[%d]' % i) for i in range(1, 4)])
+check("bank-paid mats go on the shopping list",
+      A.ev('(function() for _, r in ipairs(__ns.ShoppingList()) do if r.id == 2996 then return r.req end end return 0 end)()') == 6)
+# a forged update from someone who isn't the crafter is ignored
+crid2 = E.ev('__ns.NewCraftRequest("item:2996", "Tyler Baker", 1, "me")'); tick(3)
+D.ex('local r = __ns.G().requests["%s"]; local c = {}; for k, v in pairs(r) do c[k] = v end; c.status = "approved"; c.u = c.u + 5; __ns.Send("D", { req = { ["%s"] = c } })' % (crid2, crid2)); tick(3)
+check("forged crafter update ignored", A.ev('__ns.G().requests["%s"].status' % crid2) == "pending")
+B.ex('local r = __ns.G().requests["%s"]; local c = {}; for k, v in pairs(r) do c[k] = v end; c.status = "approved"; c.qty = 99; c.u = c.u + 9; __ns.Send("D", { req = { ["%s"] = c } })' % (crid2, crid2)); tick(3)
+check("crafter can't change the amount by hand-editing", A.ev('__ns.G().requests["%s"].qty' % crid2) == 1)
+# Tyler mails the bags to Pip: filled automatically
+B.ex('__ns.AutoFillFor("Pip Baker", { {30001, 1} })'); tick(3)
+check("crafter mailing it marks it made", A.ev('__ns.G().requests["%s"].status' % crid) == "filled")
+check("requester told it's done", "Craft done" in [E.ev('__toasts[%d]' % i) for i in range(1, 6)])
+
+# Requests view and details for crafts
+A.ex('__ns.UI:SetView("requests"); __ns.UI.state.requests = { filter = "all", sort = "new", crafts = true }; __ns.UI:Refresh()')
+check("Crafts filter", A.ev(shown) == 2)
+B.ex('__ns.UI:Show(); __ns.UI:SetView("requests"); __ns.UI:OpenDetails("request", "%s")' % crid2)
+check("crafter sees Accept in the details", B.ev('(function() for _, b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() and b.text:GetText() == "Accept" then return true end end return false end)()') == True)
+E.ex('__ns.UI:Show(); __ns.UI:SetView("recipes"); __ns.UI:OpenDetails("craftask", "item:30001\\nTyler Baker")')
+check("ask-to-craft form", E.ev('__ns.UI.details.kind') == "craftask")
+E.ex('(function() for _, b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() and b.text:GetText() == "Send request" then b:GetScript("OnClick")(b) end end end)()'); tick(3)
+check("form sends the request", A.ev('(function() local n = 0 for _, r in pairs(__ns.G().requests) do if r.crafter then n = n + 1 end end return n end)()') == 3)
+
+# Crafters: profession dropdown; officer coverage
+A.ex('__ns.UI:CloseDetails(); __ns.UI:SetView("crafters"); __ns.UI.state.crafters = { filter = "all", prof = "Tailoring" }; __ns.UI:Refresh()')
+tailors = A.ev(shown)
+A.ex('__ns.UI.state.crafters.prof = "Leatherworking"; __ns.UI:Refresh()')
+check("crafters profession filter (%d tailors)" % tailors, tailors >= 1 and A.ev(shown) == 0)
+A.ex('__ns.UI.crafterProfChip:GetScript("OnClick")(__ns.UI.crafterProfChip)')
+check("crafters dropdown opens", A.ev('EPUGuildMenu:IsShown()') == True and A.ev('EPUGuildMenu.rows[1].text:GetText()') == "All professions")
+A.ex('EPUGuildMenu:Hide()')
+cov = "(function() for _, r in ipairs(__ns.Coverage()) do if r.prof == '%s' then return r.count end end end)()"
+check("coverage: tailoring covered, leatherworking a gap", A.ev(cov % "Tailoring") >= 1 and A.ev(cov % "Leatherworking") == 0)
+A.ex('__ns.UI:SetView("officer"); __ns.UI:OpenDetails("coverage", "all")')
+check("coverage details open", A.ev('__ns.UI.details.kind') == "coverage")
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

@@ -27,7 +27,12 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 **Crafters and recipes**
 - **Crafters** lists everyone's professions and skill. Officers can mark **guild crafters** (for example, our Tailor) from a crafter's details. Guild crafters get a star and are listed first everywhere.
 - **Recipes** lists every recipe guild members can make. It's searchable, and you can filter by profession, *Online* (someone who can make it is on now) or *Guild crafters*. Click a recipe to see who can make it, with a Whisper button for each. BoP items are left out, since they can't be passed on.
-- A crafter's recipes are shared the first time they open their profession window with the addon, and again only when they learn something new.
+- A crafter's recipes (with their materials and skill-up colors) are shared the first time they open their profession window with the addon, and again when they learn something new.
+- **Materials:** a recipe's details list its reagents and how many the guild bank has, plus how many crafts the bank could cover. Officers can click **Stock mats for 5 crafts** to raise the bank's needs to match.
+- **Skill-ups:** a colored **+** after a crafter's name means they'd still get a skill point making it (orange always, yellow usually, green sometimes). The *Skill-ups* filter shows only those, so work goes to the crafters who are still leveling.
+- **Craft requests:** in a recipe's details click **Ask ... to craft**, pick the amount and who provides the materials (you, the guild bank, or the crafter). The crafter gets a pop-up and can **Accept** or **Decline**; mailing or trading what they made marks it **Made**. Craft requests appear under Requests (use the *Crafts* filter) and on Discord. They don't count toward the bank's request limit. **Mail materials** fills a mail to the crafter for you.
+- **Tooltips:** crafted items show which guildmates make them. Patterns and recipes say whether someone in the guild already knows them, and if not, who has that profession.
+- **Coverage:** the Officer page lists professions nobody has and ones without a guild crafter. **Profession coverage** shows each profession's players, best skill and who's online.
 
 **Helping out without opening the window**
 - **Tooltips:** hover any item and you'll see "Guild bank needs 40 more" (or how many the bank holds, or your request's status).
@@ -71,7 +76,8 @@ Adding an item: click into the item box, then shift-click the item in your bags.
 - Data travels over hidden addon messages on the guild channel. There's no website or server. Each player's copy is saved in their SavedVariables.
 - When you log in, the addon asks for anything new. One online officer answers, and the others stand down.
 - Only trusted ranks can publish needs, bank contents and donation records, or approve, reject and fill requests. Anyone can post (or cancel) their own requests and their own professions.
-- Recipe lists stay on each crafter's own PC. A "Who crafts?" question is answered live by whoever is online and has opened that profession window since installing.
+- Each crafter's recipe list is shared with the guild (only theirs; nobody else can publish it). The older "Who can craft...?" button still asks online members live, for anyone who hasn't opened their profession window yet.
+- Craft requests can only be accepted, made or declined by the crafter they were sent to (or an officer).
 
 ## Mains and alts
 The addon notices every character you log in with, since its saved data is shared across your WoW account, and tells the guild which characters are one player.

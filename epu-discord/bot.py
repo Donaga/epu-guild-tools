@@ -124,8 +124,9 @@ def channel() -> discord.abc.Messageable | None:
 # ---------------------------------------------------------------------------
 def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str = "") -> discord.Embed:
     st = core.status_of(r)
-    name = r.get("itemName") or (gd.item_name(r.get("item")) if gd else f"item {r.get('item')}")
-    e = discord.Embed(title=f"{name} x{r.get('qty', 1)}", color=STATUS_COLOR.get(st, discord.Color.blurple()))
+    craft = core.is_craft(r)
+    name = gd.request_name(r) if gd else (r.get("itemName") or r.get("spell") or f"item {r.get('item')}")
+    e = discord.Embed(title=("Craft: " if craft else "") + f"{name} x{r.get('qty', 1)}", color=STATUS_COLOR.get(st, discord.Color.blurple()))
     if r.get("item"):
         e.url = f"{cfg['wowhead'].rstrip('/')}/item={r['item']}"
     who = gd.label(r.get("who", "?")) if gd else r.get("who", "?")
@@ -134,8 +135,12 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
     e.add_field(name="Requested by", value=who, inline=True)
     if r.get("to") and r.get("to") != r.get("who"):
         e.add_field(name="Mail to", value=r["to"], inline=True)
-    e.add_field(name="Status", value=st.capitalize(), inline=True)
-    if gd and r.get("item"):
+    if craft:
+        e.add_field(name="Crafter", value=r["crafter"], inline=True)
+        e.add_field(name="Materials", value={"me": "Requester sends", "bank": "Guild bank sends",
+                                              "crafter": "Crafter's own"}.get(r.get("mats"), "Requester sends"), inline=True)
+    e.add_field(name="Status", value=core.status_label(r).capitalize(), inline=True)
+    if gd and r.get("item") and not craft:
         e.add_field(name="In bank", value=str(gd.bank_count(r["item"])), inline=True)
     if r.get("note"):
         e.add_field(name="Note", value=r["note"], inline=False)
@@ -145,7 +150,7 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
         e.add_field(name="By", value=r["by"], inline=True)
     if note_extra:
         e.add_field(name="\u200b", value=note_extra, inline=False)
-    e.set_footer(text=f"EPU request {rid}")
+    e.set_footer(text=f"EPU {'craft ' if craft else ''}request {rid}" + (" · the crafter accepts it in game" if craft and st == "pending" else ""))
     return e
 
 
@@ -165,7 +170,7 @@ async def post_or_edit(rid: str, r: dict, gd: core.GuildData | None, note_extra:
         return
     st = core.status_of(r)
     embed = request_embed(rid, r, gd, note_extra)
-    view = request_view(rid, st)
+    view = None if core.is_craft(r) else request_view(rid, st)   # crafters answer in game
     posted = state.posted(rid)
     if posted:
         try:
@@ -206,7 +211,10 @@ def status_embed(gd: core.GuildData) -> discord.Embed:
     shop_lines = [f"{r['name']}: {r['buy']}" for r in st["shopping"][:15]]
     e.add_field(name="Shopping list", value=_clip(shop_lines) if shop_lines else "Nothing to buy.", inline=False)
     e.add_field(name="Gold", value=core.money_text(st["gold"]), inline=True)
-    e.add_field(name="Requests", value=f"{st['requests']['pending']} pending, {st['requests']['approved']} approved", inline=True)
+    req = f"{st['requests']['pending']} pending, {st['requests']['approved']} approved"
+    if st["requests"].get("crafts"):
+        req += f"\n{st['requests']['crafts']} open craft requests"
+    e.add_field(name="Requests", value=req, inline=True)
     if st["banks"]:
         e.add_field(name="Held by", value=", ".join(st["banks"]), inline=True)
     e.set_footer(text="\U0001F534 under half  \U0001F7E1 below target  \u2705 stocked. Updates when an officer /reloads or logs out.")
@@ -264,8 +272,13 @@ def help_embed() -> discord.Embed:
         "`/needs`: what the bank is short on. Donations of these are the most help.\n"
         "`/bank search:` look up an item, e.g. `/bank search:potion`.\n"
         "`/requests`: all open requests.\n"
-        "`/craft item:` who in the guild can make something (\u2b50 = guild crafter).\n"
+        "`/craft item:` who in the guild can make something, and what it takes (\u2b50 = guild crafter).\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
+    e.add_field(name="Getting something crafted", inline=False, value=(
+        "In game, open the addon's **Recipes** page, pick the recipe and click **Ask ... to craft**. Choose who "
+        "provides the materials (you, the guild bank, or the crafter). The crafter gets a pop-up and accepts it, "
+        "and you're told when it's made. Craft requests show up here too. Hover any pattern or recipe in game "
+        "to see whether someone in the guild already knows it."))
     e.add_field(name="Donating", inline=False, value=(
         "Items the bank needs show a gold coin in your bags and a line on their tooltip. At any mailbox the addon's "
         "Donate panel lets you pick what to give and fills the mail to the bank character for you. Deposits in the "
@@ -622,11 +635,16 @@ async def craft_cmd(interaction: discord.Interaction, item: str):
             f"Nobody has shared a recipe for **{name}** yet. Crafters share theirs by opening their profession window in game.",
             ephemeral=True)
         return
-    lines = [("\u2b50 " if c["designated"] else "") + f"**{c['who']}** ({c['prof']} {c['rank'] or '?'})" for c in crafters[:15]]
+    lines = [("\u2b50 " if c["designated"] else "") + f"**{c['who']}** ({c['prof']} {c['rank'] or '?'})"
+             + (" \U0001F53C skill-up" if c.get("skillup") else "") for c in crafters[:15]]
+    mats = gd.mats_for(crafters[0]["key"])
+    if mats:
+        lines.append("")
+        lines.append("Materials: " + ", ".join(f"{gd.item_name(i)} x{n}" for i, n in mats))
     e = discord.Embed(title=f"Who can craft {name}", description="\n".join(lines), color=discord.Color.blurple())
     if item_id:
         e.url = f"{cfg['wowhead'].rstrip('/')}/item={item_id}"
-    e.set_footer(text="\u2b50 = guild crafter. Whisper them in game, or /request it from the guild bank.")
+    e.set_footer(text="\u2b50 = guild crafter. \U0001F53C = they'd get a skill point. Ask one in game from the Recipes page.")
     await interaction.response.send_message(embed=e)
 
 
@@ -664,7 +682,8 @@ async def requests_cmd(interaction: discord.Interaction):
         await interaction.response.send_message("No open requests.", ephemeral=True)
         return
     rows.sort(key=lambda x: x[1].get("t", 0))
-    lines = [f"{core.status_of(r).capitalize()}: **{gd.item_name(r.get('item'))}** x{r.get('qty', 1)} for {gd.label(r.get('to') or r.get('who', '?'))}" for _, r in rows[:25]]
+    lines = [f"{core.status_label(r).capitalize()}: **{gd.request_name(r)}** x{r.get('qty', 1)} for {gd.label(r.get('to') or r.get('who', '?'))}"
+             + (f" (craft by {r['crafter']})" if core.is_craft(r) else "") for _, r in rows[:25]]
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 

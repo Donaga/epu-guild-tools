@@ -106,8 +106,11 @@ function GetItemInfo(x)
   local id = tonumber(x)
   if not id then for k, v in pairs(ITEMS) do if v == x then id = k end end end
   if not id or not ITEMS[id] then return nil end
-  return ITEMS[id], __link(id), 1, 1, 1, "Trade Goods", "Cloth", 20, "", "icon" .. id, 1, 7, 0, (__bop and __bop[id]) and 1 or 0
+  local cls = __cls and __cls[id]   -- { classID, subType } for recipe items in tests
+  return ITEMS[id], __link(id), 1, 1, 1, cls and "Recipe" or "Trade Goods", cls and cls[2] or "Cloth", 20, "", "icon" .. id, 1,
+    cls and cls[1] or 7, 0, (__bop and __bop[id]) and 1 or 0
 end
+__ITEMS = ITEMS
 function GetItemInfoInstant(id) return id, nil, nil, nil, "icon" .. id end
 ITEM_QUALITY_COLORS = { [1] = { hex = "|cffffffff" } }
 function GetItemCount() return 3 end
@@ -150,6 +153,10 @@ __TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "easy", 2996 } }
 function GetNumTradeSkills() return #__TS end
 function GetTradeSkillInfo(i) return __TS[i][1], __TS[i][2] end
 function GetTradeSkillItemLink(i) if __TS[i][3] then return __link(__TS[i][3]) end end
+__TSR = {}   -- [index] = { {itemID, count}, ... } reagents
+function GetTradeSkillNumReagents(i) return #(__TSR[i] or {}) end
+function GetTradeSkillReagentInfo(i, j) local r = __TSR[i][j]; return ITEMS[r[1]], "icon", r[2], 0 end
+function GetTradeSkillReagentItemLink(i, j) return __link(__TSR[i][j][1]) end
 ERR_TRADE_COMPLETE = "Trade complete."
 
 function __load(dir)

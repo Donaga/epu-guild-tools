@@ -212,7 +212,7 @@ PreHook("AutoLootMailItem", RecordMailAll)
 local outgoing
 PreHook("SendMail", function(to)
   outgoing = nil
-  if not ns.IsTrusted(ns.me) or not GetSendMailItemLink then return end
+  if not GetSendMailItemLink then return end
   local items = {}
   for i = 1, (ATTACHMENTS_MAX_SEND or 12) do
     local id = ns.ItemID(GetSendMailItemLink(i))
@@ -230,7 +230,12 @@ ns.On("MAIL_FAILED", function() outgoing = nil end)
 local tradeSnap
 ns.On("TRADE_ACCEPT_UPDATE", function()
   local bankAlt, officer = ns.IsBankAlt(), ns.IsTrusted(ns.me)
-  if not bankAlt and not officer then return end
+  local crafting = false   -- handing over something we were asked to craft?
+  local g = ns.G()
+  for _, r in pairs((g and g.requests) or {}) do
+    if r.crafter == ns.me and r.status == "approved" then crafting = true break end
+  end
+  if not bankAlt and not officer and not crafting then return end
   local who = ns.Member(ns.UnitFullName("NPC"))
   if not who then tradeSnap = nil return end
   local snap = { who = who, money = GetTargetTradeMoney() or 0, items = {}, mine = {}, bankAlt = bankAlt }
@@ -281,29 +286,16 @@ local function Split(bag, slot, n)
   return SplitContainerItem(bag, slot, n)
 end
 
-function ns.MailRequest(rid)
-  local g = ns.G()
-  local r = g and g.requests[rid]
-  if not r then return end
-  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers and the bank character send requested items.") end
-  if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail it again.") end
-  if r.status ~= "approved" then return ns.Print("Approve the request before mailing it.") end
-
-  if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
-  local to = r.to or r.who
-  local name = ns.ItemName(r.item, true)
-  if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
-  if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Guild bank: " .. name .. " x" .. r.qty) end
-  if ClearCursor then ClearCursor() end
-
-  -- Attach whole stacks, then split off the remainder.
-  local need, slotIndex = tonumber(r.qty) or 1, 1
+-- Put `qty` of an item from the bags into the outgoing mail, starting at
+-- attachment slot `slotIndex`. Returns how many were attached and the next free slot.
+local function AttachItem(item, qty, slotIndex)
+  local need = tonumber(qty) or 1
   local maxSlots = ATTACHMENTS_MAX_SEND or 12
   for _, bag in ipairs(BagList()) do
     for slot = 1, (NumSlots(bag) or 0) do
       if need <= 0 or slotIndex > maxSlots then break end
       local id, count = SlotItem(bag, slot)
-      if id == r.item then
+      if id == item then
         if count <= need then
           Pickup(bag, slot)
           need = need - count
@@ -316,13 +308,64 @@ function ns.MailRequest(rid)
       end
     end
   end
-  local attached = (tonumber(r.qty) or 1) - need
+  return (tonumber(qty) or 1) - need, slotIndex
+end
+
+local function StartMail(to, subject)
+  if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
+  if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
+  if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText(subject) end
+  if ClearCursor then ClearCursor() end
+end
+
+-- Officers mail approved bank requests; a crafter mails what they made.
+function ns.MailRequest(rid)
+  local g = ns.G()
+  local r = g and g.requests[rid]
+  if not r then return end
+  local crafter = r.crafter and r.crafter == ns.me
+  if not crafter and not ns.IsTrusted(ns.me) then return ns.Print("Only officers and the bank character send requested items.") end
+  if not r.item then return ns.Print("That's an enchant, so there's nothing to mail. Meet up and use the trade window, then mark it made.") end
+  if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail it again.") end
+  if r.status ~= "approved" then return ns.Print(r.crafter and "Accept the request before mailing it." or "Approve the request before mailing it.") end
+
+  local to = r.to or r.who
+  local name = ns.ItemName(r.item, true)
+  StartMail(to, (r.crafter and "Crafted: " or "Guild bank: ") .. name .. " x" .. r.qty)
+  local attached = AttachItem(r.item, r.qty, 1)
+  local need = (tonumber(r.qty) or 1) - attached
   if attached == 0 then
-    return ns.Print("You don't have any " .. ns.ItemLink(r.item) .. " in your bags. Take it out of the bank first.")
+    return ns.Print("You don't have any " .. ns.ItemLink(r.item) .. " in your bags." .. (r.crafter and "" or " Take it out of the bank first."))
   end
   if need > 0 then
     ns.Print("Attached " .. attached .. " of " .. r.qty .. " " .. ns.ItemLink(r.item) .. " (that's all you're carrying). Check the mail, then click Send.")
   else
     ns.Print("Mail ready for " .. to .. ": " .. ns.ItemLink(r.item) .. " x" .. r.qty .. ". Check it, then click Send. The request is marked filled when it goes.")
+  end
+end
+
+-- Send a craft request's materials to the crafter: officers when the bank
+-- pays, or the requester when they said they'd send them.
+function ns.MailCraftMats(rid)
+  local g = ns.G()
+  local r = g and g.requests[rid]
+  if not r or not r.crafter then return end
+  local mine = r.who == ns.me
+  if not mine and not ns.IsTrusted(ns.me) then return ns.Print("Only the requester or an officer sends the materials.") end
+  if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail materials again.") end
+  local mats = ns.MatsFor(r.key)
+  if #mats == 0 then return ns.Print("The materials for this recipe haven't been shared yet. Ask " .. r.crafter .. " what they need.") end
+  StartMail(r.crafter, "Mats for " .. ns.RequestName(r, true) .. " x" .. r.qty)
+  local slotIndex, short = 1, {}
+  for _, m in ipairs(mats) do
+    local want = m.n * (tonumber(r.qty) or 1)
+    local got
+    got, slotIndex = AttachItem(m.id, want, slotIndex)
+    if got < want then short[#short + 1] = ns.ItemLink(m.id) .. " x" .. (want - got) end
+  end
+  if #short > 0 then
+    ns.Print("Mail ready for " .. r.crafter .. ", but you're short: " .. table.concat(short, ", ") .. ". Check it, then click Send.")
+  else
+    ns.Print("Materials ready to mail to " .. r.crafter .. ". Check it, then click Send.")
   end
 end

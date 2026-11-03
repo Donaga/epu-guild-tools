@@ -221,6 +221,19 @@ def status_of(r: dict) -> str:
     return STATUS_LABEL.get(s, s)
 
 
+def is_craft(r: dict) -> bool:
+    """A craft request goes to a crafter, not the bank."""
+    return isinstance(r, dict) and bool(r.get("crafter"))
+
+
+CRAFT_LABEL = {"pending": "asked", "approved": "accepted", "filled": "made", "rejected": "declined", "cancelled": "cancelled"}
+
+
+def status_label(r: dict) -> str:
+    st = status_of(r)
+    return CRAFT_LABEL.get(st, st) if is_craft(r) else st
+
+
 class GuildData:
     """A read of one guild's data out of EPUGuildDB."""
 
@@ -343,10 +356,31 @@ class GuildData:
                 items = list(items.values()) if isinstance(items, dict) else list(items)
                 spells = p.get("spells") or {}
                 spells = list(spells.values()) if isinstance(spells, dict) else list(spells)
-                if (item_id is not None and item_id in items) or (spell and spell.lower() in (s.lower() for s in spells)):
-                    out.append({"who": who, "prof": prof, "rank": p.get("rank"), "designated": self.is_designated(who, prof)})
+                key = None
+                if item_id is not None and item_id in items:
+                    key = f"item:{item_id}"
+                elif spell:
+                    key = next((f"spell:{s}" for s in spells if s.lower() == spell.lower()), None)
+                if key:
+                    diff = (p.get("diff") or {}).get(key)
+                    out.append({"who": who, "prof": prof, "rank": p.get("rank"), "designated": self.is_designated(who, prof),
+                                "skillup": diff in ("o", "y"), "key": key})
         out.sort(key=lambda c: (not c["designated"], -(c["rank"] or 0), c["who"]))
         return out
+
+    def mats_for(self, key) -> list[tuple[int, int]]:
+        """Reagents for a recipe key ("item:123" or "spell:Name") as (item id, count)."""
+        m = (self.g.get("mats") or {}).get(key) if key else None
+        r = (m or {}).get("r") or []
+        r = list(r.values()) if isinstance(r, dict) else list(r)
+        return [(int(r[i]), int(r[i + 1])) for i in range(0, len(r) - 1, 2)]
+
+    def request_name(self, r: dict) -> str:
+        if r.get("itemName"):
+            return r["itemName"]
+        if r.get("item"):
+            return self.item_name(r["item"])
+        return r.get("spell") or "?"
 
     def craftable_items(self) -> dict[int, str]:
         names = {}
@@ -370,7 +404,13 @@ class GuildData:
         for row in self.needs():
             demand.setdefault(row["id"], {"need": 0, "req": 0})["need"] = row["target"]
         for r in self.requests.values():
-            if isinstance(r, dict) and r.get("status") == "approved" and r.get("item"):
+            if not isinstance(r, dict) or r.get("status") != "approved":
+                continue
+            if is_craft(r):
+                if r.get("mats") == "bank":       # the bank supplies the materials
+                    for item_id, n in self.mats_for(r.get("key")):
+                        demand.setdefault(item_id, {"need": 0, "req": 0})["req"] += n * int(r.get("qty") or 1)
+            elif r.get("item"):
                 demand.setdefault(r["item"], {"need": 0, "req": 0})["req"] += int(r.get("qty") or 0)
         rows = []
         for item_id, d in demand.items():
@@ -384,11 +424,14 @@ class GuildData:
     def status_summary(self) -> dict:
         """Everything the pinned status post shows."""
         banks = [(name, s) for name, s in self.bank.items() if isinstance(s, dict) and not s.get("retired")]
-        counts = {"pending": 0, "approved": 0}
+        counts = {"pending": 0, "approved": 0, "crafts": 0}
         for r in self.requests.values():
             if isinstance(r, dict):
                 st = status_of(r)
-                if st in counts:
+                if is_craft(r):
+                    if st in ("pending", "approved"):
+                        counts["crafts"] += 1
+                elif st in counts:
                     counts[st] += 1
         return {
             "needs": self.needs(),

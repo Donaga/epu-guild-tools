@@ -123,7 +123,7 @@ check("status: needs listed", [n["name"] for n in sm["needs"]] == ["Linen Cloth"
 check("status: gold from guild bank", sm["gold"] == 5000000)
 addon_shop = A.ev('(function() local t = {} for _, r in ipairs(__ns.ShoppingList()) do t[#t+1] = r.id .. "=" .. r.buy end return table.concat(t, ",") end)()')
 check("status: shopping matches the addon's Shopping tab (%s)" % addon_shop, ",".join(f"{r['id']}={r['buy']}" for r in sm["shopping"]) == addon_shop)
-check("status: request counts", sm["requests"] == {"pending": 1, "approved": 1} or print(sm["requests"]))
+check("status: request counts", sm["requests"] == {"pending": 1, "approved": 1, "crafts": 0} or print(sm["requests"]))
 import importlib, json as _j
 cfgdir = tempfile.mkdtemp()
 _j.dump({"token": "x.y.z", "server_id": "1", "channel_id": "2", "wow_path": WOW}, open(os.path.join(cfgdir, "config.json"), "w"))
@@ -141,6 +141,29 @@ print("   ", emb.fields[0].value, "|", emb.fields[2].value)
 st.queue_status(rid_d, "approved", "x"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 B.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(2)
 check("member client ignores inbox", B.ev(f'__ns.G().requests["{rid_d}"].status') == "pending")
+
+# --- craft requests, reagents and skill-ups on the bot side ---
+cg = core.GuildData({"guilds": {"G - R": {
+    "bank": {"Epu Bank": {"v": 1, "items": {2996: 1}}},
+    "recipes": {"Tyler Baker": {"t": 1, "profs": {"Tailoring": {"rank": 150, "items": [30001], "diff": {"item:30001": "o"}}}}},
+    "mats": {"item:30001": {"t": 1, "r": [2996, 3, 2589, 1]}},
+    "requests": {
+        "c1": {"who": "Pip Baker", "crafter": "Tyler Baker", "key": "item:30001", "item": 30001, "qty": 2, "mats": "bank", "status": "approved", "t": 5, "u": 5},
+        "c2": {"who": "Pip Baker", "crafter": "Tyler Baker", "key": "spell:Enchant Bracer", "spell": "Enchant Bracer", "qty": 1, "mats": "me", "status": "pending", "t": 6, "u": 6},
+        "b1": {"who": "Pip Baker", "item": 2589, "qty": 4, "status": "approved", "t": 7, "u": 7},
+    }}}, "itemNames": {2996: "Bolt of Linen Cloth", 2589: "Linen Cloth", 30001: "Linen Bag"}})
+shop = {r["id"]: r["buy"] for r in cg.shopping_list()}
+check("bank-paid craft mats on the bot's shopping list (%s)" % shop, shop.get(2996) == 5 and shop.get(2589) == 2 + 4 and 30001 not in shop)
+sm = cg.status_summary()["requests"]
+check("status post counts crafts separately", sm == {"pending": 0, "approved": 1, "crafts": 2})
+check("craft labels", core.status_label(cg.requests["c1"]) == "accepted" and core.status_label(cg.requests["c2"]) == "asked"
+      and cg.request_name(cg.requests["c2"]) == "Enchant Bracer")
+cr = cg.crafters_for(item_id=30001)
+check("/craft shows skill-ups and materials", cr[0]["skillup"] is True and cg.mats_for(cr[0]["key"]) == [(2996, 3), (2589, 1)])
+emb = bot.request_embed("c1", cg.requests["c1"], cg)
+check("craft request embed", emb.title.startswith("Craft: Linen Bag") and any(f.name == "Crafter" for f in emb.fields))
+he = bot.help_embed()
+check("help post fits Discord's limits (%d chars)" % len(he), len(he) < 6000 and all(len(f.value) <= 1024 for f in he.fields))
 
 for c in (A, B):
     c.ex('__ns.UI:Show()')

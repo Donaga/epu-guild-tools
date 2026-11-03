@@ -30,7 +30,19 @@ local PILL = {
   filled   = { "Filled",   C.panel2,  C.muted },
   rejected = { "Rejected", C.redBg,   C.red },
   cancelled= { "Cancelled",C.panel2,  C.muted },
+  -- craft requests (asked of a crafter, not the bank)
+  craft_pending  = { "Asked",    C.goldBg,  C.gold },
+  craft_open     = { "Asked",    C.goldBg,  C.gold },
+  craft_approved = { "Accepted", C.greenBg, C.green },
+  craft_filled   = { "Made",     C.panel2,  C.muted },
+  craft_rejected = { "Declined", C.redBg,   C.red },
+  craft_cancelled= { "Cancelled",C.panel2,  C.muted },
 }
+local function PillKey(r) return (r.crafter and "craft_" or "") .. (r.status or "pending") end
+
+-- Skill-up colors: orange always gives a point, yellow usually, green sometimes.
+local DIFF = { o = { "ff8040", "orange" }, y = { "ffff00", "yellow" }, g = { "40c040", "green" } }
+local function SkillMark(d) return DIFF[d] and ("|cff" .. DIFF[d][1] .. "+|r") or "" end
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local SIDEBAR_W, HEADER_H, TOOLBAR_H, COMPOSER_H, FOOTER_H, ROW_H, DETAILS_W = 140, 36, 34, 36, 24, 38, 280
 
@@ -181,6 +193,7 @@ local function Ago(t)
 end
 
 local function Quality(id)
+  if not id then return 1 end
   local _, _, q = GetItemInfo(id)
   return q or 1
 end
@@ -780,8 +793,8 @@ end
 UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
-  crafters = { filter = "all" },
-  recipes = { prof = nil, online = false, designated = false, crafter = nil },
+  crafters = { filter = "all", prof = nil },
+  recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
 
@@ -798,6 +811,21 @@ end
 local Views = {}
 local ORDER = { "needs", "shopping", "bank", "requests", "donations", "crafters", "recipes", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
+
+-- A toolbar button that opens a dropdown menu.
+--   items() -> { {label, value, right} }, current() -> value, set(value)
+local function DropChip(bar, w, tip, items, current, set)
+  local b
+  b = bar:Add(Btn(bar, "", w, 22), "left", function()
+    OpenMenu(b, items(), current(), function(v) set(v); UI:Refresh() end)
+  end, tip)
+  b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
+  b.arrow = b:CreateTexture(nil, "ARTWORK")
+  b.arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+  b.arrow:SetSize(12, 12); b.arrow:SetPoint("RIGHT", -5, -2)
+  b.arrow:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
+  return b
+end
 
 -- Needs ---------------------------------------------------------------------
 Views.needs = {
@@ -917,7 +945,9 @@ Views.requests = {
     local n = 0
     local officer = ns.IsTrusted(ns.me)
     for _, r in pairs(g.requests) do
-      if officer and (r.status == "pending" or r.status == "open") then n = n + 1
+      local pending = (r.status == "pending" or r.status == "open")
+      if r.crafter and ns.IAmCrafter(r) and (pending or r.status == "approved") then n = n + 1     -- work for me to do
+      elseif officer and pending and not r.crafter then n = n + 1
       elseif not officer and ns.IsActiveRequest(r) and ns.MainOf(r.who) == ns.MainOf(ns.me) then n = n + 1 end
     end
     return n, C.goldBg, C.gold
@@ -926,7 +956,11 @@ Views.requests = {
     UI.mineChip = bar:Add(Btn(bar, "Mine", 50, 22), "left", function()
       UI.state.requests.mine = not UI.state.requests.mine
       UI:Refresh()
-    end, "Only your requests (and your alts')")
+    end, "Only your requests (and your alts'), plus crafts people asked you to make")
+    UI.craftsChip = bar:Add(Btn(bar, "Crafts", 54, 22), "left", function()
+      UI.state.requests.crafts = not UI.state.requests.crafts
+      UI:Refresh()
+    end, "Only craft requests (asked of a crafter, not the bank). Ask for one from the Recipes page.")
     UI.sortChip = bar:Add(Btn(bar, "Sort: Newest", 100, 22), "right", function()
       local st = UI.state.requests
       for i, s in ipairs(SORTS) do
@@ -939,18 +973,34 @@ Views.requests = {
     local st, officer, out = UI.state.requests, ns.IsTrusted(ns.me), {}
     local myMain = ns.MainOf(ns.me)
     for rid, r in pairs(g.requests) do
-      local name = ns.ItemName(r.item, true)
-      if RequestMatchesFilter(r, st.filter) and (not st.mine or ns.MainOf(r.who) == myMain)
-        and Match(q, name, r.who, r.to, ns.MainOf(r.who), r.note) then
+      local name = ns.RequestName(r, true)
+      local mineHere = ns.MainOf(r.who) == myMain or ns.IAmCrafter(r)
+      if RequestMatchesFilter(r, st.filter) and (not st.mine or mineHere) and (not st.crafts or r.crafter)
+        and Match(q, name, r.who, r.to, ns.MainOf(r.who), r.note, r.crafter) then
         local pending = (r.status == "pending" or r.status == "open")
         local parts = { ns.WhoLabel(r.who) }
+        if r.crafter then
+          parts[#parts + 1] = "|cff6ea8ffcraft by " .. (ns.IAmCrafter(r) and "you" or r.crafter) .. "|r"
+          parts[#parts + 1] = ({ me = "they send mats", bank = "bank sends mats", crafter = "crafter's mats" })[r.mats or "me"]
+        end
         if r.to and r.to ~= r.who then parts[#parts + 1] = "|cfff2c14e-> " .. r.to .. "|r" end
         parts[#parts + 1] = Ago(r.t)
         if r.via == "discord" then parts[#parts + 1] = "|cff8b9cffDiscord|r" end
         if r.status == "rejected" and r.reason and r.reason ~= "" then parts[#parts + 1] = "|cffff6b6b" .. r.reason .. "|r"
         elseif r.note and r.note ~= "" then parts[#parts + 1] = "\"" .. r.note .. "\"" end
         local buttons
-        if officer and pending then
+        local crafterHere = r.crafter and r.crafter == ns.me
+        if crafterHere and pending then
+          buttons = {
+            { "Interface\\RaidFrame\\ReadyCheck-NotReady", "Decline (open details to add a reason)", function() ns.EditRequest(rid, { status = "rejected" }) end },
+            { "Interface\\RaidFrame\\ReadyCheck-Ready", "Accept: you'll make it", function() ns.EditRequest(rid, { status = "approved" }) end },
+          }
+        elseif crafterHere and r.status == "approved" then
+          buttons = { { "Interface\\RaidFrame\\ReadyCheck-Ready", "Made it (mailing it to them marks this automatically)", function() ns.EditRequest(rid, { status = "filled" }) end } }
+          if r.item then table.insert(buttons, 1, { "Interface\\Icons\\INV_Letter_15", "Mail it (open a mailbox first)", function() ns.MailRequest(rid) end }) end
+        elseif r.crafter then
+          buttons = nil   -- officers and the requester use the details panel
+        elseif officer and pending then
           buttons = {
             { "Interface\\RaidFrame\\ReadyCheck-NotReady", "Reject (open details to add a reason)", function() ns.EditRequest(rid, { status = "rejected" }) end },
             { "Interface\\RaidFrame\\ReadyCheck-Ready", "Approve", function() ns.EditRequest(rid, { status = "approved" }) end },
@@ -959,9 +1009,10 @@ Views.requests = {
           buttons = { { "Interface\\Icons\\INV_Letter_15", "Mail it (open a mailbox first)", function() ns.MailRequest(rid) end } }
         end
         out[#out + 1] = {
-          key = "req:" .. rid, item = r.item, icon = ns.ItemIcon(r.item), qcolor = QColor(Quality(r.item)),
+          key = "req:" .. rid, item = r.item,
+          icon = r.item and ns.ItemIcon(r.item) or "Interface\\Icons\\Trade_Engraving", qcolor = QColor(Quality(r.item)),
           title = name .. " |cff9aa1abx" .. r.qty .. "|r", titleColor = QColor(Quality(r.item)),
-          sub = table.concat(parts, "  ·  "), pill = r.status, buttons = buttons,
+          sub = table.concat(parts, "  ·  "), pill = PillKey(r), buttons = buttons,
           t = r.t, who = r.who, name = name,
           onClick = function() UI:OpenDetails("request", rid) end,
         }
@@ -1032,6 +1083,18 @@ Views.crafters = {
   label = "Crafters", icon = "Interface\\Icons\\Trade_BlackSmithing",
   chips = { { "all", "All" }, { "online", "Online" }, { "designated", "Guild crafters" } },
   tools = function(bar)
+    UI.crafterProfChip = DropChip(bar, 130, "Pick a profession", function()
+      local counts = {}
+      for _, c in pairs((ns.G() or {}).crafters or {}) do
+        for p in pairs(c.profs or {}) do counts[p] = (counts[p] or 0) + 1 end
+      end
+      local list = {}
+      for p in pairs(counts) do list[#list + 1] = p end
+      table.sort(list)
+      local items = { { label = "All professions", value = false } }
+      for _, p in ipairs(list) do items[#items + 1] = { label = p, value = p, right = tostring(counts[p]) } end
+      return items
+    end, function() return UI.state.crafters.prof or false end, function(v) UI.state.crafters.prof = v or nil end)
     bar:Add(Btn(bar, "Who can craft...?", 120, 22), "right", function()
       local text = UI.search:GetText()
       if text == "" then return ns.Print("Type an item name in the search box (or shift-click an item into it), then click Who can craft.") end
@@ -1051,9 +1114,10 @@ Views.crafters = {
     local list = {}
     for who, c in pairs(g.crafters) do
       for prof, skill in pairs(c.profs or {}) do
-        local f = UI.state.crafters.filter
+        local f, pf = UI.state.crafters.filter, UI.state.crafters.prof
         local des = ns.IsDesignated(who, prof)
-        if (f == "all" or (f == "online" and Online(who)) or (f == "designated" and des)) and Match(q, who, prof, ns.MainOf(who)) then
+        if (f == "all" or (f == "online" and Online(who)) or (f == "designated" and des))
+          and (not pf or pf == prof) and Match(q, who, prof, ns.MainOf(who)) then
           list[#list + 1] = { who = who, prof = prof, skill = skill, lvl = c.lvl, des = des }
         end
       end
@@ -1069,10 +1133,12 @@ Views.crafters = {
       local nrec = 0
       local rec = g.recipes[who] and g.recipes[who].profs and g.recipes[who].profs[e.prof]
       if rec then nrec = #(rec.items or {}) + #(rec.spells or {}) end
+      local age = rec and (rec.at or g.recipes[who].t)
       out[#out + 1] = {
         key = "craft:" .. who .. e.prof, dot = Online(who),
         title = (e.des and (STAR .. " ") or "") .. ns.WhoLabel(who) .. (e.des and ("  |cfff2c14eguild " .. e.prof:lower() .. "|r") or ""),
-        sub = e.prof .. "  ·  level " .. tostring(e.lvl or "?") .. (nrec > 0 and ("  ·  " .. nrec .. " recipes") or ""),
+        sub = e.prof .. "  ·  level " .. tostring(e.lvl or "?")
+          .. (nrec > 0 and ("  ·  " .. nrec .. " recipes, updated " .. Ago(age)) or ""),
         right = tostring(e.skill),
         frac = nil, onClick = function() UI:OpenDetails("crafter", who) end,
       }
@@ -1104,8 +1170,7 @@ local MAX_LIST = 250   -- long lists: show the first 250 and ask people to searc
 Views.recipes = {
   label = "Recipes", icon = "Interface\\Icons\\INV_Misc_Book_09",
   tools = function(bar)
-    UI.profChip = bar:Add(Btn(bar, "All professions", 140, 22), "left", function(self)
-      local st = UI.state.recipes
+    UI.profChip = DropChip(bar, 140, "Pick a profession", function()
       local counts = {}
       for _, e in ipairs(ns.RecipeIndex()) do
         local seen = {}
@@ -1115,25 +1180,17 @@ Views.recipes = {
       end
       local items = { { label = "All professions", value = false } }
       for _, p in ipairs(RecipeProfs()) do items[#items + 1] = { label = p, value = p, right = tostring(counts[p] or 0) } end
-      OpenMenu(UI.profChip, items, st.prof or false, function(v)
-        st.prof = v or nil
-        UI:Refresh()
-      end)
-    end, "Pick a profession")
-    do -- make it look like a dropdown: text on the left, arrow on the right
-      local b = UI.profChip
-      b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
-      b.arrow = b:CreateTexture(nil, "ARTWORK")
-      b.arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
-      b.arrow:SetSize(12, 12); b.arrow:SetPoint("RIGHT", -5, -2)
-      b.arrow:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
-    end
+      return items
+    end, function() return UI.state.recipes.prof or false end, function(v) UI.state.recipes.prof = v or nil end)
     UI.onlineChip = bar:Add(Btn(bar, "Online", 56, 22), "left", function()
       UI.state.recipes.online = not UI.state.recipes.online; UI:Refresh()
     end, "Only recipes someone online right now can make")
     UI.desChip = bar:Add(Btn(bar, "Guild crafters", 96, 22), "left", function()
       UI.state.recipes.designated = not UI.state.recipes.designated; UI:Refresh()
     end, "Only recipes a designated guild crafter can make")
+    UI.skillChip = bar:Add(Btn(bar, "Skill-ups", 68, 22), "left", function()
+      UI.state.recipes.skillup = not UI.state.recipes.skillup; UI:Refresh()
+    end, "Only recipes that still give someone a skill point. Send these to them so they level up!")
     UI.crafterChip = bar:Add(Btn(bar, "", 110, 22), "right", function()
       UI.state.recipes.crafter = nil; UI:Refresh()
     end, "Click to show everyone's recipes again")
@@ -1143,18 +1200,19 @@ Views.recipes = {
     for _, e in ipairs(ns.RecipeIndex()) do
       local name = e.item and ns.ItemName(e.item, true) or e.name
       if (not st.prof or e.prof == st.prof) and ns.IsBoP(e.item or 0) ~= true then
-        local crafters, anyOnline, anyDes, hasCrafter = {}, false, false, st.crafter == nil
+        local crafters, anyOnline, anyDes, anySkill, hasCrafter = {}, false, false, false, st.crafter == nil
         for _, c in ipairs(e.crafters) do
           local des = ns.IsDesignated(c.who, c.prof)
           local on = Online(c.who)
           anyOnline = anyOnline or on
           anyDes = anyDes or des
+          anySkill = anySkill or (c.diff ~= nil)
           if c.who == st.crafter then hasCrafter = true end
-          crafters[#crafters + 1] = { who = c.who, des = des, on = on }
+          crafters[#crafters + 1] = { who = c.who, des = des, on = on, diff = c.diff }
         end
         local names = {}
         for _, c in ipairs(crafters) do names[#names + 1] = c.who end
-        if hasCrafter and (not st.online or anyOnline) and (not st.designated or anyDes)
+        if hasCrafter and (not st.online or anyOnline) and (not st.designated or anyDes) and (not st.skillup or anySkill)
           and Match(q, name, e.prof, table.concat(names, " ")) then
           table.sort(crafters, function(a, b)
             if a.des ~= b.des then return a.des end
@@ -1164,7 +1222,7 @@ Views.recipes = {
           local shown = {}
           for i = 1, math.min(4, #crafters) do
             local c = crafters[i]
-            shown[#shown + 1] = (c.des and STAR or "") .. (c.on and ("|cff4ade80" .. c.who .. "|r") or c.who)
+            shown[#shown + 1] = (c.des and STAR or "") .. (c.on and ("|cff4ade80" .. c.who .. "|r") or c.who) .. SkillMark(c.diff)
           end
           if #crafters > 4 then shown[#shown + 1] = "+" .. (#crafters - 4) .. " more" end
           local key = e.key
@@ -1190,7 +1248,7 @@ Views.recipes = {
   footer = function()
     local n = UI.recipeTotal or 0
     if n > MAX_LIST then return "Showing " .. MAX_LIST .. " of " .. n .. " recipes. Search or pick a profession to narrow it down." end
-    return n .. " recipes. Recipes appear when a crafter opens their profession window with the addon. BoP items are left out."
+    return n .. " recipes. Green = online, " .. SkillMark("o") .. " = they'd get a skill point making it. BoP items are left out."
   end,
   empty = "No recipes match. Crafters share theirs by opening their profession window once.",
 }
@@ -1379,6 +1437,7 @@ do
         local n = ns.ArchiveFinished()
         ns.Print("Tidied " .. n .. " finished request" .. (n == 1 and "" or "s") .. ". They're still under the All filter.")
       end, "Hides filled, rejected and cancelled requests from the default views, for everyone." },
+    { "Profession coverage", function() UI:OpenDetails("coverage", "all") end, "Which professions the guild has, who's best, and the gaps." },
   }
   local x = 14
   for _, t in ipairs(tools) do
@@ -1415,20 +1474,152 @@ local function RefreshOfficerPage(g)
     if r.status == "pending" or r.status == "open" then pending = pending + 1 end
   end
   for _ in pairs(g.crafters) do members = members + 1 end
+  local gaps, noGuild = {}, {}
+  for _, row in ipairs(ns.Coverage()) do
+    if row.count == 0 then gaps[#gaps + 1] = row.prof
+    elseif #row.guild == 0 then noGuild[#noGuild + 1] = row.prof end
+  end
   UI.officerStats:SetText(open .. " open requests (" .. pending .. " pending)  ·  " .. members
-    .. " members using the addon  ·  addon version " .. ns.VERSION)
+    .. " members using the addon  ·  addon version " .. ns.VERSION
+    .. ((members > 0 and #gaps > 0) and ("\n|cffff6b6bNobody has:|r " .. table.concat(gaps, ", ")) or "")
+    .. ((members > 0 and #noGuild > 0) and ("\n|cfff2c14eNo guild crafter yet:|r " .. table.concat(noGuild, ", ")) or ""))
 end
 
 ---------------------------------------------------------------------------
 -- Details content
 ---------------------------------------------------------------------------
+-- Reagent lines for a recipe: icon, name x count, how many the bank has.
+local function MatsLines(key, times)
+  local mats = ns.MatsFor(key)
+  if #mats == 0 then
+    det:Text("Materials: not shared yet (the crafter's addon sends them when they open their profession window).", C.muted)
+    return mats
+  end
+  det:Text(times and times > 1 and ("Materials for " .. times .. ":") or "Materials:", C.muted)
+  for _, m in ipairs(mats) do
+    local need = m.n * (times or 1)
+    local bank = ns.BankCount(m.id)
+    local col = (bank >= need) and "|cff4ade80" or "|cff7e8590"
+    det:Text("|T" .. (ns.ItemIcon(m.id) or "") .. ":14:14|t " .. ns.ItemName(m.id, true) .. " x" .. need
+      .. "   " .. col .. "bank " .. bank .. "|r")
+    det.y = det.y + 4
+  end
+  return mats
+end
+
+local MATS_LABEL = { me = "I'll send the materials", bank = "Guild bank sends materials", crafter = "Crafter uses their own" }
+local MATS_ORDER = { "me", "bank", "crafter" }
+
 function UI:FillDetails()
   local g = ns.G()
   if not det:IsShown() or not g then return end
   local kind, key = det.kind, det.key
   local officer = ns.IsTrusted(ns.me)
 
-  if kind == "request" then
+  if kind == "request" and g.requests[key] and g.requests[key].crafter then
+    local r = g.requests[key]
+    local p = PILL[PillKey(r)] or { r.status }
+    local name = ns.RequestName(r, true)
+    det:Reset(r.item and ns.ItemIcon(r.item) or "Interface\\Icons\\Trade_Engraving", Quality(r.item),
+      name .. "  x" .. r.qty, "Craft request  ·  " .. p[1] .. "  ·  " .. Ago(r.t))
+    local e = ns.RecipeFor(r.key)
+    local prof = e and e.prof
+    det:Text("Asked by " .. ns.WhoLabel(r.who) .. ((r.to and r.to ~= r.who) and (", for " .. r.to) or ""))
+    det:Text("Crafter: " .. ((prof and ns.IsDesignated(r.crafter, prof)) and (STAR .. " ") or "") .. r.crafter
+      .. (Online(r.crafter) and "  |cff4ade80online|r" or ""))
+    det:Text(MATS_LABEL[r.mats or "me"] or "", C.muted)
+    if r.note and r.note ~= "" then det:Text("Note: " .. r.note) end
+    if r.status == "rejected" and r.reason and r.reason ~= "" then det:Text("Reason: " .. r.reason, C.red) end
+    det:Gap()
+    MatsLines(r.key, r.qty)
+    det:Gap()
+    local iCraft, own = r.crafter == ns.me, r.who == ns.me
+    local pending = (r.status == "pending" or r.status == "open")
+    if iCraft or officer then
+      local reason = det:Field("Reason", r.reason or "", 160)
+      local function Set(st) return function() ns.EditRequest(key, { status = st, reason = reason:GetText() }) end end
+      if pending then
+        det:Buttons({ { "Accept", Set("approved"), accent = true, tip = "You'll make it. They're told right away." },
+          { "Decline", Set("rejected"), tip = "Type a reason above first if you like" } })
+      elseif r.status == "approved" then
+        local specs = { { "Made it", Set("filled"), accent = true, tip = "Mailing or trading it to them marks this automatically." },
+          { "Decline", Set("rejected") } }
+        if r.item then table.insert(specs, 2, { "Mail it", function() ns.MailRequest(key) end,
+          tip = "With a mailbox open: fills in " .. (r.to or r.who) .. " and attaches what you made." }) end
+        det:Buttons(specs)
+      end
+    end
+    if ns.IsActiveRequest(r) and ((own and r.mats == "me") or (officer and r.mats == "bank")) then
+      det:Buttons({ { "Mail materials to " .. (r.crafter:match("^(%S+)") or r.crafter), function() ns.MailCraftMats(key) end,
+        tip = "With a mailbox open: attaches the materials for " .. r.qty .. " from your bags." } })
+    end
+    if own and ns.IsActiveRequest(r) then
+      det:Buttons({ { "Cancel request", function() ns.EditRequest(key, { status = "cancelled" }) end } })
+    end
+    local other = iCraft and r.who or r.crafter
+    det:Buttons({ { "Whisper " .. (other:match("^(%S+)") or other), function()
+      if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. other .. " ") end
+    end } })
+
+  elseif kind == "craftask" then
+    -- key = recipeKey .. "\n" .. crafter
+    local rkey, crafter = key:match("^(.-)\n(.+)$")
+    local e = rkey and ns.RecipeFor(rkey)
+    if not e then return UI:CloseDetails() end
+    local name = e.item and ns.ItemName(e.item, true) or e.name
+    det:Reset(e.item and ns.ItemIcon(e.item) or "Interface\\Icons\\Trade_Engraving", Quality(e.item), name,
+      "Ask " .. crafter .. " to craft this")
+    det.ask = det.ask or {}
+    local ask = det.ask
+    if ask.key ~= key then ask.key, ask.qty, ask.mats, ask.forIndex = key, 1, "me", 1 end
+    local qty = det:Field("Quantity", tostring(ask.qty), 60, true)
+    qty.onChange = function(b) ask.qty = math.max(1, tonumber(b:GetText()) or 1) end
+    qty.onEnter = function() UI:FillDetails() end
+    local note = det:Field("Note", ask.note or "", 160)
+    note.onChange = function(b) ask.note = b:GetText() end
+    local function MatsIndex() for i, m in ipairs(MATS_ORDER) do if m == ask.mats then return i end end return 1 end
+    det:Buttons({ { MATS_LABEL[ask.mats], function()
+      ask.mats = MATS_ORDER[MatsIndex() % #MATS_ORDER + 1]
+      UI:FillDetails()
+    end, tip = "Who provides the materials. Click to change." } })
+    local chars = ns.MyChars()
+    if #chars > 1 then
+      if ask.forIndex > #chars then ask.forIndex = 1 end
+      det:Buttons({ { "Send it to: " .. chars[ask.forIndex], function()
+        ask.forIndex = ask.forIndex % #chars + 1
+        UI:FillDetails()
+      end, tip = "Which of your characters gets it" } })
+    end
+    det:Gap()
+    MatsLines(rkey, ask.qty)
+    det:Gap()
+    det:Buttons({ { "Send request", function()
+      local rid = ns.NewCraftRequest(rkey, crafter, ask.qty, ask.mats, ask.note, chars[ask.forIndex])
+      ask.key = nil
+      if rid then UI:OpenDetails("request", rid) end
+    end, accent = true }, { "Back", function() UI:OpenDetails("recipe", rkey) end } })
+    det:Text(crafter .. " gets a pop-up and can accept or decline. You'll be told either way.", C.muted)
+
+  elseif kind == "coverage" then
+    det:Reset("Interface\\Icons\\INV_Misc_Note_01", 1, "Profession coverage", "Who the guild has for each profession")
+    local gaps = {}
+    for _, row in ipairs(ns.Coverage()) do
+      if row.count == 0 then
+        det:Text("|cffff6b6b" .. row.prof .. ": nobody yet|r")
+        gaps[#gaps + 1] = row.prof
+      else
+        local guild = #row.guild > 0 and ("  " .. STAR .. " " .. table.concat(row.guild, ", ")) or "  |cfff2c14eno guild crafter|r"
+        det:Text(row.prof .. ": " .. row.count .. (row.count == 1 and " player" or " players")
+          .. ", best " .. row.best .. ((row.online > 0) and ("  ·  |cff4ade80" .. row.online .. " online|r") or "")
+          .. (row.recipes > 0 and ("  ·  " .. row.recipes .. " recipes") or "") .. "\n" .. guild)
+      end
+      det.y = det.y + 2
+    end
+    det:Gap()
+    det:Text(#gaps > 0 and ("Worth recruiting or leveling: " .. table.concat(gaps, ", ") .. ".") or "Every profession has someone.", C.muted)
+    det:Text("Players are counted once across their alts. Pick guild crafters from a crafter's details.", C.muted)
+
+  elseif kind == "request" then
     local r = g.requests[key]
     if not r then return UI:CloseDetails() end
     local p = PILL[r.status] or { r.status }
@@ -1554,7 +1745,7 @@ function UI:FillDetails()
     for _, p in ipairs(profs) do
       local n = rec[p] and (#(rec[p].items or {}) + #(rec[p].spells or {})) or 0
       det:Text((ns.IsDesignated(key, p) and (STAR .. " ") or "") .. p .. ": " .. c.profs[p]
-        .. (n > 0 and ("  |cff7e8590(" .. n .. " recipes shared)|r") or "  |cff7e8590(recipes not shared yet)|r"))
+        .. (n > 0 and ("  |cff7e8590(" .. n .. " recipes, updated " .. Ago(rec[p].at or g.recipes[key].t) .. ")|r") or "  |cff7e8590(recipes not shared yet)|r"))
       if officer then
         local des = ns.IsDesignated(key, p)
         det:Buttons({ { des and ("Remove as guild " .. p:lower()) or ("Make guild " .. p:lower()), function()
@@ -1580,6 +1771,17 @@ function UI:FillDetails()
     det:Reset(e.item and ns.ItemIcon(e.item) or "Interface\\Icons\\Trade_Engraving", e.item and Quality(e.item) or 1,
       name, e.prof .. "  ·  " .. #e.crafters .. (#e.crafters == 1 and " crafter" or " crafters"))
     if e.item then det:Text("In bank: " .. ns.BankCount(e.item), C.muted) end
+    local mats = MatsLines(key)
+    if #mats > 0 then
+      local n = ns.CraftsCovered(key) or 0
+      det:Text(n > 0 and ("|cff4ade80Bank materials cover " .. n .. (n == 1 and " craft" or " crafts") .. "|r")
+        or "The bank doesn't have the materials for one yet.", n > 0 and C.text or C.muted)
+      if officer then
+        det:Buttons({ { "Stock mats for 5 crafts", function() ns.StockMatsFor(key, 5) end,
+          tip = "Raises the bank's needs so it keeps enough of each material for 5 crafts." } })
+      end
+    end
+    det:Gap()
     local list = {}
     for _, cr in ipairs(e.crafters) do list[#list + 1] = cr end
     table.sort(list, function(a, b)
@@ -1591,18 +1793,27 @@ function UI:FillDetails()
     end)
     for _, cr in ipairs(list) do
       local who = cr.who
+      local skill = cr.diff and ("  |cff" .. DIFF[cr.diff][1] .. "skill-up (" .. DIFF[cr.diff][2] .. ")|r") or ""
       det:Text((ns.IsDesignated(who, cr.prof) and (STAR .. " ") or "") .. ns.WhoLabel(who)
-        .. "  |cff7e8590" .. cr.prof .. " " .. tostring(cr.rank or "?") .. "|r" .. (Online(who) and "  |cff4ade80online|r" or ""))
+        .. "  |cff7e8590" .. cr.prof .. " " .. tostring(cr.rank or "?") .. "|r" .. (Online(who) and "  |cff4ade80online|r" or "")
+        .. skill .. "\n|cff7e8590updated " .. Ago(cr.at) .. "|r")
       det.y = det.y + 2
-      det:Buttons({ { "Whisper " .. (who:match("^(%S+)") or who), function()
+      local short = who:match("^(%S+)") or who
+      local specs = { { "Whisper " .. short, function()
         if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. who .. " ") end
-      end } })
+      end } }
+      if who ~= ns.me then
+        table.insert(specs, 1, { "Ask " .. short .. " to craft", function() UI:OpenDetails("craftask", key .. "\n" .. who) end,
+          accent = true, tip = "Send " .. short .. " a craft request. They get a pop-up and can accept it." })
+      end
+      det:Buttons(specs)
     end
+    if #list > 0 then det:Text(SkillMark("o") .. " Orange always gives the crafter a skill point, yellow usually, green sometimes.", C.muted) end
     if e.item then
       det:Gap()
-      det:Buttons({ { "Request this", function()
+      det:Buttons({ { "Request one from the bank", function()
         UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(e.item)); UI.qtyBox:SetFocus()
-      end, accent = true } })
+      end } })
     end
   end
   det:Finish()
@@ -1765,8 +1976,15 @@ function UI:Refresh()
   if bar then
     local stKey = (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
+    if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
+    if v == Views.crafters then
+      local pf = self.state.crafters.prof
+      self.crafterProfChip:SetLabel(pf or "All professions")
+      self.crafterProfChip:SetOn(pf ~= nil)
+    end
     if v == Views.recipes then
       local st = self.state.recipes
+      self.skillChip:SetOn(st.skillup)
       self.profChip:SetLabel(st.prof or "All professions")
       self.profChip:SetOn(st.prof ~= nil)
       self.onlineChip:SetOn(st.online)

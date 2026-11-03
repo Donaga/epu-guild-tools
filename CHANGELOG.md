@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+- **Craft requests:** ask a guildmate to craft a recipe from its details, choosing who provides the materials. The crafter gets a pop-up and accepts or declines; mailing or trading what they made marks it made. Shown under Requests (*Crafts* filter) and in Discord. **Mail materials** fills the mail to the crafter.
+- **Materials:** recipe details list reagents, what the bank holds and how many crafts that covers. Officers can stock the bank for 5 crafts in one click. Bank-paid materials for accepted crafts go on the shopping list.
+- **Skill-up colors:** see who would still gain a skill point from a recipe, and filter Recipes to those.
+- **Tooltips:** crafted items list guild crafters; patterns and recipes show whether anyone in the guild knows them.
+- **Profession coverage** on the Officer page: professions nobody has, ones without a guild crafter, and a full breakdown.
+- Crafters and recipes show when each crafter's list was last updated.
+- Crafters gets the same profession dropdown as Recipes.
+- Discord: craft request posts, crafts count on the status post, `/craft` shows materials and skill-ups, and a how-to section on getting things crafted.
+- Profession scanning also understands the modern profession window, in case Forever uses it.
+
 ## 0.6.1
 
 - Recipes: the profession filter is now a dropdown menu showing every profession with its recipe count, instead of clicking through them one at a time. Click outside or press Escape to close it.

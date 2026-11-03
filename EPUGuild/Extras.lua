@@ -26,6 +26,53 @@ end
 ---------------------------------------------------------------------------
 -- 1. Tooltips
 ---------------------------------------------------------------------------
+local CraftLines
+local RECIPE_CLASS = (Enum and Enum.ItemClass and Enum.ItemClass.Recipe) or 9
+
+local function NameList(list, max)
+  local names = {}
+  for i = 1, math.min(max, #list) do
+    local c = list[i]
+    local n = c.who:match("^(%S+)") or c.who
+    if ns.IsDesignated(c.who, c.prof) then n = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t" .. n end
+    if ns.roster[c.who] and ns.roster[c.who].online then n = "|cff4ade80" .. n .. "|r" end
+    names[#names + 1] = n
+  end
+  if #list > max then names[#names + 1] = "+" .. (#list - max) .. " more" end
+  return table.concat(names, ", ")
+end
+
+-- Who in the guild crafts this item; for recipes/patterns, whether anyone knows it.
+CraftLines = function(tt, id)
+  local crafters = ns.CraftersOf("item:" .. id)
+  local added = false
+  if #crafters > 0 then
+    tt:AddLine("Guild crafters: " .. NameList(crafters, 3), 0.85, 0.86, 0.88)
+    added = true
+  end
+  local name, _, _, _, _, _, subType, _, _, _, _, classID = GetItemInfo(id)
+  if classID == RECIPE_CLASS and name then
+    local made = name:match("^[^:]+:%s*(.+)$") or name    -- "Pattern: Woolen Bag" -> "Woolen Bag"
+    local e = ns.RecipeByName(made)
+    if e then
+      tt:AddLine("Known in the guild by " .. NameList(ns.CraftersOf(e.key), 3), MUTED[1], MUTED[2], MUTED[3])
+      added = true
+    elseif #ns.RecipeIndex() > 0 then
+      tt:AddLine("Nobody in the guild knows this recipe yet", GOLD[1], GOLD[2], GOLD[3])
+      local g, who = ns.G(), {}
+      for n, c in pairs((g and g.crafters) or {}) do
+        local skill = c.profs and subType and c.profs[subType]
+        if skill then who[#who + 1] = { n = n, s = skill } end
+      end
+      table.sort(who, function(a, b) return a.s > b.s end)
+      local parts = {}
+      for i = 1, math.min(3, #who) do parts[#parts + 1] = (who[i].n:match("^(%S+)") or who[i].n) .. " " .. who[i].s end
+      if #parts > 0 then tt:AddLine(subType .. " in the guild: " .. table.concat(parts, ", "), MUTED[1], MUTED[2], MUTED[3]) end
+      added = true
+    end
+  end
+  return added
+end
 local function TooltipLines(tt, id)
   if not id or not Setting("tooltips", true) then return end
   local g = ns.G()
@@ -50,10 +97,16 @@ local function TooltipLines(tt, id)
   for _, r in pairs(g.requests) do
     if r.item == id and mine[r.who] and ns.IsActiveRequest(r) then
       local st = (r.status == "open") and "pending" or r.status
-      tt:AddLine("Your guild bank request: " .. st .. " (x" .. r.qty .. ")", GOLD[1], GOLD[2], GOLD[3])
+      if r.crafter then
+        st = (r.status == "approved") and "accepted" or st
+        tt:AddLine("Your craft request to " .. r.crafter .. ": " .. st .. " (x" .. r.qty .. ")", GOLD[1], GOLD[2], GOLD[3])
+      else
+        tt:AddLine("Your guild bank request: " .. st .. " (x" .. r.qty .. ")", GOLD[1], GOLD[2], GOLD[3])
+      end
       added = true
     end
   end
+  if CraftLines(tt, id) then added = true end
   if added then tt:Show() end
 end
 ns.TooltipLines = TooltipLines
@@ -230,8 +283,27 @@ end
 function ns.OnRequestChanged(rid, r, oldStatus)
   if not r or not ns.me then return end
   local mine = MyChars()
-  local name = ns.ItemName(r.item, true)
-  local icon = ns.ItemIcon(r.item)
+  local name = ns.RequestName(r, true)
+  local icon = r.item and ns.ItemIcon(r.item) or "Interface\\Icons\\Trade_Engraving"
+  if r.crafter then
+    local short = r.crafter:match("^(%S+)") or r.crafter
+    if mine[r.who] and oldStatus and oldStatus ~= r.status then
+      if r.status == "approved" then
+        ns.Notify("Craft accepted", short .. " will make " .. name .. " x" .. r.qty .. "."
+          .. (r.mats == "me" and " Mail them the materials." or ""), icon)
+      elseif r.status == "filled" then
+        ns.Notify("Craft done", short .. " made " .. name .. " x" .. r.qty .. ".", icon)
+      elseif r.status == "rejected" then
+        ns.Notify("Craft declined", short .. " can't make " .. name .. ((r.reason and r.reason ~= "") and (": " .. r.reason) or ""), icon)
+      end
+    elseif not oldStatus and mine[r.crafter] and not mine[r.who] and (r.status == "pending" or r.status == "open") then
+      ns.Notify("Craft request", ns.WhoLabel(r.who) .. " asks you to make " .. name .. " x" .. r.qty .. ".", icon)
+    elseif ns.IsTrusted(ns.me) and r.mats == "bank" and r.status == "approved" and oldStatus ~= "approved"
+      and Setting("officerNotices", true) and not mine[r.crafter] then
+      ns.Notify("Bank materials needed", short .. " accepted " .. name .. " x" .. r.qty .. " for " .. r.who .. ". The bank sends the materials.", icon)
+    end
+    return
+  end
   if mine[r.who] and oldStatus and oldStatus ~= r.status then
     if r.status == "approved" then
       ns.Notify("Request approved", name .. " x" .. r.qty .. ". It'll be mailed to " .. (r.to or r.who) .. ".", icon)
