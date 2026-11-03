@@ -374,6 +374,10 @@ class GuildData:
         rows.sort(key=lambda e: e.get("t", 0))
         return rows
 
+    def motd(self) -> dict | None:
+        m = self.g.get("motd")
+        return m if isinstance(m, dict) and m.get("text") else None
+
     def news(self) -> dict:
         """Announcements by id (including removed ones, so their posts can be taken down)."""
         return {k: v for k, v in (self.g.get("news") or {}).items() if isinstance(v, dict)}
@@ -516,9 +520,20 @@ class State:
         self.save()
         return e
 
-    def queue_news(self, title: str, text: str, by: str) -> dict:
-        """An officer's /announce: the game picks it up and shows it to everyone."""
+    def queue_news(self, title: str, text: str, by: str, nid: str | None = None, edit: bool = False) -> dict:
+        """An officer's /announce, or a post copied from the announcements channel
+        (nid = "m<message id>" so edits and deletes find it again)."""
         e = {"id": uuid.uuid4().hex[:10], "kind": "news", "title": title[:60], "text": text[:400], "by": by, "t": int(time.time())}
+        if nid:
+            e["nid"] = nid
+        if edit:
+            e["edit"] = True
+        self.data["inbox"].append(e)
+        self.save()
+        return e
+
+    def queue_news_remove(self, nid: str) -> dict:
+        e = {"id": uuid.uuid4().hex[:10], "kind": "news_remove", "nid": nid, "t": int(time.time())}
         self.data["inbox"].append(e)
         self.save()
         return e
@@ -590,6 +605,12 @@ def diff(gd: GuildData, state: State) -> dict:
             out["new_feed"].append(e)
     if fresh:
         state.data["feed_seen"] = (state.data.get("feed_seen", []) + fresh)[-2000:]
+    # in-game guild message of the day
+    m = gd.motd()
+    if m and state.data.get("motd_posted") != m["text"]:
+        if primed:
+            out["motd"] = m["text"]
+        state.data["motd_posted"] = m["text"]
     # announcements: new, edited or removed
     posted = state.data.setdefault("news_posted", {})
     for nid, e in gd.news().items():
@@ -608,7 +629,27 @@ def diff(gd: GuildData, state: State) -> dict:
 ITEM_ID_RE = re.compile(r"item[=:](\d+)(?:/([A-Za-z0-9\-]+))?")
 
 
-def name_from_slug(slug: str | None) -> str | None:
+def message_to_news(content: str, embeds: list | None = None) -> tuple[str, str]:
+    """Turn a Discord post into (title, text) for the game's announcement pop-up.
+    The first line becomes the title if there's more than one line."""
+    text = (content or "").strip()
+    title = ""
+    for em in embeds or []:
+        et, ed = (em.get("title") or "").strip(), (em.get("description") or "").strip()
+        if not text and ed:
+            text = ed
+        if not title and et:
+            title = et
+    # markdown the game can't show: **bold**, __underline__, headers, >quotes
+    text = re.sub(r"(\*\*|__|~~|`)", "", text)
+    lines = [re.sub(r"^(#+\s*|>\s*)", "", ln).strip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+    if not title and len(lines) > 1 and len(lines[0]) <= 60:
+        title, lines = lines[0], lines[1:]
+    body = "\n".join(lines)
+    if len(body) > 400:
+        body = body[:370].rstrip() + "... (more on Discord)"
+    return (title or "Announcement")[:60], body
     """'pattern-woolen-reagent-bag' -> 'Pattern Woolen Reagent Bag' (Wowhead URL text)."""
     if not slug:
         return None

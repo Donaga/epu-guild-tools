@@ -201,17 +201,53 @@ function ns.NewsEntries()
   return list
 end
 
+-- The in-game guild Message of the Day, as a News entry (each client reads it itself; nothing to sync).
+function ns.MotdEntry()
+  local g = ns.GuildStore()
+  local m = g and g.motd
+  if not m or not m.text or m.text == "" then return nil end
+  return { id = "motd", title = "Guild message of the day", text = m.text, by = "Guild", t = m.t, motd = true }
+end
+
+function ns.GuildInfoText()
+  local t = GetGuildInfoText and GetGuildInfoText()
+  if type(t) == "string" and t:gsub("%s", "") ~= "" then return t end
+  return nil
+end
+
+function ns.UpdateMotd(text)
+  local g = ns.GuildStore()
+  if not g then return end
+  if text == nil and GetGuildRosterMOTD then text = GetGuildRosterMOTD() end
+  if type(text) ~= "string" then return end
+  g.motd = g.motd or {}
+  if g.motd.text ~= text then
+    g.motd = { text = text, t = ns.Now() }
+    ns.Changed()
+  end
+end
+ns.On("GUILD_MOTD", function(text) ns.UpdateMotd(text) end)
+ns.On("PLAYER_GUILD_UPDATE", function() ns.UpdateMotd() end)
+ns.On("GUILD_ROSTER_UPDATE", function() ns.UpdateMotd() end)
+
 function ns.UnreadNews()
   local read = (ns.cdb and ns.cdb.newsRead) or {}
   local out = {}
+  local motd = ns.MotdEntry()
+  if motd and ns.cdb and ns.cdb.motdRead ~= motd.text then out[#out + 1] = motd end
   for _, e in ipairs(ns.NewsEntries()) do if not read[e.id] then out[#out + 1] = e end end
   return out
 end
 
 function ns.MarkNewsRead(id)
   if not ns.cdb then return end
-  ns.cdb.newsRead = ns.cdb.newsRead or {}
-  ns.cdb.newsRead[id] = true
+  if id == "motd" then
+    local m = ns.MotdEntry()
+    ns.cdb.motdRead = m and m.text or nil
+  else
+    ns.cdb.newsRead = ns.cdb.newsRead or {}
+    ns.cdb.newsRead[id] = true
+  end
   ns.Changed()
 end
 

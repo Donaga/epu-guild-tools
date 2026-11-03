@@ -160,6 +160,44 @@ A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'
 check("/announce reaches the game and members", B.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "Raid night" then return e.by end end end)()') == "Donaga (Discord)")
 check("announcement embed", bot.news_embed({"title": "Raid night", "text": "x", "by": "Donaga"}).title == "Raid night")
 
+# --- copying the Discord announcements channel into the game ---
+import asyncio, types
+from datetime import datetime as _dt, timezone as _tz
+bot.client._connection.user = types.SimpleNamespace(id=1)
+bot.flush_inbox = lambda: core.write_inbox(core.inbox_path(WOW), bot.state.data["inbox"])
+bot.state = st
+def fake_msg(mid, content, author="Donaga", aid=2):
+    return types.SimpleNamespace(id=mid, clean_content=content, embeds=[], type=bot.discord.MessageType.default, guild=None,
+                                 author=types.SimpleNamespace(id=aid, display_name=author), created_at=_dt.now(_tz.utc))
+check("copies a post from the announcements channel", asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 6"))) is True)
+check("the same post isn't copied twice", asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 6"))) is False)
+check("the bot's own posts are skipped", asyncio.run(bot.import_message(fake_msg(778, "hello", aid=1))) is False)
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+title_of = '(function() local e = __ns.GuildStore().news["m777"] return e and not e.removed and (e.title .. "|" .. e.text) or nil end)()'
+check("copied post becomes an in-game announcement", B.ev(title_of) == "Patch night|Servers restart at 6")
+check("copied posts aren't posted back to Discord", st.data["news_posted"]["m777"]["external"] is True)
+asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 7"), edit=True))
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+check("edits in Discord update the game", B.ev(title_of) == "Patch night|Servers restart at 7")
+st.queue_news_remove("m777"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+check("deleting in Discord removes it in game", B.ev(title_of) is None)
+
+# --- in-game message of the day ---
+for c in (A, B):
+    c.ex('__motd = "Welcome! Bank alt is Epu Bank."; __ginfo = "Casual leveling guild. Be nice."; __fire("GUILD_MOTD", __motd)')
+check("MOTD shows as unread news", B.ev('__ns.UnreadNews()[1].id') == "motd")
+B.ex('__ns.UI:Show(); __ns.UI:SetView("news")')
+check("News page shows MOTD and guild info", B.ev('(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() and r.data then t[#t+1] = r.data.key end end return table.concat(t, ",") end)()').startswith("news:motd,news:info"))
+B.ex('__ns.MarkNewsRead("motd")')
+check("reading it clears it until it changes", B.ev('(function() for _, e in ipairs(__ns.UnreadNews()) do if e.id == "motd" then return true end end return false end)()') == False)
+B.ex('__motd = "New: raid Friday"; __fire("GUILD_MOTD", __motd)')
+check("a new MOTD is unread again", B.ev('__ns.UnreadNews()[1].id') == "motd")
+A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
+gd5 = core.load_guild_data(paths[0], "E Pluribus Unum")
+check("bot mirrors the MOTD to Discord", core.diff(gd5, st).get("motd") == "Welcome! Bank alt is Epu Bank.")
+check("and only once", core.diff(gd5, st).get("motd") is None)
+
 # --- a member's client doesn't apply the inbox ---
 st.queue_status(rid_d, "approved", "x"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 B.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(2)

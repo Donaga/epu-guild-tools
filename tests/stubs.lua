@@ -268,3 +268,7 @@ MailFrameTab2 = NewMock()
 __corner = nil
 Baganator = { API = { RegisterCornerWidget = function(label, id, onUpdate, onInit) __corner = { onUpdate = onUpdate, onInit = onInit } end,
   RequestItemButtonsRefresh = function() end } }
+
+__motd, __ginfo = "", ""
+function GetGuildRosterMOTD() return __motd end
+function GetGuildInfoText() return __ginfo end

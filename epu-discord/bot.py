@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 
@@ -59,6 +59,10 @@ def load_config() -> dict:
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
     cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
     cfg.setdefault("post_milestones", True)       # level-ups, first mounts, new members... in Discord
+    cfg.setdefault("import_channel_id", "")       # an existing #announcements channel to copy into the game
+    cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
+    cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
+    cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
@@ -68,6 +72,8 @@ def load_config() -> dict:
 cfg = load_config()
 state = core.State(os.path.join(HERE, "state.json"))
 intents = discord.Intents.default()
+if cfg["import_channel_id"]:
+    intents.message_content = True   # needed to read the announcements channel (turn it on in the Developer Portal)
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 GUILD = discord.Object(id=int(cfg["server_id"]))
@@ -291,7 +297,8 @@ def help_embed() -> discord.Embed:
         "automatically. In game, the addon's **Roster** page shows who's online, their level and role, and who's "
         "near your level. Set your role and what you're looking for under **My profile**."))
     e.add_field(name=f"Officers ({officer} role)", inline=False, value=(
-        "`/announce` posts a guild announcement here and as a pop-up in game.\n"
+        "`/announce` posts a guild announcement here and as a pop-up in game. Posts in the announcements channel "
+        "are copied into the game too, and the in-game message of the day is mirrored here.\n"
         "Use the **Approve** and **Reject** buttons on request posts. Reject asks for an optional reason.\n"
         "Mailing or trading an approved item to the requester marks it filled automatically."))
     e.add_field(name="Why isn't it instant?", inline=False, value=(
@@ -450,6 +457,8 @@ async def refresh(gd: core.GuildData):
     await post_milestones(gd, changes["new_feed"])
     for nid, e in changes["news"]:
         await post_news(nid, e)
+    if changes.get("motd"):
+        await post_motd(changes["motd"])
     if cfg["post_donations"] and changes["new_donations"]:
         ch = channel()
         for d in changes["new_donations"][:10]:
@@ -494,6 +503,8 @@ async def post_news(nid: str, e: dict):
         return
     posted = state.data.setdefault("news_posted", {})
     p = posted.get(nid)
+    if p and p.get("external"):
+        return          # it came from the announcements channel; the original post is already there
     try:
         if p:
             try:
@@ -512,6 +523,113 @@ async def post_news(nid: str, e: dict):
         posted[nid] = {"message_id": msg.id, "u": e.get("u") or 0}
     except Exception as ex:
         explain(ex, "post an announcement", cfg["announce_channel_id"])
+
+
+async def post_motd(text: str):
+    if not cfg["post_motd"]:
+        return
+    ch = client.get_channel(int(cfg["announce_channel_id"]))
+    if ch is None:
+        return
+    em = discord.Embed(title="Guild message of the day", description=text, color=discord.Color.gold())
+    em.set_footer(text="Set in game in the guild window.")
+    try:
+        await ch.send(embed=em)
+    except Exception as ex:
+        explain(ex, "post the guild message of the day", cfg["announce_channel_id"])
+
+
+# --- copying an existing announcements channel into the game ---------------
+async def may_import(message: discord.Message) -> bool:
+    if message.author.id == client.user.id or message.type not in (discord.MessageType.default, discord.MessageType.reply):
+        return False
+    if not cfg["import_officers_only"]:
+        return True
+    member = message.author if isinstance(message.author, discord.Member) else None
+    if member is None and message.guild is not None:
+        try:
+            member = await message.guild.fetch_member(message.author.id)
+        except discord.HTTPException:
+            return False
+    return is_officer(member)
+
+
+def embeds_of(message) -> list[dict]:
+    return [{"title": em.title, "description": em.description} for em in getattr(message, "embeds", [])]
+
+
+async def import_message(message: discord.Message, edit: bool = False) -> bool:
+    imported = state.data.setdefault("imported", {})
+    key = str(message.id)
+    if (key in imported and not edit) or (edit and key not in imported):
+        return False
+    if not edit and not await may_import(message):
+        return False
+    title, text = core.message_to_news(message.clean_content, embeds_of(message))
+    if not text and title == "Announcement":
+        return False      # an image-only post, nothing to show in game
+    nid = "m" + key
+    state.queue_news(title, text, message.author.display_name, nid=nid, edit=edit)
+    imported[key] = int(message.created_at.timestamp())
+    # the post already exists in Discord, so don't post it back when it shows up from the game
+    state.data.setdefault("news_posted", {})[nid] = {"message_id": message.id, "u": 10 ** 12, "external": True}
+    state.save()
+    flush_inbox()
+    log.info("Copied announcement %s into the game inbox (%s)", message.id, title)
+    return True
+
+
+async def backfill_announcements():
+    cid = cfg["import_channel_id"]
+    if not cid:
+        return
+    ch = client.get_channel(int(cid))
+    if ch is None:
+        log.error("import_channel_id %s not found; check the ID and that the bot can see that channel.", cid)
+        return
+    after = datetime.now(timezone.utc) - timedelta(days=float(cfg["import_days"]))
+    n = 0
+    try:
+        async for m in ch.history(limit=50, after=after, oldest_first=True):
+            if await import_message(m):
+                n += 1
+    except discord.Forbidden:
+        log.error("The bot can't read the history of channel %s. Give it View Channel and Read Message History there.", cid)
+        return
+    if n:
+        log.info("Copied %d existing announcement(s) into the game. They appear after an officer's next /reload.", n)
+
+
+@client.event
+async def on_message(message: discord.Message):
+    if cfg["import_channel_id"] and str(message.channel.id) == str(cfg["import_channel_id"]):
+        await import_message(message)
+
+
+@client.event
+async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
+    if not cfg["import_channel_id"] or str(payload.channel_id) != str(cfg["import_channel_id"]):
+        return
+    if str(payload.message_id) not in state.data.get("imported", {}):
+        return
+    ch = client.get_channel(payload.channel_id)
+    try:
+        msg = await ch.fetch_message(payload.message_id)
+    except discord.HTTPException:
+        return
+    await import_message(msg, edit=True)
+
+
+@client.event
+async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+    if not cfg["import_channel_id"] or str(payload.channel_id) != str(cfg["import_channel_id"]):
+        return
+    imported = state.data.get("imported", {})
+    if str(payload.message_id) in imported:
+        state.queue_news_remove("m" + str(payload.message_id))
+        imported.pop(str(payload.message_id), None)
+        state.save()
+        flush_inbox()
 
 
 @tree.command(name="announce", description="Officers: post a guild announcement (also pops up in game)", guild=GUILD)
@@ -798,6 +916,7 @@ async def on_ready():
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
     await ensure_help_post()
+    await backfill_announcements()
     if cfg["item_db"]:
         await asyncio.to_thread(load_items)
     if not release_loop.is_running():
@@ -809,4 +928,9 @@ async def on_ready():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    client.run(cfg["token"], log_handler=None)
+    try:
+        client.run(cfg["token"], log_handler=None)
+    except discord.errors.PrivilegedIntentsRequired:
+        sys.exit("To copy the announcements channel the bot needs the Message Content Intent.\n"
+                 "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
+                 "Or leave import_channel_id blank in config.json to skip copying announcements.")

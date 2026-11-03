@@ -112,11 +112,19 @@ function ns.ProcessInbox()
           ok = true
         end
       elseif e.kind == "news" then
+        -- /announce, or a post copied from the Discord announcements channel.
+        -- e.nid is the post's own id, so edits update the same announcement.
         local g2 = ns.GuildStore()
-        if g2 and not g2.news["d-" .. e.id] then
-          ns.PostNews(e.title, e.text, "d-" .. e.id, e.by and (e.by .. " (Discord)") or nil)
-          if g2.news["d-" .. e.id] then g2.news["d-" .. e.id].via = "discord" end
+        local nid = e.nid or ("d-" .. e.id)
+        local cur = g2 and g2.news[nid]
+        if g2 and (not cur or (e.edit and not cur.removed)) then
+          ns.PostNews(e.title, e.text, nid, e.by and (e.by .. " (Discord)") or nil)
+          if g2.news[nid] then g2.news[nid].via = "discord" end
         end
+        ok = true
+      elseif e.kind == "news_remove" then
+        local g2 = ns.GuildStore()
+        if g2 and e.nid and g2.news[e.nid] and not g2.news[e.nid].removed then ns.RemoveNews(e.nid) end
         ok = true
       else
         ok = true      -- unknown kind from a newer companion

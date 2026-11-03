@@ -1285,6 +1285,23 @@ Views.news = {
   end,
   rows = function(g, q)
     local out, read = {}, (ns.cdb and ns.cdb.newsRead) or {}
+    local motd = ns.MotdEntry()
+    if motd and Match(q, motd.text) then
+      out[#out + 1] = {
+        key = "news:motd", icon = "Interface\\Icons\\INV_Misc_Note_01", qcolor = C.gold,
+        title = "Message of the day", titleColor = C.gold, sub = motd.text:gsub("\n", " "),
+        pill = (ns.cdb and ns.cdb.motdRead ~= motd.text) and "news_new" or nil,
+        onClick = function() ns.MarkNewsRead("motd"); UI:OpenDetails("motd", "motd") end,
+      }
+    end
+    local info = ns.GuildInfoText()
+    if info and Match(q, info) then
+      out[#out + 1] = {
+        key = "news:info", icon = "Interface\\Icons\\INV_Misc_Book_09", qcolor = C.line,
+        title = "Guild info", sub = info:gsub("\n", " "),
+        onClick = function() UI:OpenDetails("motd", "info") end,
+      }
+    end
     for _, e in ipairs(ns.NewsEntries()) do
       if Match(q, e.title, e.text, e.by) then
         out[#out + 1] = {
@@ -1307,7 +1324,7 @@ Views.news = {
     end
     return out
   end,
-  footer = function() return "Announcements from officers, then the last 30 days of guild milestones." end,
+  footer = function() return "Message of the day, announcements (in game and from Discord), then the last 30 days of milestones." end,
   empty = "Nothing yet. Level-ups, first mounts, profession ranks and big donations show up here.",
 }
 
@@ -1846,6 +1863,19 @@ function UI:FillDetails()
       det:Buttons({ { "Edit", function() UI:OpenDetails("newnews", key) end },
         { "Remove", function() ns.RemoveNews(key); UI:CloseDetails() end } })
     end
+
+  elseif kind == "motd" then
+    local m, info = ns.MotdEntry(), ns.GuildInfoText()
+    det:Reset("Interface\\Icons\\INV_Misc_Note_01", 1, key == "info" and "Guild info" or "Message of the day",
+      "From the in-game guild window" .. ((key ~= "info" and m and m.t) and ("  ·  changed " .. Ago(m.t)) or ""))
+    if key ~= "info" then
+      det:Text(m and m.text or "No message of the day set.")
+      if info then det:Gap(); det:Text("Guild info", C.muted); det:Text(info) end
+    else
+      det:Text(info or "No guild info set.")
+    end
+    det:Gap()
+    det:Text("Officers change these in the guild window (Guild & Communities). The addon shows the message of the day here, pops it up when it changes, and mirrors it to Discord.", C.muted)
 
   elseif kind == "newnews" then
     local e = key ~= "new" and (ns.GuildStore() or {}).news[key] or nil
