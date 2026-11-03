@@ -238,6 +238,8 @@ local HELP = {
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
+  "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
+  "|cffffd100/epu welcome|r - show the welcome tips again",
   "|cffffd100/epu resetwindow|r - put the window back in the middle at its normal size",
 }
 
@@ -284,6 +286,16 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
+  elseif cmd == "tooltips" or cmd == "markers" or cmd == "notices" or cmd == "donate" or cmd == "officernotices" then
+    local key = ({ tooltips = "tooltips", markers = "bagMarkers", notices = "notices", donate = "donatePanel", officernotices = "officerNotices" })[cmd]
+    local on = ns.db.settings[key] == false
+    ns.db.settings[key] = on
+    ns.Print(({ tooltips = "Tooltip lines", markers = "Bag coins for needed items", notices = "Pop-up notices",
+      donate = "Mailbox donate panel", officernotices = "New-request pop-ups for officers" })[cmd] .. (on and " on." or " off."))
+    if ns.RefreshBagMarkers then ns.RefreshBagMarkers() end
+  elseif cmd == "welcome" then
+    ns.UI:Show()
+    ns.ShowWelcome()
   elseif cmd == "scale" then
     local s = tonumber(args)
     if not s or s < 0.6 or s > 1.5 then return ns.Print("Usage: /epu scale 0.9  (between 0.6 and 1.5)") end

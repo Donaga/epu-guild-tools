@@ -112,6 +112,63 @@ A.ex('__ns.Send("H", {needs = 0, bank = {}, since = 0, ver = "9.9.9"})'); tick(3
 check("no repeat popup for the same version", B.ev("#__popups") == 1)
 check("older version: no popup", A.ev("#__popups") == 0)
 
+# --- 1. tooltips ---
+B.ex('GameTooltip._lines = {}; __tooltipHook(GameTooltip, {id = 2589})')
+lines = B.ev('table.concat(GameTooltip._lines, "|")')
+check("tooltip shows what the bank needs (%s)" % lines, "needs" in lines and "/200" in lines)
+B.ex('SlashCmdList.EPUGUILD("tooltips"); GameTooltip._lines = {}; __tooltipHook(GameTooltip, {id = 2589})')
+check("tooltips can be turned off", B.ev('#GameTooltip._lines') == 0)
+B.ex('SlashCmdList.EPUGUILD("tooltips")')
+
+# --- 2. bag coins ---
+check("needed items are marked", B.ev('__ns.ItemIsNeeded(2589)') == True and B.ev('__ns.ItemIsNeeded(4306)') == False)
+check("Baganator corner widget registered", B.ev('__corner ~= nil') and B.ev('__corner.onUpdate(nil, {itemID = 2589})') == True)
+B.ex('__ns.RefreshBagMarkers()')
+
+# --- 4. notices ---
+B.ex('__toasts = {}; local old = __ns.Notify; __ns.Notify = function(t, x) table.insert(__toasts, t) end')
+A.ex('__ns.Notify = function() end')
+A.ex('__ns.SetPolicy("maxOpen", 0)'); tick(3)
+B.ex('__ns.NewRequest(2589, 3, "")'); tick(3)
+rid3 = A.ev("(function() for k, r in pairs(__ns.G().requests) do if r.item == 2589 and r.qty == 3 then return k end end end)()")
+A.ex(f'__ns.EditRequest("{rid3}", {{ status = "approved" }})'); tick(3)
+check("requester gets an 'approved' notice", B.ev('__toasts[#__toasts]') == "Request approved")
+A.ex(f'__ns.EditRequest("{rid3}", {{ status = "filled" }})'); tick(3)
+check("and a 'filled' notice", B.ev('__toasts[#__toasts]') == "Request filled")
+A.ex('__otoasts = {}; __ns.Notify = function(t) table.insert(__otoasts, t) end')
+B.ex('__ns.NewRequest(4306, 1, "")'); tick(3)
+check("officer gets a 'new request' notice", A.ev('__otoasts[1]') == "New guild bank request")
+clients["Pip Baker"] = E = Client("Pip Baker")
+E.ex('__ns.Notify = function(t) __etoasts = (__etoasts or 0) + 1 end'); tick(30)
+check("catching up at login doesn't flood notices", (E.ev('__etoasts') or 0) == 0)
+
+# --- 3. donate at the mailbox (member B carries 30 linen + 5 silk) ---
+B.ex('__bags[0] = {{2589, 20}, {2589, 10}, {4306, 5}}; __mailSlots = {}; MailFrame._shown = true')
+B.ex('__ns.ShowDonate()')
+check("donate panel opens for members with a bank to send to", B.ev('__ns.DonatePanel:IsShown()') == True)
+check("only needed items listed by default", B.ev('(function() local n = 0 for _, r in ipairs(__ns.DonatePanel.rows) do if r:IsShown() then n = n + 1 end end return n end)()') == 1)
+check("nothing picked until you choose", B.ev('next(__ns.DonatePanel.pick)') is None)
+B.ex('local r = __ns.DonatePanel.rows[1]; r.plus:GetScript("OnClick")(); r.plus:GetScript("OnClick")()')
+check("+ adds one at a time", B.ev('__ns.DonatePanel.pick[2589]') == 2)
+B.ex('__ns.DonatePanel.rows[1]:GetScript("OnMouseWheel")(nil, 1)')
+check("mouse wheel adjusts", B.ev('__ns.DonatePanel.pick[2589]') == 3)
+B.ex('__ns.DonatePanel.rows[1].max:GetScript("OnClick")()')
+need_left = B.ev('200 - __ns.BankCount(2589)')
+check("Max picks what the bank still needs (capped at what you carry)", B.ev('__ns.DonatePanel.pick[2589]') == min(30, need_left))
+B.ex('__ns.DonatePanel.pick[2589] = 25; __ns.FillDonation()')
+check("Fill mail attaches exactly the chosen amount", B.ev('(function() local n = 0 for _, s in pairs(__mailSlots) do n = n + s[2] end return n end)()') == 25)
+check("addressed to the bank", B.ev('SendMailNameEditBox._text') == "Chris Baker")
+A.ex('__ns.ShowDonate()')
+check("the bank character doesn't get the donate panel", A.ev('__ns.DonatePanel:IsShown()') != True)
+
+# --- 6. welcome ---
+B.ex('__ns.ShowWelcome()')
+check("welcome card shows", B.ev('true'))
+
+# --- details panel scrolls instead of overflowing ---
+A.ex('__ns.UI:SetSize(620, 420); __ns.UI:SetView("requests"); __ns.UI:OpenDetails("request", "' + rid3 + '")')
+check("details body sized for scrolling", A.ev('__ns.UI.details.body:GetHeight()') > 100)
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

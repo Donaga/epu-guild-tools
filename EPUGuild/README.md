@@ -24,6 +24,13 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 
 **Mail it.** With a mailbox open, an officer clicks the mail icon on an approved request (or **Mail it** in its details). The addon fills in the recipient and subject and attaches the right number of the item from your bags, splitting a stack if needed. Check it and press Send; the request turns Filled when the mail goes.
 
+**Helping out without opening the window**
+- **Tooltips:** hover any item and you'll see "Guild bank needs 40 more" (or how many the bank holds, or your request's status).
+- **Bag coins:** items the bank needs get a small gold coin in your bags. It works in Blizzard's bags and in Baganator; in Baganator you can move it under its icon corner settings.
+- **Donate at the mailbox:** a panel opens next to the mailbox listing the needed items you carry. Choose how many of each with - / + (shift for 10), the mouse wheel, or **Max** (what the bank still needs; click again for all you have). Nothing is added unless you pick it. **Fill mail** addresses it to the bank and attaches your picks; you check it and press Send. "Show everything I carry" lets you give other things too.
+- **Pop-ups:** you get a notice when your request is approved, filled or declined. Officers also get one for each new request.
+- Turn any of these off with `/epu tooltips`, `/epu markers`, `/epu donate`, `/epu notices` (officers: `/epu officernotices`). `/epu welcome` shows the welcome tips again.
+
 **Officer page** (officers only): which ranks can manage the bank, whether this character is a bank, a per-player limit on open requests, the Discord inbox, and tools to post needs to guild chat, force a sync, or tidy finished requests away.
 
 ## What it does

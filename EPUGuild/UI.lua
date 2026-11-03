@@ -207,8 +207,8 @@ UI:SetToplevel(true)
 UI:SetClampedToScreen(true)
 UI:SetMovable(true)
 UI:SetResizable(true)
-if UI.SetResizeBounds then UI:SetResizeBounds(600, 380, 1400, 1000)
-elseif UI.SetMinResize then UI:SetMinResize(600, 380); UI:SetMaxResize(1400, 1000) end
+if UI.SetResizeBounds then UI:SetResizeBounds(620, 420, 1400, 1000)
+elseif UI.SetMinResize then UI:SetMinResize(620, 420); UI:SetMaxResize(1400, 1000) end
 UI:EnableMouse(true)
 UI:Hide()
 tinsert(UISpecialFrames, "EPUGuildFrame")
@@ -582,18 +582,47 @@ UI.details = det
 
 det.close = IconBtn(det, "Interface\\Buttons\\UI-StopButton", "Close details", 20)
 det.close:SetPoint("TOPRIGHT", -8, -8)
+det.close:SetFrameLevel(det:GetFrameLevel() + 5)
 det.close:SetScript("OnClick", function() UI:CloseDetails() end)
-det.icon = det:CreateTexture(nil, "ARTWORK")
+
+-- Everything below the close button scrolls, so nothing is cut off on small windows.
+det.scroll = CreateFrame("ScrollFrame", nil, det)
+det.scroll:SetPoint("TOPLEFT", 1, 0)
+det.scroll:SetPoint("BOTTOMRIGHT", -4, 0)
+det.body = CreateFrame("Frame", nil, det.scroll)
+det.body:SetSize(DETAILS_W - 6, 1)
+det.scroll:SetScrollChild(det.body)
+det.scroll:EnableMouseWheel(true)
+det.thumb = Tex(det, "ARTWORK", C.line)
+det.thumb:SetWidth(3)
+function det:UpdateScroll()
+  local viewH, total = self.scroll:GetHeight() or 0, self.body:GetHeight() or 0
+  local maxV = math.max(0, total - viewH)
+  if (self.scroll:GetVerticalScroll() or 0) > maxV then self.scroll:SetVerticalScroll(maxV) end
+  if maxV <= 1 or viewH <= 0 then self.thumb:Hide() return end
+  local h = math.max(20, viewH * viewH / total)
+  local off = (self.scroll:GetVerticalScroll() or 0) / maxV * (viewH - h)
+  self.thumb:ClearAllPoints()
+  self.thumb:SetPoint("TOPRIGHT", self, "TOPRIGHT", -1, -off)
+  self.thumb:SetHeight(h)
+  self.thumb:Show()
+end
+det.scroll:SetScript("OnMouseWheel", function(self, delta)
+  local maxV = math.max(0, (det.body:GetHeight() or 0) - (self:GetHeight() or 0))
+  self:SetVerticalScroll(math.min(maxV, math.max(0, (self:GetVerticalScroll() or 0) - delta * 40)))
+  det:UpdateScroll()
+end)
+
+det.icon = det.body:CreateTexture(nil, "ARTWORK")
 det.icon:SetSize(32, 32)
 det.icon:SetPoint("TOPLEFT", 12, -10)
 det.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-det.title = Font(det, 13, C.white)
+det.title = Font(det.body, 13, C.white)
 det.title:SetPoint("TOPLEFT", 52, -12)
-det.title:SetPoint("RIGHT", det.close, "LEFT", -6, 0)
-det.title:SetWordWrap(true)
-det.subtitle = Font(det, 11, C.muted)
+det.title:SetWidth(DETAILS_W - 52 - 36)
+det.subtitle = Font(det.body, 11, C.muted)
 det.subtitle:SetPoint("TOPLEFT", 52, -30)
-det.subtitle:SetPoint("RIGHT", -10, 0)
+det.subtitle:SetWidth(DETAILS_W - 62)
 
 det.pools = { text = {}, box = {}, btn = {}, label = {} }
 det.used = { text = 0, box = 0, btn = 0, label = 0 }
@@ -604,6 +633,7 @@ function det:Reset(icon, quality, titleText, subtitle)
     self.used[k] = 0
   end
   self.y = -52
+  self.scroll:SetVerticalScroll(0)
   if icon then self.icon:SetTexture(icon); self.icon:Show() else self.icon:Hide() end
   local q = quality and QColor(quality) or C.white
   self.title:SetText(titleText or "")
@@ -621,7 +651,7 @@ function det:Take(kind, make)
 end
 
 function det:Text(str, color)
-  local fs = self:Take("text", function() local f = Font(self, 11, C.text); f:SetWordWrap(true); return f end)
+  local fs = self:Take("text", function() local f = Font(self.body, 11, C.text); f:SetWordWrap(true); return f end)
   fs:SetPoint("TOPLEFT", 12, self.y)
   fs:SetWidth(DETAILS_W - 24)
   fs:SetText(str)
@@ -631,13 +661,13 @@ function det:Text(str, color)
 end
 
 function det:Field(label, value, width, numeric)
-  local l = self:Take("label", function() return Font(self, 11, C.muted) end)
+  local l = self:Take("label", function() return Font(self.body, 11, C.muted) end)
   l:SetPoint("TOPLEFT", 12, self.y - 4)
   l:SetText(label)
-  local b = self:Take("box", function() return Box(self, 100, "") end)
+  local b = self:Take("box", function() return Box(self.body, 100, "") end)
   b:SetNumeric(numeric == true)
-  b:SetWidth(width or 150)
-  b:SetPoint("TOPLEFT", 96, self.y)
+  b:SetWidth(math.min(width or 150, DETAILS_W - 90 - 14))
+  b:SetPoint("TOPLEFT", 90, self.y)
   b:SetText(value or "")
   b.onChange, b.onEnter = nil, nil
   self.y = self.y - 28
@@ -647,13 +677,13 @@ end
 function det:Buttons(specs)
   local x = 12
   for _, s in ipairs(specs) do
-    local b = self:Take("btn", function() return Btn(self, "", 80, 22) end)
+    local b = self:Take("btn", function() return Btn(self.body, "", 80, 22) end)
     b.style = s.accent and "accent" or nil
     b:SetOn(false)
     b:SetLabel(s[1])
     local w = math.max(56, (b.text:GetStringWidth() or 40) + 18)
     b:SetWidth(w)
-    if x + w > DETAILS_W - 12 then x = 12; self.y = self.y - 28 end
+    if x + w > DETAILS_W - 16 then x = 12; self.y = self.y - 28 end
     b:SetPoint("TOPLEFT", x, self.y)
     b.tip = s.tip
     b:SetScript("OnClick", s[2])
@@ -663,6 +693,12 @@ function det:Buttons(specs)
 end
 
 function det:Gap(n) self.y = self.y - (n or 6) end
+
+-- Call after filling: sizes the scrolling body to what was added.
+function det:Finish()
+  self.body:SetHeight(math.max(1, -self.y + 8))
+  self:UpdateScroll()
+end
 
 function UI:CloseDetails()
   det:Hide()
@@ -1345,6 +1381,7 @@ function UI:FillDetails()
       if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. key .. " ") end
     end, accent = true } })
   end
+  det:Finish()
 end
 
 ---------------------------------------------------------------------------
@@ -1527,7 +1564,7 @@ function UI:Refresh()
   self.footerText:SetText(v.footer and v.footer(g) or "")
   UpdateThumb()
   -- don't wipe what an officer is typing in the details panel
-  if det:IsShown() and not (self.focusBox and self.focusBox:GetParent() == det) then self:FillDetails() end
+  if det:IsShown() and not (self.focusBox and self.focusBox:GetParent() == det.body) then self:FillDetails() end
 end
 
 UI:SetScript("OnShow", function(self)

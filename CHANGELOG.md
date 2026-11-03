@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+- Item tooltips show what the guild bank needs or holds, and your own request's status.
+- Gold coin on items in your bags that the bank needs (Blizzard bags and Baganator).
+- Donate panel at the mailbox: choose items and amounts with -/+, mouse wheel or Max; Fill mail addresses and attaches only what you picked.
+- Pop-up notices when your request is approved, filled or declined; officers get one for new requests (not for old ones caught up at login).
+- Welcome card the first time the window opens (with a main-character picker for players with alts).
+- Details panel scrolls instead of overflowing on smaller windows; slightly larger minimum window size.
+
 ## 0.4.0
 - Updates without CurseForge: a one-click Windows updater (optionally runs at startup), an in-game popup when a guildmate has a newer version, Discord release announcements and `/download`, and WowUp support (Install from URL).
 - New window: flat dark style, sidebar with counts, search, request filters (status, Mine, sort), real item icons with quality borders, status pills, progress bars, resizable (`/epu scale`, `/epu resetwindow`).

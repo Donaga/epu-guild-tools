@@ -39,6 +39,7 @@ function ns.Changed()
   if ns.CloseMetGoals and ns.db and ns.IsTrusted(ns.me) then
     ns.Debounce("goals", 3, ns.CloseMetGoals)
   end
+  if ns.RefreshBagMarkers then ns.Debounce("bagmarkers", 1, ns.RefreshBagMarkers) end
 end
 
 -- Request states: pending -> approved | rejected -> filled; or cancelled.
@@ -121,7 +122,8 @@ function ns.Prune(g)
   end
 end
 
-function ns.Merge(sender, b)
+-- catchingUp: this bundle answers our login sync, so don't announce old news
+function ns.Merge(sender, b, catchingUp)
   local g = ns.G()
   if not g or type(b) ~= "table" then return false end
   local trusted = ns.IsTrusted(sender)
@@ -154,8 +156,10 @@ function ns.Merge(sender, b)
         and (trusted or (r.who == sender and MEMBER_STATES[r.status])) then
         local cur = g.requests[id]
         if not cur or r.u > cur.u then
+          local oldStatus = cur and cur.status
           g.requests[id] = r
           changed = true
+          if ns.OnRequestChanged and (oldStatus or not catchingUp) then pcall(ns.OnRequestChanged, id, r, oldStatus) end
         end
       end
     end
@@ -303,7 +307,7 @@ end
 ns.comm.D = function(sender, b, channel)
   if type(b) ~= "table" then return end
   if b.ver then ns.NoteVersion(sender, b.ver) end
-  ns.Merge(sender, b)
+  ns.Merge(sender, b, b.sync ~= nil)
   if b.sync and channel == "GUILD" and ns.IsTrusted(sender) then
     if b.sync == ns.me then
       local g = ns.G()

@@ -266,8 +266,9 @@ def help_embed() -> discord.Embed:
         "`/requests`: all open requests.\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
     e.add_field(name="Donating", inline=False, value=(
-        "Mail items or gold to the bank character, or deposit them in the guild bank once we have one. "
-        "They're logged automatically, and you'll get a thank-you here."))
+        "Items the bank needs show a gold coin in your bags and a line on their tooltip. At any mailbox the addon's "
+        "Donate panel lets you pick what to give and fills the mail to the bank character for you. Deposits in the "
+        "guild bank count too. Donations are logged automatically, and you'll get a thank-you here."))
     e.add_field(name=f"Officers ({officer} role)", inline=False, value=(
         "Use the **Approve** and **Reject** buttons on request posts. Reject asks for an optional reason.\n"
         "Mailing or trading an approved item to the requester marks it filled automatically."))

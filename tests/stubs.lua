@@ -229,3 +229,18 @@ function GuildControlGetRankName(i) return ({"Guild Master", "Officer", "Veteran
 __popups = {}
 function StaticPopup_Show(name, a, b) table.insert(__popups, {name, a, b}) end
 OKAY = "Okay"
+
+-- tooltips, sounds, Baganator
+GameTooltip = NewMock(); GameTooltip._lines = {}
+function GameTooltip:AddLine(t) table.insert(self._lines, t) end
+ItemRefTooltip = NewMock()
+Enum = Enum or {}; Enum.TooltipDataType = { Item = 0 }
+__tooltipHook = nil
+TooltipDataProcessor = { AddTooltipPostCall = function(kind, fn) __tooltipHook = fn end }
+function PlaySound() end
+function IsShiftKeyDown() return false end
+C_Container.GetContainerItemID = function(b, s) local x = __bags[b] and __bags[b][s]; return x and x[1] end
+MailFrameTab2 = NewMock()
+__corner = nil
+Baganator = { API = { RegisterCornerWidget = function(label, id, onUpdate, onInit) __corner = { onUpdate = onUpdate, onInit = onInit } end,
+  RequestItemButtonsRefresh = function() end } }
