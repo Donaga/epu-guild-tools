@@ -6,7 +6,7 @@
 - **My profile:** set your roles (tank/healer/DPS) and a "looking for" note.
 - **News:** officer announcements plus guild milestones (every 10 levels, first mount, profession ranks, big donations, new members), with pop-ups for guildmates online.
 - **Announcements:** pop up for everyone at their next login until read. Post from News or Discord's `/announce`; mirrored to Discord, including edits and removals.
-- **Officer review:** join date, recent levels, donations and requests, *Inactive* and *Promote?* tags, a review filter on the Roster, and a promotion check on the Officer page.
+- **Officer review:** join date, recent levels, donations and requests, *Inactive* and *Promote?* tags, a review filter on the Roster, and a promotion reminder on the Officer page (labeled boxes plus the rule in plain words).
 - **Officer notes and log:** private notes on members, and a log of officer actions. Both stay on the officer channel, so members never receive them.
 - The Officer page scrolls, and its tools wrap onto a second line.
 - Discord: milestones post to a feed channel, announcements to an announcements channel, `/announce` for officers, and the how-to post covers the new pages.

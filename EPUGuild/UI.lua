@@ -1576,14 +1576,26 @@ do
   saveDiscord.tip = "Reloads your UI so WoW saves everything and the Discord bot picks it up."
   saveDiscord:SetScript("OnClick", function() pcall(ns.CacheItemNames); ReloadUI() end)
 
-  local _, h6 = Row("Promotion check")
-  h6:SetText("Lowest rank only: days in guild, minimum level (0 = off)")
-  UI.promoDays = Box(officerPage, 40, "days", true)
-  UI.promoDays:SetPoint("TOPRIGHT", -126, -188)
-  UI.promoLevel = Box(officerPage, 40, "lvl", true)
-  UI.promoLevel:SetPoint("TOPRIGHT", -80, -188)
+  local rowY = y
+  local _, h6 = Row("Promotion reminder", 62)
+  h6:SetText("Tags members at the lowest rank who are ready, so you remember to promote them")
+  -- [Days in guild: __]  [Min level: __]  [Save], with their own labels
   local promoSave = Btn(officerPage, "Save", 62, 22)
-  promoSave:SetPoint("TOPRIGHT", -14, -188)
+  promoSave:SetPoint("TOPRIGHT", -14, rowY)
+  UI.promoLevel = Box(officerPage, 36, "0", true)
+  UI.promoLevel:SetPoint("TOPRIGHT", promoSave, "TOPLEFT", -8, 0)
+  local lvlLabel = Font(officerPage, 11, C.muted)
+  lvlLabel:SetPoint("RIGHT", UI.promoLevel, "LEFT", -4, 0)
+  lvlLabel:SetText("Min level")
+  UI.promoDays = Box(officerPage, 36, "0", true)
+  UI.promoDays:SetPoint("RIGHT", lvlLabel, "LEFT", -12, 0)
+  local daysLabel = Font(officerPage, 11, C.muted)
+  daysLabel:SetPoint("RIGHT", UI.promoDays, "LEFT", -4, 0)
+  daysLabel:SetText("Days in guild")
+  h6:ClearAllPoints()
+  h6:SetPoint("TOPLEFT", 14, rowY - 20)
+  UI.promoRule = Font(officerPage, 11, C.gold)       -- the rule in plain words
+  UI.promoRule:SetPoint("TOPLEFT", 14, rowY - 38)
   promoSave.tip = "Members at the lowest rank who meet both get a \"Promote?\" tag on the Roster page (officers only)."
   promoSave:SetScript("OnClick", function()
     ns.SetPolicy("promoDays", tonumber(UI.promoDays:GetText()) or 0)
@@ -1634,6 +1646,19 @@ local function RefreshOfficerPage(g)
   if not UI.limitBox:HasFocus() then UI.limitBox:SetText(tostring(g.policy.maxOpen or 0)) end
   if not UI.promoDays:HasFocus() then UI.promoDays:SetText(tostring(g.policy.promoDays or 0)) end
   if not UI.promoLevel:HasFocus() then UI.promoLevel:SetText(tostring(g.policy.promoLevel or 0)) end
+  local pd, pl = tonumber(g.policy.promoDays) or 0, tonumber(g.policy.promoLevel) or 0
+  local nRanks = (GuildControlGetNumRanks and GuildControlGetNumRanks()) or 0
+  local lowName = (nRanks > 0 and GuildControlGetRankName and GuildControlGetRankName(nRanks)) or "lowest-rank"
+  if pd == 0 and pl == 0 then
+    UI.promoRule:SetText("Off. Set either number above 0 to turn it on.")
+    SetColor(UI.promoRule, C.muted)
+  else
+    local parts = {}
+    if pd > 0 then parts[#parts + 1] = "in the guild " .. pd .. "+ days" end
+    if pl > 0 then parts[#parts + 1] = "level " .. pl .. "+" end
+    UI.promoRule:SetText("Now: " .. lowName .. " members " .. table.concat(parts, " and ") .. " get a \"Promote?\" tag on the Roster.")
+    SetColor(UI.promoRule, C.gold)
+  end
   local inactive, promote = 0, 0
   for name in pairs(ns.roster) do
     local rv = ns.Review(name)
