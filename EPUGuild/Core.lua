@@ -11,6 +11,8 @@ ns.VERSION = (getMeta and getMeta(ADDON, "Version")) or "0.0.0"
 -- Event dispatch
 ---------------------------------------------------------------------------
 local frame = CreateFrame("Frame")
+ns.LOGO = "Interface\\AddOns\\EPUGuild\\Media\\logo"        -- the EPU guild crest
+ns.LOGO_SMALL = "Interface\\AddOns\\EPUGuild\\Media\\logo64"
 ns.handlers = {}
 
 function ns.On(event, fn)

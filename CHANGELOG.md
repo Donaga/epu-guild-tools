@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+- The EPU crest replaces the placeholder bag icon: window header, minimap button, the AddOns list, pop-up notices, the welcome card and the mailbox Donate panel.
+- Discord: the crest appears on the status post, how-to post, `/download` and announcements.
+
 ## 0.8.1
 
 - WowUp: releases now tell WowUp they're for WoW: Forever, so Install from URL finds the right download. Nothing else changed.

@@ -63,6 +63,7 @@ def load_config() -> dict:
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
     cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
+    cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
@@ -210,6 +211,8 @@ def _clip(lines: list[str], limit: int = 1000) -> str:
 def status_embed(gd: core.GuildData) -> discord.Embed:
     st = gd.status_summary()
     e = discord.Embed(title="Guild Bank Status", color=discord.Color.blurple())
+    if cfg["logo_url"]:
+        e.set_thumbnail(url=cfg["logo_url"])
     need_lines = []
     for n in st["needs"]:
         frac = n["have"] / n["target"]
@@ -318,6 +321,8 @@ def help_embed() -> discord.Embed:
         "and **Install**.\n"
         "4. WowUp shows an **Update** button under *My Addons* when there's a new version (or turn on auto-update). "
         "Use WowUp *or* the updater, not both."))
+    if cfg["logo_url"]:
+        e.set_thumbnail(url=cfg["logo_url"])
     e.set_footer(text="Type /help any time to see this again.")
     return e
 
@@ -357,6 +362,8 @@ latest_release: dict | None = None
 
 def download_embed(rel: dict | None) -> discord.Embed:
     e = discord.Embed(title="Get EPU Guild Tools", color=discord.Color.gold())
+    if cfg["logo_url"]:
+        e.set_thumbnail(url=cfg["logo_url"])
     if not rel:
         e.description = f"[Latest release]({cfg['addon_url']})"
         return e
@@ -503,6 +510,8 @@ async def post_milestones(gd: core.GuildData, entries: list[dict]):
 
 def news_embed(e: dict) -> discord.Embed:
     em = discord.Embed(title=e.get("title") or "Guild announcement", description=e.get("text") or "", color=discord.Color.gold())
+    if cfg["logo_url"]:
+        em.set_thumbnail(url=cfg["logo_url"])
     em.set_footer(text=f"Posted by {e.get('by', '?')}. Shows as a pop-up in game at everyone's next login.")
     return em
 
