@@ -189,12 +189,31 @@ INBOX_HEADER = (
 )
 
 
+def safe_replace(tmp: str, path: str) -> None:
+    """Move tmp over path. On Windows a sync app (OneDrive, Dropbox), an antivirus scan
+    or WoW itself can hold the file for a moment, so retry, then fall back to a plain copy."""
+    last = None
+    for attempt in range(15):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError as e:
+            last = e
+            time.sleep(0.2 * (attempt + 1) if attempt < 5 else 1.0)
+    try:
+        with open(tmp, encoding="utf-8") as src, open(path, "w", encoding="utf-8") as dst:
+            dst.write(src.read())
+        os.remove(tmp)
+    except OSError:
+        raise last
+
+
 def write_inbox(path: str, entries: list) -> None:
     text = INBOX_HEADER + "EPUGuildInbox = " + lua_value(entries) + "\n"
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
-    os.replace(tmp, path)
+    safe_replace(tmp, path)
 
 
 # ---------------------------------------------------------------------------
@@ -478,7 +497,7 @@ class State:
         tmp = self.path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2)
-        os.replace(tmp, self.path)
+        safe_replace(tmp, self.path)
 
     # Discord user -> WoW characters (first one is their main)
     def characters_for(self, discord_id: int) -> list[str]:
@@ -821,7 +840,7 @@ class ItemDB:
         tmp = self.cache + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f)
-        os.replace(tmp, self.cache)
+        safe_replace(tmp, self.cache)
 
     def search(self, text: str, limit: int = 25) -> list[tuple[int, str]]:
         q = " ".join((text or "").lower().split())
