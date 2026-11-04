@@ -25,6 +25,8 @@ The **Release** workflow then runs the tests, stamps the version into the `.toc`
 
 The repo must be **public** for the updater and WowUp to download releases.
 
+**CurseForge (optional):** each release can also upload to CurseForge. Create the project once on CurseForge, then in GitHub go to Settings > Secrets and variables > Actions and add a **secret** `CF_API_KEY` (an API token from your CurseForge author account) and a **variable** `CURSEFORGE_PROJECT_ID` (the numeric Project ID from the project page). Until both are set, the upload step just skips. The text in `media/curseforge-description.md` and the logo in `media/epu-logo.png` are ready for the project page.
+
 ## Running the tests locally
 ```
 pip install lupa "discord.py>=2.3"

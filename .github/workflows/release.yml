@@ -37,3 +37,12 @@ jobs:
             dist/*.zip
             dist/release.json
           tag_name: ${{ github.event.release.tag_name }}
+      # Also publish to CurseForge, once the CF_API_KEY secret and the
+      # CURSEFORGE_PROJECT_ID variable are set (Settings > Secrets and variables > Actions).
+      - name: Upload to CurseForge
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"; VERSION="${VERSION#v}"
+          python tools/curseforge_upload.py "dist/EPUGuild-${VERSION}.zip" "${VERSION}" CHANGELOG.md
