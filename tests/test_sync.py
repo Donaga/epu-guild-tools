@@ -125,6 +125,22 @@ for c in (A, D):
         c.ex(f'__ns.UI:SetTab("{tab}")')
     c.ex('__ns.UI.itemBox:SetText("linen"); __ns.UI:SetTab("Bank"); __ns.UI.itemBox:SetText("linen"); __ns.UI:Refresh()')
 check("UI rendered bank rows", A.ev("#__ns.UI.rows") >= 1)
+
+# --- taint guard: never assign to Blizzard's globals or replace their functions ---
+import re, glob as _glob
+ours = re.compile(r"^(EPUGuild\w*|SLASH_EPUGUILD\d+|BINDING_\w*EPU\w*)$")
+bad = []
+for path in sorted(_glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "EPUGuild", "*.lua"))):
+    src = open(path, encoding="utf-8").read()
+    locals_ = set(re.findall(r"^\s*local\s+(?:function\s+)?([A-Za-z_]\w*)", src, re.M))
+    for ln, line in enumerate(src.splitlines(), 1):
+        m = re.match(r"^([A-Za-z_]\w*)\s*=[^=]", line)        # a top-level assignment
+        if m and m.group(1) not in locals_ and not ours.match(m.group(1)):
+            bad.append(f"{os.path.basename(path)}:{ln} {line.strip()[:60]}")
+        if re.search(r"_G\[[^\]]+\]\s*=[^=]", line):
+            bad.append(f"{os.path.basename(path)}:{ln} {line.strip()[:60]}")
+check("addon never overwrites Blizzard globals (taint) %s" % (bad or ""), not bad)
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 log = A.ev("__log"); print("--- officer chat log ---")

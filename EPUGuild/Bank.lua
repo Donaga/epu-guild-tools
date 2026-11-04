@@ -155,12 +155,38 @@ function ns.AddDonation(who, item, n, money, to, t)
   end)
 end
 
-local function MailSender(i)
+-- What's in the mailbox, read just before you act on it. We hook Blizzard's mail
+-- functions safely (after they run), so we work from this copy instead of
+-- assuming the mail is still there.
+local inbox = {}   -- [index] = { sender, money, cod, items = { [slot] = { id, count } } }
+
+local function ReadMail(i)
   local _, _, sender, _, money, cod = GetInboxHeaderInfo(i)
-  sender = ns.Member(sender)
+  local m = { sender = sender, money = money or 0, cod = cod or 0, items = {} }
+  for a = 1, (ATTACHMENTS_MAX_RECEIVE or 12) do
+    local id = ns.ItemID(GetInboxItemLink and GetInboxItemLink(i, a))
+    if id then m.items[a] = { id, ns.InboxCount(i, a, id) } end
+  end
+  return m
+end
+
+local function SnapInbox()
+  wipe(inbox)
+  for i = 1, ((GetInboxNumItems and GetInboxNumItems()) or 0) do inbox[i] = ReadMail(i) end
+end
+ns.SnapInbox = SnapInbox
+ns.On("MAIL_SHOW", SnapInbox)
+ns.On("MAIL_INBOX_UPDATE", SnapInbox)
+
+local function MailAt(i)
+  return inbox[i] or ReadMail(i)
+end
+
+local function GuildSender(m)
+  local sender = ns.Member(m.sender)
   if not sender then return nil end                             -- AH, NPCs, non-guild mail
-  if cod and cod > 0 then return nil end                        -- COD is a purchase, not a gift
-  return sender, money or 0
+  if m.cod and m.cod > 0 then return nil end                    -- COD is a purchase, not a gift
+  return sender
 end
 
 -- GetInboxItem returns (name, itemID, texture, count, ...) on current
@@ -173,19 +199,23 @@ end
 
 local function RecordMailItem(i, a)
   if not ns.IsBankAlt() then return end
-  local sender = MailSender(i)
-  if not sender or TotalFreeBagSlots() == 0 then return end
-  local link = GetInboxItemLink and GetInboxItemLink(i, a)
-  local id = ns.ItemID(link)
-  if not id then return end
-  count = ns.InboxCount(i, a, id)
+  local m = MailAt(i)
+  local sender = GuildSender(m)
+  local it = m.items[a]
+  if not sender or not it then return end
+  m.items[a] = nil                                              -- taken; don't count it twice
+  local id, count = it[1], it[2]
   if Fresh("i" .. sender .. id .. count .. i .. a) then ns.AddDonation(sender, id, count, 0) end
 end
 
 local function RecordMailMoney(i)
   if not ns.IsBankAlt() then return end
-  local sender, money = MailSender(i)
-  if sender and money > 0 and Fresh("m" .. sender .. money .. i) then ns.AddDonation(sender, nil, 0, money) end
+  local m = MailAt(i)
+  local sender, money = GuildSender(m), m.money
+  if sender and money > 0 then
+    m.money = 0
+    if Fresh("m" .. sender .. money .. i) then ns.AddDonation(sender, nil, 0, money) end
+  end
 end
 
 local function RecordMailAll(i)
@@ -193,37 +223,42 @@ local function RecordMailAll(i)
   RecordMailMoney(i)
 end
 
--- Pre-hooks: the attachment is gone once the original function runs.
-local function PreHook(name, fn)
-  local orig = _G[name]
-  if type(orig) ~= "function" then return end
-  _G[name] = function(...)
-    pcall(fn, ...)
-    return orig(...)
-  end
+-- Run fn right after Blizzard's function, without replacing it: replacing a
+-- Blizzard function "taints" the default UI and gets the addon blocked.
+local function AfterCall(name, fn)
+  if type(_G[name]) ~= "function" then return end
+  hooksecurefunc(name, function(...) pcall(fn, ...) end)
 end
-PreHook("TakeInboxItem", RecordMailItem)
-PreHook("TakeInboxMoney", RecordMailMoney)
-PreHook("AutoLootMailItem", RecordMailAll)
+AfterCall("TakeInboxItem", RecordMailItem)
+AfterCall("TakeInboxMoney", RecordMailMoney)
+AfterCall("AutoLootMailItem", RecordMailAll)
 
 ---------------------------------------------------------------------------
 -- Auto-fill requests: when a trusted character mails or trades an item to
 -- a member with an approved request for it, the request is marked filled.
 ---------------------------------------------------------------------------
-local outgoing
-PreHook("SendMail", function(to)
-  outgoing = nil
-  if not GetSendMailItemLink then return end
+local outgoing, attached = nil, {}
+
+local function ReadAttachments()
   local items = {}
+  if not GetSendMailItemLink then return items end
   for i = 1, (ATTACHMENTS_MAX_SEND or 12) do
     local id = ns.ItemID(GetSendMailItemLink(i))
     if id then items[#items + 1] = { id, 1 } end
   end
-  if #items > 0 then outgoing = { to = to, items = items } end
+  return items
+end
+-- keep a copy as items are attached, in case Send clears them before we look
+ns.On("MAIL_SEND_INFO_UPDATE", function() attached = ReadAttachments() end)
+
+AfterCall("SendMail", function(to)
+  local items = ReadAttachments()
+  if #items == 0 then items = attached end
+  outgoing = (#items > 0) and { to = to, items = items } or nil
 end)
 ns.On("MAIL_SEND_SUCCESS", function()
   local o = outgoing
-  outgoing = nil
+  outgoing, attached = nil, {}
   if o then ns.AutoFillFor(o.to, o.items) end
 end)
 ns.On("MAIL_FAILED", function() outgoing = nil end)

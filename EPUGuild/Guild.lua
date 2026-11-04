@@ -253,7 +253,6 @@ function ns.MarkNewsRead(id)
   ns.Changed()
 end
 
-StaticPopupDialogs = StaticPopupDialogs or {}
 StaticPopupDialogs["EPUGUILD_NEWS"] = {
   text = "|cfff2c14eGuild announcement|r\n\n%s",
   button1 = "Got it",

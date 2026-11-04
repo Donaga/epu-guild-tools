@@ -137,7 +137,19 @@ UIParent = NewMock(); Minimap = NewMock(); GameTooltip = NewMock()
 UISpecialFrames = {}
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
-function hooksecurefunc() end
+StaticPopupDialogs = {}   -- the game always has this table; addons add entries, never replace it
+-- like the game: run the hook after the original, without changing what it returns
+function hooksecurefunc(a, b, c)
+  local tbl, name, fn = _G, a, b
+  if type(a) == "table" then tbl, name, fn = a, b, c end
+  local orig = tbl[name]
+  if type(orig) ~= "function" then return end
+  tbl[name] = function(...)
+    local r = { orig(...) }
+    fn(...)
+    return unpack(r)
+  end
+end
 function GameTooltip_Hide() end
 function IsModifiedClick() return false end
 function ChatEdit_InsertLink() end
@@ -155,8 +167,10 @@ function GetMoney() return __money end
 function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, "subj", m.money or 0, 0 end end
 function GetInboxItemLink(i, a) local m = __inbox[i]; if m and m.items[a] then return __link(m.items[a][1]) end end
 function GetInboxItem(i, a) local m = __inbox[i]; if m and m.items[a] then return "x", m.items[a][1], "tex", m.items[a][2] end end
-function TakeInboxItem(i, a) __inbox[i].items[a] = nil end
-function TakeInboxMoney(i) __inbox[i].money = 0 end
+-- Like the game: taking mail is a request to the server; the mailbox changes a moment later.
+function GetInboxNumItems() return #__inbox end
+function TakeInboxItem(i, a) C_Timer.After(0.1, function() if __inbox[i] then __inbox[i].items[a] = nil end __fire("MAIL_INBOX_UPDATE") end) end
+function TakeInboxMoney(i) C_Timer.After(0.1, function() if __inbox[i] then __inbox[i].money = 0 end __fire("MAIL_INBOX_UPDATE") end) end
 function AutoLootMailItem(i) end
 ATTACHMENTS_MAX_RECEIVE = 12
 function GetTargetTradeMoney() return 0 end
@@ -193,7 +207,8 @@ end
 date = os.date; time = os.time
 __sendItems = {}
 function GetSendMailItemLink(i) local id = __sendItems[i]; if id then return __link(id) end end
-function SendMail(to) __lastMailTo = to; __fire("MAIL_SEND_SUCCESS") end
+-- Like the game: the server confirms a moment later, then the send form is cleared.
+function SendMail(to) __lastMailTo = to; C_Timer.After(0.1, function() __fire("MAIL_SEND_SUCCESS"); __sendItems = {} end) end
 function GetTradePlayerItemLink() end
 __shopping = nil
 Auctionator = { API = { v1 = {

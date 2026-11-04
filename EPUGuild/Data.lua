@@ -353,7 +353,6 @@ end
 ns.pendingHello = {}
 
 -- A guildmate's addon is newer than ours: tell the player once per session.
-StaticPopupDialogs = StaticPopupDialogs or {}
 StaticPopupDialogs["EPUGUILD_UPDATE"] = {
   text = "EPU Guild Tools %s is out (you have %s).\n\nDouble-click \"Update EPU Guild Tools\" from the updater, or get it with /download in the guild Discord. Then type /reload.",
   button1 = OKAY or "Okay",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.4
+
+- Fixed: "EPUGuild has been blocked from an action only available to the Blizzard UI". The addon no longer rewrites Blizzard's pop-up dialog table or replaces Blizzard's mail functions; it hooks them the safe way instead. Mail donation logging and auto-fill work as before.
+
 ## 0.8.3
 
 - Announcements copied from Discord: `@everyone`/`@here` pings are left out (so they don't become the title), older posts appear in News quietly instead of popping up one after another, and each keeps its original Discord date.
