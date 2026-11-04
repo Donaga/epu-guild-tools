@@ -656,6 +656,9 @@ def message_to_news(content: str, embeds: list | None = None) -> tuple[str, str]
             text = ed
         if not title and et:
             title = et
+    # WoW's fonts have no emoji: drop them (and the joiners/variation marks that glue them together)
+    text = re.sub("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0E\uFE0F\u200D\u20E3]", "", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
     # pings mean nothing in game: drop @everyone/@here, and lines that are only pings
     text = re.sub(r"@(everyone|here)\b", "", text)
     text = "\n".join(ln for ln in text.splitlines() if not re.fullmatch(r"\s*(@\S+\s*)+", ln))
@@ -663,6 +666,8 @@ def message_to_news(content: str, embeds: list | None = None) -> tuple[str, str]
     text = re.sub(r"(\*\*|__|~~|`)", "", text)
     lines = [re.sub(r"^(#+\s*|>\s*)", "", ln).strip() for ln in text.splitlines()]
     lines = [ln for ln in lines if ln]
+    if title:
+        title = re.sub("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0E\uFE0F\u200D\u20E3]", "", title).strip()
     if not title and len(lines) > 1 and len(lines[0]) <= 60:
         title, lines = lines[0], lines[1:]
     body = "\n".join(lines)
