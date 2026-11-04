@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.3
+
+- Announcements copied from Discord: @everyone/@here pings are left out (so they don't become the title), older posts appear in News quietly instead of popping up one after another, and each keeps its original Discord date.
+
 ## 0.8.2
 
 - The EPU crest replaces the placeholder bag icon: window header, minimap button, the AddOns list, pop-up notices, the welcome card and the mailbox Donate panel.

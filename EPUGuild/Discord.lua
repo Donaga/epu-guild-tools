@@ -118,7 +118,8 @@ function ns.ProcessInbox()
         local nid = e.nid or ("d-" .. e.id)
         local cur = g2 and g2.news[nid]
         if g2 and (not cur or (e.edit and not cur.removed)) then
-          ns.PostNews(e.title, e.text, nid, e.by and (e.by .. " (Discord)") or nil)
+          ns.PostNews(e.title, e.text, nid, e.by and (e.by .. " (Discord)") or nil,
+            { quiet = e.quiet, t = tonumber(e.posted) })
           if g2.news[nid] then g2.news[nid].via = "discord" end
         end
         ok = true

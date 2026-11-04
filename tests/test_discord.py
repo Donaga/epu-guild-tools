@@ -170,7 +170,9 @@ def fake_msg(mid, content, author="Donaga", aid=2):
     return types.SimpleNamespace(id=mid, clean_content=content, embeds=[], type=bot.discord.MessageType.default, guild=None,
                                  author=types.SimpleNamespace(id=aid, display_name=author), created_at=_dt.now(_tz.utc))
 check("copies a post from the announcements channel", asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 6"))) is True)
-check("the same post isn't copied twice", asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 6"))) is False)
+n_in = len(st.data["inbox"])
+asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 6")))
+check("the same post isn't copied twice", len(st.data["inbox"]) == n_in)
 check("the bot's own posts are skipped", asyncio.run(bot.import_message(fake_msg(778, "hello", aid=1))) is False)
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
 title_of = '(function() local e = __ns.GuildStore().news["m777"] return e and not e.removed and (e.title .. "|" .. e.text) or nil end)()'
@@ -182,6 +184,19 @@ check("edits in Discord update the game", B.ev(title_of) == "Patch night|Servers
 st.queue_news_remove("m777"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
 check("deleting in Discord removes it in game", B.ev(title_of) is None)
+
+# pings stripped; older posts copied quietly (no pop-up); a pending copy is rewritten, not duplicated
+asyncio.run(bot.import_message(fake_msg(901, "@everyone\n**Launch night**\nGoldshire at 6"), quiet=True))
+n_before = len(st.data["inbox"])
+asyncio.run(bot.import_message(fake_msg(901, "@everyone\n**Launch night!**\nGoldshire at 6"), quiet=True))
+check("re-copying a post that hasn't reached the game rewrites it", len(st.data["inbox"]) == n_before
+      and [e for e in st.data["inbox"] if e.get("nid") == "m901"][0]["title"] == "Launch night!")
+core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
+B.ex('__popups = {}')
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+check("old announcements show in News", B.ev('__ns.GuildStore().news["m901"].title') == "Launch night!")
+check("but don't pop up or count as unread", B.ev('#__popups') == 0
+      and B.ev('(function() for _, e in ipairs(__ns.UnreadNews()) do if e.id == "m901" then return true end end return false end)()') == False)
 
 # --- in-game message of the day ---
 for c in (A, B):

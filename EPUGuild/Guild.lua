@@ -162,7 +162,8 @@ end
 ---------------------------------------------------------------------------
 -- Announcements
 ---------------------------------------------------------------------------
-function ns.PostNews(title, text, id, by)
+-- opts: { quiet = true (listed in News, no pop-up), t = original post time }
+function ns.PostNews(title, text, id, by, opts)
   local g = ns.GuildStore()
   if not g or not ns.IsTrusted(ns.me) then return ns.Print("Only officers can post announcements.") end
   title = (title or ""):sub(1, 60)
@@ -170,8 +171,9 @@ function ns.PostNews(title, text, id, by)
   if title == "" and text == "" then return ns.Print("Write a title or a message first.") end
   id = id or NewID("N")
   local cur = g.news[id]
-  local e = { t = cur and cur.t or ns.Now(), u = ns.NextVersion(cur and cur.u), by = by or (cur and cur.by) or ns.me,
-    title = title, text = text, via = cur and cur.via }
+  opts = opts or {}
+  local e = { t = (cur and cur.t) or opts.t or ns.Now(), u = ns.NextVersion(cur and cur.u), by = by or (cur and cur.by) or ns.me,
+    title = title, text = text, via = cur and cur.via, quiet = opts.quiet or (cur and cur.quiet) or nil }
   g.news[id] = e
   if ns.cdb then ns.cdb.newsRead = ns.cdb.newsRead or {}; ns.cdb.newsRead[id] = true end
   ns.Send("D", { news = { [id] = e } })
@@ -195,7 +197,7 @@ function ns.NewsEntries()
   local g = ns.GuildStore()
   local list = {}
   for id, e in pairs((g and g.news) or {}) do
-    if not e.removed then list[#list + 1] = { id = id, t = e.t, by = e.by, title = e.title, text = e.text } end
+    if not e.removed then list[#list + 1] = { id = id, t = e.t, by = e.by, title = e.title, text = e.text, quiet = e.quiet } end
   end
   table.sort(list, function(a, b) return (a.t or 0) > (b.t or 0) end)
   return list
@@ -235,7 +237,7 @@ function ns.UnreadNews()
   local out = {}
   local motd = ns.MotdEntry()
   if motd and ns.cdb and ns.cdb.motdRead ~= motd.text then out[#out + 1] = motd end
-  for _, e in ipairs(ns.NewsEntries()) do if not read[e.id] then out[#out + 1] = e end end
+  for _, e in ipairs(ns.NewsEntries()) do if not read[e.id] and not e.quiet then out[#out + 1] = e end end
   return out
 end
 
@@ -425,9 +427,10 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
     for id, e in pairs(b.news) do
       local cur = g.news[id]
       if type(e) == "table" and type(e.u) == "number" and (not cur or e.u > (cur.u or 0)) then
-        g.news[id] = { t = e.t, u = e.u, by = e.by, title = e.title, text = e.text, removed = e.removed, via = e.via }
+        g.news[id] = { t = e.t, u = e.u, by = e.by, title = e.title, text = e.text, removed = e.removed, via = e.via,
+          quiet = e.quiet and true or nil }
         changed = true
-        if not catchingUp and not cur and not e.removed then C_Timer.After(1, ns.ShowUnreadNews) end
+        if not catchingUp and not cur and not e.removed and not e.quiet then C_Timer.After(1, ns.ShowUnreadNews) end
       end
     end
   end

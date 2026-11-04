@@ -577,18 +577,25 @@ def embeds_of(message) -> list[dict]:
     return [{"title": em.title, "description": em.description} for em in getattr(message, "embeds", [])]
 
 
-async def import_message(message: discord.Message, edit: bool = False) -> bool:
+def _pending(nid: str) -> bool:
+    return any(e.get("kind") == "news" and e.get("nid") == nid for e in state.data.get("inbox", []))
+
+
+async def import_message(message: discord.Message, edit: bool = False, quiet: bool = False) -> bool:
     imported = state.data.setdefault("imported", {})
     key = str(message.id)
-    if (key in imported and not edit) or (edit and key not in imported):
+    if edit and key not in imported:
         return False
+    if key in imported and not edit and not _pending("m" + key):
+        return False          # already in the game
     if not edit and not await may_import(message):
         return False
     title, text = core.message_to_news(message.clean_content, embeds_of(message))
     if not text and title == "Announcement":
         return False      # an image-only post, nothing to show in game
     nid = "m" + key
-    state.queue_news(title, text, message.author.display_name, nid=nid, edit=edit)
+    state.queue_news(title, text, message.author.display_name, nid=nid, edit=edit,
+                     posted_at=int(message.created_at.timestamp()), quiet=quiet)
     imported[key] = int(message.created_at.timestamp())
     # the post already exists in Discord, so don't post it back when it shows up from the game
     state.data.setdefault("news_posted", {})[nid] = {"message_id": message.id, "u": 10 ** 12, "external": True}
@@ -608,9 +615,11 @@ async def backfill_announcements():
         return
     after = datetime.now(timezone.utc) - timedelta(days=float(cfg["import_days"]))
     n = 0
+    recent = datetime.now(timezone.utc) - timedelta(days=3)
     try:
         async for m in ch.history(limit=50, after=after, oldest_first=True):
-            if await import_message(m):
+            # older posts go into News quietly; only the last few days pop up in game
+            if await import_message(m, quiet=m.created_at < recent):
                 n += 1
     except discord.Forbidden:
         log.error("The bot can't read the history of channel %s. Give it View Channel and Read Message History there.", cid)

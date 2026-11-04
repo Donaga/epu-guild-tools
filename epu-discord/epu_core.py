@@ -520,10 +520,26 @@ class State:
         self.save()
         return e
 
-    def queue_news(self, title: str, text: str, by: str, nid: str | None = None, edit: bool = False) -> dict:
+    def queue_news(self, title: str, text: str, by: str, nid: str | None = None, edit: bool = False,
+                   posted_at: int | None = None, quiet: bool = False) -> dict:
         """An officer's /announce, or a post copied from the announcements channel
-        (nid = "m<message id>" so edits and deletes find it again)."""
+        (nid = "m<message id>" so edits and deletes find it again).
+        quiet: show it in News but don't pop it up (older posts copied at startup)."""
+        if nid and not edit:
+            # still waiting for the game? replace that entry instead of adding another
+            for old in self.data["inbox"]:
+                if old.get("kind") == "news" and old.get("nid") == nid:
+                    old.update(title=title[:60], text=text[:400], by=by, posted=posted_at or old.get("posted"))
+                    old.pop("quiet", None)
+                    if quiet:
+                        old["quiet"] = True
+                    self.save()
+                    return old
         e = {"id": uuid.uuid4().hex[:10], "kind": "news", "title": title[:60], "text": text[:400], "by": by, "t": int(time.time())}
+        if posted_at:
+            e["posted"] = int(posted_at)
+        if quiet:
+            e["quiet"] = True
         if nid:
             e["nid"] = nid
         if edit:
@@ -640,6 +656,9 @@ def message_to_news(content: str, embeds: list | None = None) -> tuple[str, str]
             text = ed
         if not title and et:
             title = et
+    # pings mean nothing in game: drop @everyone/@here, and lines that are only pings
+    text = re.sub(r"@(everyone|here)\b", "", text)
+    text = "\n".join(ln for ln in text.splitlines() if not re.fullmatch(r"\s*(@\S+\s*)+", ln))
     # markdown the game can't show: **bold**, __underline__, headers, >quotes
     text = re.sub(r"(\*\*|__|~~|`)", "", text)
     lines = [re.sub(r"^(#+\s*|>\s*)", "", ln).strip() for ln in text.splitlines()]
