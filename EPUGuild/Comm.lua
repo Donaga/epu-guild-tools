@@ -76,20 +76,50 @@ end
 
 ---------------------------------------------------------------------------
 -- Sending. Messages over 250 bytes are split into numbered parts.
--- A simple queue keeps us at ~4 messages a second to stay under the
--- server's addon message throttle.
+-- The game throttles addon messages per prefix: a burst of about 10, then
+-- roughly one a second. A refused message is silently lost unless we check,
+-- and one lost part spoils a whole bundle, so: pace with a token bucket and
+-- put anything the game refuses back at the front of the queue.
 ---------------------------------------------------------------------------
 local MAX_SINGLE = 250
 local CHUNK = 230
-local INTERVAL = 0.25
+local BURST, REFILL = 8, 1.1          -- stay a little under the game's own limits
 
 local queue, sending, msgCounter = {}, false, 0
+local tokens, lastRefill = BURST, 0
+
+local THROTTLED = {}
+if Enum and Enum.SendAddonMessageResult then
+  local R = Enum.SendAddonMessageResult
+  for _, k in ipairs({ "AddonMessageThrottle", "ChannelThrottle", "GeneralError" }) do
+    if R[k] ~= nil then THROTTLED[R[k]] = true end
+  end
+end
+
+local function Refused(result)
+  if result == false then return true end                 -- older clients: false = not sent
+  return type(result) == "number" and THROTTLED[result] == true
+end
 
 local function pump()
-  local m = table.remove(queue, 1)
+  local m = queue[1]
   if not m then sending = false return end
-  C_ChatInfo.SendAddonMessage(ns.PREFIX, m[1], m[2], m[3])
-  C_Timer.After(INTERVAL, pump)
+  local now = GetTime()
+  tokens = math.min(BURST, tokens + (now - lastRefill) / REFILL)
+  lastRefill = now
+  if tokens < 1 then
+    C_Timer.After(REFILL * (1 - tokens) + 0.05, pump)
+    return
+  end
+  local ok, result = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, m[1], m[2], m[3])
+  if ok and Refused(result) then
+    tokens = 0                                            -- back off; resend this one later
+    C_Timer.After(REFILL + 0.2, pump)
+    return
+  end
+  table.remove(queue, 1)
+  tokens = tokens - 1
+  C_Timer.After(0.15, pump)
 end
 
 function ns.Send(kind, data, channel, target)

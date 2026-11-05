@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1
+
+- **Fixed: members saw empty pages.** The game limits how fast an addon can send messages (a short burst, then about one a second). The addon sent faster than that and didn't notice when the game refused a message, so the big first sync to a member lost pieces and was thrown away. It now paces itself under the limit and resends anything refused. Officers especially should update, since their addon is what sends the guild's data.
+- Empty pages tell members when they're still waiting for guild data, and that `/epu sync` asks again.
+
 ## 0.9.0
 
 - EPU Guild Tools is on CurseForge: https://www.curseforge.com/wow/addons/epu-guild-tools — now the recommended way to install and stay updated. Every release uploads there automatically.

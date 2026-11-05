@@ -2436,7 +2436,15 @@ function UI:Refresh()
   local rows = v.rows(g, Q())
   ShowRows(rows, width)
   self.empty:SetWidth(math.max(200, width - 60))
-  self.empty:SetText(Q() ~= "" and ("Nothing matches \"" .. Q() .. "\".") or v.empty)
+  local emptyText = v.empty
+  local g0 = ns.G()
+  if Q() == "" and g0 and not g0.syncedAt and not ns.IsTrusted(ns.me) then
+    -- a member who hasn't received the guild's data yet
+    emptyText = (emptyText and (emptyText .. "\n\n") or "")
+      .. "|cfff2c14eWaiting for guild data.|r It's sent by an officer who's online with the addon.\n"
+      .. ((ns.QueueLength and ns.QueueLength() > 0) and "Syncing now..." or "Type |cffffffff/epu sync|r to ask again once an officer is on.")
+  end
+  self.empty:SetText(Q() ~= "" and ("Nothing matches \"" .. Q() .. "\".") or emptyText)
   self.empty:SetShown(#rows == 0)
   self.footerText:SetText(v.footer and v.footer(g) or "")
   UpdateThumb()

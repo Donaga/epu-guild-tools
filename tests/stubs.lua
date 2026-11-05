@@ -83,10 +83,21 @@ function __advance(sec)
   end
   __now = target
 end
+-- Like the game: each prefix gets a burst of 10 messages, refilling one per
+-- second. Over the limit, the message is dropped and the call says so.
+Enum = Enum or {}
+Enum.SendAddonMessageResult = { Success = 0, InvalidPrefix = 1, InvalidMessage = 2, AddonMessageThrottle = 3,
+  InvalidChatType = 4, NotInGroup = 5, TargetRequired = 6, InvalidChannel = 7, ChannelThrottle = 8, GeneralError = 9 }
+__sendTokens, __sendRefill, __dropped = 10, 0, 0
 C_ChatInfo = {
   SendAddonMessage = function(p, m, c, t)
     assert(#m <= 255, "addon message too long: " .. #m)
+    __sendTokens = math.min(10, __sendTokens + (__now - __sendRefill))
+    __sendRefill = __now
+    if __sendTokens < 1 then __dropped = __dropped + 1; return Enum.SendAddonMessageResult.AddonMessageThrottle end
+    __sendTokens = __sendTokens - 1
     table.insert(__out, { p, m, c, t })
+    return Enum.SendAddonMessageResult.Success
   end,
   RegisterAddonMessagePrefix = noop,
 }

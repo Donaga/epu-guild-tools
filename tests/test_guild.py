@@ -134,6 +134,28 @@ B.ex('GetNumSkillLines = nil; local P = { [5] = {"Blacksmithing", 39}, [7] = {"M
 check("modern profession list read and shared (%s)" % A.ev('(function() local c = __ns.G().crafters["Tyler Baker"] return c and (tostring(c.profs.Blacksmithing) .. "," .. tostring(c.profs.Mining) .. "," .. tostring(c.profs.Cooking)) end)()'),
       A.ev('(function() local c = __ns.G().crafters["Tyler Baker"] return c and c.profs.Blacksmithing == 39 and c.profs.Mining == 67 and c.profs.Cooking == 10 end)()') == True)
 
+# --- a member logging in fresh gets everything, even past the game's message limit ---
+for i in range(12):
+    A.ex('__ns.PostNews("Notice %d", string.rep("Long announcement text for testing the sync. ", 8))' % i)
+for i in range(40):
+    A.ex('__ns.SetNeed(%d, 20)' % (50000 + i))
+tick(90)
+simcore.ROSTER.append(("Late Member", "Initiate", 4))
+for c in clients.values():
+    c.ex('table.insert(__roster, {"Late Member", "Initiate", 4})')
+LM = Client("Late Member"); clients["Late Member"] = LM
+tick(180)
+check("fresh member got every announcement (%s)" % LM.ev('#__ns.NewsEntries()'), LM.ev('#__ns.NewsEntries()') == A.ev('#__ns.NewsEntries()'))
+check("and every need (%s)" % LM.ev('(function() local n = 0 for _ in pairs(__ns.G().needs.list) do n = n + 1 end return n end)()'),
+      LM.ev('(function() local n = 0 for _ in pairs(__ns.G().needs.list) do n = n + 1 end return n end)()')
+      == A.ev('(function() local n = 0 for _ in pairs(__ns.G().needs.list) do n = n + 1 end return n end)()'))
+check("pacing keeps us under the game's limit (%d refused)" % sum((c.ev("__dropped") or 0) for c in clients.values()),
+      sum((c.ev("__dropped") or 0) for c in clients.values()) == 0)
+# force the game to refuse: the message must still arrive once the limit refills
+A.ex('__sendTokens = 0; __sendRefill = __now; __ns.PostNews("After throttle", "still arrives")'); tick(20)
+check("a refused message is resent and arrives", A.ev('__dropped') > 0
+      and LM.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "After throttle" then return true end end return false end)()') == True)
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)
