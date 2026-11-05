@@ -126,6 +126,14 @@ check("officer catching up gets notes and log", GM2.ev('__ns.GuildStore().notes[
 fits = A.ev('(function() local bad = {} for _, k in ipairs({"news","roster"}) do __ns.UI:SetView(k) local b = __ns.UI.bars[k] if b.leftX + b.rightX > 480 then bad[#bad+1] = k .. "=" .. (b.leftX + b.rightX) end end return table.concat(bad, ",") end)()')
 check("news and roster toolbars fit (%s)" % (fits or "ok"), fits == "")
 
+# --- WoW: Forever lists professions with GetProfessions(), not the old skill list ---
+B.ex('GetNumSkillLines = nil; local P = { [5] = {"Blacksmithing", 39}, [7] = {"Mining", 67}, [9] = {"Cooking", 10} }'
+     '; function GetProfessions() return 5, 7, nil, nil, 9 end'
+     '; function GetProfessionInfo(i) return P[i][1], "icon", P[i][2], 75 end'
+     '; __ns.ScanProfessions()'); tick(3)
+check("modern profession list read and shared (%s)" % A.ev('(function() local c = __ns.G().crafters["Tyler Baker"] return c and (tostring(c.profs.Blacksmithing) .. "," .. tostring(c.profs.Mining) .. "," .. tostring(c.profs.Cooking)) end)()'),
+      A.ev('(function() local c = __ns.G().crafters["Tyler Baker"] return c and c.profs.Blacksmithing == 39 and c.profs.Mining == 67 and c.profs.Cooking == 10 end)()') == True)
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

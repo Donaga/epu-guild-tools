@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.5
+
+- Fixed: Crafters showed "No profession data yet" on WoW: Forever. Professions are now read the way Forever lists them, and update when you learn or skill up a profession.
+- Recipe scanning falls back to the modern profession window when the old one has nothing.
+
 ## 0.8.4
 
 - Fixed: "EPUGuild has been blocked from an action only available to the Blizzard UI". The addon no longer rewrites Blizzard's pop-up dialog table or replaces Blizzard's mail functions; it hooks them the safe way instead. Mail donation logging and auto-fill work as before.

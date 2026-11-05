@@ -848,11 +848,31 @@ local KNOWN_PROFS = {
   Cooking = true, ["First Aid"] = true, Fishing = true,
 }
 
+-- Modern clients (WoW: Forever included) list professions through GetProfessions().
+local function ModernProfessions()
+  local profs = {}
+  if not GetProfessions or not GetProfessionInfo then return nil end
+  for _, index in pairs({ GetProfessions() }) do
+    if index then
+      local name, _, skill = GetProfessionInfo(index)
+      if name and skill then profs[name] = skill end
+    end
+  end
+  return profs
+end
+
 function ns.ScanProfessions()
   local g = ns.G()
-  if not g or not GetNumSkillLines then return end
+  if not g then return end
   local profs = {}
-  local inProf, riding = false, false
+  local inProf, riding = false, nil
+  local modern = (not GetNumSkillLines or GetNumSkillLines() == 0) and ModernProfessions() or nil
+  if modern then
+    profs = modern
+  elseif not GetNumSkillLines then
+    return
+  else
+  riding = false
   for i = 1, GetNumSkillLines() do
     local name, isHeader, _, rank = GetSkillLineInfo(i)
     if isHeader then
@@ -865,9 +885,10 @@ function ns.ScanProfessions()
       profs[name] = rank
     end
   end
+  end
   local cur = g.crafters[ns.me]
   if ns.ProfessionMilestones and cur then pcall(ns.ProfessionMilestones, cur.profs, profs) end
-  if ns.RidingMilestone and ns.cdb then
+  if ns.RidingMilestone and ns.cdb and riding ~= nil then
     if ns.cdb.riding ~= nil then pcall(ns.RidingMilestone, ns.cdb.riding, riding) end
     ns.cdb.riding = riding
   end
@@ -885,6 +906,10 @@ end)
 ns.On("PLAYER_LEVEL_UP", function()
   ns.Debounce("profs", 10, ns.ScanProfessions)
 end)
+-- learning, unlearning or skilling up a profession (modern clients)
+for _, ev in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_CLOSE", "CHAT_MSG_SKILL", "LEARNED_SPELL_IN_TAB" }) do
+  ns.On(ev, function() ns.Debounce("profs", 3, ns.ScanProfessions) end)
+end
 
 ---------------------------------------------------------------------------
 -- Recipes: each character remembers its own recipes (scanned when the
@@ -1213,7 +1238,7 @@ local function ScanModern()
 end
 
 local function ScanAny()
-  if GetNumTradeSkills then ScanTradeSkill() else pcall(ScanModern) end
+  if GetNumTradeSkills and (GetNumTradeSkills() or 0) > 0 then ScanTradeSkill() else pcall(ScanModern) end
 end
 
 ns.On("TRADE_SKILL_SHOW", function() C_Timer.After(0.5, ScanAny) end)
