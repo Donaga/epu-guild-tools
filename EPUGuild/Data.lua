@@ -354,7 +354,7 @@ ns.pendingHello = {}
 
 -- A guildmate's addon is newer than ours: tell the player once per session.
 StaticPopupDialogs["EPUGUILD_UPDATE"] = {
-  text = "EPU Guild Tools %s is out (you have %s).\n\nDouble-click \"Update EPU Guild Tools\" from the updater, or get it with /download in the guild Discord. Then type /reload.",
+  text = "EPU Guild Tools %s is out (you have %s).\n\nUpdate it in the CurseForge app (or WowUp, or the EPU updater), then type /reload.\n\nNot installed through an app yet? Type /download in the guild Discord.",
   button1 = OKAY or "Okay",
   timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
 }
@@ -363,7 +363,7 @@ function ns.NoteVersion(sender, ver)
   if type(ver) ~= "string" or ns.VersionNumber(ver) <= ns.VersionNumber(ns.VERSION) then return end
   if ns.newestVersion and ns.VersionNumber(ns.newestVersion) >= ns.VersionNumber(ver) then return end
   ns.newestVersion = ver
-  ns.Print("|cfff2c14eUpdate available:|r version " .. ver .. " (you have " .. ns.VERSION .. "). Run the EPU updater or use /download in the guild Discord.")
+  ns.Print("|cfff2c14eUpdate available:|r version " .. ver .. " (you have " .. ns.VERSION .. "). Update it in the CurseForge app (or WowUp / the EPU updater), then /reload.")
   if StaticPopup_Show then StaticPopup_Show("EPUGUILD_UPDATE", ver, ns.VERSION) end
   ns.Changed()
 end

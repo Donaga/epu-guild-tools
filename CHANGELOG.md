@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- EPU Guild Tools is on CurseForge: https://www.curseforge.com/wow/addons/epu-guild-tools — now the recommended way to install and stay updated. Every release uploads there automatically.
+- The in-game update notice, Discord how-to, `/download`, release posts and READMEs point to CurseForge first; WowUp and the updater still work.
+
 ## 0.8.9
 
 - Fixed: shift-clicking an item didn't fill the item box on Forever. It now works without clicking into the box first.

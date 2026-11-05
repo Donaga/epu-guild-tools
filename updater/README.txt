@@ -1,6 +1,12 @@
 EPU Guild Tools updater
 =======================
 
+Tip: the easiest way to get and update the addon is now the CurseForge app:
+https://www.curseforge.com/wow/addons/epu-guild-tools
+(click Install, pick your Forever install). If you use CurseForge, you don't
+need this updater; to stop it running at startup, run:
+"Update EPU Guild Tools.bat" nostartup
+
 1. Unzip this folder somewhere you'll keep it, e.g. Documents\EPU Updater.
    Don't delete it afterwards: the automatic updates run from here.
 

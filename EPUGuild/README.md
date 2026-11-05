@@ -3,6 +3,9 @@
 A guild helper for **E Pluribus Unum** on WoW: Forever. It covers the time before the guild has a real guild bank, and stays useful after.
 
 ## Install
+**Recommended:** install it with the CurseForge app from https://www.curseforge.com/wow/addons/epu-guild-tools (click **Install**, pick your Forever install). The app keeps it updated. WowUp (Install from URL with the GitHub link) and the EPU updater work too; use just one.
+
+**By hand:**
 1. Unzip so the folder is `World of Warcraft\_forever_\Interface\AddOns\EPUGuild\`. The `_forever_` folder name may differ; it's the folder for the Forever client. Inside it you should see `EPUGuild.toc`.
 2. Restart the game or type `/reload`.
 3. If the AddOns list says **Out of date**, run `/dump select(4, GetBuildInfo())` in game and put that number on the `## Interface:` line of `EPUGuild.toc`. You can also tick "Load out of date AddOns" instead.

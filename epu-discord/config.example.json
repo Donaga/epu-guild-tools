@@ -19,5 +19,6 @@
   "help_post": true,
   "github_repo": "Donaga/epu-guild-tools",
   "announce_releases": true,
-  "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest"
+  "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest",
+  "curseforge_url": "https://www.curseforge.com/wow/addons/epu-guild-tools"
 }

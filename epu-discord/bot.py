@@ -58,6 +58,7 @@ def load_config() -> dict:
     cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
     cfg.setdefault("addon_url", "https://github.com/Donaga/epu-guild-tools/releases/latest")
+    cfg.setdefault("curseforge_url", "https://www.curseforge.com/wow/addons/epu-guild-tools")   # the recommended way to install
     cfg.setdefault("post_milestones", True)       # level-ups, first mounts, new members... in Discord
     cfg.setdefault("import_channel_id", "")       # an existing #announcements channel to copy into the game
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
@@ -329,19 +330,19 @@ def help_embed() -> discord.Embed:
         "WoW addons can't use the internet, so the bot and the game swap notes through files. Those are written when an "
         "officer types `/reload` or `/epu save`, or logs in or out. Requests made here reach the game, and changes made "
         "in game reach Discord, at the next one of those, usually within the same play session."))
-    e.add_field(name="Get the addon (and keep it updated)", inline=False, value=(
-        "Type `/download`. The easy way is the **updater**: unzip it, double-click *Update EPU Guild Tools*, and "
-        "it installs the addon and updates it whenever there's a new version. Run *Update automatically at startup* "
-        "once and you never have to think about it. Type `/epu` in game to open the addon."))
-    e.add_field(name="Or use WowUp", inline=False, value=(
-        "1. Download WowUp from https://wowup.io (the free *WowUp* is fine) and install it. If Windows says it "
-        "protected your PC, click *More info*, then *Run anyway*.\n"
-        "2. Open WowUp and pick **World of Warcraft Forever** in the dropdown at the top. If it's missing, add "
-        "`World of Warcraft\\_forever_\\Wow.exe` in WowUp's options.\n"
-        f"3. **Get Addons**, then **Install from URL**, paste `https://github.com/{cfg['github_repo']}`, then **Import** "
-        "and **Install**.\n"
-        "4. WowUp shows an **Update** button under *My Addons* when there's a new version (or turn on auto-update). "
-        "Use WowUp *or* the updater, not both."))
+    cf = cfg["curseforge_url"]
+    e.add_field(name="Get the addon: CurseForge (recommended)", inline=False, value=(
+        "1. Install the free **CurseForge app** from https://www.curseforge.com/download/app and sign in (a free "
+        "CurseForge account keeps your addons with you).\n"
+        f"2. Open {cf} and click **Install**. Pick **World of Warcraft**, then your **Forever** install.\n"
+        "3. That's it: the app keeps it updated. Turn on auto-update in the app's World of Warcraft settings so new "
+        "versions install on their own.\n"
+        "Type `/epu` in game to open the addon. It's unlisted, so search won't find it; use the link."))
+    e.add_field(name="Other ways", inline=False, value=(
+        "**WowUp:** pick **World of Warcraft Forever** at the top, then Get Addons > Install from URL and paste "
+        f"`https://github.com/{cfg['github_repo']}`.\n"
+        "**Updater or by hand:** type `/download`.\n"
+        "Use one of these, not several; they'd each try to update it."))
     if cfg["logo_url"]:
         e.set_thumbnail(url=cfg["logo_url"])
     e.set_footer(text="Type /help any time to see this again.")
@@ -386,21 +387,23 @@ def download_embed(rel: dict | None) -> discord.Embed:
     if cfg["logo_url"]:
         e.set_thumbnail(url=cfg["logo_url"])
     if not rel:
-        e.description = f"[Latest release]({cfg['addon_url']})"
+        e.description = (f"**Recommended:** [install it with CurseForge]({cfg['curseforge_url']}).\n"
+                         f"Or get the [latest release]({cfg['addon_url']}).")
         return e
     e.description = f"Current version: **{rel['version']}**"
-    if rel.get("updater"):
-        e.add_field(name="Recommended: the updater", inline=False, value=(
-            f"[Download the updater]({rel['updater']}). Unzip it somewhere you'll keep (like Documents), double-click "
-            "**Update EPU Guild Tools**, and it installs the addon for you. Double-click **Update automatically at "
-            "startup** once and it keeps itself updated."))
-    if rel.get("addon"):
-        e.add_field(name="Or install it by hand", inline=False, value=(
-            f"[Download the addon]({rel['addon']}) and unzip it into "
-            "`World of Warcraft\\_forever_\\Interface\\AddOns`, then type `/reload` in game."))
+    e.add_field(name="Recommended: CurseForge", inline=False, value=(
+        f"[Open EPU Guild Tools on CurseForge]({cfg['curseforge_url']}) and click **Install** (you need the free "
+        "[CurseForge app](https://www.curseforge.com/download/app)). Pick your **Forever** install, and the app keeps "
+        "it updated."))
     e.add_field(name="Use WowUp?", inline=False, value=(
-        "Get it from https://wowup.io, pick **World of Warcraft Forever** at the top, then Get Addons > Install from URL "
-        f"and paste `https://github.com/{cfg['github_repo']}`. WowUp keeps it updated."))
+        "Pick **World of Warcraft Forever** at the top, then Get Addons > Install from URL and paste "
+        f"`https://github.com/{cfg['github_repo']}`. WowUp keeps it updated."))
+    if rel.get("updater"):
+        e.add_field(name="No addon app?", inline=False, value=(
+            f"[Download the updater]({rel['updater']}), unzip it somewhere you'll keep, and double-click "
+            "**Update EPU Guild Tools**."
+            + (f" Or [download the addon]({rel['addon']}) and unzip it into "
+               "`World of Warcraft\\_forever_\\Interface\\AddOns`." if rel.get("addon") else "")))
     if rel.get("page"):
         e.add_field(name="\u200b", value=f"[Release notes]({rel['page']})", inline=False)
     return e
@@ -431,7 +434,8 @@ async def check_release(announce: bool = True):
     notes = rel["notes"][:900] + ("..." if len(rel["notes"]) > 900 else "")
     if notes:
         e.description = notes
-    e.set_footer(text="Already have the updater set to run at startup? You'll get it automatically. Then /reload in game.")
+    e.set_footer(text="CurseForge app: it shows up as an update once CurseForge approves it (usually within a day). "
+                      "WowUp and the updater have it now. Then /reload in game.")
     try:
         await ch.send(embed=e)
     except Exception as ex:
@@ -443,7 +447,7 @@ async def release_loop():
     await check_release()
 
 
-@tree.command(name="download", description="Get the EPU Guild Tools addon and its updater", guild=GUILD)
+@tree.command(name="download", description="How to install EPU Guild Tools (CurseForge, WowUp or the updater)", guild=GUILD)
 async def download_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(embed=download_embed(latest_release), ephemeral=True)
 

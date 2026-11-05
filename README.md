@@ -10,11 +10,14 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 | [`tests/`](tests/) | Simulators that run the addon outside WoW, with stubbed game functions, plus the Discord file round trip. |
 
 ## Getting the addon (guildmates)
-- **Easiest:** download `EPU-Updater-x.y.z.zip` from the latest [Release](../../releases/latest), unzip it somewhere you'll keep it, and double-click **Update EPU Guild Tools**. It finds WoW: Forever, installs the addon, and updates it whenever you run it. Double-click **Update automatically at startup** once and it keeps itself current.
+- **Recommended: CurseForge.** Install the free [CurseForge app](https://www.curseforge.com/download/app), open **https://www.curseforge.com/wow/addons/epu-guild-tools** and click **Install**, then pick your *Forever* install. The app keeps it updated (turn on auto-update in its World of Warcraft settings). The project is unlisted, so use the link rather than searching.
+- **Updater:** download `EPU-Updater-x.y.z.zip` from the latest [Release](../../releases/latest), unzip it somewhere you'll keep it, and double-click **Update EPU Guild Tools**. It finds WoW: Forever, installs the addon, and updates it whenever you run it. Double-click **Update automatically at startup** once and it keeps itself current.
 - **WowUp:** pick your *Forever* install from the dropdown at the top, then Get Addons > Install from URL, paste `https://github.com/Donaga/epu-guild-tools` and click Install. WowUp updates it like any other addon.
 - **By hand:** unzip `EPUGuild-x.y.z.zip` into `World of Warcraft\_forever_\Interface\AddOns\`, then `/reload`.
 
-In game, the addon tells you when a guildmate has a newer version. On Discord, the bot announces each release and `/download` gives the links.
+Use just one of these; each would try to update the same folder. In game, the addon tells you when a guildmate has a newer version. On Discord, the bot announces each release and `/download` gives the links.
+
+Every GitHub release also uploads to CurseForge automatically (see *Making a release*); CurseForge reviews each file before the app offers it, usually within a day.
 
 ## Making a release
 1. Commit changes to `main`. The **Tests** workflow runs on every push.

@@ -16,6 +16,6 @@ Guild bank, crafting and guild management for **E Pluribus Unum** on WoW: Foreve
 - News: announcements (also from Discord) and milestones like level-ups and first mounts
 - Officer tools: member review, private officer notes, an officer log
 
-Type `/epu` in game to open it. Data syncs between guild members who have the addon; nothing is sent outside the game except through the guild's own Discord bot.
+Type `/epu` in game to open it. This page is the recommended way to install it: click **Install** and the CurseForge app keeps it updated. Data syncs between guild members who have the addon; nothing is sent outside the game except through the guild's own Discord bot.
 
 Source and issues: https://github.com/Donaga/epu-guild-tools
