@@ -173,11 +173,18 @@ local function Box(parent, w, placeholder, numeric)
     self:ClearFocus()
     if self.onEnter then self.onEnter(self) end
   end)
-  -- drag an item onto the box
-  e:SetScript("OnReceiveDrag", function(self)
+  -- drop an item onto the box (released from a drag, or clicked with it on the cursor)
+  local function TakeCursorItem(self)
     local kind, id, link = GetCursorInfo()
-    if kind == "item" then self:SetText(link or ("item:" .. id)); ClearCursor() end
-  end)
+    if kind == "item" and id then
+      self:SetText(link or select(2, GetItemInfo(id)) or ("item:" .. id))
+      ClearCursor()
+      return true
+    end
+  end
+  e.TakeCursorItem = TakeCursorItem
+  e:SetScript("OnReceiveDrag", TakeCursorItem)
+  e:HookScript("OnMouseDown", function(self) TakeCursorItem(self) end)
   return e
 end
 
@@ -1554,12 +1561,32 @@ UI.itemBox.onEnter = SubmitComposer
 UI.qtyBox.onEnter = SubmitComposer
 UI.noteBox.onEnter = SubmitComposer
 
--- Shift-click an item while one of our boxes has focus
-hooksecurefunc("ChatEdit_InsertLink", function(link)
-  if UI:IsShown() and UI.focusBox and UI.focusBox:IsVisible() and type(link) == "string" and link:find("|Hitem:") then
-    UI.focusBox:SetText(link)
+-- Shift-click an item: it goes into the box you're typing in, or the item box
+-- at the bottom if the window is open. Modern clients send shift-clicks through
+-- ChatFrameUtil.InsertLink, older ones through ChatEdit_InsertLink; hook both.
+local lastLink, lastAt = nil, 0
+local function OnInsertLink(link)
+  if not UI:IsShown() or type(link) ~= "string" or not link:find("|Hitem:") then return end
+  if link == lastLink and GetTime() - lastAt < 0.2 then return end      -- same click seen by two hooks
+  lastLink, lastAt = link, GetTime()
+  local box = UI.focusBox
+  if not (box and box:IsVisible()) then
+    box = UI.itemBox:IsVisible() and UI.itemBox or nil
   end
-end)
+  if box then box:SetText(link) end
+end
+if ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink", OnInsertLink) end
+if ChatFrameUtil and ChatFrameUtil.InsertLink then hooksecurefunc(ChatFrameUtil, "InsertLink", OnInsertLink) end
+if HandleModifiedItemClick then
+  hooksecurefunc("HandleModifiedItemClick", function(link)
+    if IsModifiedClick and IsModifiedClick("CHATLINK") then OnInsertLink(link) end
+  end)
+end
+
+-- The whole bottom bar takes a dropped item too, not just the small box.
+composer:EnableMouse(true)
+composer:SetScript("OnReceiveDrag", function() UI.itemBox:TakeCursorItem() end)
+composer:SetScript("OnMouseDown", function() UI.itemBox:TakeCursorItem() end)
 
 ---------------------------------------------------------------------------
 -- Officer page (custom content, built once)

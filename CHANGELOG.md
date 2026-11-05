@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.9
+
+- Fixed: shift-clicking an item didn't fill the item box on Forever. It now works without clicking into the box first.
+- Fixed: dragging an item onto the box. You can also click the box (or anywhere on the bottom bar) with an item on your cursor.
+
 ## 0.8.8
 
 - A guild bank with no tabs and no gold isn't listed as an empty "Guild Bank" holder anymore.

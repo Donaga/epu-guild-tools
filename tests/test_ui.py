@@ -12,6 +12,15 @@ A.ex('__bags[0] = {{4306, 20}, {4306, 5}, {2589, 40}}; __money = 5000000')
 A.ex('SlashCmdList.EPUGUILD("bankalt on")'); tick(8)
 A.ex('SlashCmdList.EPUGUILD("need 2589 200")'); A.ex('SlashCmdList.EPUGUILD("need 14047 50 goal")'); tick(3)
 
+# --- picking an item for a need or request ---
+A.ex('__ns.UI:Show(); __ns.UI:SetView("needs"); __ns.UI.itemBox:SetText(""); __ns.UI.focusBox = nil; ChatFrameUtil.InsertLink(__link(4306))')
+check("shift-click fills the item box without clicking into it first (modern clients)", (A.ev('__ns.UI.itemBox:GetText()') or "").find("Hitem:4306") is not None)
+A.ex('__ns.UI.itemBox:SetText(""); __cursor_item = 2589; __ns.UI.itemBox:GetScript("OnReceiveDrag")(__ns.UI.itemBox)')
+check("dragging an item onto the box", "Hitem:2589" in (A.ev('__ns.UI.itemBox:GetText()') or "") and A.ev('__cursor_item') is None)
+A.ex('__ns.UI.itemBox:SetText(""); __cursor_item = 14047; __ns.UI.itemBox:GetScript("OnMouseDown")(__ns.UI.itemBox)')
+check("clicking the box with an item on the cursor", "Hitem:14047" in (A.ev('__ns.UI.itemBox:GetText()') or ""))
+A.ex('__ns.UI.itemBox:SetText("")')
+
 # soulbound items (Hearthstone, BoP gear) aren't guild stock
 A.ex('__bags[1] = {{6948, 1, true}, {30050, 1, true}, {4306, 3}}; __fire("BAG_UPDATE")'); tick(8)
 check("Hearthstone and soulbound gear left out of bank stock",

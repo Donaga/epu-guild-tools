@@ -26,6 +26,10 @@ function M:SetShown(v) if v then self:Show() else self:Hide() end end
 function M:HasFocus() return false end
 function M:SetScript(k, fn) self._scripts[k] = fn end
 function M:GetScript(k) return self._scripts[k] end
+function M:HookScript(k, fn)
+  local old = self._scripts[k]
+  self._scripts[k] = old and function(...) old(...); fn(...) end or fn
+end
 -- Like a real client, registering an event this client doesn't have is an error.
 __missingEvents = { CRAFT_SHOW = true, CRAFT_UPDATE = true, TRADE_SKILL_LIST_UPDATE = true }
 function M:RegisterEvent(e)
@@ -154,6 +158,9 @@ end
 function GameTooltip_Hide() end
 function IsModifiedClick() return false end
 function ChatEdit_InsertLink() end
+ChatFrameUtil = { InsertLink = function() end }   -- modern clients route shift-clicks here
+__cursor_item = nil
+
 function SendChatMessage(m, c) table.insert(__log, "[" .. c .. "] " .. m) end
 SlashCmdList = {}
 function GetNumSkillLines() return 4 end
@@ -178,8 +185,8 @@ function GetTargetTradeMoney() return 0 end
 function GetTradeTargetItemLink() end
 function GetTradeTargetItemInfo() end
 function GetCoinTextureString(c) return c .. "c" end
-function GetCursorInfo() end
-function ClearCursor() end
+function GetCursorInfo() if __cursor_item then return "item", __cursor_item, __link(__cursor_item) end end
+function ClearCursor() __cursor_item = nil end
 function GetTradeSkillLine() return "Tailoring", 150, 300 end
 __TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "easy", 2996 } }
 function GetNumTradeSkills() return #__TS end
