@@ -19,11 +19,13 @@ function ns.CacheItemNames()
   local g = ns.G()
   if not g or not ns.db then return end
   ns.db.itemNames = ns.db.itemNames or {}
-  local names = ns.db.itemNames
+  ns.db.itemClass = ns.db.itemClass or {}        -- [itemID] = { classID, subclassID }, so Discord can group by type
+  local names, classes = ns.db.itemNames, ns.db.itemClass
   local function add(id)
-    if type(id) ~= "number" or names[id] then return end
-    local name = GetItemInfo(id)
+    if type(id) ~= "number" or (names[id] and classes[id]) then return end
+    local name, _, _, _, _, _, _, _, _, _, _, classID, subclassID = GetItemInfo(id)
     if name then names[id] = name end
+    if classID then classes[id] = { classID, subclassID or 0 } end
   end
   for id in pairs(g.needs.list) do add(id) end
   for _, s in pairs(g.bank) do for id in pairs(s.items or {}) do add(id) end end

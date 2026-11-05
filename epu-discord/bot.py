@@ -208,6 +208,12 @@ def _clip(lines: list[str], limit: int = 1000) -> str:
     return "\n".join(out) or "-"
 
 
+CATEGORY_EMOJI = {"Cloth": "\U0001F9F5", "Leather": "\U0001F9E5", "Metal & Stone": "\u26CF\uFE0F", "Herbs": "\U0001F33F",
+                  "Cooking": "\U0001F356", "Enchanting": "\u2728", "Elemental": "\U0001F525", "Parts & Engineering": "\u2699\uFE0F",
+                  "Other Trade Goods": "\U0001F4E6", "Consumables": "\U0001F9EA", "Reagents": "\U0001F52E", "Bags": "\U0001F392",
+                  "Weapons & Armor": "\u2694\uFE0F", "Recipes": "\U0001F4DC", "Other": "\U0001F4E6"}
+
+
 def status_embed(gd: core.GuildData) -> discord.Embed:
     st = gd.status_summary()
     e = discord.Embed(title="Guild Bank Status", color=discord.Color.blurple())
@@ -224,13 +230,16 @@ def status_embed(gd: core.GuildData) -> discord.Embed:
     e.add_field(name="Shopping list", value=_clip(shop_lines) if shop_lines else "Nothing to buy.", inline=False)
     items = gd.bank_items()
     if items:
-        top = sorted(items, key=lambda r: (-r["count"], r["name"]))
-        lines = [f"{r['name']}: {r['count']}" for r in top[:40]]
-        more = len(items) - 40
-        value = _clip(lines, 1000 if more <= 0 else 960)
-        if more > 0 and "more" not in value[-20:]:
-            value += f"\n...and {more} more (`/bank search:` to look one up)"
-        e.add_field(name=f"In the bank ({len(items)} kinds of items)", value=value, inline=False)
+        groups: dict = {}
+        for r in items:
+            groups.setdefault(r["category"], []).append(r)
+        cats = [c for c in core.CATEGORIES if c in groups]
+        used = sum(len(f.value) + len(f.name) for f in e.fields) + 400      # room for the gold/requests fields and footer
+        budget = max(300, (5800 - used) // max(1, len(cats)))
+        for cat in cats:
+            rows = sorted(groups[cat], key=lambda r: (-r["count"], r["name"]))
+            value = _clip([f"{r['name']}: {r['count']}" for r in rows], min(1000, budget))
+            e.add_field(name=f"{CATEGORY_EMOJI.get(cat, '')} {cat}".strip(), value=value, inline=True)
     else:
         e.add_field(name="In the bank", value="Nothing recorded yet. A bank character's bags count once it logs in with `/epu bankalt on`; "
                     "open its bank once to add the bank slots.", inline=False)

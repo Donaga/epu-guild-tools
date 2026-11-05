@@ -11,6 +11,29 @@ ns.VERSION = (getMeta and getMeta(ADDON, "Version")) or "0.0.0"
 -- Event dispatch
 ---------------------------------------------------------------------------
 local frame = CreateFrame("Frame")
+-- Item categories for the Bank page and the Discord status post.
+-- Keyed by Blizzard's item class and subclass numbers (same on every client).
+ns.CATEGORIES = { "Cloth", "Leather", "Metal & Stone", "Herbs", "Cooking", "Enchanting", "Elemental",
+  "Parts & Engineering", "Other Trade Goods", "Consumables", "Reagents", "Bags", "Weapons & Armor", "Recipes", "Other" }
+local TRADE = { [5] = "Cloth", [6] = "Leather", [7] = "Metal & Stone", [9] = "Herbs", [8] = "Cooking",
+  [12] = "Enchanting", [10] = "Elemental", [1] = "Parts & Engineering", [2] = "Parts & Engineering", [3] = "Parts & Engineering" }
+function ns.CategoryOf(classID, subclassID)
+  if classID == 7 then return TRADE[subclassID] or "Other Trade Goods" end
+  if classID == 0 then return "Consumables" end
+  if classID == 5 then return "Reagents" end
+  if classID == 1 or classID == 11 then return "Bags" end
+  if classID == 2 or classID == 4 then return "Weapons & Armor" end
+  if classID == 9 then return "Recipes" end
+  return "Other"
+end
+function ns.ItemCategory(id)
+  local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = GetItemInfo(id)
+  if not classID and ns.db and ns.db.itemClass and ns.db.itemClass[id] then
+    classID, subclassID = ns.db.itemClass[id][1], ns.db.itemClass[id][2]
+  end
+  return ns.CategoryOf(classID, subclassID)
+end
+
 ns.LOGO = "Interface\\AddOns\\EPUGuild\\Media\\logo"        -- the EPU guild crest
 ns.LOGO_SMALL = "Interface\\AddOns\\EPUGuild\\Media\\logo64"
 ns.handlers = {}

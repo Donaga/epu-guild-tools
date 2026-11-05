@@ -29,7 +29,11 @@ check("officer sees officer nav", A.ev('__ns.UI.nav.officer:IsShown()') == True)
 
 A.ex('__ns.UI:SetView("bank")')
 A.ex('__ns.UI.search:SetText("silk")')
-check("search filters the bank list", A.ev('#(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r end end return t end)()') == 1)
+check("search filters the bank list (category header + the item)", A.ev('#(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r end end return t end)()') == 2)
+check("bank grouped by category", A.ev('__ns.UI.rows[1].data.key') == "cat:Cloth" and A.ev('__ns.UI.rows[2].data.item') == 4306)
+A.ex('__ns.UI.search:SetText(""); __ns.UI.state.bank.cat = "Herbs"; __ns.UI:Refresh()')
+check("category dropdown filter", A.ev('(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then n = n + 1 end end return n end)()') == 0)
+A.ex('__ns.UI.state.bank.cat = nil; __ns.UI.search:SetText("silk")')
 A.ex('__ns.UI.search:SetText("")')
 
 # --- requests: member asks, officer approves from the row, filters ---

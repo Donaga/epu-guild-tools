@@ -235,6 +235,20 @@ ACTIVE = {"pending", "approved", "open"}
 STATUS_LABEL = {"open": "pending"}
 
 
+# Same groups as the addon's Bank page (Blizzard item class / subclass numbers)
+CATEGORIES = ["Cloth", "Leather", "Metal & Stone", "Herbs", "Cooking", "Enchanting", "Elemental",
+              "Parts & Engineering", "Other Trade Goods", "Consumables", "Reagents", "Bags", "Weapons & Armor", "Recipes", "Other"]
+_TRADE = {5: "Cloth", 6: "Leather", 7: "Metal & Stone", 9: "Herbs", 8: "Cooking", 12: "Enchanting", 10: "Elemental",
+          1: "Parts & Engineering", 2: "Parts & Engineering", 3: "Parts & Engineering"}
+
+
+def category_of(class_id: int | None, subclass_id: int | None = 0) -> str:
+    if class_id == 7:
+        return _TRADE.get(subclass_id, "Other Trade Goods")
+    return {0: "Consumables", 5: "Reagents", 1: "Bags", 11: "Bags", 2: "Weapons & Armor", 4: "Weapons & Armor",
+            9: "Recipes"}.get(class_id, "Other")
+
+
 def status_of(r: dict) -> str:
     s = r.get("status", "pending")
     return STATUS_LABEL.get(s, s)
@@ -268,6 +282,11 @@ class GuildData:
             self.key = next(iter(guilds), None)
         self.g = guilds.get(self.key) or {}
         self.item_names = {int(k): v for k, v in (self.db.get("itemNames") or {}).items() if isinstance(k, (int, float))}
+        self.item_class = {}
+        for k, v in (self.db.get("itemClass") or {}).items():
+            vals = list(v.values()) if isinstance(v, dict) else list(v or [])
+            if isinstance(k, (int, float)) and vals:
+                self.item_class[int(k)] = (int(vals[0]), int(vals[1]) if len(vals) > 1 else 0)
         self.inbox_done = self.db.get("inboxDone") or {}
 
     @property
@@ -353,13 +372,18 @@ class GuildData:
         rows.sort(key=lambda r: (r["have"] / r["target"], r["name"]))
         return rows
 
+    def category(self, item_id) -> str:
+        c = self.item_class.get(int(item_id)) if str(item_id).isdigit() else None
+        return category_of(*c) if c else "Other"
+
     def bank_items(self) -> list[dict]:
         totals: dict = {}
         for s in self.bank.values():
             if isinstance(s, dict) and not s.get("retired"):
                 for item_id, c in (s.get("items") or {}).items():
                     totals[item_id] = totals.get(item_id, 0) + int(c or 0)
-        return sorted(({"id": i, "name": self.item_name(i), "count": c} for i, c in totals.items()), key=lambda r: r["name"])
+        return sorted(({"id": i, "name": self.item_name(i), "count": c, "category": self.category(i)} for i, c in totals.items()),
+                      key=lambda r: r["name"])
 
     def is_designated(self, who: str, prof: str) -> bool:
         des = ((self.g.get("policy") or {}).get("designated") or {}).get(prof) or {}

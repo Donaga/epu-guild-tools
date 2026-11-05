@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.7
+
+- Bank page: items grouped by category (Cloth, Herbs, Metal & Stone, Consumables, Bags, Weapons & Armor and so on), most plentiful first, with a category dropdown.
+- Discord: the status post groups the bank the same way, with an emoji per category.
+
 ## 0.8.6
 
 - Bank stock leaves out soulbound items (Hearthstone, bind-on-pickup gear) and quest items, since they can't be given away.

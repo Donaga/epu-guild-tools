@@ -798,6 +798,7 @@ end
 UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
+  bank = { cat = nil },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "all", role = nil, review = nil },
@@ -901,6 +902,21 @@ Views.shopping = {
 -- Bank ----------------------------------------------------------------------
 Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
+  tools = function(bar)
+    UI.bankCatChip = DropChip(bar, 150, "Show one kind of item", function()
+      local counts = {}
+      for _, s in pairs((ns.G() or {}).bank or {}) do
+        if not s.retired then
+          for id in pairs(s.items or {}) do local c = ns.ItemCategory(id); counts[c] = (counts[c] or 0) + 1 end
+        end
+      end
+      local items = { { label = "All categories", value = false } }
+      for _, c in ipairs(ns.CATEGORIES) do
+        if counts[c] then items[#items + 1] = { label = c, value = c, right = tostring(counts[c]) } end
+      end
+      return items
+    end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil end)
+  end,
   rows = function(g, q)
     local totals, holders = {}, {}
     for alt, s in pairs(g.bank) do
@@ -911,18 +927,35 @@ Views.bank = {
         end
       end
     end
-    local out = {}
+    -- grouped by category, each under a header, most plentiful first
+    local groups, order = {}, {}
+    for i, c in ipairs(ns.CATEGORIES) do order[c] = i end
+    local only = UI.state.bank.cat
     for id, c in pairs(totals) do
       local name = ns.ItemName(id, true)
-      if Match(q, name, holders[id]) then
-        out[#out + 1] = {
+      local cat = ns.ItemCategory(id)
+      if (not only or cat == only) and Match(q, name, holders[id], cat) then
+        groups[cat] = groups[cat] or {}
+        table.insert(groups[cat], {
           key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-          title = name, sub = holders[id], right = tostring(c), sort = name,
+          title = name, sub = holders[id], right = tostring(c), count = c, sort = name,
           onClick = function() UI:OpenDetails("item", id) end,
-        }
+        })
       end
     end
-    table.sort(out, function(a, b) return a.sort < b.sort end)
+    local cats = {}
+    for cat in pairs(groups) do cats[#cats + 1] = cat end
+    table.sort(cats, function(a, b) return (order[a] or 99) < (order[b] or 99) end)
+    local out = {}
+    for _, cat in ipairs(cats) do
+      local list = groups[cat]
+      table.sort(list, function(a, b) if a.count ~= b.count then return a.count > b.count end return a.sort < b.sort end)
+      local total = 0
+      for _, r in ipairs(list) do total = total + r.count end
+      out[#out + 1] = { key = "cat:" .. cat, title = "|cfff2c14e" .. cat .. "|r",
+        sub = #list .. (#list == 1 and " kind of item" or " kinds of items"), right = tostring(total) }
+      for _, r in ipairs(list) do out[#out + 1] = r end
+    end
     return out
   end,
   footer = function(g)
@@ -2319,6 +2352,10 @@ function UI:Refresh()
     local stKey = v.stateKey or (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
     if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
+    if v == Views.bank then
+      self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
+      self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
+    end
     if v == Views.roster then
       local st = self.state.roster
       self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Any role")
