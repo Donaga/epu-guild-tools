@@ -190,6 +190,14 @@ function ns.ItemIcon(id)
   return (select(10, GetItemInfo(id)))
 end
 
+-- How many the player carries. Newer clients moved GetItemCount to C_Item.
+function ns.ItemCount(id)
+  local f = (C_Item and C_Item.GetItemCount) or GetItemCount
+  if not f or not id then return 0 end
+  local ok, n = pcall(f, id)
+  return (ok and tonumber(n)) or 0
+end
+
 -- Coloured item name, or a placeholder while the client fetches item data.
 function ns.ItemName(id, plain)
   local name, _, quality = GetItemInfo(id)

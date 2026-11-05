@@ -392,8 +392,9 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
   if type(b.profiles) == "table" then
     for who, p in pairs(b.profiles) do
       if type(p) == "table" and type(p.t) == "number" and (trusted or who == sender) then
-        local cur = g.profiles[who]
+        local cur = ns.Real(g, "profiles", who, g.profiles[who])
         if not cur or p.t > cur.t then
+          ns.Confirm(g, "profiles", who)
           g.profiles[who] = { t = p.t, roles = type(p.roles) == "string" and p.roles:sub(1, 3) or nil,
             lf = type(p.lf) == "string" and p.lf:sub(1, 60) or nil }
           changed = true
@@ -404,8 +405,9 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
 
   if type(b.feed) == "table" then
     for id, e in pairs(b.feed) do
-      if type(e) == "table" and type(e.t) == "number" and type(e.text) == "string" and not g.feed[id]
+      if type(e) == "table" and type(e.t) == "number" and type(e.text) == "string" and not ns.Real(g, "feed", id, g.feed[id])
         and (trusted or e.who == sender) then
+        ns.Confirm(g, "feed", id)
         g.feed[id] = { t = e.t, who = e.who, kind = e.kind, text = e.text:sub(1, 120) }
         changed = true
         if not catchingUp and e.who ~= ns.me and ns.Notify and ns.db and ns.db.settings.milestones ~= false
@@ -418,8 +420,9 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
 
   if trusted and type(b.news) == "table" then
     for id, e in pairs(b.news) do
-      local cur = g.news[id]
+      local cur = ns.Real(g, "news", id, g.news[id])
       if type(e) == "table" and type(e.u) == "number" and (not cur or e.u > (cur.u or 0)) then
+        ns.Confirm(g, "news", id)
         g.news[id] = { t = e.t, u = e.u, by = e.by, title = e.title, text = e.text, removed = e.removed, via = e.via,
           quiet = e.quiet and true or nil }
         changed = true
@@ -430,8 +433,9 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
 
   if trusted and type(b.joined) == "table" then
     for who, j in pairs(b.joined) do
-      local cur = g.joined[who]
+      local cur = ns.Real(g, "joined", who, g.joined[who])
       if type(j) == "table" and type(j.t) == "number" and (not cur or j.t < cur.t) then
+        ns.Confirm(g, "joined", who)
         g.joined[who] = { t = j.t, r = math.max(j.r or 0, cur and cur.r or 0), seed = j.seed }
         changed = true
       end
@@ -443,10 +447,11 @@ end
 function ns.DeltaGuild(b, since)
   local g = ns.GuildStore()
   if not g then return end
-  for who, p in pairs(g.profiles) do if (p.t or 0) > since then b.profiles = b.profiles or {}; b.profiles[who] = p end end
-  for id, e in pairs(g.feed) do if (e.t or 0) > since then b.feed = b.feed or {}; b.feed[id] = e end end
-  for id, e in pairs(g.news) do if (e.u or 0) > since then b.news = b.news or {}; b.news[id] = e end end
-  for who, j in pairs(g.joined) do if (j.r or j.t or 0) > since then b.joined = b.joined or {}; b.joined[who] = j end end
+  local U = ns.Unconf
+  for who, p in pairs(g.profiles) do if (p.t or 0) > since and not U(g, "profiles", who) then b.profiles = b.profiles or {}; b.profiles[who] = p end end
+  for id, e in pairs(g.feed) do if (e.t or 0) > since and not U(g, "feed", id) then b.feed = b.feed or {}; b.feed[id] = e end end
+  for id, e in pairs(g.news) do if (e.u or 0) > since and not U(g, "news", id) then b.news = b.news or {}; b.news[id] = e end end
+  for who, j in pairs(g.joined) do if (j.r or j.t or 0) > since and not U(g, "joined", who) then b.joined = b.joined or {}; b.joined[who] = j end end
 end
 
 ---------------------------------------------------------------------------

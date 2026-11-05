@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.3
+
+- **Fixed: the Needs page was blank for some players** (or kept showing the last page you had open). It used a game function that WoW: Forever has moved. A page that ever hits an error now says so instead of showing stale rows.
+- **Syncing runs by itself.** At login the addon keeps trying until the guild has loaded, then asks for updates. It asks again when an officer comes online, after an officer's 15-minute check-in shows something new, and every 15 minutes while it's still missing data. `/epu sync` is only a backup now.
+- **Fixed: officer data could be thrown away right after login** if it arrived before the guild roster had loaded. It's now held until the roster loads.
+- **Sync arrives in pieces, most important first:** needs and bank, then requests and donations, then announcements, then crafters and recipes. Each piece is kept as it arrives, so a lost message only costs that piece, and it's re-asked automatically.
+- **No officer online? Guildmates help.** A member who already has the guild's data passes it on to someone who has none. It's marked **Unconfirmed** in the sidebar and footer until an officer's addon checks it. Passed-on data only fills gaps, never overrides real data, never pops up announcements, and is never passed on again. Anything an officer doesn't have is dropped.
+- **New Sync tab:** when each member last synced, from whom, what came across, and their addon version (older versions in red). *This PC* shows your own sync history. Hover the status at the bottom of the sidebar for details; click it to sync now.
+
 ## 0.9.2
 
 - Fixed: "Interface action failed because of an AddOn". Announcements and update notices now use the addon's own pop-up instead of Blizzard's shared dialog boxes, which an addon can taint for Blizzard's own dialogs. The addon also no longer changes the guild window's "Show offline members" setting.

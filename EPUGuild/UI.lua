@@ -25,6 +25,8 @@ local C = {
 }
 local PILL = {
   pending  = { "Pending",  C.goldBg,  C.gold },
+  sync_wait   = { "Waiting",     C.goldBg, C.gold },
+  sync_unconf = { "Unconfirmed", C.goldBg, C.gold },
   open     = { "Pending",  C.goldBg,  C.gold },
   approved = { "Approved", C.greenBg, C.green },
   filled   = { "Filled",   C.panel2,  C.muted },
@@ -364,6 +366,21 @@ goldText:SetPoint("BOTTOMLEFT", 10, 30)
 local syncText = Font(side, 10, C.muted)
 syncText:SetPoint("BOTTOMLEFT", 10, 12)
 syncText:SetWidth(SIDEBAR_W - 16)
+-- hover the status line for the details
+local syncHover = CreateFrame("Frame", nil, side)
+syncHover:SetPoint("BOTTOMLEFT", 4, 6); syncHover:SetPoint("BOTTOMRIGHT", -4, 6); syncHover:SetHeight(20)
+syncHover:EnableMouse(true)
+syncHover:SetScript("OnEnter", function(self)
+  if not ns.SyncStatus then return end
+  local label, _, long = ns.SyncStatus()
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:AddLine(label, 1, 1, 1)
+  if long and long ~= "" then GameTooltip:AddLine(long, 0.8, 0.8, 0.8, true) end
+  GameTooltip:AddLine("Addon version " .. ns.VERSION, 0.5, 0.5, 0.5)
+  GameTooltip:Show()
+end)
+syncHover:SetScript("OnLeave", function() GameTooltip:Hide() end)
+syncHover:SetScript("OnMouseUp", function() ns.FullSync() end)
 local sfline = Tex(side, "BORDER", C.line)
 sfline:SetPoint("BOTTOMLEFT", 6, 52); sfline:SetPoint("BOTTOMRIGHT", -6, 52); sfline:SetHeight(1)
 
@@ -815,6 +832,7 @@ UI.state = {
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "all", role = nil, review = nil },
+  sync = { filter = "guild" },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
 local REQ_FILTERS = { { "open", "Open" }, { "pending", "Pending" }, { "approved", "Approved / accepted" }, { "filled", "Filled / made" },
@@ -831,7 +849,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "officer" }
+local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 -- A toolbar button that opens a dropdown menu.
@@ -865,7 +883,7 @@ Views.needs = {
       local name = ns.ItemName(n.id, true)
       if (st.filter == "all" or (st.filter == "low" and n.critical) or (st.filter == "goal" and n.kind == "goal")) and Match(q, name) then
         local color = n.frac < 0.5 and C.red or (n.frac < 1 and C.gold or C.green)
-        local carry = GetItemCount(n.id) or 0
+        local carry = ns.ItemCount(n.id)
         local id = n.id
         out[#out + 1] = {
           key = "need:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)),
@@ -1138,6 +1156,83 @@ Views.donations = {
     return #names > 0 and ("Top donors, 30 days: " .. table.concat(names, ", ")) or "Mail or trades to a bank character are logged automatically."
   end,
   empty = "No donations logged yet.",
+}
+
+-- Sync ------------------------------------------------------------------------
+local SYNC_KIND = { asked = "Asked", sent = "Answered", relayed = "Passed on", officer = "Synced", relay = "Unconfirmed",
+  dropped = "Cleaned up", checkin = "Check-in", behind = "Behind" }
+Views.sync = {
+  label = "Sync", icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", stateKey = "sync",
+  chips = { { "guild", "Members" }, { "all", "Whole roster" }, { "mine", "This PC" } },
+  tools = function(bar)
+    bar:Add(Btn(bar, "Sync now", 80, 22, "accent"), "right", function() ns.FullSync() end,
+      "Ask online officers for everything again (it also happens by itself)")
+  end,
+  rows = function(g, q)
+    local st, out = UI.state.sync, {}
+    if st.filter == "mine" then
+      for i, e in ipairs(g.syncLog or {}) do
+        if Match(q, e.text, e.who) then
+          out[#out + 1] = {
+            key = "synclog:" .. i, title = e.text or "?", titleColor = (e.kind == "relay" or e.kind == "behind") and C.gold or C.text,
+            sub = (SYNC_KIND[e.kind] or e.kind or "") .. "  ·  " .. Ago(e.t),
+          }
+        end
+      end
+      return out
+    end
+    local reports = {}
+    for _, r in ipairs(ns.SyncReports()) do reports[r.name] = r end
+    if st.filter == "all" then
+      for name in pairs(ns.roster) do reports[name] = reports[name] or { name = name, none = true } end
+    end
+    local list = {}
+    for _, r in pairs(reports) do list[#list + 1] = r end
+    table.sort(list, function(a, b)
+      if (a.none or false) ~= (b.none or false) then return not a.none end
+      return math.max(a.t or 0, a.asked or 0) > math.max(b.t or 0, b.asked or 0)
+    end)
+    local newest = ns.newestVersion or ns.VERSION
+    for _, r in ipairs(list) do
+      if Match(q, r.name, r.from, r.what, r.ver) then
+        local sub, pill
+        if r.none then
+          sub = "No addon seen yet"
+        elseif r.t then
+          sub = ((r.kind == "relay") and "Unconfirmed copy from " or "Synced from ") .. tostring(r.from or "?") .. " " .. Ago(r.t)
+            .. "  ·  " .. tostring(r.what or "")
+          if r.kind == "relay" then pill = "sync_unconf" end
+          if r.asked and r.asked > r.t + 60 then sub = "Asked " .. Ago(r.asked) .. ", no answer yet  ·  last: " .. sub; pill = "sync_wait" end
+        elseif r.asked then
+          sub = "Asked " .. Ago(r.asked) .. ", hasn't synced yet"
+          pill = "sync_wait"
+        else
+          sub = r.from or "Waiting for guild data"
+        end
+        local old = r.ver and ns.VersionNumber(r.ver) < ns.VersionNumber(newest)
+        out[#out + 1] = {
+          key = "sync:" .. r.name, dot = ns.roster[r.name] ~= nil and ns.roster[r.name].online == true,
+          title = ns.WhoLabel and ns.WhoLabel(r.name) or r.name, titleColor = r.none and C.muted or C.text,
+          sub = sub, pill = pill,
+          right = r.ver and ("v" .. r.ver) or nil, rightColor = old and C.red or C.muted,
+          tip = old and { " ", "Older addon version: they should update in the CurseForge app." } or nil,
+        }
+      end
+    end
+    return out
+  end,
+  footer = function(g)
+    if UI.state.sync.filter == "mine" then return "What this PC's addon sent and received. Kept on this PC only." end
+    local n, day, old = 0, 0, 0
+    local newest = ns.newestVersion or ns.VERSION
+    for _, r in ipairs(ns.SyncReports()) do
+      n = n + 1
+      if r.t and ns.Now() - r.t < 86400 then day = day + 1 end
+      if r.ver and ns.VersionNumber(r.ver) < ns.VersionNumber(newest) then old = old + 1 end
+    end
+    return n .. " with the addon  ·  " .. day .. " synced today" .. (old > 0 and ("  ·  |cffff6b6b" .. old .. " on an older version|r") or "")
+  end,
+  empty = "Nothing yet. Members show up here as their addon syncs.",
 }
 
 -- Crafters ------------------------------------------------------------------
@@ -2033,7 +2128,7 @@ function UI:FillDetails()
     det:Reset(ns.ItemIcon(r.item), Quality(r.item), ns.ItemName(r.item, true), p[1] .. "  ·  requested " .. Ago(r.t))
     det:Text("Requested by " .. ns.WhoLabel(r.who) .. ((r.via == "discord") and " via Discord" or ""))
     if r.by and r.status ~= "pending" then det:Text("Last changed by " .. r.by .. " " .. Ago(r.u), C.muted) end
-    det:Text("In bank: " .. ns.BankCount(r.item) .. "   You carry: " .. (GetItemCount(r.item) or 0), C.muted)
+    det:Text("In bank: " .. ns.BankCount(r.item) .. "   You carry: " .. ns.ItemCount(r.item), C.muted)
     det:Gap()
     local own, pending = (r.who == ns.me), (r.status == "pending" or r.status == "open")
     local canEdit = officer or (own and pending)
@@ -2087,7 +2182,7 @@ function UI:FillDetails()
     if not v then return UI:CloseDetails() end
     local target, nkind = ns.NeedEntry(v)
     det:Reset(ns.ItemIcon(key), Quality(key), ns.ItemName(key, true), (nkind == "goal" and "One-time goal" or "Restock") .. "  ·  target " .. target)
-    det:Text("In bank: " .. ns.BankCount(key) .. "   You carry: " .. (GetItemCount(key) or 0))
+    det:Text("In bank: " .. ns.BankCount(key) .. "   You carry: " .. ns.ItemCount(key))
     det:Text("Mail donations to " .. ns.BankAltNames(), C.muted)
     det:Gap()
     if officer then
@@ -2338,14 +2433,20 @@ function UI:Refresh()
 
   -- sidebar: officer page visibility, badges
   local y = -8
+  local nVisible = 0
+  for _, key in ipairs(ORDER) do if not Views[key].officer or officer then nVisible = nVisible + 1 end end
+  local step = math.max(26, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local visible = not v.officer or officer
     b:SetShown(visible)
     if visible then
-      b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, y); y = y - 30
+      b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, y); y = y - step
       local n, bg, fg = 0, C.goldBg, C.gold
-      if g and v.count then n, bg, fg = v.count(g) end
+      if g and v.count then
+        local ok, a, b2, c2 = pcall(v.count, g)
+        if ok then n, bg, fg = a, b2 or bg, c2 or fg else n = 0 end
+      end
       if n and n > 0 then
         b.badge.text:SetText(n > 99 and "99+" or tostring(n))
         b.badge.bg:SetColorTexture(bg[1], bg[2], bg[3], 1)
@@ -2371,11 +2472,15 @@ function UI:Refresh()
 
   local gold = 0
   for _, s in pairs(g.bank) do if not s.retired then gold = gold + (s.money or 0) end end
-  goldText:SetText(Money(gold))
+  goldText:SetText(Money(gold) .. "  |cff7e8590on hand|r")
   if ns.newestVersion then
     syncText:SetText("|cfff2c14eUpdate available: v" .. ns.newestVersion .. "|r")
+  elseif ns.SyncStatus then
+    local label, tone = ns.SyncStatus()
+    local hex = (tone == "green" and "6fcf73") or (tone == "gold" and "f2c14e") or "7e8590"
+    syncText:SetText("|cff" .. hex .. label .. "|r")
   else
-    syncText:SetText("on hand  ·  v" .. ns.VERSION)
+    syncText:SetText("v" .. ns.VERSION)
   end
 
   local v = Views[self.view]
@@ -2433,7 +2538,17 @@ function UI:Refresh()
 
   local width = (scroll:GetWidth() or 400)
   child:SetWidth(width)
-  local rows = v.rows(g, Q())
+  local okRows, rows = pcall(v.rows, g, Q())
+  if not okRows then
+    -- never leave the last page's rows on screen under this page's name
+    if not self.rowErr then ns.Print("|cffff6060This page hit an error:|r " .. tostring(rows) .. "  (please send this to an officer)") end
+    self.rowErr = true
+    ShowRows({}, width)
+    self.empty:SetText("|cffff6060This page couldn't load.|r Try /reload. If it keeps happening, tell an officer\n(the error is in your chat window).")
+    self.empty:Show()
+    self.footerText:SetText("")
+    return
+  end
   ShowRows(rows, width)
   self.empty:SetWidth(math.max(200, width - 60))
   local emptyText = v.empty
@@ -2441,12 +2556,16 @@ function UI:Refresh()
   if Q() == "" and g0 and not g0.syncedAt and not ns.IsTrusted(ns.me) then
     -- a member who hasn't received the guild's data yet
     emptyText = (emptyText and (emptyText .. "\n\n") or "")
-      .. "|cfff2c14eWaiting for guild data.|r It's sent by an officer who's online with the addon.\n"
-      .. ((ns.QueueLength and ns.QueueLength() > 0) and "Syncing now..." or "Type |cffffffff/epu sync|r to ask again once an officer is on.")
+      .. "|cfff2c14eWaiting for guild data.|r It arrives by itself as soon as an officer\n"
+      .. "(or a guildmate with the addon) is online. Nothing to do on your end."
   end
   self.empty:SetText(Q() ~= "" and ("Nothing matches \"" .. Q() .. "\".") or emptyText)
   self.empty:SetShown(#rows == 0)
-  self.footerText:SetText(v.footer and v.footer(g) or "")
+  local foot = v.footer and v.footer(g) or ""
+  if ns.HasUnconfirmed and ns.HasUnconfirmed() then
+    foot = "|cfff2c14eUnconfirmed:|r passed on by a guildmate; an officer's addon will check it." .. ((foot ~= "") and ("  " .. foot) or "")
+  end
+  self.footerText:SetText(foot)
   UpdateThumb()
   -- don't wipe what an officer is typing in the details panel
   if det:IsShown() and not (self.focusBox and self.focusBox:GetParent() == det.body) then self:FillDetails() end

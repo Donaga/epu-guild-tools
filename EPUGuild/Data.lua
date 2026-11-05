@@ -108,6 +108,8 @@ ns.On("GUILD_ROSTER_UPDATE", function()
   local g = ns.G()
   if g then g.members = names end
   if ns.TrackRoster then pcall(ns.TrackRoster, ns.roster) end
+  if ns.WatchOfficers then pcall(ns.WatchOfficers, ns.roster) end
+  if ns.ReplayHeld then ns.ReplayHeld() end
   ns.Changed()
 end)
 
@@ -130,6 +132,43 @@ function ns.IsTrusted(name)
   if rankName and rankName:lower():find("bank") then return true end
   return false
 end
+
+---------------------------------------------------------------------------
+-- Unconfirmed records: data a fellow member relayed to us before any officer
+-- was online. It fills empty pages, but it never overrides real data, is
+-- never passed on, and is replaced (or dropped) by the next officer sync.
+---------------------------------------------------------------------------
+function ns.Unconf(g, f, k)
+  local u = g and g.unconf and g.unconf[f]
+  return u ~= nil and u[k] == true
+end
+
+function ns.Confirm(g, f, k)
+  local u = g and g.unconf and g.unconf[f]
+  if u and u[k] then
+    u[k] = nil
+    if next(u) == nil then g.unconf[f] = nil end
+  end
+end
+
+function ns.MarkUnconf(g, f, k)
+  g.unconf = g.unconf or {}
+  g.unconf[f] = g.unconf[f] or {}
+  g.unconf[f][k] = true
+end
+
+function ns.HasUnconfirmed()
+  local g = ns.G()
+  return g ~= nil and g.unconf ~= nil and next(g.unconf) ~= nil
+end
+
+-- the current record, unless it's only an unconfirmed relay (then real data replaces it)
+local function Real(g, f, k, v)
+  if ns.Unconf(g, f, k) then return nil end
+  return v
+end
+ns.Real = Real
+local Confirm = ns.Confirm
 
 ---------------------------------------------------------------------------
 -- Merge incoming data. Every record carries a version stamp; newer wins.
@@ -165,18 +204,20 @@ function ns.Merge(sender, b, catchingUp)
   local changed = false
 
   local nd = b.needs
-  if trusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" and nd.v > g.needs.v then
+  if trusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" and (nd.v > g.needs.v or ns.Unconf(g, "needs", "list")) then
     g.needs = { v = nd.v, list = nd.list }
+    Confirm(g, "needs", "list")
     changed = true
   end
 
   if trusted and type(b.bank) == "table" then
     for alt, snap in pairs(b.bank) do
       if type(snap) == "table" and type(snap.v) == "number" then
-        local cur = g.bank[alt]
+        local cur = Real(g, "bank", alt, g.bank[alt])
         if not cur or snap.v > cur.v then
           snap.items = snap.items or {}
           g.bank[alt] = snap
+          Confirm(g, "bank", alt)
           changed = true
         end
       end
@@ -188,11 +229,12 @@ function ns.Merge(sender, b, catchingUp)
       -- Members may only create or cancel their own requests; approving,
       -- rejecting and filling come from officers.
       if type(r) == "table" and type(r.u) == "number" and (r.item or r.spell)
-        and (trusted or (r.who == sender and MEMBER_STATES[r.status]) or ns.CrafterMayUpdate(sender, g.requests[id], r)) then
-        local cur = g.requests[id]
+        and (trusted or (r.who == sender and MEMBER_STATES[r.status]) or ns.CrafterMayUpdate(sender, Real(g, "req", id, g.requests[id]), r)) then
+        local cur = Real(g, "req", id, g.requests[id])
         if not cur or r.u > cur.u then
           local oldStatus = cur and cur.status
           g.requests[id] = r
+          Confirm(g, "req", id)
           changed = true
           if ns.OnRequestChanged and (oldStatus or not catchingUp) then pcall(ns.OnRequestChanged, id, r, oldStatus) end
         end
@@ -202,9 +244,10 @@ function ns.Merge(sender, b, catchingUp)
 
   if trusted and type(b.don) == "table" then
     for id, d in pairs(b.don) do
-      local cur = g.donations[id]
+      local cur = Real(g, "don", id, g.donations[id])
       if type(d) == "table" and (not cur or (tonumber(d.u) or 0) > (tonumber(cur.u) or 0)) then
         g.donations[id] = d          -- new, or corrected/voided by an officer
+        Confirm(g, "don", id)
         changed = true
       end
     end
@@ -230,9 +273,10 @@ function ns.Merge(sender, b, catchingUp)
   if type(b.recipes) == "table" then
     for who, rec in pairs(b.recipes) do
       if type(rec) == "table" and type(rec.t) == "number" and type(rec.profs) == "table" and (trusted or who == sender) then
-        local cur = g.recipes[who]
+        local cur = Real(g, "recipes", who, g.recipes[who])
         if not cur or rec.t > cur.t then
           g.recipes[who] = rec
+          Confirm(g, "recipes", who)
           changed = true
           ns.recipeIndex = nil
         end
@@ -242,10 +286,11 @@ function ns.Merge(sender, b, catchingUp)
 
   if type(b.mats) == "table" then
     for key, m in pairs(b.mats) do
-      local cur = g.mats[key]
+      local cur = Real(g, "mats", key, g.mats[key])
       if type(key) == "string" and type(m) == "table" and type(m.t) == "number" and type(m.r) == "table"
         and (not cur or (m.t > (cur.t or 0) and (trusted or sender == m.by))) then
         g.mats[key] = m
+        Confirm(g, "mats", key)
         changed = true
       end
     end
@@ -254,9 +299,10 @@ function ns.Merge(sender, b, catchingUp)
   if type(b.craft) == "table" then
     for who, c in pairs(b.craft) do
       if type(c) == "table" and type(c.t) == "number" and (trusted or who == sender) then
-        local cur = g.crafters[who]
+        local cur = Real(g, "craft", who, g.crafters[who])
         if not cur or c.t > cur.t then
           g.crafters[who] = c
+          Confirm(g, "craft", who)
           changed = true
         end
       end
@@ -270,11 +316,12 @@ function ns.Merge(sender, b, catchingUp)
       if type(a) == "table" and type(a.t) == "number" and type(a.chars) == "table" and type(a.main) == "string" then
         local mine = trusted
         for _, n in pairs(a.chars) do if n == sender then mine = true end end
-        local cur = g.alts[id]
+        local cur = Real(g, "alts", id, g.alts[id])
         if mine and (not cur or a.t > cur.t) then
           local list = {}
           for _, n in ipairs(a.chars) do if type(n) == "string" then list[#list + 1] = n end end
           g.alts[id] = { t = a.t, main = a.main, chars = list }
+          Confirm(g, "alts", id)
           altsChanged = true
         end
       end
@@ -289,156 +336,6 @@ function ns.Merge(sender, b, catchingUp)
   end
   return changed or altsChanged
 end
-
----------------------------------------------------------------------------
--- Sync: a client that logs in sends "H" with its needs/bank versions and the
--- time of its last completed sync. One online officer answers with
--- everything newer ("D", tagged sync = requester). Other officers see that
--- answer go by on the guild channel and stand down, so there's no pile-on.
----------------------------------------------------------------------------
-function ns.EmptyDigest()
-  return { needs = 0, bank = {}, since = 0, ver = ns.VERSION }
-end
-
-function ns.Digest()
-  local g = ns.G()
-  local d = ns.EmptyDigest()
-  if not g then return d end
-  d.needs = g.needs.v
-  d.policy = g.policy.v
-  for alt, s in pairs(g.bank) do d.bank[alt] = s.v end
-  d.since = g.syncedAt or 0
-  return d
-end
-
-function ns.Delta(d)
-  local g = ns.G()
-  if not g then return nil end
-  local b = {}
-  local since = tonumber(d.since) or 0
-  if g.needs.v > (tonumber(d.needs) or 0) then b.needs = g.needs end
-  if (g.policy.v or 0) > (tonumber(d.policy) or 0) then b.policy = g.policy end
-  for alt, s in pairs(g.bank) do
-    if s.v > ((type(d.bank) == "table" and tonumber(d.bank[alt])) or 0) then
-      b.bank = b.bank or {}
-      b.bank[alt] = s
-    end
-  end
-  for id, r in pairs(g.requests) do
-    if r.u > since then b.req = b.req or {}; b.req[id] = r end
-  end
-  for id, x in pairs(g.donations) do
-    if math.max(x.t or 0, tonumber(x.u) or 0) > since then b.don = b.don or {}; b.don[id] = x end
-  end
-  for who, c in pairs(g.crafters) do
-    if c.t > since then b.craft = b.craft or {}; b.craft[who] = c end
-  end
-  for id, a in pairs(g.alts) do
-    if (a.t or 0) > since then b.alts = b.alts or {}; b.alts[id] = a end
-  end
-  for who, rec in pairs(g.recipes) do
-    if (rec.t or 0) > since then b.recipes = b.recipes or {}; b.recipes[who] = rec end
-  end
-  for key, m in pairs(g.mats) do
-    if (m.t or 0) > since then b.mats = b.mats or {}; b.mats[key] = m end
-  end
-  if ns.DeltaGuild then ns.DeltaGuild(b, since) end
-  return b
-end
-
-ns.pendingHello = {}
-
--- A guildmate's addon is newer than ours: tell the player once per session.
-
-function ns.NoteVersion(sender, ver)
-  if type(ver) ~= "string" or ns.VersionNumber(ver) <= ns.VersionNumber(ns.VERSION) then return end
-  if ns.newestVersion and ns.VersionNumber(ns.newestVersion) >= ns.VersionNumber(ver) then return end
-  ns.newestVersion = ver
-  ns.Print("|cfff2c14eUpdate available:|r version " .. ver .. " (you have " .. ns.VERSION .. "). Update it in the CurseForge app (or WowUp / the EPU updater), then /reload.")
-  if ns.Dialog then
-    ns.Dialog("EPU Guild Tools " .. ver .. " is out", "You have " .. ns.VERSION .. ".\n\nUpdate it in the CurseForge app (or WowUp, or the EPU updater), then type /reload.\n\nNot installed through an app yet? Type /download in the guild Discord.")
-  end
-  ns.Changed()
-end
-
-ns.comm.H = function(sender, d)
-  if type(d) ~= "table" then return end
-  ns.NoteVersion(sender, d.ver)
-  if not ns.IsTrusted(ns.me) then return end
-  ns.pendingHello[sender] = d
-  C_Timer.After(1 + math.random() * 5, function()
-    local dd = ns.pendingHello[sender]
-    ns.pendingHello[sender] = nil
-    if not dd then return end          -- another officer already answered
-    local b = ns.Delta(dd)
-    if not b then return end
-    b.sync = sender
-    b.ver = ns.VERSION
-    ns.Send("D", b)
-    if ns.IsTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
-  end)
-end
-
-ns.comm.D = function(sender, b, channel)
-  if type(b) ~= "table" then return end
-  if b.ver then ns.NoteVersion(sender, b.ver) end
-  ns.Merge(sender, b, b.sync ~= nil)
-  if b.sync and channel == "GUILD" and ns.IsTrusted(sender) then
-    if b.sync == ns.me then
-      local g = ns.G()
-      -- Small overlap margin so records stamped around the hello aren't missed.
-      if g and ns.helloAt then g.syncedAt = math.max(g.syncedAt or 0, ns.helloAt - 300) end
-    else
-      ns.pendingHello[b.sync] = nil
-    end
-  end
-end
-
-function ns.SendHello()
-  if not IsInGuild() then return end
-  ns.helloAt = ns.Now()
-  ns.Send("H", ns.Digest())
-end
-
-function ns.FullSync()
-  if not IsInGuild() then return ns.Print("You are not in a guild.") end
-  ns.helloAt = ns.Now()
-  ns.Send("H", ns.EmptyDigest())
-  ns.Print("Asked online officers for a full sync.")
-end
-
--- Re-announce our own records so officers who were offline catch up.
-function ns.BroadcastMine()
-  local g = ns.G()
-  if not g then return end
-  local b, any = {}, false
-  if g.crafters[ns.me] then b.craft = { [ns.me] = g.crafters[ns.me] }; any = true end
-  local id = ns.db and ns.db.accountId
-  if id and g.alts[id] then b.alts = { [id] = g.alts[id] }; any = true end
-  if g.recipes[ns.me] then b.recipes = { [ns.me] = g.recipes[ns.me] }; any = true end
-  if g.profiles and g.profiles[ns.me] then b.profiles = { [ns.me] = g.profiles[ns.me] }; any = true end
-  for id, r in pairs(g.requests) do
-    if r.who == ns.me and ns.IsActiveRequest(r) then
-      b.req = b.req or {}
-      b.req[id] = r
-      any = true
-    end
-  end
-  if any then ns.Send("D", b) end
-end
-
-ns.On("PLAYER_ENTERING_WORLD", function(isLogin, isReload)
-  if isLogin == false and isReload == false then return end
-  ns.RequestRoster()
-  C_Timer.After(8, function()
-    if not IsInGuild() then return end
-    ns.RequestRoster()
-    ns.ScanProfessions()
-    ns.PublishAlts()
-    ns.SendHello()
-    C_Timer.After(4, ns.BroadcastMine)
-  end)
-end)
 
 ---------------------------------------------------------------------------
 -- Bank helpers
