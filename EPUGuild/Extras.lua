@@ -690,3 +690,74 @@ ns.On("PLAYER_LOGIN", function()
     if ns.db and not ns.db.settings.welcomed then ns.ShowWelcome() end
   end)
 end)
+
+
+---------------------------------------------------------------------------
+-- Our own pop-up. Blizzard's shared StaticPopup boxes get "tainted" when an
+-- addon shows one, which can block Blizzard's own dialogs later (Release
+-- Spirit, delete item...). So notices use this frame instead.
+--   ns.Dialog(title, body, { {label, fn}, {label, fn} })
+---------------------------------------------------------------------------
+local dialog
+local function BuildDialog()
+  dialog = CreateFrame("Frame", "EPUGuildDialog", UIParent)
+  dialog:SetSize(360, 160)
+  dialog:SetPoint("TOP", 0, -140)
+  dialog:SetFrameStrata("DIALOG")
+  dialog:EnableMouse(true)
+  dialog:SetMovable(true)
+  dialog:RegisterForDrag("LeftButton")
+  dialog:SetScript("OnDragStart", dialog.StartMoving)
+  dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
+  dialog:SetClampedToScreen(true)
+  tinsert(UISpecialFrames, "EPUGuildDialog")
+  local bg = dialog:CreateTexture(nil, "BACKGROUND")
+  bg:SetAllPoints()
+  bg:SetColorTexture(0.106, 0.118, 0.137, 0.97)
+  local top = dialog:CreateTexture(nil, "BORDER")
+  top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(2)
+  top:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
+  local crest = dialog:CreateTexture(nil, "ARTWORK")
+  crest:SetTexture(ns.LOGO)
+  crest:SetSize(30, 30)
+  crest:SetPoint("TOPLEFT", 12, -10)
+  dialog.title = DText(dialog, 14, GOLD)
+  dialog.title:SetPoint("TOPLEFT", 50, -12)
+  dialog.title:SetPoint("RIGHT", -14, 0)
+  dialog.body = DText(dialog, 12, { 0.85, 0.86, 0.88 })
+  dialog.body:SetPoint("TOPLEFT", 50, -34)
+  dialog.body:SetPoint("RIGHT", -16, 0)
+  dialog.body:SetWordWrap(true)
+  dialog.buttons = {}
+  for i = 1, 2 do
+    local b = DBtn(dialog, "", 110)
+    b:SetHeight(22)
+    dialog.buttons[i] = b
+  end
+  dialog.buttons[1]:SetPoint("BOTTOMRIGHT", -14, 12)
+  dialog.buttons[2]:SetPoint("RIGHT", dialog.buttons[1], "LEFT", -8, 0)
+end
+
+function ns.Dialog(title, body, buttons)
+  if not dialog then BuildDialog() end
+  dialog.title:SetText(title or "")
+  dialog.body:SetText(body or "")
+  buttons = buttons or { { "Okay" } }
+  for i, b in ipairs(dialog.buttons) do
+    local spec = buttons[i]
+    if spec then
+      b.text:SetText(spec[1])
+      b:SetWidth(math.max(80, (b.text:GetStringWidth() or 60) + 24))
+      b:SetScript("OnClick", function()
+        dialog:Hide()
+        if spec[2] then spec[2]() end
+      end)
+      b:Show()
+    else
+      b:Hide()
+    end
+  end
+  dialog:SetHeight(math.max(120, (dialog.body:GetStringHeight() or 40) + 86))
+  dialog:Show()
+  return dialog
+end

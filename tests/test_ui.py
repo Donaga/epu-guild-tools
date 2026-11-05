@@ -126,10 +126,11 @@ A.ex('__ns.UI:CloseDetails()')
 A.ex('SlashCmdList.EPUGUILD("scale 0.9"); SlashCmdList.EPUGUILD("resetwindow")')
 # --- update notice: a guildmate with a newer version logs in ---
 A.ex('__ns.Send("H", {needs = 0, bank = {}, since = 0, ver = "9.9.9"})'); tick(3)
-check("newer version shows the popup once", B.ev("#__popups") == 1 and B.ev("__popups[1][2]") == "9.9.9")
+check("newer version shows the popup once", B.ev("#__dialogs") == 1 and "9.9.9" in B.ev("__dialogs[1][1]"))
 A.ex('__ns.Send("H", {needs = 0, bank = {}, since = 0, ver = "9.9.9"})'); tick(3)
-check("no repeat popup for the same version", B.ev("#__popups") == 1)
-check("older version: no popup", A.ev("#__popups") == 0)
+check("no repeat popup for the same version", B.ev("#__dialogs") == 1)
+check("older version: no popup", A.ev("#__dialogs") == 0)
+check("the addon never uses Blizzard's shared pop-ups (taint)", B.ev("#__popups") == 0 and A.ev("#__popups") == 0)
 
 # --- 1. tooltips ---
 B.ex('GameTooltip._lines = {}; __tooltipHook(GameTooltip, {id = 2589})')

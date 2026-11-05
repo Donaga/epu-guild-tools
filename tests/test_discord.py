@@ -199,10 +199,10 @@ asyncio.run(bot.import_message(fake_msg(901, "@everyone\n**Launch night!**\nGold
 check("re-copying a post that hasn't reached the game rewrites it", len(st.data["inbox"]) == n_before
       and [e for e in st.data["inbox"] if e.get("nid") == "m901"][0]["title"] == "Launch night!")
 core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
-B.ex('__popups = {}')
+B.ex('__dialogs = {}')
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
 check("old announcements show in News", B.ev('__ns.GuildStore().news["m901"].title') == "Launch night!")
-check("but don't pop up or count as unread", B.ev('#__popups') == 0
+check("but don't pop up or count as unread", B.ev('#__dialogs') == 0
       and B.ev('(function() for _, e in ipairs(__ns.UnreadNews()) do if e.id == "m901" then return true end end return false end)()') == False)
 
 # --- in-game message of the day ---

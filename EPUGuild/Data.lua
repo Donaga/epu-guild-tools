@@ -85,13 +85,9 @@ end
 ns.On("GUILD_ROSTER_UPDATE", function()
   local n = GetNumGuildMembers()
   if not n or n == 0 then return end
-  -- Offline members are only listed when "Show offline members" is on; the
-  -- roster page and member review need everyone, so turn it on once.
-  if SetGuildRosterShowOffline and GetGuildRosterShowOffline and not GetGuildRosterShowOffline() and not ns.askedOffline then
-    ns.askedOffline = true
-    SetGuildRosterShowOffline(true)
-    return
-  end
+  -- Modern clients list offline members whatever the guild window's "Show
+  -- offline" box says, so we leave that setting alone (changing it from an
+  -- addon can taint the guild window).
   wipe(ns.roster)
   local names = {}
   for i = 1, n do
@@ -353,18 +349,15 @@ end
 ns.pendingHello = {}
 
 -- A guildmate's addon is newer than ours: tell the player once per session.
-StaticPopupDialogs["EPUGUILD_UPDATE"] = {
-  text = "EPU Guild Tools %s is out (you have %s).\n\nUpdate it in the CurseForge app (or WowUp, or the EPU updater), then type /reload.\n\nNot installed through an app yet? Type /download in the guild Discord.",
-  button1 = OKAY or "Okay",
-  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
-}
 
 function ns.NoteVersion(sender, ver)
   if type(ver) ~= "string" or ns.VersionNumber(ver) <= ns.VersionNumber(ns.VERSION) then return end
   if ns.newestVersion and ns.VersionNumber(ns.newestVersion) >= ns.VersionNumber(ver) then return end
   ns.newestVersion = ver
   ns.Print("|cfff2c14eUpdate available:|r version " .. ver .. " (you have " .. ns.VERSION .. "). Update it in the CurseForge app (or WowUp / the EPU updater), then /reload.")
-  if StaticPopup_Show then StaticPopup_Show("EPUGUILD_UPDATE", ver, ns.VERSION) end
+  if ns.Dialog then
+    ns.Dialog("EPU Guild Tools " .. ver .. " is out", "You have " .. ns.VERSION .. ".\n\nUpdate it in the CurseForge app (or WowUp, or the EPU updater), then type /reload.\n\nNot installed through an app yet? Type /download in the guild Discord.")
+  end
   ns.Changed()
 end
 

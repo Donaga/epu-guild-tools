@@ -253,23 +253,17 @@ function ns.MarkNewsRead(id)
   ns.Changed()
 end
 
-StaticPopupDialogs["EPUGUILD_NEWS"] = {
-  text = "|cfff2c14eGuild announcement|r\n\n%s",
-  button1 = "Got it",
-  button2 = "Open News",
-  OnAccept = function(self) ns.MarkNewsRead(self.data); C_Timer.After(0.3, ns.ShowUnreadNews) end,
-  OnCancel = function(self, _, reason)
-    ns.MarkNewsRead(self.data)
-    if reason == "clicked" and ns.UI then ns.UI:Show(); ns.UI:SetView("news") end
-  end,
-  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
-}
-
 function ns.ShowUnreadNews()
   local e = ns.UnreadNews()[1]
-  if not e or not StaticPopup_Show then return end
+  if not e or not ns.Dialog then return end
   local body = ((e.title and e.title ~= "") and ("|cffffffff" .. e.title .. "|r\n\n") or "") .. (e.text or "") .. "\n\n|cff7e8590- " .. tostring(e.by) .. "|r"
-  StaticPopup_Show("EPUGUILD_NEWS", body, nil, e.id)
+  ns.Dialog("Guild announcement", body, {
+    { "Got it", function() ns.MarkNewsRead(e.id); C_Timer.After(0.3, ns.ShowUnreadNews) end },
+    { "Open News", function()
+      ns.MarkNewsRead(e.id)
+      if ns.UI then ns.UI:Show(); ns.UI:SetView("news") end
+    end },
+  })
 end
 
 ns.On("PLAYER_ENTERING_WORLD", function(isLogin, isReload)
