@@ -35,6 +35,13 @@ check("a genuinely new identical deposit is logged", A.ev(cnt) == 5)
 check("member received guild bank donations", B.ev(cnt) == 5)
 A.ex('__fire("GUILDBANKFRAME_CLOSED")')
 
+# --- a guild with no tabs and no gold yet isn't shown as an empty "Guild Bank" ---
+A.ex('__numTabs = 0; __gbMoneyOverride = 0; __fire("GUILDBANKFRAME_OPENED")'); tick(4)
+check("empty guild bank (no tabs, no gold) is cleared", A.ev('__ns.G().bank["Guild Bank"].retired') == True and B.ev('__ns.G().bank["Guild Bank"].retired') == True)
+A.ex('__fire("GUILDBANKFRAME_CLOSED"); __numTabs = nil; __gbMoneyOverride = nil; __fire("GUILDBANKFRAME_OPENED")'); tick(4)
+check("and comes back once it has tabs", A.ev('__ns.G().bank["Guild Bank"].retired') is None and A.ev("__ns.BankCount(2589)") == 35)
+A.ex('__fire("GUILDBANKFRAME_CLOSED")')
+
 # --- in-game request that Discord should see ---
 B.ex('SlashCmdList.EPUGUILD("request 4306 4 for bags")'); tick(3)
 

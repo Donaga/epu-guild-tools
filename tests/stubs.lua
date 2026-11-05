@@ -220,12 +220,12 @@ Auctionator = { API = { v1 = {
 __gb = { {}, {} }
 __gblog = { {}, {} }
 __gbmoneylog = {}
-function GetNumGuildBankTabs() return 2 end
+function GetNumGuildBankTabs() return __numTabs or 2 end
 function GetGuildBankTabInfo(tab) return "Tab" .. tab, "icon", true end
 function GetCurrentGuildBankTab() return 1 end
 function GetGuildBankItemLink(tab, slot) local x = __gb[tab][slot]; if x then return __link(x[1]) end end
 function GetGuildBankItemInfo(tab, slot) local x = __gb[tab][slot]; if x then return "icon", x[2] end end
-function GetGuildBankMoney() return 5000000 end
+function GetGuildBankMoney() return __gbMoneyOverride or 5000000 end
 function QueryGuildBankTab() end
 function QueryGuildBankLog() end
 function GetNumGuildBankTransactions(tab) return #__gblog[tab] end

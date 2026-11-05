@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.8
+
+- A guild bank with no tabs and no gold isn't listed as an empty "Guild Bank" holder anymore.
+- Gold shows as gold, silver and copper (it was rounded down to whole gold on Forever).
+
 ## 0.8.7
 
 - Bank page: items grouped by category (Cloth, Herbs, Metal & Stone, Consumables, Bags, Weapons & Armor and so on), most plentiful first, with a category dropdown.

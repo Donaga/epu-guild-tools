@@ -182,8 +182,14 @@ local function Box(parent, w, placeholder, numeric)
 end
 
 local function Money(c)
-  if GetCoinTextureString then return GetCoinTextureString(c or 0) end
-  return tostring(math.floor((c or 0) / 10000)) .. "g"
+  c = math.floor(tonumber(c) or 0)
+  if GetCoinTextureString then return GetCoinTextureString(c) end
+  local gold, silver, copper = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
+  local parts = {}
+  if gold > 0 then parts[#parts + 1] = "|cffffd700" .. gold .. "g|r" end
+  if silver > 0 then parts[#parts + 1] = "|cffc7c7cf" .. silver .. "s|r" end
+  if copper > 0 or #parts == 0 then parts[#parts + 1] = "|cffeda55f" .. copper .. "c|r" end
+  return table.concat(parts, " ")
 end
 
 local function Ago(t)

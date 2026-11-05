@@ -54,6 +54,16 @@ function ns.ScanGuildBank()
   end
   local money = (GetGuildBankMoney and GetGuildBankMoney()) or 0
   local cur = g.bank[GB_KEY]
+  -- No tabs bought and no gold yet: there's no guild bank to show. Clear any
+  -- empty entry recorded earlier instead of listing an empty "Guild Bank".
+  if n == 0 and money == 0 then
+    if cur and not cur.retired and ns.IsTrusted(ns.me) then
+      g.bank[GB_KEY] = { v = ns.NextVersion(cur.v), money = 0, items = {}, retired = true, guild = true }
+      ns.Send("D", { bank = { [GB_KEY] = g.bank[GB_KEY] } })
+      ns.Changed()
+    end
+    return
+  end
   if cur and cur.money == money and ns.SameCounts(cur.items, items) then return end
   g.bank[GB_KEY] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, bankTime = ns.Now(), guild = true }
   ns.Changed()
