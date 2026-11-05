@@ -222,6 +222,18 @@ def status_embed(gd: core.GuildData) -> discord.Embed:
     e.add_field(name="Needs", value=_clip(need_lines) if need_lines else "No targets set.", inline=False)
     shop_lines = [f"{r['name']}: {r['buy']}" for r in st["shopping"][:15]]
     e.add_field(name="Shopping list", value=_clip(shop_lines) if shop_lines else "Nothing to buy.", inline=False)
+    items = gd.bank_items()
+    if items:
+        top = sorted(items, key=lambda r: (-r["count"], r["name"]))
+        lines = [f"{r['name']}: {r['count']}" for r in top[:40]]
+        more = len(items) - 40
+        value = _clip(lines, 1000 if more <= 0 else 960)
+        if more > 0 and "more" not in value[-20:]:
+            value += f"\n...and {more} more (`/bank search:` to look one up)"
+        e.add_field(name=f"In the bank ({len(items)} kinds of items)", value=value, inline=False)
+    else:
+        e.add_field(name="In the bank", value="Nothing recorded yet. A bank character's bags count once it logs in with `/epu bankalt on`; "
+                    "open its bank once to add the bank slots.", inline=False)
     e.add_field(name="Gold", value=core.money_text(st["gold"]), inline=True)
     req = f"{st['requests']['pending']} pending, {st['requests']['approved']} approved"
     if st["requests"].get("crafts"):

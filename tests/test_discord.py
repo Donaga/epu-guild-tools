@@ -133,7 +133,7 @@ for f in ("bot.py", "epu_core.py"):
 sys.path.insert(0, cfgdir)
 bot = importlib.import_module("bot")
 emb = bot.status_embed(gd)
-check("status embed builds", emb.title == "Guild Bank Status" and [f.name for f in emb.fields][:4] == ["Needs", "Shopping list", "Gold", "Requests"])
+check("status embed builds", emb.title == "Guild Bank Status" and [f.name.split(" (")[0] for f in emb.fields][:5] == ["Needs", "Shopping list", "In the bank", "Gold", "Requests"])
 check("status channel falls back to request channel", bot.cfg["status_channel_id"] == "2")
 print("   ", emb.fields[0].value, "|", emb.fields[2].value)
 
@@ -237,6 +237,8 @@ check("craft labels", core.status_label(cg.requests["c1"]) == "accepted" and cor
 cr = cg.crafters_for(item_id=30001)
 check("/craft shows skill-ups and materials", cr[0]["skillup"] is True and cg.mats_for(cr[0]["key"]) == [(2996, 3), (2589, 1)])
 emb = bot.request_embed("c1", cg.requests["c1"], cg)
+se = bot.status_embed(cg)
+check("status post lists what's in the bank", any(f.name.startswith("In the bank") and "Bolt of Linen Cloth: 1" in f.value for f in se.fields))
 check("craft request embed", emb.title.startswith("Craft: Linen Bag") and any(f.name == "Crafter" for f in emb.fields))
 he = bot.help_embed()
 check("help post fits Discord's limits (%d chars)" % len(he), len(he) < 6000 and all(len(f.value) <= 1024 for f in he.fields))
