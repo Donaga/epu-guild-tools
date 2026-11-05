@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.6
+
+- Bank stock leaves out soulbound items (Hearthstone, bind-on-pickup gear) and quest items, since they can't be given away.
+- Discord: the status post lists what's in the bank.
+
 ## 0.8.5
 
 - Fixed: Crafters showed "No profession data yet" on WoW: Forever. Professions are now read the way Forever lists them, and update when you learn or skill up a profession.

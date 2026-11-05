@@ -12,6 +12,12 @@ A.ex('__bags[0] = {{4306, 20}, {4306, 5}, {2589, 40}}; __money = 5000000')
 A.ex('SlashCmdList.EPUGUILD("bankalt on")'); tick(8)
 A.ex('SlashCmdList.EPUGUILD("need 2589 200")'); A.ex('SlashCmdList.EPUGUILD("need 14047 50 goal")'); tick(3)
 
+# soulbound items (Hearthstone, BoP gear) aren't guild stock
+A.ex('__bags[1] = {{6948, 1, true}, {30050, 1, true}, {4306, 3}}; __fire("BAG_UPDATE")'); tick(8)
+check("Hearthstone and soulbound gear left out of bank stock",
+      A.ev('__ns.BankCount(6948)') == 0 and A.ev('__ns.BankCount(30050)') == 0 and A.ev('__ns.BankCount(4306)') == 28)
+A.ex('__bags[1] = nil; __fire("BAG_UPDATE")'); tick(8)
+
 # --- every view renders, with search and filters ---
 for c in (A, B):
     c.ex('__ns.UI:Show()')

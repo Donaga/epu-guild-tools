@@ -13,15 +13,19 @@ local function NumSlots(bag)
   return GetContainerNumSlots(bag)
 end
 
+-- itemID, count, bound (soulbound: can't be traded or mailed)
 local function SlotItem(bag, slot)
   if C_Container and C_Container.GetContainerItemInfo then
     local info = C_Container.GetContainerItemInfo(bag, slot)
-    if info then return info.itemID or ns.ItemID(info.hyperlink), info.stackCount or 1 end
+    if info then return info.itemID or ns.ItemID(info.hyperlink), info.stackCount or 1, info.isBound == true end
     return nil
   end
-  local _, count, _, _, _, _, link, _, _, id = GetContainerItemInfo(bag, slot)
-  if link then return id or ns.ItemID(link), count or 1 end
+  local _, count, _, _, _, _, link, _, _, id, bound = GetContainerItemInfo(bag, slot)
+  if link then return id or ns.ItemID(link), count or 1, bound == true end
 end
+
+local HEARTHSTONE = 6948
+local QUEST_CLASS = (Enum and Enum.ItemClass and Enum.ItemClass.Questitem) or 12
 
 local function FreeSlots(bag)
   if C_Container and C_Container.GetContainerNumFreeSlots then return (C_Container.GetContainerNumFreeSlots(bag)) end
@@ -45,8 +49,12 @@ local function Scan(list)
   local items = {}
   for _, bag in ipairs(list) do
     for slot = 1, (NumSlots(bag) or 0) do
-      local id, count = SlotItem(bag, slot)
-      if id then items[id] = (items[id] or 0) + count end
+      local id, count, bound = SlotItem(bag, slot)
+      -- guild stock is what the bank can give away: skip soulbound items
+      -- (Hearthstone, bind-on-pickup gear) and quest items
+      if id and not bound and id ~= HEARTHSTONE and select(12, GetItemInfo(id)) ~= QUEST_CLASS then
+        items[id] = (items[id] or 0) + count
+      end
     end
   end
   return items

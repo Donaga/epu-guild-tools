@@ -116,7 +116,7 @@ function GetGuildRosterLastOnline(i)
 end
 C_GuildInfo = { GuildRoster = function() __fire("GUILD_ROSTER_UPDATE") end }
 function Ambiguate(n) return n end
-local ITEMS = { [2589] = "Linen Cloth", [2996] = "Bolt of Linen Cloth", [14047] = "Runecloth", [4306] = "Silk Cloth" }
+local ITEMS = { [6948] = "Hearthstone", [2589] = "Linen Cloth", [2996] = "Bolt of Linen Cloth", [14047] = "Runecloth", [4306] = "Silk Cloth" }
 for i = 30000, 30200 do ITEMS[i] = "Test Item " .. i end
 function __link(id) return "|cffffffff|Hitem:" .. id .. "::::::::20:::::|h[" .. ITEMS[id] .. "]|h|r" end
 function GetItemInfo(x)
@@ -160,7 +160,7 @@ local SK = { { "Professions", true }, { "Tailoring", false, nil, 150 }, { "Secon
 function GetSkillLineInfo(i) return unpack(SK[i]) end
 C_Container = {
   GetContainerNumSlots = function(b) return 16 end,
-  GetContainerItemInfo = function(b, s) local x = __bags[b] and __bags[b][s]; if x then return { itemID = x[1], stackCount = x[2], hyperlink = __link(x[1]) } end end,
+  GetContainerItemInfo = function(b, s) local x = __bags[b] and __bags[b][s]; if x then return { itemID = x[1], stackCount = x[2], hyperlink = __link(x[1]), isBound = x[3] == true } end end,
   GetContainerNumFreeSlots = function() return 5 end,
 }
 function GetMoney() return __money end
