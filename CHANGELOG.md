@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.4
+
+- **Fixed: Needs, Shopping, Bank, Requests, Donations and Recipes wouldn't load for some players.** Their game only has the newer item functions (`C_Item`), and the addon used the old names, which exist only when the game's "deprecated API" fallback is on. The addon now uses the new ones and falls back to the old.
+- **Clearer errors.** If a page can't load, it says which page, what went wrong in plain words, where in the addon, and the addon version, so a screenshot is all an officer needs. The same details go to chat.
+- One odd item in the synced bank data can no longer take down the whole Bank page.
+
 ## 0.9.3
 
 - **Fixed: the Needs page was blank for some players** (or kept showing the last page you had open). It used a game function that WoW: Forever has moved. A page that ever hits an error now says so instead of showing stale rows.

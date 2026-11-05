@@ -1,5 +1,9 @@
 -- EPU Guild Tools: guild data, trust rules, sync, needs, requests, crafters
 local ADDON, ns = ...
+-- Newer clients keep these under C_Item; the old global names only exist when
+-- the game's "deprecated API" fallback is on, which varies from PC to PC.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 
 local DAY = 86400
 

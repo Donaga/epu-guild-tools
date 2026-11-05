@@ -1,6 +1,10 @@
 -- EPU Guild Tools: main window (flat dark style), details panel, officer
 -- settings, and the minimap button.
 local ADDON, ns = ...
+-- Newer clients keep these under C_Item; the old global names only exist when
+-- the game's "deprecated API" fallback is on, which varies from PC to PC.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 
 ---------------------------------------------------------------------------
 -- Look
@@ -952,9 +956,12 @@ Views.bank = {
     local totals, holders = {}, {}
     for alt, s in pairs(g.bank) do
       if not s.retired then
-        for id, c in pairs(s.items or {}) do
-          totals[id] = (totals[id] or 0) + c
-          holders[id] = holders[id] and (holders[id] .. ", " .. alt) or alt
+        for id, c in pairs(type(s.items) == "table" and s.items or {}) do
+          id, c = tonumber(id), tonumber(c)
+          if id and c then
+            totals[id] = (totals[id] or 0) + c
+            holders[id] = holders[id] and (holders[id] .. ", " .. tostring(alt)) or tostring(alt)
+          end
         end
       end
     end
@@ -963,15 +970,23 @@ Views.bank = {
     for i, c in ipairs(ns.CATEGORIES) do order[c] = i end
     local only = UI.state.bank.cat
     for id, c in pairs(totals) do
-      local name = ns.ItemName(id, true)
-      local cat = ns.ItemCategory(id)
-      if (not only or cat == only) and Match(q, name, holders[id], cat) then
-        groups[cat] = groups[cat] or {}
-        table.insert(groups[cat], {
-          key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-          title = name, sub = holders[id], right = tostring(c), count = c, sort = name,
-          onClick = function() UI:OpenDetails("item", id) end,
-        })
+      -- one odd item mustn't take the whole page down
+      local ok, err = ns.SafeCall(function()
+        local name = tostring(ns.ItemName(id, true))
+        local okc, cat = pcall(ns.ItemCategory, id)
+        cat = (okc and type(cat) == "string") and cat or "Other"
+        if (not only or cat == only) and Match(q, name, holders[id], cat) then
+          groups[cat] = groups[cat] or {}
+          table.insert(groups[cat], {
+            key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
+            title = name, sub = holders[id], right = tostring(c), count = c, sort = name,
+            onClick = function() UI:OpenDetails("item", id) end,
+          })
+        end
+      end)
+      if not ok and not UI.bankItemErr then
+        UI.bankItemErr = true
+        ns.Print("Skipped bank item " .. tostring(id) .. " (" .. tostring(err.where) .. "): " .. err.plain .. "  |cff9aa1ab" .. err.raw .. "|r")
       end
     end
     local cats = {}
@@ -2538,13 +2553,23 @@ function UI:Refresh()
 
   local width = (scroll:GetWidth() or 400)
   child:SetWidth(width)
-  local okRows, rows = pcall(v.rows, g, Q())
+  local okRows, rows = ns.SafeCall(v.rows, g, Q())
   if not okRows then
     -- never leave the last page's rows on screen under this page's name
-    if not self.rowErr then ns.Print("|cffff6060This page hit an error:|r " .. tostring(rows) .. "  (please send this to an officer)") end
-    self.rowErr = true
+    local e = rows
+    local where = e.where and (" in " .. e.where) or ""
+    local key = (v.label or "?") .. where .. e.raw
+    if self.rowErr ~= key then
+      self.rowErr = key
+      ns.Print("|cffff6060The " .. (v.label or "") .. " page couldn't load|r (v" .. ns.VERSION .. where .. "): " .. e.plain)
+      ns.Print("|cff9aa1abDetails: " .. e.raw .. "|r")
+    end
     ShowRows({}, width)
-    self.empty:SetText("|cffff6060This page couldn't load.|r Try /reload. If it keeps happening, tell an officer\n(the error is in your chat window).")
+    self.empty:SetText("|cffff6060The " .. (v.label or "") .. " page couldn't load.|r\n\n"
+      .. "|cffffffffWhat went wrong:|r " .. e.plain .. "\n"
+      .. "|cffffffffWhere:|r " .. (e.where or "unknown") .. ", addon v" .. ns.VERSION .. "\n\n"
+      .. "|cff9aa1ab" .. e.raw:sub(1, 240) .. "|r\n\n"
+      .. "Try /reload. If it keeps happening, send a screenshot of this to an officer.")
     self.empty:Show()
     self.footerText:SetText("")
     return

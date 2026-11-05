@@ -1,5 +1,9 @@
 -- EPU Guild Tools: core helpers, saved variables, slash commands
 local ADDON, ns = ...
+-- Newer clients keep these under C_Item; the old global names only exist when
+-- the game's "deprecated API" fallback is on, which varies from PC to PC.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 
 ns.PREFIX = "EPUGuild"            -- addon message prefix (max 16 chars)
 ns.comm = {}                      -- message handlers, keyed by one-letter kind
@@ -188,6 +192,60 @@ function ns.ItemIcon(id)
     if icon then return icon end
   end
   return (select(10, GetItemInfo(id)))
+end
+
+-- Turn a Lua error into something a player can read: what went wrong, and
+-- where in the addon (file and line), plus the raw message for an officer.
+local function Where(text)
+  if not text then return nil end
+  for file, line in tostring(text):gmatch("EPUGuild[\\/]([%w_]+%.lua):(%d+)") do
+    return file .. " line " .. line
+  end
+end
+
+function ns.ExplainError(err, stack)
+  local msg = tostring(err or "unknown error")
+  local raw = msg:gsub("^.-EPUGuild[\\/]", "")
+  local plain
+  local kind, name = msg:match("attempt to call (%a+) '([^']+)' %(a nil value%)")
+  if name then
+    plain = "The game doesn't have \"" .. name .. "\" here. WoW: Forever may have renamed or removed it, so this needs an addon fix."
+  end
+  if not plain then
+    local a, b = msg:match("attempt to compare (%a+) with (%a+)")
+    if a then plain = "Some guild data isn't in the expected form (a " .. a .. " where a " .. b .. " was expected). Syncing again may fix it." end
+  end
+  if not plain then
+    local what = msg:match("attempt to index (.-) %(a nil value%)")
+    if what then plain = "Some data the page needs is missing (" .. what:gsub("[%a]+ ", "", 1) .. "). It may not have synced yet." end
+  end
+  if not plain then
+    local what = msg:match("attempt to concatenate (.-) %(a [%a]+ value%)")
+    if what then plain = "A piece of text the page shows is missing (" .. what:gsub("[%a]+ ", "", 1) .. "). It may not have synced yet." end
+  end
+  if not plain then
+    local what = msg:match("attempt to perform arithmetic on (.-) %(a [%a]+ value%)")
+    if what then plain = "A number in the guild data is missing or isn't a number (" .. what:gsub("[%a]+ ", "", 1) .. ")." end
+  end
+  if not plain and msg:find("invalid order function", 1, true) then
+    plain = "Sorting the list failed because some entries can't be compared."
+  end
+  if not plain and msg:find("stack overflow", 1, true) then plain = "The addon got stuck in a loop." end
+  plain = plain or "Something unexpected went wrong."
+  return plain, Where(msg) or Where(stack), raw
+end
+
+-- Run fn safely; on error return false plus a readable explanation.
+function ns.SafeCall(fn, ...)
+  local stack
+  local args, n = { ... }, select("#", ...)
+  local res = { xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
+    stack = debugstack and debugstack(2) or (debug and debug.traceback and debug.traceback("", 2)) or nil
+    return e
+  end) }
+  if res[1] then return true, unpack(res, 2) end
+  local plain, where, raw = ns.ExplainError(res[2], stack)
+  return false, { plain = plain, where = where, raw = raw }
 end
 
 -- How many the player carries. Newer clients moved GetItemCount to C_Item.

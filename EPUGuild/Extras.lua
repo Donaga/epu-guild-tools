@@ -5,6 +5,10 @@
 --   * pop-up notices when your request changes (and new requests for officers)
 --   * a welcome card the first time the window opens
 local ADDON, ns = ...
+-- Newer clients keep these under C_Item; the old global names only exist when
+-- the game's "deprecated API" fallback is on, which varies from PC to PC.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 
 local GOLD = { 0.95, 0.76, 0.31 }
 local MUTED = { 0.55, 0.58, 0.62 }

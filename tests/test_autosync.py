@@ -5,7 +5,7 @@ import sys, re
 import simcore
 from simcore import *
 
-for n in ["Late Member", "Mid Member", "Roster Late", "Part Member", "Check Member"]:
+for n in ["Late Member", "Mid Member", "Roster Late", "Part Member", "Check Member", "Modern Client"]:
     simcore.ROSTER.append((n, "Initiate", 4))
 
 def join(name, pre=""):
@@ -161,6 +161,20 @@ A.ex('__ns.SeenSync("Pip Baker", { t = __ns.Now(), from = "Chris Baker", what = 
 check("older versions are flagged", "older version" in A.ev('__ns.UI.footerText:GetText()'))
 A.ex('__ns.UI:SetView("needs")')
 
+
+# --- a client without the old global item functions (only C_Item) ---
+MC = join("Modern Client", 'C_Item = { GetItemInfo = GetItemInfo, GetItemInfoInstant = GetItemInfoInstant, GetItemCount = GetItemCount or function() return 0 end }'
+          '; GetItemInfo = nil; GetItemInfoInstant = nil; GetItemCount = nil')
+tick(60)
+MC.ex('__ns.UI:Show()')
+bad = []
+for view in ["news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "sync"]:
+    MC.ex('__ns.UI:SetView("%s")' % view)
+    t = MC.ev('__ns.UI.empty:IsShown() and __ns.UI.empty:GetText() or ""') or ""
+    if "couldn't load" in t: bad.append(view + ": " + t.split("What went wrong:|r ")[-1][:80])
+check("every page loads with only C_Item (%s)" % ("; ".join(bad) or "ok"), not bad)
+check("and item pages have rows", MC.ev("(function() __ns.UI:SetView('needs') local n=0 for _,r in ipairs(__ns.UI.rows) do if r:IsShown() then n=n+1 end end return n end)()") > 0)
+
 # --- Needs page without the old GetItemCount (WoW: Forever) ---
 B.ex('GetItemCount = nil; C_Item = C_Item or {}; C_Item.GetItemCount = function() return 2 end')
 B.ex('__ns.UI:Show(); __ns.UI:SetView("roster"); __ns.UI:SetView("needs")')
@@ -173,7 +187,14 @@ check("still draws with no count function at all", "Loading" in B.ev('__ns.UI.ro
 # a page that errors shows a message, not the previous page's rows
 B.ex('__ns.UI:SetView("roster"); local real = __ns.OpenNeeds; __ns.OpenNeeds = function() error("boom") end; __ns.UI:SetView("needs"); __ns.OpenNeeds = real')
 shown = B.ev("(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then n = n + 1 end end return n end)()")
-check("a broken page doesn't show stale rows", shown == 0 and "couldn't load" in B.ev('__ns.UI.empty:GetText()'))
+txt = B.ev('__ns.UI.empty:GetText()')
+check("a broken page doesn't show stale rows", shown == 0 and "couldn't load" in txt)
+check("and says which page, why and where (%s)" % txt.replace("\n", " / "), "Needs page" in txt and "What went wrong" in txt and "line" in txt)
+B.ex('__ns.UI:SetView("roster"); local real = __ns.OpenNeeds; __ns.OpenNeeds = function() return GetMissingThing() end; __ns.UI:SetView("needs"); __ns.OpenNeeds = real')
+txt = B.ev('__ns.UI.empty:GetText()')
+check("missing game functions are named in plain words", "doesn't have \"GetMissingThing\"" in txt)
+B.ex('__ns.G().bank["Odd Alt"] = { v = 1, items = { [30001] = "x", foo = 3, [30002] = 4 } }; __ns.UI:SetView("bank")')
+check("odd bank data doesn't break the Bank page", B.ev("(function() for _, r in ipairs(__ns.UI.rows) do if r:IsShown() and (r.title:GetText() or ''):find('30002') then return true end end return false end)()") == True)
 
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
