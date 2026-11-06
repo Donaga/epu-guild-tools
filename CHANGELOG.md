@@ -9,6 +9,7 @@
   - The panel is taller and scrolls with the mouse wheel, so nothing gets cut off.
   - "Show everything (+N)" adds the rest of your tradeable items, such as white gear and grey junk.
   - To change an amount with the wheel, hold Ctrl.
+- **Fixed: a bank character's bank wasn't counted, only their bags.** Newer game clients number bank bags differently (and add a reagent bag), so the addon now asks the game which containers are the bank. Open the bank once on the bank character to record it; it's remembered between visits and updated each time you go back. The account-wide bank isn't counted.
 
 ## 0.9.4
 

@@ -23,3 +23,5 @@ jobs:
         run: python tests/test_guild.py
       - name: Auto-sync tests
         run: python tests/test_autosync.py
+      - name: Bank alt tests
+        run: python tests/test_bankalt.py

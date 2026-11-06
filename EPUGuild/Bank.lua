@@ -36,18 +36,39 @@ local function FreeSlots(bag)
   return (GetContainerNumFreeSlots(bag))
 end
 
+-- Which container numbers are bags and which are the bank differs between
+-- game versions (newer clients add a reagent bag and renumber bank bags, and
+-- some use bank "tabs"), so ask the game when it can tell us.
 local function BagList()
-  local t = {}
-  for b = 0, (NUM_BAG_SLOTS or 4) do t[#t + 1] = b end
-  return t
+  local t, seen = {}, {}
+  local function add(b) if b and not seen[b] then seen[b] = true; t[#t + 1] = b end end
+  for b = 0, (NUM_BAG_SLOTS or 4) do add(b) end
+  local E = Enum and Enum.BagIndex
+  if E then add(E.ReagentBag) end
+  return t, seen
 end
 
 local function BankList()
-  local t = { BANK_CONTAINER or -1 }
-  local first = (NUM_BAG_SLOTS or 4) + 1
-  for b = first, first + (NUM_BANKBAGSLOTS or 6) - 1 do t[#t + 1] = b end
+  local _, inBags = BagList()
+  local t, seen = {}, {}
+  local function add(b) if type(b) == "number" and not seen[b] and not inBags[b] then seen[b] = true; t[#t + 1] = b end end
+  local E = Enum and Enum.BagIndex
+  if E then
+    for name, b in pairs(E) do
+      -- the character's own bank, bank bags/tabs and reagent bank; not the account-wide one
+      if type(name) == "string" and name:find("Bank") and not name:find("Account") and not name:find("Warband") then add(b) end
+    end
+  end
+  add(BANK_CONTAINER or -1)
+  add(REAGENTBANK_CONTAINER)
+  if not E then
+    local first = (NUM_BAG_SLOTS or 4) + 1
+    for b = first, first + (NUM_BANKBAGSLOTS or 7) - 1 do add(b) end
+  end
+  table.sort(t)
   return t
 end
+ns.BagList, ns.BankList = BagList, BankList
 
 local function Scan(list)
   local items = {}
@@ -132,6 +153,11 @@ ns.On("PLAYER_MONEY", function() Rescan(1.5) end)
 ns.On("PLAYERBANKSLOTS_CHANGED", function() Rescan(1) end)
 ns.On("BANKFRAME_OPENED", function() bankOpen = true; Rescan(0.5) end)
 ns.On("BANKFRAME_CLOSED", function() bankOpen = false end)
+-- newer clients report the banker through the interaction manager instead
+local BANKER = (Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.Banker) or 8
+ns.On("PLAYER_INTERACTION_MANAGER_FRAME_SHOW", function(kind) if kind == BANKER then bankOpen = true; Rescan(0.5) end end)
+ns.On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(kind) if kind == BANKER then Rescan(0); C_Timer.After(0.2, function() bankOpen = false end) end end)
+ns.On("BAG_UPDATE_DELAYED", function() if bankOpen then Rescan(0.5) end end)
 ns.On("PLAYER_ENTERING_WORLD", function() Rescan(6) end)
 
 ---------------------------------------------------------------------------
