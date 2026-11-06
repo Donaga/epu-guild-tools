@@ -440,6 +440,9 @@ end
 -- Default view: what the bank needs, crafting materials and recipes, and
 -- green-or-better Bind on Equip gear.
 local GEAR = "Gear (Bind on Equip)"
+-- item classes the bank stocks: consumables (potions, elixirs, scrolls, bandages,
+-- food), bags, gems, reagents, ammo, trade goods, recipes, quivers
+local USEFUL = { [0] = true, [1] = true, [3] = true, [5] = true, [6] = true, [7] = true, [9] = true, [11] = true }
 local function Kind(id)
   local _, _, quality, _, _, _, _, _, _, _, _, classID, subclassID, bindType = GetItemInfo(id)
   if not classID and GetItemInfoInstant then
@@ -447,13 +450,13 @@ local function Kind(id)
     classID, subclassID = c, sc
   end
   if classID == 12 then return nil end                                   -- quest items
-  local cat = ns.CategoryOf(classID, subclassID)
+  local cat = (classID == 3 and "Gems") or (classID == 6 and "Ammo") or ns.CategoryOf(classID, subclassID)
   if classID == 2 or classID == 4 then
     local useful = (tonumber(quality) or 0) >= 2 and bindType == 2
     return useful and GEAR or "Other gear", useful
   end
-  local useful = classID == 7 or classID == 5 or classID == 9          -- trade goods, reagents, recipes
-  return cat, useful
+  if (tonumber(quality) or 1) == 0 then return "Junk", false end        -- grey items: only under Show everything
+  return cat, USEFUL[classID] == true
 end
 ns.DonateKind = Kind
 
@@ -461,6 +464,9 @@ local ORDER = { ["Bank needs"] = 0 }
 for i, c in ipairs(ns.CATEGORIES) do ORDER[c] = i end
 ORDER[GEAR] = ORDER["Weapons & Armor"] or 50
 ORDER["Other gear"] = 98
+ORDER["Junk"] = 99
+ORDER["Gems"] = (ORDER["Reagents"] or 11) + 0.5
+ORDER["Ammo"] = (ORDER["Bags"] or 12) + 0.5
 
 local ROW_H, HEAD_H = 32, 20
 
@@ -546,7 +552,7 @@ function don:Update()
   self.to = alts[self.toIndex]
   self.toBtn.text:SetText("Send to: " .. self.to .. ((#alts > 1) and "  (click to change)" or ""))
   self.sub:SetText(self.showAll and "Everything you could give (soulbound items are left out)."
-    or "What the bank needs, crafting materials and green+ Bind on Equip gear.")
+    or "What the bank needs, crafting materials, recipes, consumables, bags and green+ Bind on Equip gear.")
   local g = ns.G()
   local carry = Carried()
   local groups, hidden = {}, 0
@@ -574,7 +580,7 @@ function don:Update()
     entries[#entries + 1] = { head = c .. "  (" .. #groups[c] .. ")" }
     for _, e in ipairs(groups[c]) do entries[#entries + 1] = e end
   end
-  self.entryCount = #entries
+  self.entryCount, self.entries = #entries, entries
   self.offset = math.max(0, math.min(self.offset or 0, #entries - 1))
 
   -- lay out from the scroll offset until the list is full

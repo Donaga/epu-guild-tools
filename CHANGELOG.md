@@ -3,11 +3,11 @@
 ## 0.9.5
 
 - **Donate panel at the mailbox, reworked.**
-  - It now lists what the bank needs (always first), crafting materials, reagents and recipes, and green-or-better Bind on Equip gear.
+  - It now lists what the bank needs (always first), crafting materials, recipes, consumables (potions, elixirs, scrolls, bandages, food), bags and quivers, gems, reagents, ammo, and green-or-better Bind on Equip gear.
   - Soulbound items, quest items and the Hearthstone are never listed.
   - Items are grouped by category (Bank needs, Cloth, Leather, Metal & Stone, Herbs and so on).
   - The panel is taller and scrolls with the mouse wheel, so nothing gets cut off.
-  - "Show everything (+N)" adds the rest of your tradeable items.
+  - "Show everything (+N)" adds the rest of your tradeable items, such as white gear and grey junk.
   - To change an amount with the wheel, hold Ctrl.
 
 ## 0.9.4

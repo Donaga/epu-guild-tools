@@ -182,24 +182,30 @@ B.ex('__ns.DonatePanel.pick[2589] = 25; __ns.FillDonation()')
 check("Fill mail attaches exactly the chosen amount", B.ev('(function() local n = 0 for _, s in pairs(__mailSlots) do n = n + s[2] end return n end)()') == 25)
 check("addressed to the bank", B.ev('SendMailNameEditBox._text') == "Chris Baker")
 
+allTxt = lambda: B.ev('(function() local t = {} for _, e in ipairs(__ns.DonatePanel.entries) do t[#t+1] = e.id and ("item:" .. e.id) or e.head end return table.concat(t, "|") end)()')
 # what's offered: crafting stuff and green+ BoE gear; never soulbound, quest items or the Hearthstone
 B.ex('__bags[0] = {{2589, 20}, {4306, 5}, {6948, 1}, {30050, 1}, {30051, 1}, {30052, 1, true}, {30053, 1}, {30054, 1}}'
      '; __cls = __cls or {}; __cls[30050] = {4, "Mail"}; __cls[30051] = {4, "Cloth"}; __cls[30052] = {2, "Sword"}; __cls[30053] = {12, "Quest"}; __cls[30054] = {0, "Potion"}'
      '; __qual = { [30050] = 2, [30051] = 1, [30052] = 3 }; __bind = { [30050] = 2, [30051] = 2, [30052] = 2 }')
+B.ex('table.insert(__bags[0], {30055, 1}); table.insert(__bags[0], {30056, 1}); table.insert(__bags[0], {30057, 1})'
+     '; __cls[30055] = {9, "Tailoring"}; __cls[30056] = {1, "Bag"}; __cls[30057] = {15, "Junk"}; __qual[30057] = 0')
 B.ex('__ns.DonatePanel.offset = 0; __ns.DonatePanel.showAll = false; __ns.DonatePanel:Update()')
-dshown = rowsTxt()
+dshown = allTxt()
+check("recipes and bags are offered", "item:30055" in dshown and "Recipes" in dshown and "item:30056" in dshown and "Bags" in dshown)
+check("grey junk isn't", "item:30057" not in dshown)
 check("green Bind on Equip gear is offered (%s)" % dshown, "item:30050" in dshown and "Gear (Bind on Equip)" in dshown)
-check("white gear and potions wait behind Show everything", "item:30051" not in dshown and "item:30054" not in dshown)
+check("white gear waits behind Show everything", "item:30051" not in dshown)
+check("consumables (potions etc.) are offered", "item:30054" in dshown and "Consumables" in dshown)
 check("soulbound, quest items and the Hearthstone never show", all(x not in dshown for x in ("item:30052", "item:30053", "item:6948")))
 B.ex('__ns.DonatePanel.showAll = true; __ns.DonatePanel:Update()')
-dshown = rowsTxt()
-check("Show everything adds the rest, still no soulbound", "item:30051" in dshown and "item:30054" in dshown and "item:30052" not in dshown)
+dshown = allTxt()
+check("Show everything adds the rest, still no soulbound", "item:30051" in dshown and "item:30052" not in dshown)
 # long lists scroll
 B.ex('__bags[0] = {}; for i = 0, 25 do __bags[0][i + 1] = {30100 + i, 3} end; __ns.DonatePanel.offset = 0; __ns.DonatePanel:Update()')
 first = B.ev('__ns.DonatePanel.shown')
 B.ex('__ns.DonatePanel.list:GetScript("OnMouseWheel")(nil, -1)')
 check("a long list scrolls (%d rows shown of %d)" % (first, B.ev('__ns.DonatePanel.entryCount')), first < B.ev('__ns.DonatePanel.entryCount') and B.ev('__ns.DonatePanel.offset') > 0)
-B.ex('__ns.DonatePanel.showAll = false; __bags[0] = {}; __cls[30050] = nil; __cls[30051] = nil; __cls[30052] = nil; __cls[30053] = nil; __cls[30054] = nil; __qual = nil; __bind = nil')
+B.ex('__ns.DonatePanel.showAll = false; __bags[0] = {}; __cls[30050] = nil; __cls[30051] = nil; __cls[30052] = nil; __cls[30053] = nil; __cls[30054] = nil; __cls[30055] = nil; __cls[30056] = nil; __cls[30057] = nil; __qual = nil; __bind = nil')
 A.ex('__ns.ShowDonate()')
 check("the bank character doesn't get the donate panel", A.ev('__ns.DonatePanel:IsShown()') != True)
 
