@@ -167,6 +167,9 @@ local function Box(parent, w, placeholder, numeric)
   Edges(e, C.line)
   e.ph = Font(e, 11, C.muted)
   e.ph:SetPoint("LEFT", 6, 0)
+  e.ph:SetPoint("RIGHT", -6, 0)
+  e.ph:SetJustifyH("LEFT")
+  e.ph:SetWordWrap(false)
   e.ph:SetText(placeholder or "")
   e:SetScript("OnEscapePressed", e.ClearFocus)
   e:SetScript("OnEditFocusGained", function(self) EdgeColor(self, C.gold); UI.focusBox = self end)
@@ -1689,7 +1692,198 @@ UI.action:SetScript("OnClick", SubmitComposer)
 UI.itemBox.onEnter = SubmitComposer
 UI.qtyBox.onEnter = SubmitComposer
 UI.noteBox.onEnter = SubmitComposer
-UI.forBox.onEnter = SubmitComposer
+UI.forBox.onEnter = function(self)
+  if UI:AcceptSuggestion(true) then return end
+  SubmitComposer()
+end
+
+---------------------------------------------------------------------------
+-- Name suggestions for the For box: guild members matching what you've
+-- typed (start of first or last name), online first. Tab or a click fills it
+-- in; Up/Down pick; Enter takes the picked one.
+---------------------------------------------------------------------------
+local sug = CreateFrame("Frame", nil, UI)
+sug:SetFrameStrata("DIALOG")
+sug:SetClampedToScreen(true)
+sug.bg = Tex(sug, "BACKGROUND", C.panel); sug.bg:SetAllPoints()
+Edges(sug, C.line)
+sug.rows, sug.names, sug.sel, sug.moved = {}, {}, 1, false
+sug:Hide()
+UI.suggest = sug
+
+function ns.MatchMembers(text, max)
+  text = (text or ""):lower():match("^%s*(.-)%s*$")
+  local out = {}
+  if text == "" then return out end
+  for name, r in pairs(ns.roster or {}) do
+    local l = name:lower()
+    local last = l:match("%s(.+)$") or ""
+    if l:sub(1, #text) == text or last:sub(1, #text) == text then
+      out[#out + 1] = { name = name, online = r.online and true or false, level = r.level }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.online ~= b.online then return a.online end
+    return a.name < b.name
+  end)
+  while #out > (max or 8) do out[#out] = nil end
+  return out
+end
+
+-- Items the addon knows by name: everything the guild deals with, your bags,
+-- and names cached earlier. (The game can't search items it hasn't seen.)
+function ns.ItemCandidates()
+  local ids = {}
+  local g = ns.G()
+  if g then
+    for id in pairs(g.needs.list) do ids[id] = true end
+    for _, b in pairs(g.bank) do for id in pairs(b.items or {}) do ids[tonumber(id) or 0] = true end end
+    for _, r in pairs(g.requests) do if r.item then ids[r.item] = true end end
+    for _, d in pairs(g.donations) do if d.item then ids[d.item] = true end end
+    for _, rec in pairs(g.recipes or {}) do
+      for _, p in pairs(rec.profs or {}) do for _, id in ipairs(p.items or {}) do ids[id] = true end end
+    end
+    for _, m in pairs(g.mats or {}) do for i = 1, #(m.r or {}), 2 do ids[m.r[i]] = true end end
+  end
+  for id in pairs((ns.db and ns.db.itemNames) or {}) do ids[id] = true end
+  for bag = 0, (NUM_BAG_SLOTS or 4) do
+    local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
+    for slot = 1, n do
+      local info = C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag, slot)
+      if info and info.itemID then ids[info.itemID] = true end
+    end
+  end
+  ids[0] = nil
+  return ids
+end
+
+function ns.MatchItems(text, max)
+  text = (text or ""):lower():match("^%s*(.-)%s*$")
+  local out = {}
+  if #text < 2 then return out end
+  local names = (ns.db and ns.db.itemNames) or {}
+  for id in pairs(ns.ItemCandidates()) do
+    local name = GetItemInfo(id) or names[id]
+    if name then
+      local l = name:lower()
+      local at = l:find(text, 1, true)
+      -- match at the start of the name or of any word in it
+      if at and (at == 1 or l:sub(at - 1, at - 1):find("[%s%-:%(]")) then
+        out[#out + 1] = { id = id, name = name, first = at == 1 }
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.first ~= b.first then return a.first end
+    return a.name < b.name
+  end)
+  while #out > (max or 8) do out[#out] = nil end
+  return out
+end
+
+local function DrawSuggestions()
+  for i, r in ipairs(sug.rows) do r.hl:SetShown(i == sug.sel) end
+end
+
+-- list: { { text, right, value, icon }, ... }; pick(box, value) fills the box
+function UI:ShowSuggestions(box, list, pick)
+  if #list == 0 then sug:Hide(); return end
+  sug.box, sug.pick, sug.names, sug.sel, sug.moved = box, pick, {}, 1, false
+  local w = math.max(box:GetWidth(), 220)
+  for i, m in ipairs(list) do
+    local r = sug.rows[i]
+    if not r then
+      r = CreateFrame("Button", nil, sug)
+      r:SetHeight(20)
+      r.hl = Tex(r, "BACKGROUND", C.hover); r.hl:SetAllPoints(); r.hl:Hide()
+      r.icon = r:CreateTexture(nil, "ARTWORK"); r.icon:SetSize(16, 16); r.icon:SetPoint("LEFT", 4, 0)
+      r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+      r.text = Font(r, 11)
+      r.right = Font(r, 10, C.muted); r.right:SetPoint("RIGHT", -8, 0)
+      r:SetScript("OnEnter", function(self) sug.sel = self.i; DrawSuggestions() end)
+      r:SetScript("OnClick", function(self) sug.sel = self.i; UI:AcceptSuggestion() end)
+      sug.rows[i] = r
+    end
+    r.i = i
+    r:ClearAllPoints()
+    r:SetPoint("BOTTOMLEFT", 1, 1 + (#list - i) * 20)
+    r:SetPoint("BOTTOMRIGHT", -1, 1 + (#list - i) * 20)
+    r.text:ClearAllPoints()
+    r.text:SetPoint("LEFT", m.icon and 24 or 8, 0)
+    r.icon:SetShown(m.icon ~= nil)
+    if m.icon then r.icon:SetTexture(m.icon) end
+    r.text:SetText(m.text)
+    r.right:SetText(m.right or "")
+    r:Show()
+    sug.names[i] = m.value
+  end
+  for i = #list + 1, #sug.rows do sug.rows[i]:Hide() end
+  sug:SetSize(w, #list * 20 + 2)
+  sug:ClearAllPoints()
+  sug:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 0, 2)     -- the form sits at the bottom, so open upwards
+  sug:Show()
+  DrawSuggestions()
+end
+
+function UI:Suggest(box)
+  local text = box:GetText() or ""
+  local found = ns.MatchMembers(text, 8)
+  if #found == 1 and found[1].name:lower() == text:lower() then sug:Hide(); return end
+  local list = {}
+  for i, m in ipairs(found) do
+    list[i] = { text = m.name, value = m.name,
+      right = (m.online and "|cff4ade80online|r  " or "") .. (m.level and ("lvl " .. m.level) or "") }
+  end
+  self:ShowSuggestions(box, list, function(b, v) b:SetText(v) end)
+end
+
+function UI:SuggestItems(box)
+  local text = box:GetText() or ""
+  if text:find("|H", 1, true) or text:find("^item:") then sug:Hide(); return end   -- already a real item
+  local found = ns.MatchItems(text, 8)
+  local list = {}
+  for i, m in ipairs(found) do
+    local have = ns.BankCount and ns.BankCount(m.id) or 0
+    local q = select(3, GetItemInfo(m.id))
+    local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
+    list[i] = { text = (c and c.hex or "") .. m.name .. (c and c.hex and "|r" or ""), value = m.id, icon = ns.ItemIcon(m.id),
+      right = have > 0 and ("bank has " .. have) or nil }
+  end
+  self:ShowSuggestions(box, list, function(b, id) b:SetText(select(2, GetItemInfo(id)) or ("item:" .. id)) end)
+end
+
+-- Fill in the picked suggestion. With onlyIfChosen (Enter), only when the
+-- choice is clear: a single match, or one picked with the arrow keys.
+function UI:AcceptSuggestion(onlyIfChosen)
+  if not sug:IsShown() or not sug.box then return false end
+  if onlyIfChosen and not sug.moved and #sug.names ~= 1 then sug:Hide(); return false end
+  local v = sug.names[sug.sel]
+  if v == nil then return false end
+  local box = sug.box
+  sug:Hide()
+  sug.pick(box, v)
+  return true
+end
+
+local function WireSuggestions(box, suggest)
+  box.onChange = function(self) if self:HasFocus() then suggest(UI, self) end end
+  box:SetScript("OnTabPressed", function() UI:AcceptSuggestion() end)
+  box:SetScript("OnArrowPressed", function(self, key)
+    if not sug:IsShown() or sug.box ~= self then return end
+    -- the list grows upwards: Up goes to the next entry
+    if key == "UP" then sug.sel = math.min(#sug.names, sug.sel + 1); sug.moved = true
+    elseif key == "DOWN" then sug.sel = math.max(1, sug.sel - 1); sug.moved = true end
+    DrawSuggestions()
+  end)
+  box:HookScript("OnEditFocusLost", function(self) C_Timer.After(0.2, function() if sug.box == self and not self:HasFocus() then sug:Hide() end end) end)
+  box:HookScript("OnHide", function(self) if sug.box == self then sug:Hide() end end)
+end
+WireSuggestions(UI.forBox, UI.Suggest)
+WireSuggestions(UI.itemBox, UI.SuggestItems)
+UI.itemBox.onEnter = function(self)
+  if UI:AcceptSuggestion(true) then return end
+  SubmitComposer()
+end
 
 -- open the request form already addressed to someone (from the roster)
 function UI:RequestFor(name)
@@ -2436,9 +2630,16 @@ function UI:Layout()
     self.kindBtn:SetShown(need)
     self.forBtn:SetShown(wantFor and not officerFor)
     self.forBox:SetShown(officerFor)
+    local tight = width < 560
+    local noteW = officerFor and (tight and 80 or 100) or 120
+    local forW = officerFor and (tight and 92 or 110) or 104
+    self.noteBox:SetWidth(noteW)
+    self.forBox:SetWidth(forW)
     local itemW = width - 10 - 46 - 6 - 6 - 90 - 20
-    if need then itemW = itemW - 96 - 6 else itemW = itemW - 120 - 6 - (wantFor and 110 or 0) end
-    self.itemBox:SetWidth(math.max(120, itemW))
+    if need then itemW = itemW - 96 - 6 else itemW = itemW - noteW - 6 - (wantFor and (forW + 6) or 0) end
+    itemW = math.max(110, itemW)
+    self.itemBox:SetWidth(itemW)
+    self.itemBox.ph:SetText(itemW >= 200 and "Item: shift-click or drag it here" or (itemW >= 150 and "Item: shift-click or drag" or "Item (shift-click)"))
     self.action:SetLabel(need and "Set need" or "Request")
     if wantFor and not officerFor then self:UpdateForButton() end
   end

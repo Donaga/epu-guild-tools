@@ -183,6 +183,55 @@ A.ex('__ns.UI:SetView("roster"); __ns.UI:OpenDetails("member", "Newbie Stone")')
 A.ex('(function() for _, b in ipairs(__ns.UI.details.pools.btn or {}) do if b:IsShown() and (b.text:GetText() or ""):find("Request for") then b:GetScript("OnClick")() end end end)()')
 check("Request for… on the roster opens the form with their name", A.ev('__ns.UI.view') == "requests" and A.ev('__ns.UI.forBox:GetText()') == "Newbie Stone")
 
+
+# --- name suggestions while typing ---
+A.ex('__ns.UI:SetView("requests"); __ns.UI.forBox.HasFocus = function() return true end')
+A.ex('__ns.UI.forBox:SetText("tyl")')
+check("typing suggests matching members", A.ev('__ns.UI.suggest:IsShown()') == True and A.ev('__ns.UI.suggest.names[1]') == "Tyler Baker")
+A.ex('__ns.UI.forBox:GetScript("OnTabPressed")(__ns.UI.forBox)')
+check("Tab fills in the name", A.ev('__ns.UI.forBox:GetText()') == "Tyler Baker" and A.ev('__ns.UI.suggest:IsShown()') != True)
+A.ex('__ns.UI.forBox:SetText("bak")')
+check("last names match too", "Tyler Baker" in [A.ev('__ns.UI.suggest.names[%d]' % i) for i in range(1, 9)])
+A.ex('__ns.UI.forBox:SetText("Chris")')
+check("several matches are all listed", A.ev('#__ns.UI.suggest.names') >= 2)
+A.ex('__ns.UI.itemBox:SetText(""); __log = {}; __ns.UI.forBox.onEnter(__ns.UI.forBox)')
+check("Enter doesn't guess between several", A.ev('__ns.UI.forBox:GetText()') == "Chris")
+A.ex('__ns.UI.forBox:SetText("Chris"); __ns.UI.forBox:GetScript("OnArrowPressed")(__ns.UI.forBox, "UP")')
+pick = A.ev('__ns.UI.suggest.names[__ns.UI.suggest.sel]')
+A.ex('__ns.UI.forBox.onEnter(__ns.UI.forBox)')
+check("arrow keys then Enter picks one (%s)" % pick, A.ev('__ns.UI.forBox:GetText()') == pick and pick.startswith("Chris "))
+A.ex('__ns.UI.suggest.rows[1]:GetScript("OnClick")(__ns.UI.suggest.rows[1])') if A.ev('__ns.UI.suggest:IsShown()') else None
+A.ex('__ns.UI.forBox:SetText("")')
+check("an empty box shows no suggestions", A.ev('__ns.UI.suggest:IsShown()') != True)
+# the item hint fits its box
+check("item hint is shortened when the box is narrow", A.ev('__ns.UI.itemBox:GetWidth()') >= 200 or A.ev('__ns.UI.itemBox.ph:GetText()') != "Item: shift-click or drag it here")
+check("officers see 'Officer copy', not 'Waiting for guild data' (%s)" % A.ev('(__ns.SyncStatus())'),
+      A.ev('(__ns.SyncStatus())') in ("Officer copy",) or A.ev('(__ns.SyncStatus())').startswith("Synced"))
+
+
+# --- item suggestions while typing ---
+A.ex('__ns.UI:SetView("requests"); __ns.UI.itemBox.HasFocus = function() return true end; __bags[0] = {{4306, 5}}')
+A.ex('__ns.UI.itemBox:SetText("lin")')
+names = [A.ev('__ns.UI.suggest.names[%d]' % i) for i in range(1, 9)]
+check("typing part of an item name suggests items (%s)" % names, A.ev('__ns.UI.suggest:IsShown()') == True and 2589 in names)
+A.ex('__ns.UI.itemBox:SetText("cloth")')
+names = [A.ev('__ns.UI.suggest.names[%d]' % i) for i in range(1, 9)]
+check("words inside the name match too (Linen Cloth, Silk Cloth)", 2589 in names and 4306 in names)
+A.ex('__ns.UI.itemBox:SetText("silk")')
+A.ex('__ns.UI.itemBox:GetScript("OnTabPressed")(__ns.UI.itemBox)')
+check("Tab puts the item in the box", A.ev('__ns.ItemID(__ns.UI.itemBox:GetText())') == 4306)
+check("and the list closes (it's a real item now)", A.ev('__ns.UI.suggest:IsShown()') != True)
+A.ex('__ns.UI.itemBox:SetText("l")')
+check("one letter isn't enough to search", A.ev('__ns.UI.suggest:IsShown()') != True)
+A.ex('__ns.UI.forBox.HasFocus = nil; __ns.UI.qtyBox:SetText("2"); __ns.UI.forBox:SetText(""); __ns.UI.itemBox:SetText("silk")')
+n0 = A.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()')
+A.ex('__ns.UI.itemBox.onEnter(__ns.UI.itemBox)')
+check("Enter with a single match picks it (doesn't submit yet)", A.ev('__ns.ItemID(__ns.UI.itemBox:GetText())') == 4306
+      and A.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()') == n0)
+A.ex('__ns.UI.itemBox.onEnter(__ns.UI.itemBox)'); tick(2)
+check("a second Enter makes the request", A.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()') == n0 + 1)
+A.ex('__ns.UI.itemBox.HasFocus = nil; __ns.UI.forBox.HasFocus = nil; __bags[0] = {}')
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

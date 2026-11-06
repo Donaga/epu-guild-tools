@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.8
+
+- **Suggestions as you type.**
+  - **For box (officers):** guild members whose first or last name starts with what you've typed, online first.
+  - **Item box (requests and needs):** items the guild deals with (bank stock, needs, recipes and their materials, past requests and donations, your bags). Shown with icons and how many the bank has.
+  - **Picking one:** Tab or a click fills it in. Up/Down choose, then Enter. Enter alone picks it only when there's one match.
+- **Fixed: the request form's boxes overlapped** when the officer For box was showing. The boxes now size to fit, and the item box's hint shortens when space is tight.
+- **Officers' sidebar status** now reads "Officer copy" instead of "Waiting for guild data". Members sync from your copy.
+
 ## 0.9.7
 
 - **Officers can make requests for other members.**

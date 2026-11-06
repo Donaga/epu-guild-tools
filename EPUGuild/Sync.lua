@@ -603,8 +603,9 @@ function ns.SyncStatus()
   if S.officerAt then
     return "Synced " .. Ago(S.officerAt), "green", "Up to date with " .. tostring(S.officer or "an officer") .. ". Checks again automatically."
   end
-  if ns.IsTrusted(ns.me) and g.syncedAt then
-    return "Last sync " .. Ago(g.syncedAt), "muted", "No other officer has been online since you logged in."
+  if ns.IsTrusted(ns.me) then
+    return "Officer copy", "green", "You hold the guild's copy, so members sync from you. No other officer has synced with you since you logged in"
+      .. (g.syncedAt and (" (last time: " .. Ago(g.syncedAt) .. ").") or ".")
   end
   if g.syncedAt then
     return "Waiting for an officer", "muted", "Last synced " .. Ago(g.syncedAt) .. ". Updates arrive automatically when an officer is online."
