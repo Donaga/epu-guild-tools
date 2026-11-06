@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.5
+
+- **Donate panel at the mailbox, reworked.**
+  - It now lists what the bank needs (always first), crafting materials, reagents and recipes, and green-or-better Bind on Equip gear.
+  - Soulbound items, quest items and the Hearthstone are never listed.
+  - Items are grouped by category (Bank needs, Cloth, Leather, Metal & Stone, Herbs and so on).
+  - The panel is taller and scrolls with the mouse wheel, so nothing gets cut off.
+  - "Show everything (+N)" adds the rest of your tradeable items.
+  - To change an amount with the wheel, hold Ctrl.
+
 ## 0.9.4
 
 - **Fixed: Needs, Shopping, Bank, Requests, Donations and Recipes wouldn't load for some players.** Their game only has the newer item functions (`C_Item`), and the addon used the old names, which exist only when the game's "deprecated API" fallback is on. The addon now uses the new ones and falls back to the old.

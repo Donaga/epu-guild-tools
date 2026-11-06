@@ -327,7 +327,7 @@ end
 -- 3. Donate at the mailbox: choose items and amounts, then Fill mail
 ---------------------------------------------------------------------------
 local don = CreateFrame("Frame", "EPUGuildDonate", UIParent)
-don:SetSize(300, 360)
+don:SetSize(300, 440)
 don:SetFrameStrata("HIGH")
 don:Hide()
 don:EnableMouse(true)
@@ -387,13 +387,23 @@ do
   don.list = CreateFrame("Frame", nil, don)
   don.list:SetPoint("TOPLEFT", 8, -74)
   don.list:SetPoint("BOTTOMRIGHT", -8, 66)
+  don.list:EnableMouseWheel(true)
+  don.list:SetScript("OnMouseWheel", function(_, delta) don:Scroll(-delta) end)
+  don.thumbTrack = don:CreateTexture(nil, "BORDER")
+  don.thumbTrack:SetPoint("TOPRIGHT", don.list, "TOPRIGHT", 2, 0)
+  don.thumbTrack:SetPoint("BOTTOMRIGHT", don.list, "BOTTOMRIGHT", 2, 0)
+  don.thumbTrack:SetWidth(3)
+  don.thumbTrack:SetColorTexture(0.16, 0.18, 0.21, 1)
+  don.thumb = don:CreateTexture(nil, "ARTWORK")
+  don.thumb:SetWidth(3)
+  don.thumb:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.8)
   don.empty = DText(don.list, 11, MUTED)
   don.empty:SetPoint("TOP", 0, -20)
   don.empty:SetWidth(260)
   don.empty:SetJustifyH("CENTER")
-  don.allBtn = DBtn(don, "Show everything I carry", 160)
+  don.allBtn = DBtn(don, "Show everything", 160)
   don.allBtn:SetPoint("BOTTOMLEFT", 12, 40)
-  don.allBtn:SetScript("OnClick", function() don.showAll = not don.showAll; don:Update() end)
+  don.allBtn:SetScript("OnClick", function() don.showAll = not don.showAll; don.offset = 0; don:Update() end)
   don.total = DText(don, 11, MUTED)
   don.total:SetPoint("BOTTOMRIGHT", -12, 44)
   don.fill = DBtn(don, "Fill mail", 276)
@@ -404,48 +414,82 @@ do
   don.fill:SetScript("OnClick", function() ns.FillDonation() end)
 end
 
--- Items in your bags: { id, count } sorted needed-first
+-- Items in your bags you could actually give: { [id] = count }.
+-- Soulbound items, the Hearthstone and quest items are left out.
+local HEARTHSTONE = 6948
 local function Carried()
   local counts = {}
   for bag = 0, (NUM_BAG_SLOTS or 4) do
     local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
     for slot = 1, n do
-      local id, count
+      local id, count, bound
       if C_Container and C_Container.GetContainerItemInfo then
         local info = C_Container.GetContainerItemInfo(bag, slot)
-        if info then id, count = info.itemID, info.stackCount end
+        if info then id, count, bound = info.itemID, info.stackCount, info.isBound end
       else
-        local _, c, _, _, _, _, link = GetContainerItemInfo(bag, slot)
-        if link then id, count = ns.ItemID(link), c end
+        local _, c, _, _, _, _, link, _, _, _, b = GetContainerItemInfo(bag, slot)
+        if link then id, count, bound = ns.ItemID(link), c, b end
       end
-      if id then counts[id] = (counts[id] or 0) + (count or 1) end
+      if id and not bound and id ~= HEARTHSTONE then counts[id] = (counts[id] or 0) + (count or 1) end
     end
   end
   return counts
 end
 
+-- What kind of thing is it, and is it worth offering to the bank?
+-- Default view: what the bank needs, crafting materials and recipes, and
+-- green-or-better Bind on Equip gear.
+local GEAR = "Gear (Bind on Equip)"
+local function Kind(id)
+  local _, _, quality, _, _, _, _, _, _, _, _, classID, subclassID, bindType = GetItemInfo(id)
+  if not classID and GetItemInfoInstant then
+    local _, _, _, _, _, c, sc = GetItemInfoInstant(id)
+    classID, subclassID = c, sc
+  end
+  if classID == 12 then return nil end                                   -- quest items
+  local cat = ns.CategoryOf(classID, subclassID)
+  if classID == 2 or classID == 4 then
+    local useful = (tonumber(quality) or 0) >= 2 and bindType == 2
+    return useful and GEAR or "Other gear", useful
+  end
+  local useful = classID == 7 or classID == 5 or classID == 9          -- trade goods, reagents, recipes
+  return cat, useful
+end
+ns.DonateKind = Kind
+
+local ORDER = { ["Bank needs"] = 0 }
+for i, c in ipairs(ns.CATEGORIES) do ORDER[c] = i end
+ORDER[GEAR] = ORDER["Weapons & Armor"] or 50
+ORDER["Other gear"] = 98
+
+local ROW_H, HEAD_H = 32, 20
+
 local function DonateRow(i)
   local r = don.rows[i]
   if r then return r end
   r = CreateFrame("Frame", nil, don.list)
-  r:SetSize(284, 30)
-  r:SetPoint("TOPLEFT", 0, -(i - 1) * 32)
+  r:SetSize(270, ROW_H - 2)
   r:EnableMouseWheel(true)
+  r.head = DText(r, 11, GOLD)
+  r.head:SetPoint("BOTTOMLEFT", 4, 3)
+  r.headLine = r:CreateTexture(nil, "BORDER")
+  r.headLine:SetPoint("BOTTOMLEFT", 4, 0); r.headLine:SetPoint("BOTTOMRIGHT", -4, 0); r.headLine:SetHeight(1)
+  r.headLine:SetColorTexture(0.25, 0.27, 0.31, 1)
   r.icon = r:CreateTexture(nil, "ARTWORK")
   r.icon:SetSize(24, 24)
   r.icon:SetPoint("LEFT", 4, 0)
   r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   r.name = DText(r, 11, { 1, 1, 1 })
   r.name:SetPoint("TOPLEFT", 34, -2)
-  r.name:SetWidth(120)
+  r.name:SetWidth(118)
   r.info = DText(r, 10, MUTED)
   r.info:SetPoint("TOPLEFT", 34, -16)
-  r.info:SetWidth(120)
+  r.info:SetWidth(118)
   r.minus = DBtn(r, "-", 20)
-  r.minus:SetPoint("LEFT", 160, 0)
+  r.minus:SetPoint("LEFT", 154, 0)
   r.qty = DText(r, 12, GOLD)
   r.qty:SetPoint("LEFT", r.minus, "RIGHT", 2, 0)
-  r.qty:SetWidth(30)
+  r.qty:SetWidth(26)
   r.qty:SetJustifyH("CENTER")
   r.plus = DBtn(r, "+", 20)
   r.plus:SetPoint("LEFT", r.qty, "RIGHT", 2, 0)
@@ -459,7 +503,7 @@ local function DonateRow(i)
     don.pick[id] = math.max(0, math.min(r.carry or 0, new))
     don:Update()
   end
-  -- shift-click +/- moves a whole stack's worth (or 10)
+  -- shift-click +/- moves 10 at a time
   r.minus:SetScript("OnClick", function() Change(IsShiftKeyDown() and -10 or -1) end)
   r.plus:SetScript("OnClick", function() Change(IsShiftKeyDown() and 10 or 1) end)
   r.max:SetScript("OnClick", function()
@@ -469,17 +513,30 @@ local function DonateRow(i)
       Change(0, r.suggest and r.suggest > 0 and r.suggest or r.carry)
     end
   end)
-  r:SetScript("OnMouseWheel", function(_, delta) Change(delta * (IsShiftKeyDown() and 10 or 1)) end)
+  -- the wheel scrolls the list; hold Ctrl to change the amount instead
+  r:SetScript("OnMouseWheel", function(_, delta)
+    if IsControlKeyDown and IsControlKeyDown() and r.id then Change(delta) else don:Scroll(-delta) end
+  end)
   r:SetScript("OnEnter", function(self)
     if not self.id then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetHyperlink("item:" .. self.id)
-    GameTooltip:AddLine("Use - / + (shift for 10), the mouse wheel, or Max. Max first picks what the bank still needs; click again for all you carry.", 1, 1, 1, true)
+    GameTooltip:AddLine("Use - / + (shift for 10) or Max. Max first picks what the bank still needs; click again for all you carry. Ctrl + mouse wheel also changes the amount.", 1, 1, 1, true)
     GameTooltip:Show()
   end)
   r:SetScript("OnLeave", GameTooltip_Hide)
   don.rows[i] = r
   return r
+end
+
+function don:Scroll(step)
+  self.offset = math.max(0, math.min((self.offset or 0) + (step or 0) * 2, math.max(0, (self.entryCount or 0) - 1)))
+  self:Update()
+end
+
+-- the item row showing this item, if it's on screen
+function don:RowFor(id)
+  for _, r in ipairs(self.rows) do if r:IsShown() and r.id == id then return r end end
 end
 
 function don:Update()
@@ -488,38 +545,82 @@ function don:Update()
   self.toIndex = math.min(self.toIndex or 1, #alts)
   self.to = alts[self.toIndex]
   self.toBtn.text:SetText("Send to: " .. self.to .. ((#alts > 1) and "  (click to change)" or ""))
-  self.sub:SetText("Pick what to give and how many. Nothing is added unless you choose it.")
+  self.sub:SetText(self.showAll and "Everything you could give (soulbound items are left out)."
+    or "What the bank needs, crafting materials and green+ Bind on Equip gear.")
   local g = ns.G()
   local carry = Carried()
-  local list = {}
+  local groups, hidden = {}, 0
   for id, n in pairs(carry) do
     local v = g and g.needs.list[id]
     local target = v and ns.NeedEntry(v) or 0
     local still = math.max(0, target - ns.BankCount(id))
-    if still > 0 or self.showAll or (self.pick[id] or 0) > 0 then
-      list[#list + 1] = { id = id, carry = n, still = still, name = ns.ItemName(id, true) }
+    local cat, useful = Kind(id)
+    if cat then
+      if still > 0 then cat = "Bank needs" end
+      if still > 0 or useful or self.showAll or (self.pick[id] or 0) > 0 then
+        groups[cat] = groups[cat] or {}
+        table.insert(groups[cat], { id = id, carry = n, still = still, name = ns.ItemName(id, true), q = select(3, GetItemInfo(id)) })
+      else
+        hidden = hidden + 1
+      end
     end
   end
-  table.sort(list, function(a, b)
-    if (a.still > 0) ~= (b.still > 0) then return a.still > 0 end
-    return a.name < b.name
-  end)
-  local maxRows = math.floor(((self.list:GetHeight() or 220)) / 32)
-  local items, stacks = 0, 0
-  for i, e in ipairs(list) do
-    local r = DonateRow(i)
-    if i <= maxRows then
+  local cats = {}
+  for c in pairs(groups) do cats[#cats + 1] = c end
+  table.sort(cats, function(a, b) return (ORDER[a] or 99) < (ORDER[b] or 99) end)
+  local entries = {}
+  for _, c in ipairs(cats) do
+    table.sort(groups[c], function(a, b) return a.name < b.name end)
+    entries[#entries + 1] = { head = c .. "  (" .. #groups[c] .. ")" }
+    for _, e in ipairs(groups[c]) do entries[#entries + 1] = e end
+  end
+  self.entryCount = #entries
+  self.offset = math.max(0, math.min(self.offset or 0, #entries - 1))
+
+  -- lay out from the scroll offset until the list is full
+  local listH = self.list:GetHeight() or 280
+  local y, slot = 0, 0
+  for i = self.offset + 1, #entries do
+    local e = entries[i]
+    local h = e.head and HEAD_H or ROW_H
+    if y + h > listH then break end
+    slot = slot + 1
+    local r = DonateRow(slot)
+    r:ClearAllPoints()
+    r:SetPoint("TOPLEFT", 0, -y)
+    r:SetHeight(h - 2)
+    local isHead = e.head ~= nil
+    r.head:SetShown(isHead); r.headLine:SetShown(isHead)
+    for _, w in ipairs({ r.icon, r.name, r.info, r.minus, r.qty, r.plus, r.max }) do w:SetShown(not isHead) end
+    if isHead then
+      r.id = nil
+      r.head:SetText(e.head)
+    else
       r.id, r.carry, r.suggest = e.id, e.carry, math.min(e.carry, e.still)
       r.icon:SetTexture(ns.ItemIcon(e.id))
+      local c = e.q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[e.q]
       r.name:SetText(e.name)
-      r.info:SetText((e.still > 0) and ("bank needs " .. e.still .. "  ·  you have " .. e.carry) or ("you have " .. e.carry))
+      if c and c.r then r.name:SetTextColor(c.r, c.g, c.b) else r.name:SetTextColor(1, 1, 1) end
+      r.info:SetText((e.still > 0) and ("needs " .. e.still .. "  ·  you have " .. e.carry) or ("you have " .. e.carry))
       r.qty:SetText(tostring(self.pick[e.id] or 0))
-      r:Show()
-    else
-      r:Hide()
     end
+    r:Show()
+    y = y + h
   end
-  for i = #list + 1, #self.rows do self.rows[i]:Hide(); self.rows[i].id = nil end
+  for i = slot + 1, #self.rows do self.rows[i]:Hide(); self.rows[i].id = nil end
+  self.shown = slot
+  -- scroll bar
+  local more = self.offset > 0 or (self.offset + slot) < #entries
+  self.thumbTrack:SetShown(more); self.thumb:SetShown(more)
+  if more then
+    local frac = slot / math.max(1, #entries)
+    local th = math.max(16, listH * frac)
+    self.thumb:SetHeight(th)
+    self.thumb:ClearAllPoints()
+    self.thumb:SetPoint("TOP", self.thumbTrack, "TOP", 0, -(listH - th) * (self.offset / math.max(1, #entries - slot)))
+  end
+
+  local items, stacks = 0, 0
   for id, n in pairs(self.pick) do
     if n > 0 then
       items = items + n
@@ -527,9 +628,10 @@ function don:Update()
       stacks = stacks + math.ceil(n / math.max(1, tonumber(stackSize) or 20))
     end
   end
-  self.empty:SetText(self.showAll and "Your bags are empty." or "You're not carrying anything the bank needs right now. Use \"Show everything I carry\" to give something else.")
-  self.empty:SetShown(#list == 0)
-  self.allBtn.text:SetText(self.showAll and "Show only what's needed" or "Show everything I carry")
+  self.empty:SetText(self.showAll and "Nothing in your bags can be given (soulbound items are left out)."
+    or "Nothing the bank collects in your bags right now. Use \"Show everything\" to give something else.")
+  self.empty:SetShown(#entries == 0)
+  self.allBtn.text:SetText(self.showAll and "Show only useful items" or ("Show everything" .. (hidden > 0 and (" (+" .. hidden .. ")") or "")))
   self.total:SetText(items > 0 and (items .. " item" .. (items == 1 and "" or "s")) or "")
   self.fill.text:SetText(items > 0 and "Fill mail" or "Pick something to give")
   self.stacks = stacks
@@ -589,7 +691,7 @@ local function ShowDonate()
   don:ClearAllPoints()
   don:SetPoint("TOPLEFT", MailFrame, "TOPRIGHT", 4, 0)
   wipe(don.pick)
-  don.showAll, don.dismissed = false, false
+  don.showAll, don.dismissed, don.offset = false, false, 0
   don:Show()
   don:Update()
 end

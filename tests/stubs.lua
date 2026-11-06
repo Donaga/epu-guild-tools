@@ -139,8 +139,8 @@ function GetItemInfo(x)
   if not id then for k, v in pairs(ITEMS) do if v == x then id = k end end end
   if not id or not ITEMS[id] then return nil end
   local cls = __cls and __cls[id]   -- { classID, subType } for recipe items in tests
-  return ITEMS[id], __link(id), 1, 1, 1, cls and "Recipe" or "Trade Goods", cls and cls[2] or "Cloth", 20, "", "icon" .. id, 1,
-    cls and cls[1] or 7, __sub[id] or 0, (__bop and __bop[id]) and 1 or 0
+  return ITEMS[id], __link(id), (__qual and __qual[id]) or 1, 1, 1, cls and "Recipe" or "Trade Goods", cls and cls[2] or "Cloth", 20, "", "icon" .. id, 1,
+    cls and cls[1] or 7, __sub[id] or 0, (__bind and __bind[id]) or ((__bop and __bop[id]) and 1 or 0)
 end
 __ITEMS = ITEMS
 __sub = { [2589] = 5, [14047] = 5, [4306] = 5, [2996] = 5 }   -- item subclass: 5 = cloth
