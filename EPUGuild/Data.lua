@@ -536,10 +536,26 @@ end
 -- Requests
 ---------------------------------------------------------------------------
 -- to: which of my characters to mail it to (defaults to the one asking)
-function ns.NewRequest(id, qty, note, to)
+function ns.NewRequest(id, qty, note, to, forWho)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
   local officer = ns.IsTrusted(ns.me)
+  -- officers can file a request in another member's name
+  if forWho and forWho ~= ns.me then
+    if not officer then return ns.Print("Only officers can make requests for other members.") end
+    local now = ns.Now()
+    local rid = forWho .. "-" .. now .. "-" .. math.random(100, 999)
+    note = (note or ""):match("^%s*(.-)%s*$")
+    local tag = "added by " .. (ns.me:match("^(%S+)") or ns.me)
+    local r = { who = forWho, item = id, qty = qty or 1, note = ((note ~= "" and (note .. " (" .. tag .. ")")) or ("Added by " .. (ns.me:match("^(%S+)") or ns.me))):sub(1, 80),
+      status = "approved", by = ns.me, made = ns.me, t = now, u = now }
+    g.requests[rid] = r
+    ns.Send("D", { req = { [rid] = r } })
+    ns.Log("request", "Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. " for " .. forWho)
+    ns.Changed()
+    ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. " for " .. forWho .. " (approved). It shows up as their request.")
+    return rid
+  end
   local limit = tonumber(g.policy.maxOpen) or 0
   if not officer and limit > 0 and ns.OpenCountFor(ns.me) >= limit then
     return ns.Print("You already have " .. limit .. " open request" .. (limit == 1 and "" or "s")

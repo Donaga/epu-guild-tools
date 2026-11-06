@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.7
+
+- **Officers can make requests for other members.**
+  - On the Requests page, officers get a **For** box. Type a guildmate's name and the request is filed under their name.
+  - Part of a name works if it matches only one member. If it matches several, the addon lists them.
+  - These requests are approved right away and marked with who added them. The member gets a notice, and the request shows up as theirs.
+  - From the **Roster**, open a member and click **Request for [name]** to open the form with their name filled in.
+
 ## 0.9.6
 
 - **Fixed: a bank character's bank wasn't counted, only their bags.** Newer game clients number bank bags differently (and add a reagent bag), so the addon now asks the game which containers are the bank. Open the bank once on the bank character to record it; it's remembered between visits and updated each time you go back. The account-wide bank isn't counted.

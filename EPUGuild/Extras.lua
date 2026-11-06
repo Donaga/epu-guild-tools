@@ -309,6 +309,10 @@ function ns.OnRequestChanged(rid, r, oldStatus)
     end
     return
   end
+  if mine[r.who] and not oldStatus and r.made and not mine[r.made] then
+    ns.Notify("Request added for you", ns.WhoLabel(r.made) .. " requested " .. name .. " x" .. r.qty .. " for you. It'll be mailed to " .. (r.to or r.who) .. ".", icon)
+    return
+  end
   if mine[r.who] and oldStatus and oldStatus ~= r.status then
     if r.status == "approved" then
       ns.Notify("Request approved", name .. " x" .. r.qty .. ". It'll be mailed to " .. (r.to or r.who) .. ".", icon)

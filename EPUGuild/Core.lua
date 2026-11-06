@@ -125,6 +125,25 @@ end
 -- Match a name to a guild member. Some places may only give a first name,
 -- so a first name counts if exactly one member has it. Returns nil if the
 -- name is ambiguous or not in the guild.
+-- A guild member from what someone typed: full name, first name, or the start
+-- of a name if only one member matches. Returns name, or nil plus the matches.
+function ns.FindMember(text)
+  text = text and text:match("^%s*(.-)%s*$") or ""
+  if text == "" then return nil, {} end
+  local exact = ns.Member(text)
+  if exact then return exact end
+  local lower, hits = text:lower(), {}
+  for full in pairs(ns.roster or {}) do
+    local l = full:lower()
+    if l:sub(1, #lower) == lower or l:find(" " .. lower, 1, true) == (l:find(" ", 1, true)) and l:find(" " .. lower, 1, true) then
+      hits[#hits + 1] = full
+    end
+  end
+  table.sort(hits)
+  if #hits == 1 then return hits[1] end
+  return nil, hits
+end
+
 function ns.Member(name)
   name = ns.Short(name)
   if not name or not ns.roster then return nil end

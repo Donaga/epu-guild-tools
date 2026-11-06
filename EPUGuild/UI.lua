@@ -1647,11 +1647,16 @@ function UI:UpdateForButton()
   self.forBtn:SetLabel("For: " .. (t:match("^(%S+)") or t))
 end
 UI.forBtn:SetScript("OnClick", function() UI.forIndex = UI.forIndex + 1; UI:UpdateForButton() end)
+-- officers: type any guild member's name (partial is fine if it's unique)
+UI.forBox = Box(composer, 110, "For: me")
+UI.forBox:SetPoint("LEFT", UI.noteBox, "RIGHT", 6, 0)
+UI.forBox:Hide()
+UI.forBox.tip = "Officers: type a guild member's name to request it for them."
 UI.action = Btn(composer, "Request", 90, 22, "accent")
 UI.action:SetPoint("RIGHT", -10, 0)
 
 local function ClearComposer()
-  UI.itemBox:SetText(""); UI.qtyBox:SetText(""); UI.noteBox:SetText("")
+  UI.itemBox:SetText(""); UI.qtyBox:SetText(""); UI.noteBox:SetText(""); UI.forBox:SetText("")
 end
 
 local function SubmitComposer()
@@ -1662,7 +1667,21 @@ local function SubmitComposer()
     ns.SetNeed(id, qty, UI.kind)
   else
     if not id then return ns.Print("Shift-click or drag the item you need into the item box first.") end
-    ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), UI:ForTarget())
+    local typed = UI.forBox:IsShown() and (UI.forBox:GetText() or ""):match("^%s*(.-)%s*$") or ""
+    if typed ~= "" and typed:lower() ~= "me" then
+      local who, hits = ns.FindMember(typed)
+      if not who then
+        if hits and #hits > 1 then
+          local names = {}
+          for i = 1, math.min(6, #hits) do names[i] = hits[i] end
+          return ns.Print("More than one member matches \"" .. typed .. "\": " .. table.concat(names, ", ") .. ". Type more of the name.")
+        end
+        return ns.Print("No guild member named \"" .. typed .. "\".")
+      end
+      ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), nil, who)
+    else
+      ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), UI:ForTarget())
+    end
   end
   ClearComposer()
 end
@@ -1670,6 +1689,15 @@ UI.action:SetScript("OnClick", SubmitComposer)
 UI.itemBox.onEnter = SubmitComposer
 UI.qtyBox.onEnter = SubmitComposer
 UI.noteBox.onEnter = SubmitComposer
+UI.forBox.onEnter = SubmitComposer
+
+-- open the request form already addressed to someone (from the roster)
+function UI:RequestFor(name)
+  self:SetView("requests")
+  self.forBox:SetText(name or "")
+  self.itemBox:SetFocus()
+  ns.Print("Shift-click or drag the item for " .. tostring(name) .. ", set the amount, then press Request.")
+end
 
 -- Shift-click an item: it goes into the box you're typing in, or the item box
 -- at the bottom if the window is open. Modern clients send shift-clicks through
@@ -1985,6 +2013,9 @@ function UI:FillDetails()
       end }
     end
     det:Buttons(specs)
+    if officer and key ~= ns.me then
+      det:Buttons({ { "Request for " .. (key:match("^(%S+)") or key), function() UI:RequestFor(key) end } })
+    end
     if officer then
       local rv = ns.Review(key)
       det:Gap()
@@ -2398,16 +2429,18 @@ function UI:Layout()
   if showComposer then
     local need = (v.composer == "need")
     self.composerMode = v.composer
-    local wantFor = (not need) and #ns.MyChars() > 1
+    local officerFor = (not need) and ns.IsTrusted(ns.me)
+    local wantFor = (not need) and (officerFor or #ns.MyChars() > 1)
     local width = (composer:GetWidth() or 500)
     self.noteBox:SetShown(not need)
     self.kindBtn:SetShown(need)
-    self.forBtn:SetShown(wantFor)
+    self.forBtn:SetShown(wantFor and not officerFor)
+    self.forBox:SetShown(officerFor)
     local itemW = width - 10 - 46 - 6 - 6 - 90 - 20
     if need then itemW = itemW - 96 - 6 else itemW = itemW - 120 - 6 - (wantFor and 110 or 0) end
     self.itemBox:SetWidth(math.max(120, itemW))
     self.action:SetLabel(need and "Set need" or "Request")
-    if wantFor then self:UpdateForButton() end
+    if wantFor and not officerFor then self:UpdateForButton() end
   end
 end
 

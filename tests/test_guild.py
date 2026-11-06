@@ -157,6 +157,32 @@ A.ex('__sendTokens = 0; __sendRefill = __now; __ns.PostNews("After throttle", "s
 check("a refused message is resent and arrives", A.ev('__dropped') > 0
       and LM.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "After throttle" then return true end end return false end)()') == True)
 
+
+# --- officers make requests for other members ---
+B.ex('__btoasts = {}; __ns.Notify = function(t, x) table.insert(__btoasts, t) end')
+A.ex('__ns.UI:Show(); __ns.UI:SetView("requests")')
+check("officers get a name box on the request form", A.ev('__ns.UI.forBox:IsShown()') == True and A.ev('__ns.UI.forBtn:IsShown()') != True)
+A.ex('__ns.UI.itemBox:SetText(__link(2589)); __ns.UI.qtyBox:SetText("10"); __ns.UI.forBox:SetText("tyl")')
+A.ex('__ns.UI.action:GetScript("OnClick")()'); tick(5)
+rid = B.ev('(function() for id, r in pairs(__ns.G().requests) do if r.made == "Chris Baker" then return id end end end)()')
+check("typing part of a name files it under that member", rid is not None and B.ev('__ns.G().requests["%s"].who' % rid) == "Tyler Baker")
+check("approved, and marked who added it", B.ev('__ns.G().requests["%s"].status' % rid) == "approved" and "Chris" in B.ev('__ns.G().requests["%s"].note' % rid))
+check("the member is told", "Request added for you" in [B.ev('__btoasts[%d]' % i) for i in range(1, B.ev('#__btoasts') + 1)])
+check("it shows as theirs on their PC", B.ev('__ns.G().requests["%s"].who == __ns.me' % rid) == True)
+A.ex('__log = {}; __ns.UI.itemBox:SetText(__link(2589)); __ns.UI.forBox:SetText("Nobody Here"); __ns.UI.action:GetScript("OnClick")()')
+check("an unknown name is refused with a message", any("No guild member" in (A.ev('__log[%d]' % i) or "") for i in range(1, A.ev('#__log') + 1)))
+A.ex('__log = {}; __ns.UI.itemBox:SetText(__link(2589)); __ns.UI.forBox:SetText("Chris"); __ns.UI.action:GetScript("OnClick")()')
+check("an ambiguous name lists the matches", any("More than one member" in (A.ev('__log[%d]' % i) or "") for i in range(1, A.ev('#__log') + 1)))
+B.ex('__ns.UI:Show(); __ns.UI:SetView("requests")')
+check("members don't get the name box", B.ev('__ns.UI.forBox:IsShown()') != True)
+n0 = B.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()')
+B.ex('__ns.NewRequest(2589, 1, "", nil, "Newbie Stone")'); tick(3)
+check("members can't file requests for others", B.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()') == n0)
+# from the roster
+A.ex('__ns.UI:SetView("roster"); __ns.UI:OpenDetails("member", "Newbie Stone")')
+A.ex('(function() for _, b in ipairs(__ns.UI.details.pools.btn or {}) do if b:IsShown() and (b.text:GetText() or ""):find("Request for") then b:GetScript("OnClick")() end end end)()')
+check("Request for… on the roster opens the form with their name", A.ev('__ns.UI.view') == "requests" and A.ev('__ns.UI.forBox:GetText()') == "Newbie Stone")
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)
