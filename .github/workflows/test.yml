@@ -38,3 +38,9 @@ jobs:
         run: python tests/test_bankalt.py
       - name: Reliability, verified identities, projects and onboarding
         run: python tests/test_reliability.py
+      - name: Login pacing and server throttle recovery
+        run: python tests/test_network.py
+      - name: Request search and filter counts
+        run: python tests/test_request_filters.py
+      - name: Reagent bag donations
+        run: python tests/test_donation_bags.py

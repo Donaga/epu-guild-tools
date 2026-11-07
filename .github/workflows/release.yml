@@ -28,6 +28,12 @@ jobs:
         env:
           EPU_TEST_SEED: "1"
         run: python tests/test_discord.py
+      - name: Login pacing and server throttle recovery
+        run: python tests/test_network.py
+      - name: Request search and filter counts
+        run: python tests/test_request_filters.py
+      - name: Reagent bag donations
+        run: python tests/test_donation_bags.py
       - name: Build zips
         run: |
           VERSION="${{ github.event.release.tag_name }}"

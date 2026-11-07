@@ -4,11 +4,13 @@ for n in ["Chris Baker","Tyler Baker","Epu Bank"]:
     clients[n] = Client(n)
 tick(20)
 A, B, C = clients["Chris Baker"], clients["Tyler Baker"], clients["Epu Bank"]
+tick_until(lambda: all(c.ev('__ns.QueueLength()') == 0 for c in (A, B, C)), timeout=90)
 
 # Officer sets needs (with real link syntax)
 A.ex('SlashCmdList.EPUGUILD("need " .. __link(2589) .. " 200")')
 A.ex('SlashCmdList.EPUGUILD("need 14047 100")')
 tick(3)
+tick_until(lambda: B.ev('__ns.G().needs.list[2589]') == 200 and B.ev('__ns.G().needs.list[14047]') == 100)
 check("member sees needs", B.ev("__ns.G().needs.list[2589]") == 200 and B.ev("__ns.G().needs.list[14047]") == 100)
 
 # Untrusted member tries to overwrite needs
@@ -24,6 +26,7 @@ C.ex('for i = 1, 60 do local bag = 1 + math.floor((i-1)/16); __bags[bag] = __bag
 C.ex('local banks = {-1,5,6,7,8,9,10}; for i = 61, 150 do local bag = banks[1 + math.floor((i-61)/16)]; __bags[bag] = __bags[bag] or {}; __bags[bag][((i-61)%16)+1] = {30000+i, i} end')
 C.ex('SlashCmdList.EPUGUILD("bankalt on")'); tick(8); C.ex('__fire("BANKFRAME_OPENED")')
 tick(10)
+tick_until(lambda: B.ev('__ns.BankCount(30150)') == 150, timeout=60)
 check("bank count synced to member", B.ev("__ns.BankCount(2589)") == 40)
 check("big snapshot synced", B.ev("__ns.BankCount(30150)") == 150)
 check("bank money synced", A.ev('__ns.G().bank["Epu Bank"].money') == 123456)
@@ -99,9 +102,11 @@ B.ex('__ns.NewRequest(2996, 3, "for Pip", "Pip Baker")'); tick(3)
 ridp = A.ev("(function() for k, r in pairs(__ns.G().requests) do if r.item == 2996 then return k end end end)()")
 check("deliver-to synced", A.ev(f'__ns.G().requests["{ridp}"].to') == "Pip Baker")
 A.ex(f'__ns.SetRequestStatus("{ridp}", "approved")'); tick(2)
+tick_until(lambda: B.ev(f'__ns.G().requests["{ridp}"].status') == 'approved')
 A.ex('__sendCounts = {3}; __sendItems = {2996}; SendMail("Tyler Baker")'); tick(3)
 check("mailing the requester's main doesn't fill an alt delivery", B.ev(f'__ns.G().requests["{ridp}"].status') == "approved")
 A.ex('__sendCounts = {3}; __sendItems = {2996}; SendMail("Pip Baker")'); tick(3)
+tick_until(lambda: B.ev(f'__ns.G().requests["{ridp}"].status') == 'filled')
 check("mailing the deliver-to character fills it", B.ev(f'__ns.G().requests["{ridp}"].status') == "filled")
 
 # Crafters
@@ -110,13 +115,16 @@ check("officer sees Tyler's tailoring", A.ev('__ns.G().crafters["Tyler Baker"] a
 # Recipe lookup: Tyler opens tailoring window, officer asks
 B.ex('__fire("TRADE_SKILL_SHOW")'); tick(2)
 A.ex('SlashCmdList.EPUGUILD("who " .. __link(2996))'); tick(3)
+tick_until(lambda: A.ev('#__ns.whoResults.list') == 1)
 check("who-crafts answered", A.ev("#__ns.whoResults.list") == 1 and A.ev("__ns.whoResults.list[1].who") == "Tyler Baker")
 A.ex('SlashCmdList.EPUGUILD("who bolt of linen")'); tick(3)
+tick_until(lambda: A.ev('#__ns.whoResults.list') == 1)
 check("who-crafts by name", A.ev("#__ns.whoResults.list") == 1)
 
 # Late joiner with empty data gets everything
 clients["Newbie Stone"] = D = Client("Newbie Stone")
 tick(30)
+tick_until(lambda: D.ev('__ns.G().crafters["Tyler Baker"] ~= nil'), timeout=90)
 check("late joiner got needs", D.ev("__ns.G().needs.list[2589]") == 200)
 check("late joiner got big bank", D.ev("__ns.BankCount(30150)") == 150)
 check("late joiner got all donations", D.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()") == A.ev("(function() local n=0 for _ in pairs(__ns.G().donations) do n=n+1 end return n end)()") == 3)

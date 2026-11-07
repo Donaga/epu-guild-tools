@@ -358,6 +358,7 @@ local HELP = {
   "|cffffd100/epu alts|r - list your characters the addon knows about",
   "|cffffd100/epu officerrank <n>|r - ranks 0..n are trusted (default 1: GM + officers)",
   "|cffffd100/epu sync|r - ask online officers for a full resync",
+  "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
@@ -411,6 +412,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
+  elseif cmd == "net" then
+    ns.PrintNetworkStatus()
   elseif cmd == "news" then
     if #ns.UnreadNews() == 0 then ns.Print("No unread announcements.") else ns.ShowUnreadNews() end
   elseif cmd == "milestonechat" then

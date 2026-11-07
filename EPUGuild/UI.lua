@@ -351,13 +351,21 @@ syncBtn:SetScript("OnClick", function() ns.FullSync() end)
 UI.search = Box(header, 260, "Search items, members...")
 UI.search:SetPoint("LEFT", title, "RIGHT", 18, 0)
 UI.search:SetPoint("RIGHT", syncBtn, "LEFT", -10, 0)
-UI.search:SetTextInsets(22, 6, 0, 0)
+UI.search:SetTextInsets(22, 28, 0, 0)
 UI.search.ph:SetPoint("LEFT", 22, 0)
 local mag = UI.search:CreateTexture(nil, "OVERLAY")
 mag:SetSize(14, 14)
 mag:SetPoint("LEFT", 5, 0)
 mag:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
-UI.search.onChange = function() UI:Refresh() end
+UI.clearSearch = IconBtn(UI.search, "Interface\\Buttons\\UI-StopButton", "Clear search", 18)
+UI.clearSearch:SetPoint("RIGHT", -3, 0)
+UI.clearSearch:SetFrameLevel(UI.search:GetFrameLevel()+2)
+UI.clearSearch:Hide()
+UI.clearSearch:SetScript("OnClick", function() UI.search:SetText(""); UI.search:ClearFocus() end)
+UI.search.onChange = function()
+  UI.clearSearch:SetShown((UI.search:GetText() or "")~="")
+  UI:Refresh()
+end
 
 -- Sidebar -------------------------------------------------------------------
 local side = CreateFrame("Frame", nil, UI)
@@ -1027,6 +1035,13 @@ local function RequestMatchesFilter(r, f)
   return r.status == f
 end
 
+local function RequestMatchesScope(r,q)
+  local st=UI.state.requests
+  local mine=ns.MainOf(r.who)==ns.MainOf(ns.me) or ns.IAmCrafter(r)
+  return (not st.mine or mine) and (not st.crafts or r.crafter)
+    and Match(q,ns.RequestName(r,true),r.who,r.to,ns.MainOf(r.who),r.note,r.crafter)
+end
+
 Views.requests = {
   label = "Requests", icon = "Interface\\Icons\\INV_Letter_15",
   composer = "request",
@@ -1042,11 +1057,13 @@ Views.requests = {
     return n, C.goldBg, C.gold
   end,
   tools = function(bar)
-    UI.statusChip = DropChip(bar, 120, "Which requests to show", function()
+    UI.statusChip = DropChip(bar, 120, "Which requests to show; counts include the current search, Mine and Crafts filters", function()
       local g, counts = ns.G(), {}
       for _, r in pairs((g and g.requests) or {}) do
+        if RequestMatchesScope(r,Q()) then
         for _, f in ipairs(REQ_FILTERS) do
           if RequestMatchesFilter(r, f[1]) then counts[f[1]] = (counts[f[1]] or 0) + 1 end
+        end
         end
       end
       local items = {}
@@ -1069,12 +1086,9 @@ Views.requests = {
   end,
   rows = function(g, q)
     local st, officer, out = UI.state.requests, ns.IsTrusted(ns.me), {}
-    local myMain = ns.MainOf(ns.me)
     for rid, r in pairs(g.requests) do
       local name = ns.RequestName(r, true)
-      local mineHere = ns.MainOf(r.who) == myMain or ns.IAmCrafter(r)
-      if RequestMatchesFilter(r, st.filter) and (not st.mine or mineHere) and (not st.crafts or r.crafter)
-        and Match(q, name, r.who, r.to, ns.MainOf(r.who), r.note, r.crafter) then
+      if RequestMatchesFilter(r, st.filter) and RequestMatchesScope(r,q) then
         local pending = (r.status == "pending" or r.status == "open")
         local parts = { ns.WhoLabel(r.who) }
         if r.crafter then
@@ -1125,9 +1139,18 @@ Views.requests = {
     end)
     return out
   end,
-  footer = function()
-    if ns.IsTrusted(ns.me) then return "Mailing an approved item to the requester marks it filled automatically." end
-    return "Ask for something below. An officer approves it and mails it to you."
+  footer = function(g)
+    local shown,total=0,0
+    for _,r in pairs(g.requests) do
+      if RequestMatchesFilter(r,UI.state.requests.filter) then
+        total=total+1; if RequestMatchesScope(r,Q()) then shown=shown+1 end
+      end
+    end
+    local summary="Showing "..shown.." of "..total.." requests"
+    if Q()~="" then summary=summary..' | Search: "'..Q()..'" (X clears)' end
+    if UI.state.requests.mine then summary=summary.." | Mine" end
+    if UI.state.requests.crafts then summary=summary.." | Crafts" end
+    return summary
   end,
   empty = "No requests match. Try another filter, or ask for something below.",
 }

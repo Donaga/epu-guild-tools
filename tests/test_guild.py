@@ -121,6 +121,7 @@ check("officer log details", A.ev('__ns.UI.details.kind') == "log")
 # a late officer catches up on notes and log
 del clients["Gm Baker"]
 GM2 = Client("Gm Baker"); clients["Gm Baker"] = GM2; tick(30)
+tick_until(lambda: GM2.ev('__ns.GuildStore().notes["Newbie Stone"] ~= nil') and GM2.ev('#__ns.LogEntries()') > 3, timeout=90)
 check("officer catching up gets notes and log", GM2.ev('__ns.GuildStore().notes["Newbie Stone"] ~= nil') == True and GM2.ev('#__ns.LogEntries()') > 3)
 
 # toolbars still fit at the smallest size

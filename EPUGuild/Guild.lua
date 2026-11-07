@@ -105,7 +105,7 @@ function ns.AddFeed(kind, text, who, id)
   ns.Send("D", { feed = { [id] = e } })
   ns.Changed()
   if who == ns.me and ns.db and ns.db.settings.milestoneChat and IsInGuild() then
-    SendChatMessage("[EPU] " .. who .. " " .. e.text .. "!", "GUILD")
+    ns.SendGuildChat("[EPU] " .. who .. " " .. e.text .. "!")
   end
 end
 
