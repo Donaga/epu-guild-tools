@@ -22,7 +22,6 @@ param(
 $ErrorActionPreference = 'Stop'
 $Repo      = 'Donaga/epu-guild-tools'
 $AddonName = 'EPUGuild'
-$Keep      = @('Inbox.lua')        # written by the Discord companion; never overwrite
 $StateDir  = Join-Path $env:APPDATA 'EPUGuildUpdater'
 $StateFile = Join-Path $StateDir 'settings.json'
 $Self      = $MyInvocation.MyCommand.Path
@@ -147,24 +146,13 @@ try {
 
   $dest = Join-Path $addons $AddonName
   try {
-    New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    # remove files the new version no longer has (but keep the Discord inbox)
-    $newFiles = Get-ChildItem $src.FullName -Recurse -File | ForEach-Object { $_.FullName.Substring($src.FullName.Length) }
-    Get-ChildItem $dest -Recurse -File | Where-Object {
-      ($Keep -notcontains $_.Name) -and ($newFiles -notcontains $_.FullName.Substring($dest.Length))
-    } | Remove-Item -Force
-    Get-ChildItem $src.FullName -Recurse -File | ForEach-Object {
-      $rel = $_.FullName.Substring($src.FullName.Length)
-      $target = Join-Path $dest $rel
-      if (($Keep -contains $_.Name) -and (Test-Path $target)) { return }
-      New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
-      Copy-Item $_.FullName $target -Force
-    }
+    . (Join-Path (Split-Path $Self -Parent) 'Install-EPU.ps1')
+    $previousInstall = Install-EPUAddon -Source $src.FullName -Destination $dest
   } catch [System.UnauthorizedAccessException] {
     if ($Elevated) { throw }
     # Program Files needs admin rights on some PCs: ask once, then retry
     $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$Self`" -Elevated" + $(if ($Quiet) { ' -Quiet' } else { '' })
-    Start-Process powershell -Verb RunAs -ArgumentList $argList
+    Start-Process powershell -Verb RunAs -WindowStyle Hidden -ArgumentList $argList
     exit 0
   } finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

@@ -28,6 +28,21 @@ local U = ns.Unconf
 
 ns.pendingHello = {}     -- officers: hellos waiting to be answered
 ns.pendingRelay = {}     -- members: hellos we'll relay to if no officer does
+function ns.ExpireSync()
+  for key,p in pairs(S.parts) do if GetTime()-(p.at or 0)>1800 then S.parts[key]=nil end end
+end
+
+local FIELDS={req="requests",don="donations",craft="crafters",alts="alts",altVerified="altVerified",
+  recipes="recipes",mats="mats",projects="projects",onboarding="onboarding",onboardingSteps="onboardingSteps"}
+local function FieldDigests(g)
+  local out={}
+  for wire,field in pairs(FIELDS) do
+    local confirmed={}
+    for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=v end end
+    out[wire]=ns.Fingerprint(confirmed)
+  end
+  return out
+end
 
 function ns.EmptyDigest()
   return { needs = 0, bank = {}, since = 0, ver = ns.VERSION, at = ns.Now() }
@@ -39,6 +54,11 @@ function ns.Digest()
   if not g then return d end
   -- unconfirmed copies count as missing, so an officer sends the real thing
   d.needs = U(g, "needs", "list") and 0 or g.needs.v
+  d.needsSig = ns.NeedsSignature()
+  d.fields = FieldDigests(g)
+  d.policySig=ns.Fingerprint(g.policy)
+  d.bankSig={}
+  for alt,s in pairs(g.bank) do d.bankSig[alt]=ns.Fingerprint(s) end
   d.policy = g.policy.v
   for alt, s in pairs(g.bank) do if not U(g, "bank", alt) then d.bank[alt] = s.v end end
   d.since = g.syncedAt or 0
@@ -52,17 +72,18 @@ function ns.Delta(d)
   if not g then return nil end
   local b = {}
   local since = tonumber(d.since) or 0
-  if g.needs.v > (tonumber(d.needs) or 0) and not U(g, "needs", "list") then b.needs = g.needs end
-  if (g.policy.v or 0) > (tonumber(d.policy) or 0) then b.policy = g.policy end
+  if (g.needs.v > (tonumber(d.needs) or 0) or d.needsSig ~= ns.NeedsSignature()) and not U(g, "needs", "list") then b.needs = g.needs end
+  if (g.policy.v or 0) > (tonumber(d.policy) or 0) or (d.policySig and d.policySig~=ns.Fingerprint(g.policy)) then b.policy = g.policy end
   for alt, s in pairs(g.bank) do
-    if s.v > ((type(d.bank) == "table" and tonumber(d.bank[alt])) or 0) and not U(g, "bank", alt) then
+    if (s.v > ((type(d.bank) == "table" and tonumber(d.bank[alt])) or 0) or (type(d.bankSig)=="table" and d.bankSig[alt]~=ns.Fingerprint(s))) and not U(g, "bank", alt) then
       b.bank = b.bank or {}
       b.bank[alt] = s
     end
   end
   local function add(field, src, stamp)
+    local mismatch=type(d.fields)=="table" and d.fields[field]~=ns.Fingerprint(src)
     for k, x in pairs(src) do
-      if stamp(x) > since and not U(g, field, k) then
+      if (mismatch or stamp(x) > since) and not U(g, field, k) then
         b[field] = b[field] or {}
         b[field][k] = x
       end
@@ -72,6 +93,12 @@ function ns.Delta(d)
   add("don", g.donations, function(x) return math.max(x.t or 0, tonumber(x.u) or 0) end)
   add("craft", g.crafters, function(c) return c.t or 0 end)
   add("alts", g.alts, function(a) return a.t or 0 end)
+  add("altVerified", g.altVerified, function(a) return a.t or 0 end)
+  if ns.DeltaPlanning then
+    for _,f in ipairs({"projects","onboarding","onboardingSteps"}) do
+      add(f,g[f] or {},function(r) return r.t or 0 end)
+    end
+  end
   add("recipes", g.recipes, function(r) return r.t or 0 end)
   add("mats", g.mats, function(m) return m.t or 0 end)
   if ns.DeltaGuild then ns.DeltaGuild(b, since) end
@@ -85,7 +112,7 @@ local GROUPS = {
   { "needs", "policy", "bank" },
   { "req", "don" },
   { "news", "feed" },
-  { "craft", "alts", "profiles", "joined" },
+  { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time
 
@@ -109,7 +136,43 @@ function ns.SplitDelta(b)
     end
   end
   if #parts == 0 then parts[1] = {} end   -- still answer, so the requester knows it's up to date
-  return parts
+  -- Keep whole bundles below the transport cap, including large request histories.
+  local bounded={}
+  for _,part in ipairs(parts) do
+    if #ns.Serialize(part)<=60000 then bounded[#bounded+1]=part
+    else
+      for field,records in pairs(part) do
+        if field=="policy" then
+          if #ns.Serialize(records)>240000 then ns.Print("Guild settings are too large to sync."); return end
+          bounded[#bounded+1]={[field]=records}
+        else
+          local src=field=="needs" and records.entries or records
+          if field=="needs" and not records.entries then
+            src={}; for id,value in pairs(records.list) do src[id]={v=records.v,by="",value=value} end
+          end
+          local batch={}
+          local function bundle(map)
+            if field=="needs" then
+              local list={}; for id,e in pairs(map) do list[id]=e.value end
+              return {needs={v=records.v,list=list,entries=map}}
+            end
+            return {[field]=map}
+          end
+          for id,r in pairs(src) do
+            batch[id]=r
+            if #ns.Serialize(bundle(batch))>60000 then
+              batch[id]=nil
+              if next(batch) then bounded[#bounded+1]=bundle(batch) end
+              batch={[id]=r}
+              if #ns.Serialize(bundle(batch))>240000 then ns.Print("A guild record is too large to sync; please report it to an officer."); return end
+            end
+          end
+          if next(batch) then bounded[#bounded+1]=bundle(batch) end
+        end
+      end
+    end
+  end
+  return bounded
 end
 
 local function SendAnswer(to, d, relay)
@@ -117,6 +180,7 @@ local function SendAnswer(to, d, relay)
   if not b then return end
   if relay then b.policy = nil end         -- settings only ever come from officers
   local parts = ns.SplitDelta(b)
+  if not parts then return end
   ns.LogSync(relay and "relayed" or "sent", to, (relay and "Passed on to " or "Answered ") .. to .. ": " .. ns.SyncWhat(ns.SyncCount(b)))
   for i, p in ipairs(parts) do
     p.sync, p.part, p.parts, p.hs = to, i, #parts, tonumber(d.at) or 0
@@ -159,7 +223,7 @@ local VALID = {
 }
 
 local function Tables(g)
-  return { bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
+  return { projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
     mats = g.mats, alts = g.alts, profiles = g.profiles, feed = g.feed, news = g.news, joined = g.joined }
 end
 
@@ -184,7 +248,7 @@ function ns.MergeRelay(sender, b)
     if type(src) == "table" then
       for k, x in pairs(src) do
         local stamp = type(x) == "table" and Stamp(f, x)
-        local ok = stamp and VALID[f](x) and Owner(f, k, x) ~= ns.me
+        local ok = stamp and VALID[f] and VALID[f](x) and Owner(f, k, x) ~= ns.me
         if ok and f == "alts" then
           for _, n in pairs(x.chars) do if n == ns.me then ok = false end end
         end
@@ -241,6 +305,8 @@ end
 -- reports a one-line summary after it syncs ("Y"), which the Sync tab lists.
 ---------------------------------------------------------------------------
 local LABELS = {
+  { "projects", "projects" }, { "onboarding", "checklist updates" }, { "onboardingSteps", "checklist instructions" },
+  { "altVerified", "character confirmations" },
   { "needs", "needs" }, { "bank", "bank snapshots" }, { "req", "requests" }, { "don", "donations" },
   { "news", "announcements" }, { "feed", "milestones" }, { "craft", "crafters" }, { "recipes", "recipe lists" },
   { "profiles", "profiles" }, { "alts", "alt groups" }, { "joined", "join dates" }, { "policy", "settings" },
@@ -359,6 +425,14 @@ function ns.SendHello(full)
   ns.helloAt = d.at
   S.helloAt = GetTime()
   ns.Send("H", d)
+  local hello = S.helloAt
+  local function retry()
+    if S.helloAt ~= hello or (S.officerHs or 0) >= d.at then return end
+    if S.lastPart and GetTime()-S.lastPart<90 then C_Timer.After(90,retry); return end
+    -- A missing bundle must not advance the watermark; ask for a full replay.
+    ns.MaybeHello(true, 1)
+  end
+  C_Timer.After(120, retry)
   ns.LogSync("asked", nil, full and "Asked for a full sync" or "Asked for updates")
 end
 
@@ -410,10 +484,19 @@ ns.comm.H = function(sender, d)
 end
 
 local function Complete(sender, b)
+  local count, index = tonumber(b.parts) or 1, tonumber(b.part) or 1
+  if count < 1 or count > 4096 or count ~= math.floor(count) or index < 1 or index > count or index ~= math.floor(index) then return false end
+  local now = GetTime()
+  local total=0
+  for k,p in pairs(S.parts) do if now-(p.at or 0)>1800 then S.parts[k]=nil else total=total+1 end end
   local key = sender .. ":" .. tostring(b.hs)
+  if total>=32 and not S.parts[key] then return false end
   local p = S.parts[key]
-  if not p then p = { n = tonumber(b.parts) or 1, have = {}, got = 0, counts = {} }; S.parts[key] = p end
-  local i = tonumber(b.part) or 1
+  if not p then p = { n = count, have = {}, got = 0, counts = {}, at=now }; S.parts[key] = p end
+  if p.n ~= count then return false end
+  p.at = now
+  S.lastPart = now
+  local i = index
   if not p.have[i] then p.have[i] = true; p.got = p.got + 1; Count(b, p.counts) end
   if p.got < p.n then return false end
   S.parts[key] = nil
@@ -509,7 +592,11 @@ function ns.CheckInDigest()
   local g = ns.G()
   if not g then return nil end
   local top, owner = ns.TopStamp()
-  local d = { needs = g.needs.v, policy = g.policy.v or 0, bank = {}, top = top, topBy = owner }
+  local d = { needsSig=ns.NeedsSignature(), needs = g.needs.v, policy = g.policy.v or 0, bank = {}, top = top, topBy = owner }
+  d.fields=FieldDigests(g)
+  d.policySig=ns.Fingerprint(g.policy)
+  d.bankSig={}
+  for alt,s in pairs(g.bank) do d.bankSig[alt]=ns.Fingerprint(s) end
   for alt, s in pairs(g.bank) do d.bank[alt] = s.v end
   return d
 end
@@ -518,11 +605,18 @@ end
 function ns.Behind(c)
   local g = ns.G()
   if not g or type(c) ~= "table" then return false end
+  if type(c.fields)=="table" then
+    local mine=FieldDigests(g)
+    for f,signature in pairs(c.fields) do if mine[f] and mine[f]~=signature then return true end end
+  end
+  if c.policySig and c.policySig~=ns.Fingerprint(g.policy) then return true end
+  if c.needsSig and c.needsSig ~= ns.NeedsSignature() then return true end
   if U(g, "needs", "list") or (tonumber(c.needs) or 0) > g.needs.v then return true end
   if (tonumber(c.policy) or 0) > (g.policy.v or 0) then return true end
   if type(c.bank) == "table" then
     for alt, v in pairs(c.bank) do
       local s = g.bank[alt]
+      if s and type(c.bankSig)=="table" and c.bankSig[alt]~=ns.Fingerprint(s) then return true end
       if not s or U(g, "bank", alt) or (tonumber(v) or 0) > s.v then return true end
     end
   end
@@ -623,6 +717,8 @@ function ns.BroadcastMine()
   local g = ns.G()
   if not g then return end
   local b, any = {}, false
+  ns.VerifyCharacter(ns.db.accountId)
+  if g.altVerified[ns.me] then b.altVerified = {[ns.me]=g.altVerified[ns.me]}; any=true end
   if g.crafters[ns.me] then b.craft = { [ns.me] = g.crafters[ns.me] }; any = true end
   local id = ns.db and ns.db.accountId
   if id and g.alts[id] then b.alts = { [id] = g.alts[id] }; any = true end

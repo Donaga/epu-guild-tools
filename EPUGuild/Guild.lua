@@ -408,7 +408,7 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
     for who, p in pairs(b.profiles) do
       if type(p) == "table" and type(p.t) == "number" and (trusted or who == sender) then
         local cur = ns.Real(g, "profiles", who, g.profiles[who])
-        if not cur or p.t > cur.t then
+        if not cur or ns.Newer(p, cur, "t") then
           ns.Confirm(g, "profiles", who)
           g.profiles[who] = { t = p.t, roles = type(p.roles) == "string" and p.roles:sub(1, 3) or nil,
             lf = type(p.lf) == "string" and p.lf:sub(1, 60) or nil }
@@ -436,7 +436,7 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
   if trusted and type(b.news) == "table" then
     for id, e in pairs(b.news) do
       local cur = ns.Real(g, "news", id, g.news[id])
-      if type(e) == "table" and type(e.u) == "number" and (not cur or e.u > (cur.u or 0)) then
+      if type(e) == "table" and type(e.u) == "number" and (not cur or ns.Newer(e, cur, "u")) then
         ns.Confirm(g, "news", id)
         g.news[id] = { t = e.t, u = e.u, by = e.by, title = e.title, text = e.text, removed = e.removed, via = e.via,
           quiet = e.quiet and true or nil }
@@ -489,7 +489,7 @@ local function MergeOfficer(b)
   if trusted and type(b.notes) == "table" then
     for who, n in pairs(b.notes) do
       local cur = g.notes[who]
-      if type(n) == "table" and type(n.t) == "number" and (not cur or n.t > cur.t) then
+      if type(n) == "table" and type(n.t) == "number" and (not cur or ns.Newer(n, cur, "t")) then
         g.notes[who] = { t = n.t, by = n.by, text = n.text }
         changed = true
       end

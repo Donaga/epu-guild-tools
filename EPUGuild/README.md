@@ -12,6 +12,28 @@ A guild helper for **E Pluribus Unum** on WoW: Forever. It covers the time befor
 
 Everyone in the guild should install it. The more members who have it, the more complete the data is.
 
+## Upgrading to 0.10
+
+Update the addon for everyone and update the Discord companion on the officer PC together, then `/reload` and `/epu sync`. Log onto each alt once to confirm its main/alt relationship. Unverified claims from older clients are no longer used as proof of ownership. Existing Discord links need `/link` followed by officer approval using `/approve_link user: character:`; each character is verified separately.
+
+This preview has offline simulation coverage and still needs testing in the live Forever client before a guild-wide rollout.
+
+## Crafting projects
+
+The **Projects** page lets officers create a named guild goal, then **Add craft task** for each shared recipe. Shift-click an output item (or enter its item ID), choose a crafter who knows it, enter the quantity and recipient, and **Assign**. Each task creates a normal craft request: the crafter accepts or declines, and deliveries advance project progress. Multiple tasks can cover a larger guild goal such as bags for recruits or equipment for several members.
+
+Project details show the remaining recipe materials and bank counts. **Stock materials** raises standing material reserves in Needs; approved bank-funded craft requests add their own consumption to Shopping so the reserve is maintained after crafting. Reagent quantities use the addon's existing recipe calculation; check recipes that produce multiple items per craft. Enchants are services and must be marked made manually after the trade. Completed project requests retain their history. Finish or cancel active tasks before archiving a project.
+
+## Getting started checklist
+
+**Getting started** shows your checklist; officers can review everyone's progress. Members confirm their own rules and setup steps. Officers confirm Discord identity and record a public mentor/starter-supply note. **Edit instructions** beside a checklist step changes the guild's instructions; officers can add steps using a new Step ID and select whether a member or officer confirms them. Confirming a step is a record of a person's acknowledgement, not automatic proof that they read a document or delivered starter supplies.
+
+## Delivery and bank accuracy
+
+Requests now keep **delivered** and **remaining** quantities. A partial shipment leaves the request approved. Mail prepared with **Mail it** counts toward that request only; other deliveries are allocated to the oldest approved matching request first. Reopening a filled request resets its delivery credit and preserves its history. Officers should coordinate before simultaneously sending the same request: an addon cannot make two offline clients' physical deliveries atomic.
+
+A guild-bank snapshot is published only after every tab is accessible and has responded. If a scan is incomplete, the previous snapshot remains in use with its previous observation time. Reopen the bank to retry a query that never responded. Recent guild sync does not mean someone recently inspected the physical bank.
+
 ## One-time setup (officers)
 - **Bank alt:** log onto the bank character and type `/epu bankalt on`, then open its bank once. Give the bank alt a guild rank with "Bank" in its name (e.g. *Bank*), or an officer rank. Otherwise other members' addons ignore its updates.
 - **Trust:** by default ranks 0–1 (GM + officers) are trusted. If officers sit at rank 2, type `/epu officerrank 2`. Each player sets this locally, so it's easiest to keep officers at rank 0–1.

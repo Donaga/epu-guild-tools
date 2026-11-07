@@ -7,7 +7,15 @@ on:
 permissions:
   contents: write
 jobs:
+  updater:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Staged updater and inbox preservation
+        shell: pwsh
+        run: ./tests/test_updater.ps1 -ScratchRoot $env:RUNNER_TEMP
   release:
+    needs: updater
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install lupa "discord.py>=2.3"
-      - run: python tests/test_sync.py && python tests/test_discord.py && python tests/test_itemdb.py && python tests/test_ui.py && python tests/test_guild.py && python tests/test_autosync.py && python tests/test_bankalt.py
+      - run: python tests/test_sync.py && python tests/test_discord.py && python tests/test_itemdb.py && python tests/test_ui.py && python tests/test_guild.py && python tests/test_autosync.py && python tests/test_bankalt.py && python tests/test_reliability.py
       - name: Build zips
         run: |
           VERSION="${{ github.event.release.tag_name }}"

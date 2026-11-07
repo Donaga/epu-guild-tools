@@ -109,6 +109,8 @@ function ns.ProcessInbox()
           ok = true    -- item never resolved; give up
           ns.Print("Dropped a Discord request for an unknown item: " .. tostring(e.itemName or e.item))
         end
+      elseif e.kind == "checklist" then
+        ok = ns.SetChecklist(e.who, e.step, e.done, e.note)
       elseif e.kind == "status" then
         local r = e.rid and g.requests[e.rid]
         if r then

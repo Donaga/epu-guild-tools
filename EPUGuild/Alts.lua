@@ -65,22 +65,25 @@ function ns.RebuildAlts()
   if not g then return end
   for _, rec in pairs(g.alts) do
     for _, name in ipairs(rec.chars or {}) do
-      local cur = ns.altIndex[name]
-      if not cur or (rec.t or 0) > (cur.t or 0) then ns.altIndex[name] = rec end   -- newest claim wins
+      local proof = g.altVerified[name]
+      if proof and g.alts[proof.id] == rec then
+        local cur = ns.altIndex[name]
+        if not cur or (rec.t or 0) > (cur.t or 0) then ns.altIndex[name] = rec end
+      end
     end
   end
 end
 
 function ns.MainOf(name)
   local rec = name and ns.altIndex[name]
-  return (rec and rec.main) or name
+  return (rec and ns.altIndex[rec.main] == rec and rec.main) or name
 end
 
 function ns.AltsOf(name)
   local rec = name and ns.altIndex[name]
   local out = {}
   for _, n in ipairs((rec and rec.chars) or {}) do
-    if n ~= rec.main then out[#out + 1] = n end
+    if n ~= name and ns.altIndex[n] == rec then out[#out + 1] = n end
   end
   return out
 end
@@ -98,6 +101,7 @@ function ns.PublishAlts()
   ns.RegisterMe()
   local chars, main = ns.MyChars(), ns.MyMain()
   local id = ns.db.accountId
+  ns.VerifyCharacter(id)
   local cur = g.alts[id]
   if cur and cur.main == main and table.concat(cur.chars or {}, ",") == table.concat(chars, ",") then
     ns.RebuildAlts()

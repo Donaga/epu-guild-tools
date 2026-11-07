@@ -31,6 +31,7 @@ function ns.G()
   g.requests = g.requests or {}  -- [id] = { who, item, qty, note, status, t, u, by }
   g.donations = g.donations or {}-- [id] = { t, who, item, n, money, to }
   g.crafters = g.crafters or {}  -- [member] = { t, lvl, profs = {[name] = skill} }
+  g.altVerified = g.altVerified or {}
   g.alts = g.alts or {}          -- [accountId] = { t, main, chars = { names } }
   g.policy = g.policy or { v = 0, maxOpen = 0 }   -- officer settings shared with the guild
   g.policy.designated = g.policy.designated or {}  -- [profession] = { names } (guild crafters)
@@ -180,13 +181,14 @@ local Confirm = ns.Confirm
 function ns.Prune(g)
   local now = ns.Now()
   for id, r in pairs(g.requests) do
-    if not ns.IsActiveRequest(r) and now - (r.u or 0) > 14 * DAY then g.requests[id] = nil end
+    -- A project retains its requests as its progress and delivery history.
+    if not r.project and not ns.IsActiveRequest(r) and now - (r.u or 0) > 14 * DAY then g.requests[id] = nil end
   end
   for who, c in pairs(g.crafters) do
     if now - (c.t or 0) > 90 * DAY then g.crafters[who] = nil end
   end
   for id, a in pairs(g.alts) do
-    if now - (a.t or 0) > 90 * DAY then g.alts[id] = nil end
+    -- Verified identity remains valid until the character changes its own claim.
   end
   for who, rec in pairs(g.recipes) do
     if now - (rec.t or 0) > 90 * DAY then g.recipes[who] = nil; ns.recipeIndex = nil end
@@ -208,8 +210,8 @@ function ns.Merge(sender, b, catchingUp)
   local changed = false
 
   local nd = b.needs
-  if trusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" and (nd.v > g.needs.v or ns.Unconf(g, "needs", "list")) then
-    g.needs = { v = nd.v, list = nd.list }
+  if trusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" then
+    ns.MergeNeeds(sender, nd)
     Confirm(g, "needs", "list")
     changed = true
   end
@@ -218,7 +220,7 @@ function ns.Merge(sender, b, catchingUp)
     for alt, snap in pairs(b.bank) do
       if type(snap) == "table" and type(snap.v) == "number" then
         local cur = Real(g, "bank", alt, g.bank[alt])
-        if not cur or snap.v > cur.v then
+        if not cur or ns.Newer(snap, cur, "v") then
           snap.items = snap.items or {}
           g.bank[alt] = snap
           Confirm(g, "bank", alt)
@@ -233,9 +235,9 @@ function ns.Merge(sender, b, catchingUp)
       -- Members may only create or cancel their own requests; approving,
       -- rejecting and filling come from officers.
       if type(r) == "table" and type(r.u) == "number" and (r.item or r.spell)
-        and (trusted or (r.who == sender and MEMBER_STATES[r.status]) or ns.CrafterMayUpdate(sender, Real(g, "req", id, g.requests[id]), r)) then
+        and (trusted or ns.MemberMayUpdate(sender, Real(g, "req", id, g.requests[id]), r) or ns.CrafterMayUpdate(sender, Real(g, "req", id, g.requests[id]), r)) then
         local cur = Real(g, "req", id, g.requests[id])
-        if not cur or r.u > cur.u then
+        if not cur or ns.Newer(r, cur, "u") then
           local oldStatus = cur and cur.status
           g.requests[id] = r
           Confirm(g, "req", id)
@@ -258,7 +260,7 @@ function ns.Merge(sender, b, catchingUp)
   end
 
   local pol = b.policy
-  if trusted and type(pol) == "table" and type(pol.v) == "number" and pol.v > (g.policy.v or 0) then
+  if trusted and type(pol) == "table" and type(pol.v) == "number" and ns.Newer(pol, g.policy, "v") then
     local designated = {}
     if type(pol.designated) == "table" then
       for prof, names in pairs(pol.designated) do
@@ -278,7 +280,7 @@ function ns.Merge(sender, b, catchingUp)
     for who, rec in pairs(b.recipes) do
       if type(rec) == "table" and type(rec.t) == "number" and type(rec.profs) == "table" and (trusted or who == sender) then
         local cur = Real(g, "recipes", who, g.recipes[who])
-        if not cur or rec.t > cur.t then
+        if not cur or ns.Newer(rec, cur, "t") then
           g.recipes[who] = rec
           Confirm(g, "recipes", who)
           changed = true
@@ -292,7 +294,7 @@ function ns.Merge(sender, b, catchingUp)
     for key, m in pairs(b.mats) do
       local cur = Real(g, "mats", key, g.mats[key])
       if type(key) == "string" and type(m) == "table" and type(m.t) == "number" and type(m.r) == "table"
-        and (not cur or (m.t > (cur.t or 0) and (trusted or sender == m.by))) then
+        and (trusted or sender == m.by) and (not cur or ns.Newer(m, cur, "t")) then
         g.mats[key] = m
         Confirm(g, "mats", key)
         changed = true
@@ -304,7 +306,7 @@ function ns.Merge(sender, b, catchingUp)
     for who, c in pairs(b.craft) do
       if type(c) == "table" and type(c.t) == "number" and (trusted or who == sender) then
         local cur = Real(g, "craft", who, g.crafters[who])
-        if not cur or c.t > cur.t then
+        if not cur or ns.Newer(c, cur, "t") then
           g.crafters[who] = c
           Confirm(g, "craft", who)
           changed = true
@@ -321,7 +323,7 @@ function ns.Merge(sender, b, catchingUp)
         local mine = trusted
         for _, n in pairs(a.chars) do if n == sender then mine = true end end
         local cur = Real(g, "alts", id, g.alts[id])
-        if mine and (not cur or a.t > cur.t) then
+        if mine and (not cur or ns.Newer(a, cur, "t")) then
           local list = {}
           for _, n in ipairs(a.chars) do if type(n) == "string" then list[#list + 1] = n end end
           g.alts[id] = { t = a.t, main = a.main, chars = list }
@@ -483,12 +485,12 @@ function ns.ShoppingList()
       if r.mats == "bank" then      -- the bank supplies the materials
         for _, m in ipairs(ns.MatsFor(r.key)) do
           local d = slot(m.id)
-          d.req = d.req + m.n * (tonumber(r.qty) or 1)
+          d.req = d.req + m.n * ns.Remaining(r)
         end
       end
     elseif r.status == "approved" and r.item then
       local d = slot(r.item)
-      d.req = d.req + (tonumber(r.qty) or 0)
+      d.req = d.req + ns.Remaining(r)
     end
   end
   for id, d in pairs(demand) do
@@ -620,6 +622,7 @@ function ns.SetRequestStatus(rid, status, reason, by)
   if not officer and not crafter and not (r.who == ns.me and status == "cancelled") then
     return ns.Print("Only officers can approve, reject or fill requests.")
   end
+  if r.status == "filled" and status == "approved" then r.delivered = 0; r.reopenedAt = ns.Now() end
   r.status = status
   r.by = by or ns.me
   if status == "rejected" then r.reason = (reason or ""):sub(1, 80) end
@@ -652,7 +655,7 @@ function ns.EditRequest(rid, changes)
     if changes.status and changes.status ~= "cancelled" then ns.Print("Only officers can approve, reject or fill requests.") return false end
     if not pending and (changes.qty or changes.note or changes.to) then ns.Print("This request is already being handled; ask an officer to change it.") return false end
   end
-  if changes.qty then r.qty = math.max(1, math.floor(tonumber(changes.qty) or r.qty)) end
+  if changes.qty then r.qty = math.max(1, r.delivered or 0, math.floor(tonumber(changes.qty) or r.qty)) end
   if changes.note then r.note = changes.note:sub(1, 80) end
   if changes.to then
     local to = ns.Short(changes.to)
@@ -663,6 +666,7 @@ function ns.EditRequest(rid, changes)
       ns.Log(changes.status:gsub("^%l", string.upper) .. " " .. r.who .. "'s " .. (r.crafter and "craft " or "") .. "request for "
         .. ns.RequestName(r, true) .. " x" .. tostring(r.qty) .. ((changes.reason and changes.reason ~= "") and (": " .. changes.reason) or ""))
     end
+    if r.status == "filled" and changes.status == "approved" then r.delivered = 0; r.reopenedAt = ns.Now() end
     r.status = changes.status
     r.by = ns.me
     if changes.status == "rejected" then r.reason = (changes.reason or ""):sub(1, 80) else r.reason = nil end

@@ -3,6 +3,13 @@ on:
   push:
   pull_request:
 jobs:
+  updater:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Staged updater and inbox preservation
+        shell: pwsh
+        run: ./tests/test_updater.ps1 -ScratchRoot $env:RUNNER_TEMP
   test:
     runs-on: ubuntu-latest
     steps:
@@ -25,3 +32,5 @@ jobs:
         run: python tests/test_autosync.py
       - name: Bank alt tests
         run: python tests/test_bankalt.py
+      - name: Reliability, verified identities, projects and onboarding
+        run: python tests/test_reliability.py

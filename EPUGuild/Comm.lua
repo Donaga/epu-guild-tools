@@ -43,7 +43,9 @@ function ns.Serialize(v)
   return table.concat(out)
 end
 
-local function de(s, i)
+local function de(s, i, depth)
+  depth = depth or 0
+  if depth > 24 then error("too deeply nested") end
   local c = s:sub(i, i)
   if c == "#" or c == "$" then
     local e = s:find(";", i, true)
@@ -60,9 +62,10 @@ local function de(s, i)
     while s:sub(i, i) ~= "}" do
       if i > #s then error("truncated") end
       local k, v
-      k, i = de(s, i)
-      v, i = de(s, i)
-      if k ~= nil then t[k] = v end
+      k, i = de(s, i, depth + 1)
+      v, i = de(s, i, depth + 1)
+      if type(k) ~= "string" and type(k) ~= "number" then error("invalid key") end
+      t[k] = v
     end
     return t, i + 1
   end
@@ -70,7 +73,9 @@ local function de(s, i)
 end
 
 function ns.Deserialize(s)
-  local v = de(s, 1)
+  if type(s) ~= "string" or #s > 262144 then error("payload too large") end
+  local v, pos = de(s, 1)
+  if pos ~= #s + 1 then error("trailing data") end
   return v
 end
 
@@ -126,6 +131,7 @@ function ns.Send(kind, data, channel, target)
   channel = channel or "GUILD"
   if channel == "GUILD" and not IsInGuild() then return end
   local body = kind .. ns.Serialize(data)
+  if #body > 262144 or #queue > 12000 then return false end
   if #body + 1 <= MAX_SINGLE then
     queue[#queue + 1] = { "S" .. body, channel, target }
   else
@@ -148,11 +154,24 @@ function ns.QueueLength() return #queue end
 -- Receiving
 ---------------------------------------------------------------------------
 local partial = {}
+local TTL = 1800
+local function Expire()
+  local now = GetTime()
+  for key,p in pairs(partial) do if now - p.at > TTL then partial[key] = nil end end
+  if ns.ExpireSync then ns.ExpireSync() end
+  C_Timer.After(30, Expire)
+end
+C_Timer.After(30, Expire)
+function ns.PartialCount() local n=0; for _ in pairs(partial) do n=n+1 end; return n end
 
 function ns.HandleAddonMessage(prefix, msg, channel, sender)
-  if prefix ~= ns.PREFIX then return end
+  if prefix ~= ns.PREFIX or type(msg) ~= "string" or #msg > 255 then return end
+  if channel ~= "GUILD" and channel ~= "WHISPER" and channel ~= "OFFICER" then return end
   sender = ns.Short(sender)
   if not sender or sender == ns.me then return end
+  -- The server already authenticates membership on GUILD/OFFICER. A new member
+  -- may speak before our roster refresh; only whispers require a roster match.
+  if channel == "WHISPER" and ns.roster and next(ns.roster) and not ns.roster[sender] then return end
 
   local body
   local t = msg:sub(1, 1)
@@ -162,15 +181,22 @@ function ns.HandleAddonMessage(prefix, msg, channel, sender)
     local id, i, n, part = msg:match("^P(%d+):(%d+):(%d+):(.*)$")
     if not id then return end
     i, n = tonumber(i), tonumber(n)
-    local key = sender .. ":" .. id
+    if n < 1 or n > 1140 or i < 1 or i > n then return end
+    local key = channel .. ":" .. sender .. ":" .. id
     local p = partial[key]
-    if not p or i == 1 then
-      p = { n = n, parts = {}, got = 0 }
+    if p and (p.n ~= n or GetTime() - p.at > TTL) then partial[key]=nil; return end
+    if not p then
+      local total, own = 0, 0
+      for _,v in pairs(partial) do total=total+1; if v.sender==sender then own=own+1 end end
+      if total>=32 or own>=4 then return end
+      p = { n = n, parts = {}, got = 0, bytes = 0, at=GetTime(), sender=sender }
       partial[key] = p
     end
     if not p.parts[i] then
       p.parts[i] = part
       p.got = p.got + 1
+      p.bytes = p.bytes + #part
+      if p.bytes > 262144 then partial[key]=nil; return end
     end
     if p.got < p.n then return end
     partial[key] = nil
@@ -183,7 +209,10 @@ function ns.HandleAddonMessage(prefix, msg, channel, sender)
   local ok, data = pcall(ns.Deserialize, body:sub(2))
   if not ok then return end
   local handler = ns.comm[kind]
-  if handler then handler(sender, data, channel) end
+  if handler then
+    local ok,err = pcall(handler, sender, data, channel)
+    if not ok then ns.lastMessageError = tostring(err) end
+  end
 end
 
 ns.On("CHAT_MSG_ADDON", ns.HandleAddonMessage)

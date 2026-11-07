@@ -230,6 +230,8 @@ end
 date = os.date; time = os.time
 __sendItems = {}
 function GetSendMailItemLink(i) local id = __sendItems[i]; if id then return __link(id) end end
+__sendCounts = {}
+function GetSendMailItem(i) if __sendItems[i] then return "Item", __sendItems[i], "icon", __sendCounts[i] or 1 end end
 -- Like the game: the server confirms a moment later, then the send form is cleared.
 function SendMail(to) __lastMailTo = to; C_Timer.After(0.1, function() __fire("MAIL_SEND_SUCCESS"); __sendItems = {} end) end
 function GetTradePlayerItemLink() end
@@ -248,7 +250,10 @@ function GetCurrentGuildBankTab() return 1 end
 function GetGuildBankItemLink(tab, slot) local x = __gb[tab][slot]; if x then return __link(x[1]) end end
 function GetGuildBankItemInfo(tab, slot) local x = __gb[tab][slot]; if x then return "icon", x[2] end end
 function GetGuildBankMoney() return __gbMoneyOverride or 5000000 end
-function QueryGuildBankTab() end
+function QueryGuildBankTab(tab)
+  if __delayGuildBank then return end
+  C_Timer.After(0.1, function() __fire("GUILDBANKBAGSLOTS_CHANGED") end)
+end
 function QueryGuildBankLog() end
 function GetNumGuildBankTransactions(tab) return #__gblog[tab] end
 function GetGuildBankTransaction(tab, i) local e = __gblog[tab][i]; return "deposit", e[1], __link(e[2]), e[3], nil, nil, 0, 0, 0, e[4] end

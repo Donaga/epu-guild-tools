@@ -282,7 +282,10 @@ local function ReadAttachments()
   if not GetSendMailItemLink then return items end
   for i = 1, (ATTACHMENTS_MAX_SEND or 12) do
     local id = ns.ItemID(GetSendMailItemLink(i))
-    if id then items[#items + 1] = { id, 1 } end
+    if id and GetSendMailItem then
+      local _, _, _, count = GetSendMailItem(i)
+      if ns.PositiveInt(count) then items[#items + 1] = { id, count } end
+    end
   end
   return items
 end
@@ -297,9 +300,11 @@ end)
 ns.On("MAIL_SEND_SUCCESS", function()
   local o = outgoing
   outgoing, attached = nil, {}
-  if o then ns.AutoFillFor(o.to, o.items) end
+  if o then ns.AutoFillFor(o.to, o.items, ns.mailRequestID) end
+  ns.mailRequestID = nil
 end)
 ns.On("MAIL_FAILED", function() outgoing = nil end)
+ns.On("MAIL_CLOSED", function() outgoing, attached, ns.mailRequestID = nil, {}, nil end)
 
 local tradeSnap
 ns.On("TRADE_ACCEPT_UPDATE", function()
@@ -320,7 +325,10 @@ ns.On("TRADE_ACCEPT_UPDATE", function()
       snap.items[#snap.items + 1] = { id, tonumber(count) or 1 }
     end
     local mineID = GetTradePlayerItemLink and ns.ItemID(GetTradePlayerItemLink(slot))
-    if mineID then snap.mine[#snap.mine + 1] = { mineID, 1 } end
+    if mineID and GetTradePlayerItemInfo then
+      local _, _, count = GetTradePlayerItemInfo(slot)
+      if ns.PositiveInt(count) then snap.mine[#snap.mine + 1] = { mineID, count } end
+    end
   end
   tradeSnap = snap
 end)
@@ -406,8 +414,10 @@ function ns.MailRequest(rid)
   local to = r.to or r.who
   local name = ns.ItemName(r.item, true)
   StartMail(to, (r.crafter and "Crafted: " or "Guild bank: ") .. name .. " x" .. r.qty)
-  local attached = AttachItem(r.item, r.qty, 1)
-  local need = (tonumber(r.qty) or 1) - attached
+  ns.mailRequestID = rid
+  local remaining = ns.Remaining(r)
+  local attached = AttachItem(r.item, remaining, 1)
+  local need = remaining - attached
   if attached == 0 then
     return ns.Print("You don't have any " .. ns.ItemLink(r.item) .. " in your bags." .. (r.crafter and "" or " Take it out of the bank first."))
   end
