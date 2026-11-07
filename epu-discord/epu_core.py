@@ -13,6 +13,7 @@ import io
 import json
 import os
 import re
+import shutil
 import time
 import urllib.request
 import uuid
@@ -209,7 +210,14 @@ def safe_replace(tmp: str, path: str) -> None:
 
 
 def write_inbox(path: str, entries: list) -> None:
+    lock = os.path.join(os.path.dirname(os.path.dirname(path)), ".EPUGuild-update.lock")
+    if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 600:
+        raise BlockingIOError("The addon updater is installing EPU; queued actions will retry shortly.")
     text = INBOX_HEADER + "EPUGuildInbox = " + lua_value(entries) + "\n"
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as existing:
+            if existing.read() == text:
+                return
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
@@ -312,16 +320,19 @@ class GuildData:
 
     def group_of(self, name: str) -> dict | None:
         """The main/alt group a character belongs to (newest claim wins)."""
-        best = None
-        for rec in (self.g.get("alts") or {}).values():
-            if not isinstance(rec, dict):
-                continue
-            chars = rec.get("chars") or {}
-            chars = list(chars.values()) if isinstance(chars, dict) else list(chars)
-            if name in chars and (best is None or rec.get("t", 0) > best["t"]):
-                best = {"t": rec.get("t", 0), "main": rec.get("main") or name,
-                        "chars": [rec.get("main")] + sorted(c for c in chars if c != rec.get("main"))}
-        return best
+        proofs = self.g.get("altVerified") or {}
+        proof = proofs.get(name) or {}
+        group_id = proof.get("id")
+        rec = (self.g.get("alts") or {}).get(group_id)
+        if not rec:
+            return None
+        chars = rec.get("chars") or {}
+        chars = list(chars.values()) if isinstance(chars, dict) else list(chars)
+        chars = sorted(c for c in chars if (proofs.get(c) or {}).get("id") == group_id)
+        if name not in chars:
+            return None
+        main = rec.get("main") if rec.get("main") in chars else name
+        return {"t": rec.get("t", 0), "main": main, "chars": [main] + [c for c in chars if c != main]}
 
     def main_of(self, name: str) -> str:
         g = self.group_of(name)
@@ -466,9 +477,9 @@ class GuildData:
             if is_craft(r):
                 if r.get("mats") == "bank":       # the bank supplies the materials
                     for item_id, n in self.mats_for(r.get("key")):
-                        demand.setdefault(item_id, {"need": 0, "req": 0})["req"] += n * int(r.get("qty") or 1)
+                        demand.setdefault(item_id, {"need": 0, "req": 0})["req"] += n * max(0, int(r.get("qty") or 1) - int(r.get("delivered") or 0))
             elif r.get("item"):
-                demand.setdefault(r["item"], {"need": 0, "req": 0})["req"] += int(r.get("qty") or 0)
+                demand.setdefault(r["item"], {"need": 0, "req": 0})["req"] += max(0, int(r.get("qty") or 0) - int(r.get("delivered") or 0))
         rows = []
         for item_id, d in demand.items():
             have = self.bank_count(item_id)
@@ -512,15 +523,24 @@ def load_guild_data(sv_path: str, guild_key: str | None = None) -> GuildData:
 class State:
     def __init__(self, path: str):
         self.path = path
-        self.data = {"links": {}, "posted": {}, "donations_seen": [], "inbox": [], "primed": False}
+        self.data = {"links_version": 2, "link_requests": {}, "link_audit": [], "links": {}, "posted": {}, "donations_seen": [], "inbox": [], "primed": False}
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
-                self.data.update(json.load(f))
+                loaded = json.load(f)
+                if loaded.get("links_version", 0) < 2:
+                    loaded["legacy_links"] = loaded.pop("links", {})
+                    loaded["links"] = {}
+                    loaded["links_version"] = 2
+                self.data.update(loaded)
 
     def save(self):
         tmp = self.path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.data, f, indent=2)
+        if os.path.exists(self.path):
+            backup = self.path + ".bak.tmp"
+            shutil.copy2(self.path, backup)
+            safe_replace(backup, self.path + ".bak")
         safe_replace(tmp, self.path)
 
     # Discord user -> WoW characters (first one is their main)
@@ -531,6 +551,11 @@ class State:
         return list(v or [])
 
     def link(self, discord_id: int, *characters: str, main: str | None = None) -> list[str]:
+        for uid, owned in self.data["links"].items():
+            if str(uid) != str(discord_id):
+                existing = [owned] if isinstance(owned, str) else owned
+                if any(c.lower() == n.lower() for c in characters for n in existing):
+                    raise ValueError("That character is already linked to another Discord account. Ask an officer to resolve it.")
         chars = self.characters_for(discord_id)
         for c in characters:
             if c and c not in chars:
@@ -539,6 +564,25 @@ class State:
             chars.remove(main)
             chars.insert(0, main)
         self.data["links"][str(discord_id)] = chars
+        self.save()
+        return chars
+
+    def request_link(self, discord_id: int, character: str) -> None:
+        pending = self.data["link_requests"].setdefault(str(discord_id), [])
+        if character not in pending:
+            if len(pending) >= 20:
+                raise ValueError("You already have 20 pending links. Ask an officer to review them.")
+            pending.append(character)
+        self.save()
+
+    def approve_link(self, discord_id: int, character: str, officer: str) -> list[str]:
+        pending = self.data["link_requests"].get(str(discord_id), [])
+        if character not in pending:
+            raise ValueError("That character has no pending /link request for this user.")
+        chars = self.link(discord_id, character)
+        pending.remove(character)
+        self.data["link_audit"].append({"user": str(discord_id), "character": character, "by": officer, "t": int(time.time())})
+        self.data["link_audit"] = self.data["link_audit"][-200:]
         self.save()
         return chars
 

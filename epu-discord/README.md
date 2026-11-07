@@ -1,5 +1,13 @@
 # EPU Discord companion
 
+## 0.10 identity and recovery changes
+
+Upgrade this companion together with the addon. Old, unverified Discord links are preserved under `legacy_links` in state.json for reference, but no longer authorize requests. Each member uses `/link character:` and an officer verifies the person in game, then runs `/approve_link user: character:`. Verify each character separately. One character cannot belong to multiple Discord accounts; an officer can resolve mistakes with `/revoke_link user: character:`. `/unlink` still removes your own links.
+
+Approval also queues the Discord onboarding checklist step for the next officer login/reload. Existing guild role checks still protect approvals. The companion records link approvals in its local audit and writes a previous-state recovery copy at `state.json.bak` before replacing state. Back up state.json and config.json with the companion stopped; the recovery copy can contain guild information and should stay on the officer PC.
+
+The bot periodically restores Inbox.lua if an addon manager replaced it, and defers writes during an EPU updater install. Discord changes remain queued until the game imports them on login/reload. Partial-delivery counts are shown on request messages and reduce the outstanding shopping quantity.
+
 Connects the **EPU Guild Tools** addon to a Discord channel.
 
 - **Game → Discord:** new guild bank requests are posted to a channel, and each post updates as the request is approved, rejected or filled. Donations get a thank-you post (you can turn this off).

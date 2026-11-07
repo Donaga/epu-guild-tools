@@ -151,6 +151,8 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
         e.add_field(name="Materials", value={"me": "Requester sends", "bank": "Guild bank sends",
                                               "crafter": "Crafter's own"}.get(r.get("mats"), "Requester sends"), inline=True)
     e.add_field(name="Status", value=core.status_label(r).capitalize(), inline=True)
+    if r.get("delivered"):
+        e.add_field(name="Delivered", value=f"{r['delivered']} / {r.get('qty', 1)}", inline=True)
     if gd and r.get("item") and not craft:
         e.add_field(name="In bank", value=str(gd.bank_count(r["item"])), inline=True)
     if r.get("note"):
@@ -294,8 +296,8 @@ def help_embed() -> discord.Embed:
         color=discord.Color.blurple())
     e.add_field(name="1. Link your character (once)", inline=False, value=(
         "`/link character:` and pick your name from the list. Use your full name, e.g. *Donlock Gaeilge*.\n"
-        "Your first link is your **main**. If your alts have logged in with the addon, they're linked too; "
-        "otherwise `/link` each alt. `/unlink` removes one."))
+        "An officer verifies each character with `/approve_link`. Your first approved link is your **main**. "
+        "Use `/link` for each alt; `/unlink` removes one."))
     e.add_field(name="2. Ask for something", inline=False, value=(
         "`/request item:` start typing the name and pick it from the list (every item in the game is there), then "
         "set `qty:`. A Wowhead Forever link or item ID works too. Add a `note:` for the officers, "
@@ -476,6 +478,7 @@ def explain(e: Exception, what: str, channel_id) -> None:
 @tasks.loop(seconds=15)
 async def poll():
     global polled_mtime
+    flush_inbox()
     gd = read_latest()
     if gd is None or latest_mtime == polled_mtime:
         return
@@ -787,20 +790,48 @@ async def link_cmd(interaction: discord.Interaction, character: str):
             "More than one guild member has that first name: " + ", ".join(candidates) + ". Use your full name.", ephemeral=True)
         return
     if name is None:
-        if gd and gd.members:
-            await interaction.response.send_message(
-                f"I can't find **{character}** in the guild roster. Pick your name from the list, or check the spelling.", ephemeral=True)
-            return
-        name = " ".join(w[:1].upper() + w[1:] for w in character.split())   # no roster saved yet
-    group = gd.group_of(name) if gd else None
-    if group:   # the addon already knows this player's main and alts
-        chars = state.link(interaction.user.id, *group["chars"], main=group["main"])
-    else:
-        chars = state.link(interaction.user.id, name)
-    extra = ""
-    if len(chars) > 1:
-        extra = f"\nYour characters: **{chars[0]}** (main), " + ", ".join(chars[1:]) + ". Use `/request ... for:` to pick who gets the mail."
-    await interaction.response.send_message(f"Linked **{name}**.{extra}", ephemeral=True)
+        await interaction.response.send_message("No matching guild member. An officer must first save a current roster.", ephemeral=True)
+        return
+    try:
+        state.request_link(interaction.user.id, name)
+    except ValueError as e:
+        await interaction.response.send_message(str(e), ephemeral=True)
+        return
+    await interaction.response.send_message(
+        f"Link pending for **{name}**. Ask an officer to verify your character and use `/approve_link user: character:`. Each character is approved separately.", ephemeral=True)
+
+
+@tree.command(name="approve_link", description="Officers: verify and approve a pending character link", guild=GUILD)
+@app_commands.autocomplete(character=member_autocomplete)
+async def approve_link_cmd(interaction: discord.Interaction, user: discord.Member, character: str):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message("Only officers can verify character links.", ephemeral=True)
+        return
+    gd = read_latest()
+    name, _ = gd.resolve_member(character) if gd else (None, [])
+    if not name:
+        await interaction.response.send_message("Choose a character in the saved guild roster.", ephemeral=True)
+        return
+    try:
+        state.approve_link(user.id, name, str(interaction.user.id))
+    except ValueError as e:
+        await interaction.response.send_message(str(e), ephemeral=True)
+        return
+    state.data["inbox"].append({"id": "link-" + core.uuid.uuid4().hex, "kind": "checklist", "who": name,
+                                "step": "discord", "done": True, "note": "Discord identity verified by an officer", "t": int(core.time.time())})
+    state.save()
+    flush_inbox()
+    await interaction.response.send_message(f"Verified **{name}** for {user.mention}. The onboarding step reaches the game after the next officer reload.", ephemeral=True)
+
+
+@tree.command(name="revoke_link", description="Officers: revoke a character link", guild=GUILD)
+async def revoke_link_cmd(interaction: discord.Interaction, user: discord.Member, character: str):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message("Only officers can revoke someone else's link.", ephemeral=True)
+        return
+    state.unlink(user.id, character)
+    await interaction.response.send_message("Character link revoked.", ephemeral=True)
+
 
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):

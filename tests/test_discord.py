@@ -100,6 +100,10 @@ check("/link shared first name asks for full", gd.resolve_member("chris") == (No
 
 # --- multiple linked characters and deliver-to from Discord ---
 B.ex('local key = __ns.GuildKey(); __ns.db.accountChars[key]["Pip Baker"] = __now + 100; __ns.PublishAlts()'); tick(3)
+P = Client("Pip Baker"); clients[P.name] = P
+P.ex('__now = ' + str(B.ev('__now')))
+P.ex('__ns.RegisterMe(); __ns.db.accountId = "' + B.ev('__ns.db.accountId') + '"; __ns.db.accountChars[__ns.GuildKey()]["Tyler Baker"] = __now - 100; __ns.PublishAlts()'); tick(4)
+del clients[P.name]
 A.ex(f'__dumpSV("{WOW}/WTF/Account/ACCT/SavedVariables/EPUGuild.lua")')
 gd = core.load_guild_data(paths[0], "E Pluribus Unum")
 grp = gd.group_of("Pip Baker")
@@ -111,9 +115,25 @@ chars = st.link(42, *grp["chars"], main=grp["main"])
 check("linking pulls in the alt group, main first", chars == ["Tyler Baker", "Pip Baker"])
 e2 = st.queue_request(chars[0], 2589, "Linen Cloth", 5, "", "tyler", to="Pip Baker")
 core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
-A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
-check("Discord deliver-to reaches the game", B.ev(f'__ns.G().requests["d-{e2['id']}"].to') == "Pip Baker")
+A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()')
+received = tick_until(lambda: B.ev(f'__ns.G().requests["d-{e2["id"]}"] ~= nil'))
+check("Discord deliver-to reaches the game", received and B.ev(f'__ns.G().requests["d-{e2["id"]}"].to') == "Pip Baker")
 check("unlink", st.unlink(42, "pip baker") == ["Tyler Baker"])
+st.request_link(43, "Newbie Stone")
+check("pending Discord link grants no identity", st.characters_for(43) == [])
+check("officer approval grants exactly the requested character", st.approve_link(43, "Newbie Stone", "officer-1") == ["Newbie Stone"])
+try:
+    st.link(44, "Newbie Stone")
+    check("duplicate character ownership rejected", False)
+except ValueError:
+    check("duplicate character ownership rejected", True)
+check("verified links record an audit entry", st.data["link_audit"][-1]["by"] == "officer-1")
+check("companion state has a recovery backup", os.path.exists(STATE + ".bak"))
+legacy_path = os.path.join(WOW, "legacy-state.json")
+with open(legacy_path, "w") as f:
+    json.dump({"links": {"45": ["Chris Stone"]}}, f)
+legacy = core.State(legacy_path)
+check("legacy unverified links require approval after upgrade", legacy.characters_for(45) == [] and legacy.data["legacy_links"]["45"] == ["Chris Stone"])
 
 # --- /craft lookup from shared recipes ---
 B.ex('__fire("TRADE_SKILL_SHOW")'); tick(6)

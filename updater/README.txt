@@ -23,3 +23,8 @@ WoW keeps its addons under Program Files, which sometimes needs permission.
 
 Your requests, settings and saved data are never touched; only the addon's
 files are replaced. If WoW is running, type /reload after an update.
+0.10 update safety: the updater stages and validates the complete addon before
+replacing it, preserves the Discord inbox, and retains the previous installation
+in a sibling .EPUGuild-backup-* folder. If recovery is needed, close WoW and the
+companion before restoring that folder as EPUGuild. Old backup folders can be
+removed once the new version has been checked in game.

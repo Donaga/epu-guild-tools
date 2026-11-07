@@ -85,7 +85,7 @@ A.ex('MailFrame._shown = true')
 A.ex(f'__ns.MailRequest("{rid}")')
 check("mail helper fills recipient and subject", A.ev('SendMailNameEditBox._text') == "Tyler Baker" and "Silk Cloth x12" in A.ev('SendMailSubjectEditBox._text'))
 check("mail helper attaches exactly 12 (split from a stack)", A.ev('(function() local n = 0 for _, s in pairs(__mailSlots) do n = n + s[2] end return n end)()') == 12)
-A.ex('__sendItems = {4306}; SendMail("Tyler Baker")'); tick(3)
+A.ex('__sendCounts = {12}; __sendItems = {4306}; SendMail("Tyler Baker")'); tick(3)
 check("sending marks it filled", B.ev(f'__ns.G().requests["{rid}"].status') == "filled")
 
 # --- archive finished, void a donation ---
@@ -360,7 +360,7 @@ check("forged crafter update ignored", A.ev('__ns.G().requests["%s"].status' % c
 B.ex('local r = __ns.G().requests["%s"]; local c = {}; for k, v in pairs(r) do c[k] = v end; c.status = "approved"; c.qty = 99; c.u = c.u + 9; __ns.Send("D", { req = { ["%s"] = c } })' % (crid2, crid2)); tick(3)
 check("crafter can't change the amount by hand-editing", A.ev('__ns.G().requests["%s"].qty' % crid2) == 1)
 # Tyler mails the bags to Pip: filled automatically
-B.ex('__ns.AutoFillFor("Pip Baker", { {30001, 1} })'); tick(3)
+B.ex('__ns.AutoFillFor("Pip Baker", { {30001, 2} })'); tick(3)
 check("crafter mailing it marks it made", A.ev('__ns.G().requests["%s"].status' % crid) == "filled")
 check("requester told it's done", "Craft done" in [E.ev('__toasts[%d]' % i) for i in range(1, 6)])
 

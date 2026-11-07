@@ -856,7 +856,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "sync", "officer" }
+local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "projects", "onboarding", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 -- A toolbar button that opens a dropdown menu.
@@ -1010,7 +1010,7 @@ Views.bank = {
   footer = function(g)
     local parts = {}
     for alt, s in pairs(g.bank) do
-      if not s.retired then parts[#parts + 1] = alt .. " " .. Money(s.money) .. " (" .. Ago(s.v) .. ")" end
+      if not s.retired then parts[#parts + 1] = alt .. " " .. Money(s.money) .. " (" .. Ago(s.bankTime or s.v) .. ")" end
     end
     table.sort(parts)
     return #parts > 0 and table.concat(parts, "   ") or "No bank yet. On the bank character: /epu bankalt on"
@@ -1569,6 +1569,49 @@ local function InboxWaiting()
   end
   return n
 end
+
+
+-- Crafting projects and onboarding ---------------------------------------
+Views.projects = {
+  label="Projects", icon="Interface\Icons\Trade_BlackSmithing",
+  tools=function(bar)
+    bar:Add(Btn(bar,"New project",100,22),"right",function()
+      if ns.IsTrusted(ns.me) then UI:OpenDetails("newproject","new") else ns.Print("Ask an officer to create a project.") end
+    end)
+  end,
+  rows=function(g,q)
+    ns.PlanningStore(); local out={}
+    for id,p in pairs(g.projects) do
+      if p.status~="archived" and Match(q,p.title,p.note) then
+        local done,total=ns.ProjectProgress(p)
+        out[#out+1]={key="project:"..id,title=p.title,sub=p.note,right=done.." / "..total,
+          frac=total>0 and done/total or 0,onClick=function() UI:OpenDetails("project",id) end}
+      end
+    end
+    table.sort(out,function(a,b) return a.title<b.title end); return out
+  end,
+  empty="No active crafting projects. Officers can add one and assign craft tasks.",
+  footer=function() return "Projects connect shared recipes, assigned crafters, materials and delivery progress." end,
+}
+Views.onboarding = {
+  label="Getting started", icon="Interface\Icons\INV_Misc_Book_09",
+  tools=function(bar)
+    bar:Add(Btn(bar,"My checklist",100,22),"left",function() UI:OpenDetails("checklist",ns.me) end)
+  end,
+  rows=function(g,q)
+    local out={}
+    for name in pairs(ns.roster) do
+      if (name==ns.me or ns.IsTrusted(ns.me)) and Match(q,name) then
+        local done,total=0,0
+        for _,s in ipairs(ns.Checklist(name)) do total=total+1; if s.done then done=done+1 end end
+        out[#out+1]={key="checklist:"..name,title=ns.WhoLabel(name),sub="Guild setup and welcome checklist",
+          right=done.." / "..total,frac=total>0 and done/total or 0,onClick=function() UI:OpenDetails("checklist",name) end}
+      end
+    end
+    table.sort(out,function(a,b) return a.title<b.title end); return out
+  end,
+  empty="No checklist matches.",footer=function() return "Members complete their own steps; officers confirm Discord, mentors and starter supplies." end,
+}
 
 Views.officer = {
   label = "Officer", icon = "Interface\\Icons\\INV_Misc_Key_03", officer = true,
@@ -2130,7 +2173,71 @@ function UI:FillDetails()
   local kind, key = det.kind, det.key
   local officer = ns.IsTrusted(ns.me)
 
-  if kind == "request" and g.requests[key] and g.requests[key].crafter then
+
+  if kind=="newproject" then
+    det:Reset(nil,1,"New crafting project","Officers coordinate shared crafting goals")
+    local title=det:Field("Title","",160)
+    local note=det:Field("Goal","",160)
+    det:Buttons({{"Create",function() local id=ns.CreateProject(title:GetText(),note:GetText()); if id then UI:OpenDetails("project",id) end end,accent=true}})
+  elseif kind=="project" then
+    local p=ns.PlanningStore().projects[key]; if not p then return UI:CloseDetails() end
+    local done,total=ns.ProjectProgress(p)
+    det:Reset(nil,1,p.title,done.." of "..total.." items delivered")
+    det:Text(p.note)
+    for _,task in ipairs(p.tasks) do
+      local r=g.requests[task.rid]; local rid=task.rid
+      det:Text((r and ns.RequestName(r,true) or task.key).." x"..task.qty.." - "..task.crafter)
+      det:Text(r and ((r.status or "pending")..", "..ns.Remaining(r).." remaining; deliver to "..task.to) or "Request history unavailable; awaiting sync.",C.muted)
+      if r then det:Buttons({{"View request",function() UI:OpenDetails("request",rid) end}}) end
+    end
+    det:Text("Materials still required",C.gold)
+    for item,n in pairs(ns.ProjectMaterials(p)) do det:Text(ns.ItemName(item,true).." x"..n.." (bank: "..ns.BankCount(item)..")") end
+    if officer then
+      det:Buttons({{"Add craft task",function() UI:OpenDetails("projecttask",key) end},
+        {"Stock materials",function() ns.StockProject(key) end}, {"Archive",function() ns.ArchiveProject(key); UI:CloseDetails() end}})
+    end
+  elseif kind=="projecttask" then
+    det:Reset(nil,1,"Add craft task","Pick a shared recipe and a crafter who knows it")
+    local item=det:Field("Item / spell","",160)
+    local qty=det:Field("Quantity","1",60,true)
+    local crafter=det:Field("Crafter","",160)
+    local recipient=det:Field("Send to",ns.me,160)
+    det:Text("Shift-click an item into the first field, enter an item ID, or use spell:Enchant Name. Materials come from the guild bank. The crafter must accept the request.",C.muted)
+    det:Buttons({{"Assign",function()
+      local id=ns.ItemID(item:GetText()); local recipe=id and ("item:"..id) or item:GetText()
+      local rid=ns.AddProjectTask(key,recipe,crafter:GetText(),qty:GetText(),recipient:GetText())
+      if rid then UI:OpenDetails("project",key) end
+    end,accent=true}})
+  elseif kind=="checklist" then
+    det:Reset(nil,1,"Getting started",key)
+    for _,s in ipairs(ns.Checklist(key)) do
+      local step=s.id; local value=s.done
+      det:Text((value and "[Done] " or "[ ] ")..s.title,value and C.green or C.white)
+      det:Text(s.text,C.muted)
+      if s.note~="" then det:Text(s.note) end
+      if officer or (key==ns.me and not s.officer) then
+        det:Buttons({{value and "Mark incomplete" or "Mark done",function() ns.SetChecklist(key,step,not value,s.note); UI:FillDetails() end}})
+      end
+      if officer then
+        det:Buttons({{"Edit instructions",function() UI:OpenDetails("editstep",step) end}})
+      end
+    end
+    if officer then
+      local note=det:Field("Mentor / kit","",160)
+      det:Buttons({{"Save welcome note",function() ns.SetChecklist(key,"mentor",true,note:GetText()); UI:FillDetails() end}})
+    end
+  elseif kind=="editstep" then
+    det:Reset(nil,1,"Checklist instructions","Officers can update or add steps")
+    local step=det:Field("Step ID",key,160)
+    local found
+    for _,s in ipairs(ns.OnboardingSteps()) do if s.id==key then found=s end end
+    local title=det:Field("Title",found and found.title or "",160)
+    local text=det:Field("Instructions",found and found.text or "",160)
+    local restricted=found and found.officer or false
+    det:Buttons({{restricted and "Officer confirms" or "Member confirms",function(self) restricted=not restricted; self:SetLabel(restricted and "Officer confirms" or "Member confirms") end}})
+    det:Buttons({{"Save",function() ns.SetOnboardingStep(step:GetText(),title:GetText(),text:GetText(),restricted); UI:SetView("onboarding") end,accent=true}})
+  elseif kind == "request" and g.requests[key] and g.requests[key].crafter then
+
     local r = g.requests[key]
     local p = PILL[PillKey(r)] or { r.status }
     local name = ns.RequestName(r, true)
@@ -2139,6 +2246,7 @@ function UI:FillDetails()
     local e = ns.RecipeFor(r.key)
     local prof = e and e.prof
     det:Text("Asked by " .. ns.WhoLabel(r.who) .. ((r.to and r.to ~= r.who) and (", for " .. r.to) or ""))
+    det:Text("Delivered: " .. (r.delivered or 0) .. " / " .. r.qty .. "   Remaining: " .. ns.Remaining(r))
     det:Text("Crafter: " .. ((prof and ns.IsDesignated(r.crafter, prof)) and (STAR .. " ") or "") .. r.crafter
       .. (Online(r.crafter) and "  |cff4ade80online|r" or ""))
     det:Text(MATS_LABEL[r.mats or "me"] or "", C.muted)
@@ -2366,6 +2474,7 @@ function UI:FillDetails()
     if not r then return UI:CloseDetails() end
     local p = PILL[r.status] or { r.status }
     det:Reset(ns.ItemIcon(r.item), Quality(r.item), ns.ItemName(r.item, true), p[1] .. "  ·  requested " .. Ago(r.t))
+    det:Text("Delivered: " .. (r.delivered or 0) .. " / " .. r.qty .. "   Remaining: " .. ns.Remaining(r))
     det:Text("Requested by " .. ns.WhoLabel(r.who) .. ((r.via == "discord") and " via Discord" or ""))
     if r.by and r.status ~= "pending" then det:Text("Last changed by " .. r.by .. " " .. Ago(r.u), C.muted) end
     det:Text("In bank: " .. ns.BankCount(r.item) .. "   You carry: " .. ns.ItemCount(r.item), C.muted)
@@ -2684,7 +2793,7 @@ function UI:Refresh()
   local y = -8
   local nVisible = 0
   for _, key in ipairs(ORDER) do if not Views[key].officer or officer then nVisible = nVisible + 1 end end
-  local step = math.max(26, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
+  local step = math.max(22, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local visible = not v.officer or officer

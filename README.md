@@ -37,4 +37,10 @@ python tests/test_sync.py
 python tests/test_discord.py
 python tests/test_itemdb.py
 python tests/test_ui.py
+python tests/test_guild.py
+python tests/test_autosync.py
+python tests/test_bankalt.py
+python tests/test_reliability.py
 ```
+
+On Windows, run `./tests/test_updater.ps1 -ScratchRoot <existing temporary folder>` to verify staged installs and inbox preservation.

@@ -14,6 +14,8 @@ class Client:
         self.rt.execute('__name, __rankName, __rankIndex = "%s", "%s", %d' % (name, rank[1], rank[2]))
         self.rt.execute("__roster = {" + ",".join('{"%s","%s",%d}'%r for r in ROSTER) + "}")
         self.rt.execute(f'__load("{ADDON}")')
+        if os.environ.get("EPU_TEST_SEED"):
+            self.rt.execute("math.randomseed(%d)" % int(os.environ["EPU_TEST_SEED"]))
     def ex(self, code): return self.rt.execute(code)
     def ev(self, code): return self.rt.eval(code)
 
@@ -46,4 +48,12 @@ def check(label, cond):
     print(("PASS " if cond else "FAIL ") + label)
     if not cond: check.failed += 1
 check.failed = 0
+
+def tick_until(predicate, timeout=30, step=0.25):
+    """Wait for an observable result while continuing paced network delivery."""
+    elapsed = 0
+    while not predicate() and elapsed < timeout:
+        tick(step, step=step)
+        elapsed += step
+    return bool(predicate())
 

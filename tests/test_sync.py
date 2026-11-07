@@ -46,7 +46,7 @@ A.ex('SlashCmdList.EPUGUILD("shop")')
 check("Auctionator list exported", A.ev('__shopping and __shopping.name') == "EPU Guild Bank" and A.ev('#__shopping.terms') == 3)
 print("   shopping terms:", [A.ev(f'__shopping.terms[{i}]') for i in range(1,4)])
 # officer mails the silk to Tyler -> auto-filled
-A.ex('__sendItems = {4306}; SendMail("Tyler")'); tick(3)
+A.ex('__sendCounts = {10}; __sendItems = {4306}; SendMail("Tyler")'); tick(3)
 check("mailing approved item auto-fills", B.ev(f'__ns.G().requests["{rid}"].status') == "filled")
 # reject flow
 B.ex('SlashCmdList.EPUGUILD("request 2589 5")'); tick(3)
@@ -82,6 +82,11 @@ check("mail from Chris Stone credited to him, ambiguous 'Chris' skipped",
 
 # Alts: Tyler also plays Pip Baker on the same account
 B.ex('local key = __ns.GuildKey(); __ns.db.accountChars[key]["Pip Baker"] = __now + 100; __ns.PublishAlts()'); tick(3)
+check("a claimed alt is unverified until that character confirms", A.ev('__ns.MainOf("Pip Baker")') == "Pip Baker")
+P = Client("Pip Baker"); clients[P.name] = P
+P.ex('__now = ' + str(B.ev('__now')))
+P.ex('__ns.RegisterMe(); __ns.db.accountId = "' + B.ev('__ns.db.accountId') + '"; __ns.db.accountChars[__ns.GuildKey()]["Tyler Baker"] = __now - 100; __ns.PublishAlts()'); tick(4)
+del clients[P.name]
 check("alt group synced", A.ev('__ns.MainOf("Pip Baker")') == "Tyler Baker" and A.ev('__ns.WhoLabel("Pip Baker")') == "Pip Baker (Tyler Baker)")
 check("my chars main first", B.ev('table.concat(__ns.MyChars(), ",")') == "Tyler Baker,Pip Baker")
 B.ex('SlashCmdList.EPUGUILD("main pip baker")'); tick(3)
@@ -94,9 +99,9 @@ B.ex('__ns.NewRequest(2996, 3, "for Pip", "Pip Baker")'); tick(3)
 ridp = A.ev("(function() for k, r in pairs(__ns.G().requests) do if r.item == 2996 then return k end end end)()")
 check("deliver-to synced", A.ev(f'__ns.G().requests["{ridp}"].to') == "Pip Baker")
 A.ex(f'__ns.SetRequestStatus("{ridp}", "approved")'); tick(2)
-A.ex('__sendItems = {2996}; SendMail("Tyler Baker")'); tick(3)
+A.ex('__sendCounts = {3}; __sendItems = {2996}; SendMail("Tyler Baker")'); tick(3)
 check("mailing the requester's main doesn't fill an alt delivery", B.ev(f'__ns.G().requests["{ridp}"].status') == "approved")
-A.ex('__sendItems = {2996}; SendMail("Pip Baker")'); tick(3)
+A.ex('__sendCounts = {3}; __sendItems = {2996}; SendMail("Pip Baker")'); tick(3)
 check("mailing the deliver-to character fills it", B.ev(f'__ns.G().requests["{ridp}"].status') == "filled")
 
 # Crafters

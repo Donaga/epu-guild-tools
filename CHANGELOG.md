@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0-preview
+
+- Track partial mail/trade deliveries by actual quantity and allocate each item once. Keep delivery history and show remaining quantities in game and Discord.
+- Validate request ownership, statuses, quantities, bank snapshots, recipes and materials at the receiving client.
+- Require character-authenticated, mutually acknowledged main/alt claims. Require officer approval for Discord character links, prevent duplicate ownership and support revocation; legacy unverified Discord links must be reapproved.
+- Wait for guild-bank tab responses before publishing a complete inventory; clear confirmed empty tabs and refresh observation timestamps.
+- Merge individual needs with deterministic revisions and deletion tombstones; coalesce rapid edits and use digests to recover missed records.
+- Bound and expire addon-message fragments, reject malformed payloads, split large sync bundles and retry incomplete syncs.
+- Add guild crafting projects with assigned craft requests, material requirements and delivery progress.
+- Add configurable member onboarding checklists with officer-confirmed Discord, mentor and starter-supply steps.
+- Back up Discord companion state, restore its inbox after addon updates, and stage updater installs with manifest validation, preserved inbox and a previous-install recovery copy.
+
 ## 0.9.9
 
 - **Donate panel at the guild bank vault.** The same panel now opens beside the guild bank, listing needed and useful items by category. Pick items and amounts, then press **Deposit**: they go into empty slots of the tab you're viewing (part of a stack if that's what you picked). Officers' addons record deposits from the guild bank log as donations, as before.
