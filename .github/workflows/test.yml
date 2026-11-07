@@ -42,3 +42,5 @@ jobs:
         run: python tests/test_network.py
       - name: Request search and filter counts
         run: python tests/test_request_filters.py
+      - name: Reagent bag donations
+        run: python tests/test_donation_bags.py

@@ -92,6 +92,8 @@ Adding an item: click into the item box, then shift-click the item in your bags.
 
 The request-status dropdown counts the same search, Mine and Crafts matches as the list. The footer shows how many requests are visible out of the selected status total. Use the X in the search box to clear the search.
 
+The Donate panel includes eligible items in your equipped reagent bag as well as your backpack and regular bags. Prepared donation mail and guild-bank deposits can draw from those containers; stored bank items and soulbound items are not offered as carried donations.
+
 If WoW reports message throttling, EPU pauses and retries with increasing delays rather than rapidly resending. Login syncs and visible guild needs/milestone posts share conservative pacing. `/epu net` reports EPU's queue, accepted/refused sends, recent-send warnings and cooldown for this session. A shared server warning cannot identify which addon caused it; EPU does not hide these warnings.
 
 ```

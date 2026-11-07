@@ -454,7 +454,7 @@ end
 local HEARTHSTONE = 6948
 local function Carried()
   local counts = {}
-  for bag = 0, (NUM_BAG_SLOTS or 4) do
+  for _, bag in ipairs(ns.BagList()) do
     local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
     for slot = 1, n do
       local id, count, bound
@@ -700,7 +700,7 @@ function ns.FillDonation()
   local left = {}
   for _, p in ipairs(picks) do
     local id, need = p[1], p[2]
-    for bag = 0, (NUM_BAG_SLOTS or 4) do
+    for _, bag in ipairs(ns.BagList()) do
       local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
       for slot = 1, n do
         if need <= 0 or slotIndex > maxSlots then break end
@@ -790,7 +790,7 @@ function ns.DepositDonation()
   local free = EmptySlots(tab)
   local moves, left = {}, {}
   for id, want in pairs(don.pick) do
-    for bag = 0, (NUM_BAG_SLOTS or 4) do
+    for _, bag in ipairs(ns.BagList()) do
       local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
       for slot = 1, n do
         if want <= 0 then break end

@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.10.1
 
 - Reduce EPU's initial sync burst and space outgoing packets. Use increasing cooldowns after rejected sends or a recent-send server throttle warning; pace visible guild posts too.
 - Keep large incoming transfers from triggering premature sync retries. Add `/epu net` diagnostics and a visible sync cooldown state without filtering server warnings.
 - Make request-status counts follow the search, Mine and Crafts filters, display visible versus total counts, and add a clear-search button.
+- Include eligible reagent-bag items in the Donate panel, prepared donation mail and guild-bank deposits using the shared carried-container list.
 
 ## 0.10.0
 
