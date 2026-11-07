@@ -24,6 +24,10 @@ jobs:
           python-version: "3.12"
       - run: pip install lupa "discord.py>=2.3"
       - run: python tests/test_sync.py && python tests/test_discord.py && python tests/test_itemdb.py && python tests/test_ui.py && python tests/test_guild.py && python tests/test_autosync.py && python tests/test_bankalt.py && python tests/test_reliability.py
+      - name: Discord round trip with alternate message timing
+        env:
+          EPU_TEST_SEED: "1"
+        run: python tests/test_discord.py
       - name: Build zips
         run: |
           VERSION="${{ github.event.release.tag_name }}"
