@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.9
+
+- **Donate panel at the guild bank vault.** The same panel now opens beside the guild bank, listing needed and useful items by category. Pick items and amounts, then press **Deposit**: they go into empty slots of the tab you're viewing (part of a stack if that's what you picked). Officers' addons record deposits from the guild bank log as donations, as before.
+- **Give gold in set amounts.** +5s, +10s, +20s and +1g buttons on the donate panel (right-click takes it back off). At the mailbox the gold goes into the mail, and the letter lists what's being donated. At the vault it's deposited.
+- **The donate panel closes when the mailbox (or guild bank) closes.**
+- **Fewer announcement pop-ups at login.** One pop-up at most: the newest announcement if you haven't read it, plus how many others are unread. If you've read the newest, you just get a line in chat. The message of the day no longer pops up, since the game already shows it in chat.
+- **Fewer repeat syncs.** Members no longer re-ask for data every 15 minutes when the newest record the officer holds is their own.
+
 ## 0.9.8
 
 - **Suggestions as you type.**

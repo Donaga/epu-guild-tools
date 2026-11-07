@@ -148,6 +148,13 @@ tick(17 * 60, step=1.0)
 check("officer check-in caught them up (%d)" % needs(K), needs(K) == 8)
 
 
+
+# --- a check-in whose newest record is the member's own doesn't make them ask again ---
+B.ex('__ns.G().crafters[__ns.me] = { t = __ns.Now() + 5, profs = {} }; __ns.Send("D", { craft = { [__ns.me] = __ns.G().crafters[__ns.me] } })'); tick(3)
+c = A.ev('(function() local d = __ns.CheckInDigest(); return d.topBy end)()')
+check("check-in names whose record is newest (%s)" % c, c == "Tyler Baker")
+check("so that member isn't told they're behind", B.ev('__ns.Behind(__ns.CheckInDigest())') == False or B.ev('(function() local d = { needs = __ns.G().needs.v, policy = __ns.G().policy.v, bank = {}, top = __ns.G().crafters[__ns.me].t, topBy = __ns.me } return __ns.Behind(d) end)()') == False)
+
 # --- Sync tab: everyone's last sync, what came across, and their version ---
 A.ex('__ns.UI:Show(); __ns.UI.state.sync.filter = "guild"; __ns.UI:SetView("sync")')
 rows = A.ev('(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r.title:GetText() .. " | " .. (r.sub:GetText() or "") end end return table.concat(t, "\\n") end)()')

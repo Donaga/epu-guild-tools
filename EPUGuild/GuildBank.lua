@@ -150,9 +150,14 @@ local function OnOpen()
     C_Timer.After(0.2, function() if isOpen then QueryGuildBankLog((MAX_GUILDBANK_TABS or 8) + 1) end end)
   end
   ns.Debounce("gbscan", 1.5, ns.ScanGuildBank)
+  -- the donate panel, beside the guild bank
+  C_Timer.After(0.3, function() if isOpen and ns.ShowDonate then ns.ShowDonate("vault") end end)
 end
 
-local function OnClose() isOpen = false end
+local function OnClose()
+  isOpen = false
+  if ns.HideDonate then ns.HideDonate("vault") end
+end
 
 local function IsGuildBanker(kind)
   local e = Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.GuildBanker

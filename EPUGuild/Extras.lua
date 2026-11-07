@@ -383,6 +383,7 @@ do
   don.toBtn = DBtn(don, "", 276)
   don.toBtn:SetPoint("TOPLEFT", 12, -48)
   don.toBtn:SetScript("OnClick", function()
+    if don.mode == "vault" then return end
     local alts = ns.BankAlts()
     if #alts == 0 then return end
     don.toIndex = (don.toIndex or 1) % #alts + 1
@@ -390,7 +391,7 @@ do
   end)
   don.list = CreateFrame("Frame", nil, don)
   don.list:SetPoint("TOPLEFT", 8, -74)
-  don.list:SetPoint("BOTTOMRIGHT", -8, 66)
+  don.list:SetPoint("BOTTOMRIGHT", -8, 96)
   don.list:EnableMouseWheel(true)
   don.list:SetScript("OnMouseWheel", function(_, delta) don:Scroll(-delta) end)
   don.thumbTrack = don:CreateTexture(nil, "BORDER")
@@ -408,6 +409,36 @@ do
   don.allBtn = DBtn(don, "Show everything", 160)
   don.allBtn:SetPoint("BOTTOMLEFT", 12, 40)
   don.allBtn:SetScript("OnClick", function() don.showAll = not don.showAll; don.offset = 0; don:Update() end)
+  -- gold: click to add, right-click to take back
+  don.money = 0
+  don.moneyLabel = DText(don, 11, MUTED)
+  don.moneyLabel:SetPoint("BOTTOMLEFT", 12, 72)
+  don.moneyLabel:SetText("Gold:")
+  don.coinBtns = {}
+  local x = 46
+  for _, c in ipairs({ { "5s", 500 }, { "10s", 1000 }, { "20s", 2000 }, { "1g", 10000 } }) do
+    local b = DBtn(don, "+" .. c[1], 38)
+    b:SetPoint("BOTTOMLEFT", x, 66)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    b:SetScript("OnClick", function(_, button)
+      local step = (button == "RightButton") and -c[2] or c[2]
+      local cap = math.max(0, (GetMoney() or 0) - (don.mode == "vault" and 0 or 3000))   -- leave room for postage
+      don.money = math.max(0, math.min(cap, don.money + step))
+      if step > 0 and don.money == cap then ns.Print("That's all the gold you can spare after postage.") end
+      don:Update()
+    end)
+    b:HookScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:AddLine("Add " .. c[1] .. " to the donation", 1, 1, 1)
+      GameTooltip:AddLine("Right-click to take it back off.", 0.8, 0.8, 0.8)
+      GameTooltip:Show()
+    end)
+    b:HookScript("OnLeave", GameTooltip_Hide)
+    don.coinBtns[#don.coinBtns + 1] = b
+    x = x + 42
+  end
+  don.moneyText = DText(don, 12, GOLD)
+  don.moneyText:SetPoint("BOTTOMRIGHT", -12, 72)
   don.total = DText(don, 11, MUTED)
   don.total:SetPoint("BOTTOMRIGHT", -12, 44)
   don.fill = DBtn(don, "Fill mail", 276)
@@ -415,7 +446,7 @@ do
   don.fill.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
   don.fill:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.17, 0.14, 0.07, 1) end)
   don.fill:SetPoint("BOTTOMLEFT", 12, 12)
-  don.fill:SetScript("OnClick", function() ns.FillDonation() end)
+  don.fill:SetScript("OnClick", function() if don.mode == "vault" then ns.DepositDonation() else ns.FillDonation() end end)
 end
 
 -- Items in your bags you could actually give: { [id] = count }.
@@ -550,11 +581,18 @@ function don:RowFor(id)
 end
 
 function don:Update()
-  local alts = ns.BankAlts()
-  if #alts == 0 then self:Hide() return end
-  self.toIndex = math.min(self.toIndex or 1, #alts)
-  self.to = alts[self.toIndex]
-  self.toBtn.text:SetText("Send to: " .. self.to .. ((#alts > 1) and "  (click to change)" or ""))
+  if self.mode == "vault" then
+    local tab = (GetCurrentGuildBankTab and GetCurrentGuildBankTab()) or 1
+    local name = GetGuildBankTabInfo and GetGuildBankTabInfo(tab)
+    self.to = ns.GB_KEY or "Guild Bank"
+    self.toBtn.text:SetText("Deposit into: " .. tostring(name or ("tab " .. tab)) .. "  (pick the tab in the guild bank)")
+  else
+    local alts = ns.BankAlts()
+    if #alts == 0 then self:Hide() return end
+    self.toIndex = math.min(self.toIndex or 1, #alts)
+    self.to = alts[self.toIndex]
+    self.toBtn.text:SetText("Send to: " .. self.to .. ((#alts > 1) and "  (click to change)" or ""))
+  end
   self.sub:SetText(self.showAll and "Everything you could give (soulbound items are left out)."
     or "What the bank needs, crafting materials, recipes, consumables, bags and green+ Bind on Equip gear.")
   local g = ns.G()
@@ -643,7 +681,8 @@ function don:Update()
   self.empty:SetShown(#entries == 0)
   self.allBtn.text:SetText(self.showAll and "Show only useful items" or ("Show everything" .. (hidden > 0 and (" (+" .. hidden .. ")") or "")))
   self.total:SetText(items > 0 and (items .. " item" .. (items == 1 and "" or "s")) or "")
-  self.fill.text:SetText(items > 0 and "Fill mail" or "Pick something to give")
+  self.moneyText:SetText(self.money > 0 and ns.MoneyText(self.money) or "")
+  self.fill.text:SetText((items > 0 or self.money > 0) and (self.mode == "vault" and "Deposit" or "Fill mail") or "Pick something to give")
   self.stacks = stacks
 end
 
@@ -651,7 +690,8 @@ function ns.FillDonation()
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first.") end
   local picks = {}
   for id, n in pairs(don.pick) do if n > 0 then picks[#picks + 1] = { id, n } end end
-  if #picks == 0 then return ns.Print("Pick something to give first (use + or Max).") end
+  local money = don.money or 0
+  if #picks == 0 and money <= 0 then return ns.Print("Pick something to give first (use + or Max, or the gold buttons).") end
   if MailFrameTab2 and SendMailFrame and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(don.to) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Donation for the guild bank") end
@@ -685,8 +725,25 @@ function ns.FillDonation()
     end
     if need > 0 then left[#left + 1] = ns.ItemLink(id) .. " x" .. need end
   end
+  -- gold, and a line in the letter saying what it's for
+  if money > 0 then
+    if SendMailSendMoneyButton and SendMailSendMoneyButton.Click then SendMailSendMoneyButton:Click() end
+    if MoneyInputFrame_SetCopper and SendMailMoney then MoneyInputFrame_SetCopper(SendMailMoney, money) end
+  end
+  local lines = {}
+  for _, p in ipairs(picks) do lines[#lines + 1] = (GetItemInfo(p[1]) or ("item " .. p[1])) .. " x" .. p[2] end
+  if money > 0 then lines[#lines + 1] = ns.MoneyText(money, true) .. " in gold" end
+  local body = "Donation for the guild bank: " .. table.concat(lines, ", ") .. "."
+  local edit = SendMailBodyEditBox or (MailEditBox and MailEditBox.GetEditBox and MailEditBox:GetEditBox())
+  if edit and edit.SetText then edit:SetText(body:sub(1, 500)) end
+  if SendMailSubjectEditBox and #picks == 0 then SendMailSubjectEditBox:SetText("Gold for the guild bank") end
   wipe(don.pick)
+  don.money = 0
   don:Update()
+  if #picks == 0 then
+    ns.Print("Mail ready for " .. don.to .. " with " .. ns.MoneyText(money) .. ". Check it, then click Send. Thank you!")
+    return
+  end
   if #left > 0 then
     ns.Print("A mail holds " .. maxSlots .. " stacks, so these didn't fit: " .. table.concat(left, ", ") .. ". Send this one, then pick them again.")
   else
@@ -694,21 +751,96 @@ function ns.FillDonation()
   end
 end
 
-local function ShowDonate()
-  if not Setting("donatePanel", true) or not MailFrame or not ns.G() then return end
-  if ns.IsBankAlt() or #ns.BankAlts() == 0 then return end
-  for _, a in ipairs(ns.BankAlts()) do if a == ns.me then return end end
+local function ShowDonate(mode)
+  mode = mode or "mail"
+  if not Setting("donatePanel", true) or not ns.G() then return end
+  if mode == "mail" then
+    if not MailFrame or ns.IsBankAlt() or #ns.BankAlts() == 0 then return end
+    for _, a in ipairs(ns.BankAlts()) do if a == ns.me then return end end
+  end
+  don.mode = mode
   don:ClearAllPoints()
-  don:SetPoint("TOPLEFT", MailFrame, "TOPRIGHT", 4, 0)
+  local anchor = (mode == "vault") and GuildBankFrame or MailFrame
+  if anchor then don:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0) else don:SetPoint("RIGHT", UIParent, "RIGHT", -40, 0) end
   wipe(don.pick)
-  don.showAll, don.dismissed, don.offset = false, false, 0
+  don.showAll, don.dismissed, don.offset, don.money = false, false, 0, 0
   don:Show()
   don:Update()
 end
 ns.ShowDonate = ShowDonate
+function ns.HideDonate(mode) if not mode or don.mode == mode then don:Hide() end end
 
-ns.On("MAIL_SHOW", function() C_Timer.After(0.1, ShowDonate) end)
-ns.On("MAIL_CLOSED", function() don:Hide() end)
+---------------------------------------------------------------------------
+-- Depositing at the guild bank vault: move each picked stack (or part of
+-- one) into an empty slot of the tab you're looking at, a little apart so
+-- the server keeps up. Officers' addons turn the bank log into donations.
+---------------------------------------------------------------------------
+local function EmptySlots(tab)
+  local free = {}
+  for slot = 1, (MAX_GUILDBANK_SLOTS_PER_TAB or 98) do
+    local tex = GetGuildBankItemInfo(tab, slot)
+    if not tex then free[#free + 1] = slot end
+  end
+  return free
+end
+
+function ns.DepositDonation()
+  if don.mode ~= "vault" then return end
+  local tab = (GetCurrentGuildBankTab and GetCurrentGuildBankTab()) or 1
+  local free = EmptySlots(tab)
+  local moves, left = {}, {}
+  for id, want in pairs(don.pick) do
+    for bag = 0, (NUM_BAG_SLOTS or 4) do
+      local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
+      for slot = 1, n do
+        if want <= 0 then break end
+        local info = C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag, slot)
+        if info and info.itemID == id and not info.isBound then
+          local take = math.min(want, info.stackCount or 1)
+          moves[#moves + 1] = { bag = bag, slot = slot, n = take, whole = take == (info.stackCount or 1) }
+          want = want - take
+        end
+      end
+    end
+    if want > 0 then left[#left + 1] = ns.ItemLink(id) .. " x" .. want end
+  end
+  if #moves > #free then
+    return ns.Print("This guild bank tab only has " .. #free .. " empty slot" .. (#free == 1 and "" or "s")
+      .. " and that needs " .. #moves .. ". Pick another tab, or give less at once.")
+  end
+  local money = don.money or 0
+  if #moves == 0 and money <= 0 then return ns.Print("Pick something to give first (use + or Max, or the gold buttons).") end
+  if money > 0 and DepositGuildBankMoney then DepositGuildBankMoney(money) end
+  wipe(don.pick)
+  don.money = 0
+  don:Update()
+  local i = 0
+  local function step()
+    i = i + 1
+    local m = moves[i]
+    if not m then
+      ns.Print("Deposited into the guild bank. Thank you!" .. (money > 0 and (" (" .. ns.MoneyText(money) .. " of gold too)") or ""))
+      if #left > 0 then ns.Print("Couldn't find all of: " .. table.concat(left, ", ")) end
+      return
+    end
+    if ClearCursor then ClearCursor() end
+    if m.whole then
+      if C_Container and C_Container.PickupContainerItem then C_Container.PickupContainerItem(m.bag, m.slot) else PickupContainerItem(m.bag, m.slot) end
+    else
+      if C_Container and C_Container.SplitContainerItem then C_Container.SplitContainerItem(m.bag, m.slot, m.n) else SplitContainerItem(m.bag, m.slot, m.n) end
+    end
+    PickupGuildBankItem(tab, free[i])          -- drop it in an empty slot
+    if ClearCursor then ClearCursor() end
+    C_Timer.After(0.4, step)
+  end
+  step()
+end
+
+ns.On("MAIL_SHOW", function() C_Timer.After(0.1, function() ShowDonate("mail") end) end)
+ns.On("MAIL_CLOSED", function() ns.HideDonate("mail") end)
+local MAILBOX = (Enum and Enum.PlayerInteractionType and Enum.PlayerInteractionType.MailInfo) or 17
+ns.On("PLAYER_INTERACTION_MANAGER_FRAME_HIDE", function(kind) if kind == MAILBOX then ns.HideDonate("mail") end end)
+if MailFrame and MailFrame.HookScript then MailFrame:HookScript("OnHide", function() ns.HideDonate("mail") end) end
 ns.On("BAG_UPDATE_DELAYED", function() if don:IsShown() then don:Update() end end)
 
 ---------------------------------------------------------------------------

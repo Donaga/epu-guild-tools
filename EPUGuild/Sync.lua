@@ -490,25 +490,26 @@ end
 function ns.TopStamp(excludeMine)
   local g = ns.GuildStore and ns.GuildStore() or ns.G()
   if not g then return 0 end
-  local top = 0
+  local top, owner = 0, nil
   local T = Tables(g)
   for f, src in pairs(T) do
     if f ~= "bank" then
       for k, x in pairs(src) do
         if type(x) == "table" and not U(g, f, k) and not (excludeMine and Owner(f, k, x) == ns.me) then
           local s = (f == "don") and math.max(x.t or 0, tonumber(x.u) or 0) or Stamp(f, x) or 0
-          if s > top then top = s end
+          if s > top then top, owner = s, Owner(f, k, x) end
         end
       end
     end
   end
-  return top
+  return top, owner
 end
 
 function ns.CheckInDigest()
   local g = ns.G()
   if not g then return nil end
-  local d = { needs = g.needs.v, policy = g.policy.v or 0, bank = {}, top = ns.TopStamp() }
+  local top, owner = ns.TopStamp()
+  local d = { needs = g.needs.v, policy = g.policy.v or 0, bank = {}, top = top, topBy = owner }
   for alt, s in pairs(g.bank) do d.bank[alt] = s.v end
   return d
 end
@@ -525,7 +526,9 @@ function ns.Behind(c)
       if not s or U(g, "bank", alt) or (tonumber(v) or 0) > s.v then return true end
     end
   end
-  return (tonumber(c.top) or 0) > ns.TopStamp(true)
+  -- if the officer's newest record is one of ours, compare with ours included
+  local mine = c.topBy == ns.me
+  return (tonumber(c.top) or 0) > (ns.TopStamp(not mine))
 end
 
 ns.comm.C = function(sender, c)

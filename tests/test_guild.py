@@ -232,6 +232,19 @@ A.ex('__ns.UI.itemBox.onEnter(__ns.UI.itemBox)'); tick(2)
 check("a second Enter makes the request", A.ev('(function() local n = 0 for _ in pairs(__ns.G().requests) do n = n + 1 end return n end)()') == n0 + 1)
 A.ex('__ns.UI.itemBox.HasFocus = nil; __ns.UI.forBox.HasFocus = nil; __bags[0] = {}')
 
+
+# --- login pop-up: only the newest, with a count ---
+A.ex('for i = 1, 4 do __ns.PostNews("Old " .. i, "text " .. i) end'); tick(5)
+A.ex('__ns.PostNews("Newest one", "latest")'); tick(10)
+N.ex('__dialogs = {}; __ns.ShowUnreadNews()')
+check("one pop-up at login", N.ev('#__dialogs') == 1)
+check("it's the newest announcement", "Newest one" in N.ev('__dialogs[1][2]'))
+check("and says how many others are unread (%s)" % N.ev('__dialogs[1][2]').split("\n")[-1], "more unread announcement" in N.ev('__dialogs[1][2]'))
+N.ex('__dialogs[1][3][1][2]()'); tick(1)
+check("Got it doesn't open the next one", N.ev('#__dialogs') == 1)
+N.ex('__log = {}; __dialogs = {}; __ns.ShowUnreadNews()')
+check("next login: no pop-up for older ones, just a chat line", N.ev('#__dialogs') == 0 and any("unread guild announcement" in (N.ev('__log[%d]' % i) or "") for i in range(1, N.ev('#__log') + 1)))
+
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

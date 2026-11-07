@@ -267,6 +267,17 @@ function ns.SafeCall(fn, ...)
   return false, { plain = plain, where = where, raw = raw }
 end
 
+-- "1g 5s", or plain text with no coin icons
+function ns.MoneyText(c, plain)
+  c = math.floor(tonumber(c) or 0)
+  local g, sv, cp = math.floor(c / 10000), math.floor(c / 100) % 100, c % 100
+  local parts = {}
+  if g > 0 then parts[#parts + 1] = g .. (plain and "g" or "|cffffd700g|r") end
+  if sv > 0 then parts[#parts + 1] = sv .. (plain and "s" or "|cffc7c7cfs|r") end
+  if cp > 0 or #parts == 0 then parts[#parts + 1] = cp .. (plain and "c" or "|cffeda55fc|r") end
+  return table.concat(parts, " ")
+end
+
 -- How many the player carries. Newer clients moved GetItemCount to C_Item.
 function ns.ItemCount(id)
   local f = (C_Item and C_Item.GetItemCount) or GetItemCount

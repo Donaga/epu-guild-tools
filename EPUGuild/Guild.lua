@@ -253,13 +253,28 @@ function ns.MarkNewsRead(id)
   ns.Changed()
 end
 
+-- At login: one pop-up at most. It shows the newest announcement if you
+-- haven't read it, and says how many others are unread. (The game already
+-- prints the message of the day in chat, so that never pops up.)
 function ns.ShowUnreadNews()
-  local e = ns.UnreadNews()[1]
-  if not e or not ns.Dialog then return end
-  local body = ((e.title and e.title ~= "") and ("|cffffffff" .. e.title .. "|r\n\n") or "") .. (e.text or "") .. "\n\n|cff7e8590- " .. tostring(e.by) .. "|r"
+  if not ns.Dialog then return end
+  local unread = {}
+  for _, e in ipairs(ns.UnreadNews()) do if not e.motd then unread[#unread + 1] = e end end
+  if #unread == 0 then return end
+  local newest
+  for _, e in ipairs(ns.NewsEntries()) do if not e.quiet then newest = e break end end
+  if not newest or newest.id ~= unread[1].id then
+    ns.Print("You have " .. #unread .. " unread guild announcement" .. (#unread == 1 and "" or "s") .. ". Type |cffffffff/epu news|r to read them.")
+    return
+  end
+  local e = newest
+  local more = #unread - 1
+  local body = ((e.title and e.title ~= "") and ("|cffffffff" .. e.title .. "|r\n\n") or "") .. (e.text or "")
+    .. "\n\n|cff7e8590- " .. tostring(e.by) .. "|r"
+    .. (more > 0 and ("\n\n|cfff2c14e" .. more .. " more unread announcement" .. (more == 1 and "" or "s") .. " in News.|r") or "")
   ns.Dialog("Guild announcement", body, {
-    { "Got it", function() ns.MarkNewsRead(e.id); C_Timer.After(0.3, ns.ShowUnreadNews) end },
-    { "Open News", function()
+    { "Got it", function() ns.MarkNewsRead(e.id) end },
+    { more > 0 and "Open News (" .. more .. ")" or "Open News", function()
       ns.MarkNewsRead(e.id)
       if ns.UI then ns.UI:Show(); ns.UI:SetView("news") end
     end },

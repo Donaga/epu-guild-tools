@@ -222,7 +222,7 @@ function __load(dir)
   -- record the addon's own pop-ups for the tests: { title, body }
   __dialogs = {}
   local dialog = __ns.Dialog
-  __ns.Dialog = function(t, b, ...) table.insert(__dialogs, { t, b }); return dialog(t, b, ...) end
+  __ns.Dialog = function(t, b, btns, ...) table.insert(__dialogs, { t, b, btns }); return dialog(t, b, btns, ...) end
   __fire("ADDON_LOADED", "EPUGuild")
   __fire("PLAYER_LOGIN")
   __fire("PLAYER_ENTERING_WORLD", true, false)
