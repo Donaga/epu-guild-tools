@@ -184,6 +184,7 @@ check("removed announcement comes back so the post can be deleted", len(rm) == 1
 ne = st.queue_news("Raid night", "Deadmines Friday 8pm", "Donaga")
 core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+tick_until(lambda: B.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "Raid night" then return true end end return false end)()'))
 check("/announce reaches the game and members", B.ev('(function() for _, e in ipairs(__ns.NewsEntries()) do if e.title == "Raid night" then return e.by end end end)()') == "Donaga (Discord)")
 check("announcement embed", bot.news_embed({"title": "Raid night", "text": "x", "by": "Donaga"}).title == "Raid night")
 
@@ -203,13 +204,16 @@ check("the same post isn't copied twice", len(st.data["inbox"]) == n_in)
 check("the bot's own posts are skipped", asyncio.run(bot.import_message(fake_msg(778, "hello", aid=1))) is False)
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
 title_of = '(function() local e = __ns.GuildStore().news["m777"] return e and not e.removed and (e.title .. "|" .. e.text) or nil end)()'
+tick_until(lambda: B.ev(title_of) == "Patch night|Servers restart at 6")
 check("copied post becomes an in-game announcement", B.ev(title_of) == "Patch night|Servers restart at 6")
 check("copied posts aren't posted back to Discord", st.data["news_posted"]["m777"]["external"] is True)
 asyncio.run(bot.import_message(fake_msg(777, "**Patch night**\nServers restart at 7"), edit=True))
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+tick_until(lambda: B.ev(title_of) == "Patch night|Servers restart at 7")
 check("edits in Discord update the game", B.ev(title_of) == "Patch night|Servers restart at 7")
 st.queue_news_remove("m777"); core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+tick_until(lambda: B.ev('__ns.GuildStore().news["m777"] and __ns.GuildStore().news["m777"].removed') is True)
 check("deleting in Discord removes it in game", B.ev(title_of) is None)
 
 # pings stripped; older posts copied quietly (no pop-up); a pending copy is rewritten, not duplicated
@@ -221,6 +225,7 @@ check("re-copying a post that hasn't reached the game rewrites it", len(st.data[
 core.write_inbox(core.inbox_path(WOW), st.data["inbox"])
 B.ex('__dialogs = {}')
 A.ex(f'dofile("{WOW}/Interface/AddOns/EPUGuild/Inbox.lua"); __ns.ProcessInbox()'); tick(3)
+tick_until(lambda: B.ev('__ns.GuildStore().news["m901"] ~= nil'))
 check("old announcements show in News", B.ev('__ns.GuildStore().news["m901"].title') == "Launch night!")
 check("but don't pop up or count as unread", B.ev('#__dialogs') == 0
       and B.ev('(function() for _, e in ipairs(__ns.UnreadNews()) do if e.id == "m901" then return true end end return false end)()') == False)

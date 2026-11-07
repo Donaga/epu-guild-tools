@@ -81,17 +81,44 @@ end
 
 ---------------------------------------------------------------------------
 -- Sending. Messages over 250 bytes are split into numbered parts.
--- The game throttles addon messages per prefix: a burst of about 10, then
--- roughly one a second. A refused message is silently lost unless we check,
--- and one lost part spoils a whole bundle, so: pace with a token bucket and
--- put anything the game refuses back at the front of the queue.
+-- Both prefix and shared connection limits can reject traffic. Keep initial
+-- bursts small, pace packets, and retain refused packets for a longer retry.
 ---------------------------------------------------------------------------
 local MAX_SINGLE = 250
 local CHUNK = 230
-local BURST, REFILL = 8, 1.1          -- stay a little under the game's own limits
+-- Other addons share the character's connection. Avoid the large login burst
+-- even when our own prefix still has tokens available.
+local BURST, REFILL, SPACING = 2, 1.1, 0.55
 
 local queue, sending, msgCounter = {}, false, 0
 local tokens, lastRefill = BURST, 0
+local pauseUntil, lastThrottle, lastAttempt, recovering = 0, nil, nil, false
+local backoff = 0
+local net = { attempts=0, refused=0, warnings=0, sent=0 }
+
+local function Pause()
+  local now=GetTime()
+  if lastThrottle and now-lastThrottle<2 then return end -- same refusal, two event paths
+  backoff=(lastThrottle and now-lastThrottle<60) and math.min(60,math.max(5,backoff*2)) or 5
+  lastThrottle=now
+  pauseUntil=math.max(pauseUntil,now+backoff)
+  tokens,lastRefill,recovering=0,now,true
+end
+function ns.NetworkStatus()
+  return {queued=#queue,attempts=net.attempts,sent=net.sent,refused=net.refused,warnings=net.warnings,
+    pause=math.max(0,math.ceil(pauseUntil-GetTime()))}
+end
+function ns.PrintNetworkStatus()
+  local s=ns.NetworkStatus()
+  ns.Print("Network: "..s.queued.." queued, "..s.sent.." accepted, "..s.refused.." refused, "..s.warnings
+    .." recent-send throttle warning(s), "..s.pause.."s cooldown. Counts are for EPU this session; a shared warning cannot identify its source.")
+end
+ns.On("CHAT_MSG_SYSTEM",function(msg)
+  if ERR_CHAT_THROTTLED and msg==ERR_CHAT_THROTTLED and lastAttempt and GetTime()-lastAttempt<=2 then
+    net.warnings=net.warnings+1
+    Pause()
+  end
+end)
 
 local THROTTLED = {}
 if Enum and Enum.SendAddonMessageResult then
@@ -110,21 +137,30 @@ local function pump()
   local m = queue[1]
   if not m then sending = false return end
   local now = GetTime()
+  if now<pauseUntil then C_Timer.After(pauseUntil-now+0.05,pump); return end
+  if recovering then tokens,lastRefill,recovering=1,now,false end
   tokens = math.min(BURST, tokens + (now - lastRefill) / REFILL)
   lastRefill = now
   if tokens < 1 then
     C_Timer.After(REFILL * (1 - tokens) + 0.05, pump)
     return
   end
-  local ok, result = pcall(C_ChatInfo.SendAddonMessage, ns.PREFIX, m[1], m[2], m[3])
-  if ok and Refused(result) then
-    tokens = 0                                            -- back off; resend this one later
-    C_Timer.After(REFILL + 0.2, pump)
+  lastAttempt=now
+  net.attempts=net.attempts+1
+  local chat=m[4]=="CHAT"
+  local ok,result
+  if chat then ok,result=pcall(SendChatMessage,m[1],"GUILD")
+  else ok,result=pcall(C_ChatInfo.SendAddonMessage,ns.PREFIX,m[1],m[2],m[3]) end
+  if ok and ((chat and result==false) or (not chat and Refused(result))) then
+    net.refused=net.refused+1
+    Pause()                                              -- retain the packet and cool down
+    C_Timer.After(math.max(REFILL,pauseUntil-now)+0.05, pump)
     return
   end
   table.remove(queue, 1)
+  if ok then net.sent=net.sent+1 end
   tokens = tokens - 1
-  C_Timer.After(0.15, pump)
+  C_Timer.After(SPACING, pump)
 end
 
 function ns.Send(kind, data, channel, target)
@@ -149,6 +185,14 @@ function ns.Send(kind, data, channel, target)
 end
 
 function ns.QueueLength() return #queue end
+
+-- User-requested needs posts and optional milestone announcements share the
+-- same budget instead of sending several visible guild-chat lines at once.
+function ns.SendGuildChat(text)
+  if not IsInGuild() or type(text)~="string" or #text>255 or #queue>=12000 then return false end
+  queue[#queue+1]={text,"GUILD",nil,"CHAT"}
+  if not sending then sending=true; pump() end
+end
 
 ---------------------------------------------------------------------------
 -- Receiving
@@ -198,6 +242,7 @@ function ns.HandleAddonMessage(prefix, msg, channel, sender)
       p.bytes = p.bytes + #part
       if p.bytes > 262144 then partial[key]=nil; return end
     end
+    if ns.sync and channel=="GUILD" and ns.IsTrusted(sender) then ns.sync.lastPart=GetTime() end
     if p.got < p.n then return end
     partial[key] = nil
     body = table.concat(p.parts)

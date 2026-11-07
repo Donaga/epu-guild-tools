@@ -461,9 +461,9 @@ function ns.PostNeeds()
   local open = {}
   for _, n in ipairs(ns.OpenNeeds()) do if n.rem > 0 then open[#open + 1] = n end end
   if #open == 0 then return ns.Print("No open needs right now.") end
-  SendChatMessage("Guild bank wish list - please mail to " .. ns.BankAltNames() .. ":", "GUILD")
+  ns.SendGuildChat("Guild bank wish list - please mail to " .. ns.BankAltNames() .. ":")
   for i = 1, math.min(5, #open) do
-    SendChatMessage("  " .. ns.ItemLink(open[i].id) .. " x" .. open[i].rem, "GUILD")
+    ns.SendGuildChat("  " .. ns.ItemLink(open[i].id) .. " x" .. open[i].rem)
   end
 end
 

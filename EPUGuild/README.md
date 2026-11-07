@@ -89,6 +89,11 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 Adding an item: click into the item box, then shift-click the item in your bags. You can also drag the item onto the box.
 
 ## Commands
+
+The request-status dropdown counts the same search, Mine and Crafts matches as the list. The footer shows how many requests are visible out of the selected status total. Use the X in the search box to clear the search.
+
+If WoW reports message throttling, EPU pauses and retries with increasing delays rather than rapidly resending. Login syncs and visible guild needs/milestone posts share conservative pacing. `/epu net` reports EPU's queue, accepted/refused sends, recent-send warnings and cooldown for this session. A shared server warning cannot identify which addon caused it; EPU does not hide these warnings.
+
 ```
 /epu                         open/close the window (or click the minimap bag)
 /epu need <item> <qty> [goal]  officers: set a restock minimum, or add "goal" for a one-time goal (qty 0 removes)

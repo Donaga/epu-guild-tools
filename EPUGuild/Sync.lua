@@ -428,6 +428,7 @@ function ns.SendHello(full)
   local hello = S.helloAt
   local function retry()
     if S.helloAt ~= hello or (S.officerHs or 0) >= d.at then return end
+    if ns.QueueLength and ns.QueueLength()>0 then C_Timer.After(30,retry); return end
     if S.lastPart and GetTime()-S.lastPart<90 then C_Timer.After(90,retry); return end
     -- A missing bundle must not advance the watermark; ask for a full replay.
     ns.MaybeHello(true, 1)
@@ -690,6 +691,10 @@ ns.Ago = Ago
 function ns.SyncStatus()
   local g = ns.G()
   if not g then return "Not in a guild", "muted", "" end
+  local network=ns.NetworkStatus and ns.NetworkStatus()
+  if network and network.queued>0 and network.pause>0 then
+    return "Sync cooling down", "gold", "WoW reported message throttling. EPU will retry in "..network.pause.." seconds."
+  end
   if ns.QueueLength and ns.QueueLength() > 0 and S.helloAt and GetTime() - S.helloAt < 120 then
     return "Syncing...", "gold", "Guild data is coming in."
   end
