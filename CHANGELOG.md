@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0-preview
+## 0.10.0
 
 - Track partial mail/trade deliveries by actual quantity and allocate each item once. Keep delivery history and show remaining quantities in game and Discord.
 - Validate request ownership, statuses, quantities, bank snapshots, recipes and materials at the receiving client.

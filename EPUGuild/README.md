@@ -16,7 +16,7 @@ Everyone in the guild should install it. The more members who have it, the more 
 
 Update the addon for everyone and update the Discord companion on the officer PC together, then `/reload` and `/epu sync`. Log onto each alt once to confirm its main/alt relationship. Unverified claims from older clients are no longer used as proof of ownership. Existing Discord links need `/link` followed by officer approval using `/approve_link user: character:`; each character is verified separately.
 
-This preview has offline simulation coverage and still needs testing in the live Forever client before a guild-wide rollout.
+Automated simulations cover this version. Live Forever client testing remains recommended before a guild-wide rollout.
 
 ## Crafting projects
 
