@@ -31,7 +31,7 @@ function ns.InstallCasualViews(views,env)
         drafts.new={title="",note="",lines={}}; Open("kitedit","new")
       else Open("activityform",kind) end
     end)
-    bar:Add(E.Btn(bar,"My availability",90,22),"right",function() Open("helperform",ns.me) end)
+    bar.casualAvailability=bar:Add(E.Btn(bar,"My availability",90,22),"right",function() Open("helperform",ns.me) end)
     bar.casualMine=mine; bar.casualNear=near; bar.casualChoose=choose
   end,rows=function(g,q)
     ns.CasualStore(); local st=State(); local rows={}

@@ -361,7 +361,7 @@ local HELP = {
   "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
-  "|cffffd100/epu calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
+  "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu activities|r - quest help, dungeon groups, helpers and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off opts in or out",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
@@ -418,8 +418,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
-  elseif cmd == "calendar" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then
-    ns.UI.state.activities.kind=({calendar="events",quests="quests",catchup="catchup",notifications="notifications"})[cmd]
+  elseif cmd == "guides" or cmd == "calendar" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then
+    ns.UI.state.activities.kind=({guides="guides",calendar="events",quests="quests",catchup="catchup",notifications="notifications"})[cmd]
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
   elseif cmd == "activities" then
     ns.UI:Show(); ns.UI:SetView("activities")

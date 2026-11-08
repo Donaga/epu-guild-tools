@@ -18,6 +18,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install lupa "discord.py>=2.3"
+      - name: Personalized guides and reviewed catalog
+        run: python tools/build_guide_catalog.py --check && python tests/test_guides.py
       - name: Addon sync simulation
         run: python tests/test_sync.py
       - name: Guild bank + Discord round trip

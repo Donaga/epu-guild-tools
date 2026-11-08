@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0
+
+- Add Your guides under Guild activities, with `/epu guides` access and 107 curated Forever source entries across all nine classes and twelve professions.
+- Show only this character's class, level, learned professions and skill range; specialization routes require a matching automatic or chosen own-class talent focus.
+- Default to a concise best-fit selection, with optional alternative sources, clear beta/pre-launch labels, author/update metadata and editorial review dates.
+- Add copyable full-source links, private saved guides and notes, and progress for the current level/skill bracket. Saved sources never bypass relevance.
+- Add a validated offline catalog generator, read-only source-health checker and documented weekly editorial maintenance process. HTTP access restrictions are distinguished from missing guides.
+- Retain all existing bank/mail, reagent-bag, map, activity, calendar, quest and notification features. Live Forever visual validation remains pending.
+
 ## 0.13.0
 
 - Add casual event planning with local/server time display, going/tentative/declined role signups, organiser edits, officer cancellation and personal reminders.
