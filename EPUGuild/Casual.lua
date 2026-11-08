@@ -220,7 +220,7 @@ function ns.MergeCasual(sender,b,trusted)
   local changed=false
   for _,f in ipairs(ns.CASUAL_FIELDS) do
     local src=b[f]
-    if type(src)=="table" then
+    if type(src)=="table" and validators[f] then
       local size=Count(g[f])
       for id,r in pairs(src) do
         if type(id)=="string" and validators[f](id,r) then
@@ -258,6 +258,7 @@ ns.On("PLAYER_LOGIN",function()
         end
       end
     end
+    if ns.OwnCommunityRecords and ns.OwnCommunityRecords(b) then any=true end
     return any and b or nil
   end
   -- Authors can answer a new member even when no officer is online. Forward

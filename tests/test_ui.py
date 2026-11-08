@@ -90,6 +90,7 @@ check("sending marks it filled", B.ev(f'__ns.G().requests["{rid}"].status') == "
 
 # --- archive finished, void a donation ---
 A.ex('__ns.ArchiveFinished()'); tick(3)
+tick_until(lambda: B.ev(f'__ns.G().requests[\"{rid}\"].archived') == True, timeout=30)
 check("tidy hides finished requests for everyone", B.ev(f'__ns.G().requests["{rid}"].archived') == True)
 A.ex('__inbox[1] = {sender = "Tyler Baker", money = 0, items = {{2589, 20}}}; TakeInboxItem(1, 1)'); tick(6)
 did = A.ev("(next(__ns.G().donations))")

@@ -11,6 +11,8 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 
 Guild activities include quest help, dungeon groups, voluntary helpers and starter-kit templates. Officers can combine a member’s approved bank requests into one mail draft.
 
+The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
+
 ## Getting the addon (guildmates)
 - **Recommended: CurseForge.** Install the free [CurseForge app](https://www.curseforge.com/download/app), open **https://www.curseforge.com/wow/addons/epu-guild-tools** and click **Install**, then pick your *Forever* install. The app keeps it updated (turn on auto-update in its World of Warcraft settings). The project is unlisted, so use the link rather than searching.
 - **Updater:** download `EPU-Updater-x.y.z.zip` from the latest [Release](../../releases/latest), unzip it somewhere you'll keep it, and double-click **Update EPU Guild Tools**. It finds WoW: Forever, installs the addon, and updates it whenever you run it. Double-click **Update automatically at startup** once and it keeps itself current.
@@ -40,6 +42,8 @@ python tests/test_discord.py
 python tests/test_itemdb.py
 python tests/test_ui.py
 python tests/test_casual.py
+python tests/test_community.py
+python tests/test_quest_matching.py
 python tests/test_member_mail.py
 python tests/test_guild.py
 python tests/test_autosync.py

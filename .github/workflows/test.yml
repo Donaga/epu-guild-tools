@@ -44,6 +44,10 @@ jobs:
         run: python tests/test_request_filters.py
       - name: Reagent bag donations
         run: python tests/test_donation_bags.py
+      - name: Calendar catch-up and personal notifications
+        run: python tests/test_community.py
+      - name: Opt-in quest matching
+        run: python tests/test_quest_matching.py
       - name: Casual guild activities and starter kits
         run: python tests/test_casual.py
       - name: Combined bank request mail

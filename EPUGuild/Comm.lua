@@ -197,12 +197,13 @@ function ns.CancelEphemeral(kind)
     if queue[i].ephemeral==kind then table.remove(queue,i) end
   end
 end
-function ns.SendEphemeral(kind,data,ttl,valid)
-  ns.CancelEphemeral(kind)
+function ns.SendEphemeral(kind,data,ttl,valid,key)
+  key=key or kind
+  ns.CancelEphemeral(key)
   if not IsInGuild() then return false end
   local body="S"..kind..ns.Serialize(data)
   if #body>MAX_SINGLE then return false end
-  queue[#queue+1]={body,"GUILD",ephemeral=kind,expires=GetTime()+ttl,valid=valid}
+  queue[#queue+1]={body,"GUILD",ephemeral=key,expires=GetTime()+ttl,valid=valid}
   if not sending then sending=true; pump() end
   return true
 end

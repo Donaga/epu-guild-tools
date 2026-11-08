@@ -115,7 +115,7 @@ local GROUPS = {
   { "req", "don" },
   { "news", "feed" },
   { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps" },
-  { "activityPosts", "activityReplies", "helpers", "kitTemplates" },
+  { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time
 
@@ -198,6 +198,7 @@ end
 -- Relayed (unconfirmed) data: fills gaps only
 ---------------------------------------------------------------------------
 local function Owner(f, k, x)
+  if f=="guildEvents" or f=="eventResponses" then return x.who end
   if f=="activityPosts" or f=="activityReplies" or f=="helpers" then return x.who end
   if f=="kitTemplates" then return x.by end
   if f == "req" then return x.who end
@@ -228,7 +229,7 @@ local VALID = {
 }
 
 local function Tables(g)
-  return { activityPosts=g.activityPosts or {}, activityReplies=g.activityReplies or {}, helpers=g.helpers or {}, kitTemplates=g.kitTemplates or {}, projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
+  return { guildEvents=g.guildEvents or {}, eventResponses=g.eventResponses or {}, activityPosts=g.activityPosts or {}, activityReplies=g.activityReplies or {}, helpers=g.helpers or {}, kitTemplates=g.kitTemplates or {}, projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
     mats = g.mats, alts = g.alts, profiles = g.profiles, feed = g.feed, news = g.news, joined = g.joined }
 end
 
@@ -310,6 +311,7 @@ end
 -- reports a one-line summary after it syncs ("Y"), which the Sync tab lists.
 ---------------------------------------------------------------------------
 local LABELS = {
+  { "guildEvents", "events" }, { "eventResponses", "event signups" },
   { "activityPosts", "activities" }, { "activityReplies", "responses" }, { "helpers", "helpers" }, { "kitTemplates", "kit templates" },
   { "projects", "projects" }, { "onboarding", "checklist updates" }, { "onboardingSteps", "checklist instructions" },
   { "altVerified", "character confirmations" },

@@ -18,6 +18,79 @@ Update the addon for everyone and update the Discord companion on the officer PC
 
 Automated simulations cover this version. Live Forever client testing remains recommended before a guild-wide rollout.
 
+## Calendar, quest matching, catch-up and personal notifications (0.13+)
+
+These tools are additional boards under **Guild activities**. Shortcut commands:
+`/epu calendar`, `/epu quests`, `/epu catchup` and `/epu notifications`.
+Participating guildmates need the updated addon; no companion migration is required.
+
+### Casual event calendar
+
+Any member can create an event up to 28 days ahead, with a meeting place, note,
+planned group size and duration of 15–480 minutes. Enter **Local start** as
+`YYYY-MM-DD HH:MM` in your computer's local timezone. The preview and event
+show local and server times for the same stored instant. Server display uses
+the realm's **current** timezone offset; check it again across daylight saving
+changes. If the client cannot supply the realm clock, server time is labelled
+Unavailable instead of being guessed. Invalid dates are rejected.
+
+Sign up as Going, Tentative or Can't make it, with a role and optional note.
+Signups show interest and can exceed planned slots; the organiser confirms the
+group. The organiser can edit an upcoming event; the organiser or an officer can
+cancel it. A cancelled event cannot be revived by an old edit. Declining stops
+following the event. Followed events and your signups receive one local reminder
+per start time, normally 15 minutes before the start; notification preferences
+can suppress it or send it to your digest. No native game-calendar invitations,
+automatic group invites or public guild-chat messages are sent.
+
+### Shared quest matching
+
+Sharing starts **off**. Choose up to eight quests from your current log, then
+open Sharing and enable **Share selected quests**. Selecting alone does not turn
+sharing on. The board matches exact quest IDs against online guildmates and
+shows progress and a Whisper action. Different phases and quest-chain
+requirements can still prevent playing together.
+
+Only selected quest IDs, shortened titles, completion state and up to four
+objective counts are sent. Updates are coalesced and paced, yield to existing
+traffic, expire in the send queue, and heartbeat while sharing remains enabled.
+Unselecting, abandoning a quest or stopping sharing withdraws it. Other members'
+progress exists only in memory and expires after three minutes; it is not saved
+in guild data or forwarded to Discord. Your own selected IDs and sharing
+preference are saved privately on this character. Missing/restricted APIs
+produce an unavailable state; the addon does not change your quest selection,
+automatically accept quests or share the game quest itself.
+
+### Returning-player catch-up
+
+Catch-up brings together unread announcements, recent changes to your requests,
+active projects, upcoming events and your personal notification digest, using
+whatever guild data has synced so far. After a day away, one local chat hint
+points you to it; quiet hours and notification settings suppress that hint.
+Opening news from Catch-up marks that announcement read. **Mark reviewed**
+clears the digest and advances your visit marker, while active projects and
+upcoming events remain visible. It does not mark every announcement read.
+
+### Personal notification controls
+
+Choose Instant, Digest or Off globally, with category preferences for requests,
+crafting, news, milestones, followed projects/activities/events, event reminders
+and the returning-player hint. Global Off/Digest takes precedence over category
+settings. Quiet hours use local `HH:MM`, support midnight crossings, and send
+notices to the digest without pop-ups or sound. Both fields blank disables quiet
+hours. Sound can be muted separately; reminder lead time is 5–120 minutes.
+
+Use **Follow updates** and **Mute post** in request, project, activity and event
+details; news supports per-post muting. Followed/muted items can be managed from
+Notifications. Digests are read in Catch-up. Historical sync does not produce a
+popup storm; repeated revisions are deduplicated, queued notices for the same
+post are coalesced and excess instant notices go to the bounded digest.
+Clicking a notification opens the relevant item. Settings, digest and visit
+markers remain private to this character and guild, and are never synced.
+
+Automated simulations cover these features, including the actual form controls.
+Live Forever visual validation remains pending.
+
 ## Guild activities (0.12+)
 
 Open **Guild activities** in `/epu`, or use `/epu activities`. Choose a board

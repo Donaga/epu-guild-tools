@@ -257,6 +257,7 @@ do
   toast:EnableMouse(true)
   toast:SetScript("OnMouseUp", function()
     toast:Hide()
+    if ns.OpenPersonalNotice and ns.OpenPersonalNotice(toast.context) then return end
     ns.UI:Show()
     ns.UI:SetView("requests")
   end)
@@ -265,22 +266,39 @@ end
 local toastQueue, toastBusy = {}, false
 local function NextToast()
   local t = table.remove(toastQueue, 1)
+  while t and ns.DeferQueuedNotice and ns.DeferQueuedNotice(t) do t=table.remove(toastQueue,1) end
   if not t then toastBusy = false; toast:Hide() return end
   toastBusy = true
   toast.icon:SetTexture(t.icon or ns.LOGO)
   if t.icon then toast.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) else toast.icon:SetTexCoord(0, 1, 0, 1) end   -- the crest is round; don't crop it
+  toast.context=t.context
   toast.title:SetText(t.title)
   toast.text:SetText(t.text or "")
   toast:SetAlpha(1)
   toast:Show()
-  if t.sound ~= false then pcall(PlaySound, (SOUNDKIT and SOUNDKIT.TELL_MESSAGE) or 3081) end
+  if t.sound ~= false and (not ns.PersonalSoundsEnabled or ns.PersonalSoundsEnabled()) then pcall(PlaySound, (SOUNDKIT and SOUNDKIT.TELL_MESSAGE) or 3081) end
   C_Timer.After(6, NextToast)
 end
 
-function ns.Notify(title, text, icon)
+function ns.Notify(title, text, icon, context)
   if not Setting("notices", true) then return end
+  context=context or ns.noticeContext
+  if ns.RoutePersonalNotice and not ns.RoutePersonalNotice(title,text,icon,context) then return end
+  if context then
+    for _,queued in ipairs(toastQueue) do
+      local c=queued.context
+      if c and c.category==context.category and c.kind==context.kind and c.key==context.key then
+        queued.title,queued.text,queued.icon,queued.context=title,text,icon,context
+        return
+      end
+    end
+  end
+  if #toastQueue>=30 then
+    if ns.DeferOverflowNotice then ns.DeferOverflowNotice(title,text,icon,context) end
+    return
+  end
   ns.Print(title .. (text and text ~= "" and (" - " .. text) or ""))
-  table.insert(toastQueue, { title = title, text = text, icon = icon })
+  table.insert(toastQueue, { title = title, text = text, icon = icon, context=context })
   if not toastBusy then NextToast() end
 end
 
