@@ -750,6 +750,7 @@ det.pools = { text = {}, box = {}, btn = {}, label = {} }
 det.used = { text = 0, box = 0, btn = 0, label = 0 }
 
 function det:Reset(icon, quality, titleText, subtitle)
+  self.casualDraft=nil
   for k in pairs(self.used) do
     for i = 1, #self.pools[k] do self.pools[k][i]:Hide() end
     self.used[k] = 0
@@ -864,7 +865,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "projects", "onboarding", "sync", "officer" }
+local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "activities", "projects", "onboarding", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 -- A toolbar button that opens a dropdown menu.
@@ -1636,6 +1637,8 @@ Views.onboarding = {
   empty="No checklist matches.",footer=function() return "Members complete their own steps; officers confirm Discord, mentors and starter supplies." end,
 }
 
+if ns.InstallCasualViews then ns.InstallCasualViews(Views,{Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI}) end
+
 Views.officer = {
   label = "Officer", icon = "Interface\\Icons\\INV_Misc_Key_03", officer = true,
   count = function() return InboxWaiting(), C.goldBg, C.gold end,
@@ -2197,7 +2200,15 @@ function UI:FillDetails()
   local officer = ns.IsTrusted(ns.me)
 
 
-  if kind=="newproject" then
+  if ns.FillCasualDetails and ns.FillCasualDetails(kind,key,det) then
+    -- Activity forms and details are supplied by CasualUI.
+  elseif kind=="membermail" then
+    det:Reset(nil,nil,"Fill mail for member",key)
+    local rows=ns.MemberMailPlan(key)
+    for _,row in ipairs(rows) do det:Text(ns.RequestName(row.r,true).." x"..ns.Remaining(row.r)) end
+    det:Text("Combines approved bank requests for this exact recipient. Uses items in your bags, up to the game's attachment limit. Missing quantities stay open. Sending is manual.",C.muted)
+    if officer then det:Buttons({{"Fill mail",function() ns.MailMemberRequests(key) end,accent=true}}) end
+  elseif kind=="newproject" then
     det:Reset(nil,1,"New crafting project","Officers coordinate shared crafting goals")
     local title=det:Field("Title","",160)
     local note=det:Field("Goal","",160)
@@ -2213,7 +2224,8 @@ function UI:FillDetails()
       det:Text(r and ((r.status or "pending")..", "..ns.Remaining(r).." remaining; deliver to "..task.to) or "Request history unavailable; awaiting sync.",C.muted)
       if r then det:Buttons({{"View request",function() UI:OpenDetails("request",rid) end}}) end
     end
-    det:Text("Materials still required",C.gold)
+    if p.recipient then det:Text("Starter kit for "..p.recipient,C.gold) end
+    det:Text("Materials and bank supplies still required",C.gold)
     for item,n in pairs(ns.ProjectMaterials(p)) do det:Text(ns.ItemName(item,true).." x"..n.." (bank: "..ns.BankCount(item)..")") end
     if officer then
       det:Buttons({{"Add craft task",function() UI:OpenDetails("projecttask",key) end},
@@ -2246,6 +2258,7 @@ function UI:FillDetails()
       end
     end
     if officer then
+      det:Buttons({{"Starter kits",function() UI.state.activities.kind="kits"; UI:SetView("activities") end}})
       local note=det:Field("Mentor / kit","",160)
       det:Buttons({{"Save welcome note",function() ns.SetChecklist(key,"mentor",true,note:GetText()); UI:FillDetails() end}})
     end
@@ -2338,6 +2351,9 @@ function UI:FillDetails()
       end }
     end
     det:Buttons(specs)
+    if officer and #ns.MemberMailPlan(key)>0 then
+      det:Buttons({{"Fill member mail",function() UI:OpenDetails("membermail",key) end}})
+    end
     if officer and key ~= ns.me then
       det:Buttons({ { "Request for " .. (key:match("^(%S+)") or key), function() UI:RequestFor(key) end } })
     end
@@ -2535,6 +2551,9 @@ function UI:FillDetails()
         end end
         det:Buttons({ { "Pending", Set("pending") }, { "Approve", Set("approved") }, { "Fill", Set("filled") }, { "Reject", Set("rejected"), tip = "Type a reason above first if you like" } })
         if r.status == "approved" then
+          if #ns.MemberMailPlan(r.to or r.who)>1 then
+            det:Buttons({{"Fill mail for this member",function() UI:OpenDetails("membermail",r.to or r.who) end}})
+          end
           det:Buttons({ { "Mail it", function() ns.MailRequest(key) end, accent = true,
             tip = "With a mailbox open: fills in " .. (r.to or r.who) .. " and attaches " .. r.qty .. " from your bags. You click Send." } })
         end
@@ -2959,7 +2978,7 @@ function UI:Refresh()
   self.footerText:SetText(foot)
   UpdateThumb()
   -- don't wipe what an officer is typing in the details panel
-  if det:IsShown() and not (self.focusBox and self.focusBox:GetParent() == det.body) then self:FillDetails() end
+  if det:IsShown() and not (det.casualDraft or (ns.CasualFormKind and ns.CasualFormKind(det.kind))) and not (self.focusBox and self.focusBox:GetParent() == det.body) then self:FillDetails() end
 end
 
 UI:SetScript("OnShow", function(self)

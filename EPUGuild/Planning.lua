@@ -6,6 +6,7 @@ local DEFAULTS = {
   identity={title="Confirm your main and alts",text="Log onto each character with the addon; use /epu main to choose your main."},
   professions={title="Share your professions",text="Open your profession windows to share recipes with the guild."},
   discord={title="Link Discord",text="Use /link in Discord and ask an officer to approve it.",officer=true},
+  starterkit={title="Receive your starter kit",text="Ask an officer about starter bags or profession supplies. Delivery is tracked in Projects.",officer=true},
   mentor={title="Meet your mentor",text="An officer can assign a mentor and record starter supplies here.",officer=true},
 }
 function ns.PlanningStore()
@@ -56,7 +57,8 @@ function ns.ProjectMaterials(p)
   for _,task in ipairs(p.tasks) do
     local r=g.requests[task.rid]
     if r and r.status~="cancelled" and r.status~="rejected" and r.status~="filled" then
-      for _,m in ipairs(ns.MatsFor(task.key)) do need[m.id]=(need[m.id] or 0)+m.n*ns.Remaining(r) end
+      if not r.crafter and r.item then need[r.item]=(need[r.item] or 0)+ns.Remaining(r)
+      else for _,m in ipairs(ns.MatsFor(task.key)) do need[m.id]=(need[m.id] or 0)+m.n*ns.Remaining(r) end end
     end
   end
   return need

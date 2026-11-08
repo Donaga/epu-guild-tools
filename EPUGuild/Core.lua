@@ -360,6 +360,8 @@ local HELP = {
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
+  "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
+  "|cffffd100/epu activities|r - quest help, dungeon groups, helpers and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off opts in or out",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
@@ -413,6 +415,10 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
+  elseif cmd == "mail" then
+    ns.MailMemberRequests(args)
+  elseif cmd == "activities" then
+    ns.UI:Show(); ns.UI:SetView("activities")
   elseif cmd == "map" then
     ns.ShowGuildMapSettings()
   elseif cmd == "sharelocation" then

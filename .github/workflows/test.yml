@@ -44,6 +44,10 @@ jobs:
         run: python tests/test_request_filters.py
       - name: Reagent bag donations
         run: python tests/test_donation_bags.py
+      - name: Casual guild activities and starter kits
+        run: python tests/test_casual.py
+      - name: Combined bank request mail
+        run: python tests/test_member_mail.py
       - name: Opt-in guild location sharing and map pins
         run: python tests/test_guild_map.py
       - name: Exact request mail and attachment safeguards

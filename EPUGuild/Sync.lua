@@ -34,6 +34,7 @@ end
 
 local FIELDS={req="requests",don="donations",craft="crafters",alts="alts",altVerified="altVerified",
   recipes="recipes",mats="mats",projects="projects",onboarding="onboarding",onboardingSteps="onboardingSteps"}
+for _,f in ipairs(ns.CASUAL_FIELDS or {}) do FIELDS[f]=f end
 local function FieldDigests(g)
   local out={}
   for wire,field in pairs(FIELDS) do
@@ -99,6 +100,7 @@ function ns.Delta(d)
       add(f,g[f] or {},function(r) return r.t or 0 end)
     end
   end
+  for _,f in ipairs(ns.CASUAL_FIELDS or {}) do add(f,g[f] or {},function(r) return r.t or 0 end) end
   add("recipes", g.recipes, function(r) return r.t or 0 end)
   add("mats", g.mats, function(m) return m.t or 0 end)
   if ns.DeltaGuild then ns.DeltaGuild(b, since) end
@@ -113,6 +115,7 @@ local GROUPS = {
   { "req", "don" },
   { "news", "feed" },
   { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps" },
+  { "activityPosts", "activityReplies", "helpers", "kitTemplates" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time
 
@@ -195,6 +198,8 @@ end
 -- Relayed (unconfirmed) data: fills gaps only
 ---------------------------------------------------------------------------
 local function Owner(f, k, x)
+  if f=="activityPosts" or f=="activityReplies" or f=="helpers" then return x.who end
+  if f=="kitTemplates" then return x.by end
   if f == "req" then return x.who end
   if f == "craft" or f == "recipes" or f == "profiles" or f == "joined" then return k end
   if f == "mats" then return x.by end
@@ -223,7 +228,7 @@ local VALID = {
 }
 
 local function Tables(g)
-  return { projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
+  return { activityPosts=g.activityPosts or {}, activityReplies=g.activityReplies or {}, helpers=g.helpers or {}, kitTemplates=g.kitTemplates or {}, projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
     mats = g.mats, alts = g.alts, profiles = g.profiles, feed = g.feed, news = g.news, joined = g.joined }
 end
 
@@ -305,6 +310,7 @@ end
 -- reports a one-line summary after it syncs ("Y"), which the Sync tab lists.
 ---------------------------------------------------------------------------
 local LABELS = {
+  { "activityPosts", "activities" }, { "activityReplies", "responses" }, { "helpers", "helpers" }, { "kitTemplates", "kit templates" },
   { "projects", "projects" }, { "onboarding", "checklist updates" }, { "onboardingSteps", "checklist instructions" },
   { "altVerified", "character confirmations" },
   { "needs", "needs" }, { "bank", "bank snapshots" }, { "req", "requests" }, { "don", "donations" },
