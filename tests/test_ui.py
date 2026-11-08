@@ -208,7 +208,7 @@ check("a long list scrolls (%d rows shown of %d)" % (first, B.ev('__ns.DonatePan
 B.ex('__ns.DonatePanel.showAll = false; __bags[0] = {}; __cls[30050] = nil; __cls[30051] = nil; __cls[30052] = nil; __cls[30053] = nil; __cls[30054] = nil; __cls[30055] = nil; __cls[30056] = nil; __cls[30057] = nil; __qual = nil; __bind = nil')
 
 # --- gold in the donation ---
-B.ex('__money = 50000; __bags[0] = {{2589, 10}}; __ns.ShowDonate()')
+B.ex('__mailSlots = {}; __sendItems = {}; __money = 50000; __bags[0] = {{2589, 10}}; __ns.ShowDonate()')
 B.ex('MoneyInputFrame_SetCopper = function(f, c) __mailMoney = c end; SendMailMoney = {}; SendMailBodyEditBox = NewMock(); SendMailSendMoneyButton = NewMock()')
 coin = lambda i, btn="LeftButton": B.ex('__ns.DonatePanel.coinBtns[%d]:GetScript("OnClick")(__ns.DonatePanel.coinBtns[%d], "%s")' % (i, i, btn))
 coin(1); coin(2); coin(4)

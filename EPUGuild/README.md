@@ -32,6 +32,8 @@ Project details show the remaining recipe materials and bank counts. **Stock mat
 
 Requests now keep **delivered** and **remaining** quantities. A partial shipment leaves the request approved. Mail prepared with **Mail it** counts toward that request only; other deliveries are allocated to the oldest approved matching request first. Reopening a filled request resets its delivery credit and preserves its history. Officers should coordinate before simultaneously sending the same request: an addon cannot make two offline clients' physical deliveries atomic.
 
+Mail preparation leaves an existing draft alone: send or remove its attachments before preparing another request. The helper checks actual attachment quantities after splitting and removes an attachment if it differs from the requested amount. Missing or locked stack information stops preparation. Always review the outgoing attachments before pressing Send.
+
 A guild-bank snapshot is published only after every tab is accessible and has responded. If a scan is incomplete, the previous snapshot remains in use with its previous observation time. Reopen the bank to retry a query that never responded. Recent guild sync does not mean someone recently inspected the physical bank.
 
 ## One-time setup (officers)

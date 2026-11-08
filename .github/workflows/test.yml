@@ -44,3 +44,5 @@ jobs:
         run: python tests/test_request_filters.py
       - name: Reagent bag donations
         run: python tests/test_donation_bags.py
+      - name: Exact request mail and attachment safeguards
+        run: python tests/test_exact_mail.py
