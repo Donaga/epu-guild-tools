@@ -3000,7 +3000,8 @@ function ns.UpdateMinimapButton()
 end
 
 mb:SetScript("OnClick", function(_, button)
-  if button == "RightButton" then ns.FullSync() else UI:Toggle() end
+  if IsShiftKeyDown() and ns.ShowGuildMapSettings then ns.ShowGuildMapSettings()
+  elseif button == "RightButton" then ns.FullSync() else UI:Toggle() end
 end)
 mb:SetScript("OnDragStart", function(self)
   self:SetScript("OnUpdate", function()
@@ -3017,6 +3018,7 @@ mb:SetScript("OnEnter", function(self)
   GameTooltip:SetText("EPU Guild Tools")
   GameTooltip:AddLine("Left-click: open window", 1, 1, 1)
   GameTooltip:AddLine("Right-click: resync with officers", 1, 1, 1)
+  GameTooltip:AddLine("Shift-click: guild map settings", 1, 1, 1)
   GameTooltip:AddLine("Drag: move button", 1, 1, 1)
   GameTooltip:Show()
 end)
