@@ -98,6 +98,31 @@ check('switching boards restores availability action',A.ev('__ns.UI.bars.activit
 A.ex("__ns.UI.state.activities.kind='guides'; __ns.UI:Refresh()")
 A.ex("__ns.UI:OpenDetails('guide','moba-mage'); UnitLevel=function() return 60 end; __fire('PLAYER_LEVEL_UP',60); __advance(1)")
 check('now-irrelevant guide details close after a level change',not A.ev('__ns.UI.details:IsShown()'))
+A.ex("""UnitClass=function() return 'Paladin','PALADIN' end; UnitLevel=function() return 20 end
+GetNumSkillLines=function() return 4 end
+GetSkillLineInfo=function(i) local names={'Blacksmithing','Cooking','Fishing','Mining'}; local ranks={83,146,150,109}; return names[i],false,false,ranks[i] end
+__ns.GuideState().savedOnly=false; __ns.GuideState().topic='class'; __ns.GuideState().moreSources=true
+__choices,__profile=__ns.GuideChoices()
+""")
+check('screenshot character sees six tasks instead of duplicate sources',A.ev('#__choices')==6)
+check('class leveling task comes first',A.ev('__choices[1].title')=='Level my Paladin')
+check('talents task comes second',A.ev('__choices[2].title')=='Choose my talents')
+check('profession routes outrank references on dashboard',A.ev('__ns.GuideChoice("profession:164").recommended.id')=='method-prof-blacksmithing')
+check('old topic and alternatives preferences do not clutter dashboard',A.ev('#__ns.GuideChoices()')==6)
+A.ex("__ns.UI:CloseDetails(); __ns.UI.state.activities.kind='guides'; __ns.UI:Refresh(); __taskRows=__ns.CommunityRows(__ns.G(),'',__ns.UI.state.activities,__ns.UI.bars.activities)")
+check('dashboard renders one profile plus six goal rows',A.ev('#__taskRows')==7)
+check('dashboard omits publisher review and build metadata',A.ev("(function() for i=2,#__taskRows do local r=__taskRows[i]; if r.sub:find('reviewed') or r.sub:find('pre-launch') or r.sub:find('Icy') then return false end end return true end)()"))
+check('old Topics control is hidden',not A.ev('__ns.UI.bars.activities.casualNear:IsShown()'))
+A.ex("__taskRows[2].onClick()")
+check('goal row opens its recommended-guide panel',A.ev('__ns.UI.details.kind')=='guidechoice' and A.ev('__ns.UI.details.key')=='leveling')
+A.ex("__click('Copy guide link')")
+check('task copy action uses the recommendation',A.ev('EPUGuildGuideLink.url:GetText()')=='https://mobalytics.gg/wow-forever/classes/paladin-leveling-guide')
+A.ex("__click('Other sources')")
+check('alternatives open inside a task instead of expanding the dashboard',A.ev('__ns.UI.details.kind')=='guidesources' and A.ev('#__ns.GuideChoices()')==6)
+A.ex("__ns.SetGuideSaved('method-paladin',true); __ns.GuideState().savedOnly=true")
+check('saved tasks prefer the saved source',A.ev('__ns.GuideChoice("leveling").recommended.id')=='method-paladin')
+A.ex("__ns.GuideState().savedOnly=false; __ns.UI:OpenDetails('guidechoice','profession:164'); GetNumSkillLines=function() return 0 end; __fire('SKILL_LINES_CHANGED'); __advance(1)")
+check('unlearned profession task details close',not A.ev('__ns.UI.details:IsShown()'))
 check('actual guide UI produces no runtime errors',(A.ev('__errors') or 0)==0)
 for class_name in sorted(build.CLASSES):
     A.rt.globals()['testClass']=class_name

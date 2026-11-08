@@ -15,9 +15,12 @@ The event calendar, selected-quest matching, returning-player catch-up and priva
 
 Use `/epu guides` for **Your guides**: Forever class, leveling, talent and profession
 sources filtered to this character's class, level and learned profession skills.
-Choose a talent focus in Options if the game cannot identify one. Save sources,
+Choose a talent focus in Settings if the game cannot identify one. The home screen
+shows one task per topic, such as **Level my Paladin** or **Level Blacksmithing**.
+Open a task for its recommended guide; **Other sources** holds alternatives and
+**Source details / notes** holds review metadata and private progress. Save sources,
 keep private notes and mark the current bracket reviewed. Best-fit sources show
-by default; optional alternatives retain beta/pre-launch labels. Short original
+by default; alternatives retain beta/pre-launch labels. Short original
 summaries are available in game; **Read full guide** lets you copy a source URL
 to your browser. Notes and reading progress are never synced to the guild.
 See [guide maintenance](docs/guide-sources.md) for the source selection, review

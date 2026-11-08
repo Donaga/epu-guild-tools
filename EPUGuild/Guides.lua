@@ -117,6 +117,58 @@ function ns.PersonalGuide(id)
   local p=ns.GuidePlayer()
   for _,r in ipairs(ns.GUIDE_CATALOG or {}) do if r.id==id and ns.GuideRelevant(r,p) then return r,p end end
 end
+local function HasTopic(r,topic)
+  for _,value in ipairs(r.topics) do if value==topic then return true end end
+end
+-- Present player goals rather than exposing the source registry as navigation.
+-- Rebuild from live character data so bookmarks and open details cannot bypass
+-- level, profession or talent relevance.
+function ns.GuideChoices(savedOnly)
+  local p=ns.GuidePlayer(); local s=ns.GuideState() or {}; local choices,byKey={},{}
+  if not p.class or not p.level then return choices,p end
+  local class=p.className or p.class
+  local function Add(key,title,hint,r,score)
+    if savedOnly and not (s.saved or {})[r.id] then return end
+    local choice=byKey[key]
+    if not choice then choice={key=key,title=title,hint=hint,sources={}}; byKey[key]=choice; choices[#choices+1]=choice end
+    choice.sources[#choice.sources+1]={guide=r,score=score+(r.extra and 1000 or 0)}
+  end
+  for _,r in ipairs(ns.GUIDE_CATALOG or {}) do
+    if ns.GuideRelevant(r,p) then
+      if r.profession then
+        local prof=p.professions[r.profession]
+        local route=r.group:match('%-route$')
+        Add('profession:'..r.profession,(prof.rank<300 and 'Level ' or 'Use ')..prof.name,
+          'Skill '..prof.rank..' · '..(prof.rank<300 and 'Training and skill-up help' or 'Profession reference'),r,(route and 0 or 100)+(r.priority or 1))
+      elseif r.class then
+        if HasTopic(r,'leveling') or HasTopic(r,'class') then
+          Add('leveling',(p.level<60 and 'Level my ' or 'Understand my ')..class,
+            'Level '..p.level..' · '..(p.focus and (p.focus..' playstyle') or 'Abilities, rotation and training'),r,
+            (r.spec and 0 or (HasTopic(r,'class') and 100 or 10))+(r.priority or 1))
+        end
+        if p.level>=5 and HasTopic(r,'talents') then
+          Add('talents','Choose my talents',p.focus and (p.focus..' · Build choices for my level') or 'Choose a playstyle or compare class builds',r,
+            (r.spec and 0 or (r.id:match('^planner%-') and 100 or 10))+(r.priority or 1))
+        end
+      end
+    end
+  end
+  for _,choice in ipairs(choices) do
+    table.sort(choice.sources,function(a,b) if a.score~=b.score then return a.score<b.score end return a.guide.id<b.guide.id end)
+    choice.recommended=choice.sources[1].guide
+  end
+  table.sort(choices,function(a,b)
+    local order={leveling=1,talents=2}
+    local x,y=order[a.key] or 3,order[b.key] or 3
+    if x~=y then return x<y end
+    if a.title~=b.title then return a.title<b.title end
+    return a.key<b.key
+  end)
+  return choices,p
+end
+function ns.GuideChoice(key)
+  for _,choice in ipairs(ns.GuideChoices((ns.GuideState() or {}).savedOnly)) do if choice.key==key then return choice,ns.GuidePlayer() end end
+end
 function ns.GuideBracket(r,p)
   if r.profession then
     local rank=p.professions[r.profession].rank
@@ -146,6 +198,7 @@ local function Refresh()
   if ns.UI and ns.UI:IsShown() and ns.UI.view=="activities" and ns.UI.state.activities.kind=="guides" then ns.Debounce("guideView",0.3,function()
     local det=ns.UI.details
     if det and det.kind=="guide" and not ns.PersonalGuide(det.key) then ns.UI:CloseDetails() end
+    if det and (det.kind=="guidechoice" or det.kind=="guidesources") and not ns.GuideChoice(det.key) then ns.UI:CloseDetails() end
     ns.UI:Refresh()
   end) end
 end
