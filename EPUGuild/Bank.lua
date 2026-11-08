@@ -358,46 +358,13 @@ function ns.MailboxOpen()
   return SendMailFrame ~= nil and MailFrame ~= nil and MailFrame:IsShown()
 end
 
-local function Pickup(bag, slot)
-  if C_Container and C_Container.PickupContainerItem then return C_Container.PickupContainerItem(bag, slot) end
-  return PickupContainerItem(bag, slot)
-end
-
-local function Split(bag, slot, n)
-  if C_Container and C_Container.SplitContainerItem then return C_Container.SplitContainerItem(bag, slot, n) end
-  return SplitContainerItem(bag, slot, n)
-end
-
--- Put `qty` of an item from the bags into the outgoing mail, starting at
--- attachment slot `slotIndex`. Returns how many were attached and the next free slot.
-local function AttachItem(item, qty, slotIndex)
-  local need = tonumber(qty) or 1
-  local maxSlots = ATTACHMENTS_MAX_SEND or 12
-  for _, bag in ipairs(BagList()) do
-    for slot = 1, (NumSlots(bag) or 0) do
-      if need <= 0 or slotIndex > maxSlots then break end
-      local id, count = SlotItem(bag, slot)
-      if id == item then
-        if count <= need then
-          Pickup(bag, slot)
-          need = need - count
-        else
-          Split(bag, slot, need)
-          need = 0
-        end
-        ClickSendMailItemButton(slotIndex)
-        slotIndex = slotIndex + 1
-      end
-    end
-  end
-  return (tonumber(qty) or 1) - need, slotIndex
-end
-
 local function StartMail(to, subject)
+  if not ns.MailIsEmpty() then return false end
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText(subject) end
   if ClearCursor then ClearCursor() end
+  return true
 end
 
 -- Officers mail approved bank requests; a crafter mails what they made.
@@ -413,18 +380,19 @@ function ns.MailRequest(rid)
 
   local to = r.to or r.who
   local name = ns.ItemName(r.item, true)
-  StartMail(to, (r.crafter and "Crafted: " or "Guild bank: ") .. name .. " x" .. r.qty)
-  ns.mailRequestID = rid
   local remaining = ns.Remaining(r)
-  local attached = AttachItem(r.item, remaining, 1)
+  if remaining<=0 then return ns.Print("This request has no remaining quantity to mail.") end
+  if not StartMail(to, (r.crafter and "Crafted: " or "Guild bank: ") .. name .. " x" .. remaining) then return end
+  ns.mailRequestID = rid
+  local attached = ns.AttachExactMailItem(r.item, remaining, 1)
   local need = remaining - attached
   if attached == 0 then
-    return ns.Print("You don't have any " .. ns.ItemLink(r.item) .. " in your bags." .. (r.crafter and "" or " Take it out of the bank first."))
+    return ns.Print("No items attached. Check that the item is available and unlocked in your bags, and review any preparation message above.")
   end
   if need > 0 then
-    ns.Print("Attached " .. attached .. " of " .. r.qty .. " " .. ns.ItemLink(r.item) .. " (that's all you're carrying). Check the mail, then click Send.")
+    ns.Print("Attached " .. attached .. " of " .. remaining .. " " .. ns.ItemLink(r.item) .. ". Check quantities before sending; the remainder stays open.")
   else
-    ns.Print("Mail ready for " .. to .. ": " .. ns.ItemLink(r.item) .. " x" .. r.qty .. ". Check it, then click Send. The request is marked filled when it goes.")
+    ns.Print("Prepared for " .. to .. ": " .. ns.ItemLink(r.item) .. " x" .. remaining .. ". Check attachment quantities, then click Send.")
   end
 end
 
@@ -439,12 +407,14 @@ function ns.MailCraftMats(rid)
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail materials again.") end
   local mats = ns.MatsFor(r.key)
   if #mats == 0 then return ns.Print("The materials for this recipe haven't been shared yet. Ask " .. r.crafter .. " what they need.") end
-  StartMail(r.crafter, "Mats for " .. ns.RequestName(r, true) .. " x" .. r.qty)
+  local remaining=ns.Remaining(r)
+  if remaining<=0 then return ns.Print("This craft request has no remaining quantity.") end
+  if not StartMail(r.crafter, "Mats for " .. ns.RequestName(r, true) .. " x" .. remaining) then return end
   local slotIndex, short = 1, {}
   for _, m in ipairs(mats) do
-    local want = m.n * (tonumber(r.qty) or 1)
+    local want = m.n * remaining
     local got
-    got, slotIndex = AttachItem(m.id, want, slotIndex)
+    got, slotIndex = ns.AttachExactMailItem(m.id, want, slotIndex)
     if got < want then short[#short + 1] = ns.ItemLink(m.id) .. " x" .. (want - got) end
   end
   if #short > 0 then

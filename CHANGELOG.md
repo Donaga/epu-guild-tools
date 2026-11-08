@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2
+
+- Prepare request mail for the remaining quantity and verify the actual attachment count after splitting; remove mismatched attachments, including later restacking by mail addons.
+- Stop on unknown quantities, locked stacks or failed splits. Preserve existing draft attachments and recipients instead of preparing a second request over them.
+- Apply the same exact-quantity helper to craft materials and donation mail. Improve mail simulation to model cursor swaps and attachment quantities.
+
 ## 0.10.1
 
 - Reduce EPU's initial sync burst and space outgoing packets. Use increasing cooldowns after rejected sends or a recent-send server throttle warning; pace visible guild posts too.

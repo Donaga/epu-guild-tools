@@ -196,8 +196,22 @@ function GetTargetTradeMoney() return 0 end
 function GetTradeTargetItemLink() end
 function GetTradeTargetItemInfo() end
 function GetCoinTextureString(c) return c .. "c" end
-function GetCursorInfo() if __cursor_item then return "item", __cursor_item, __link(__cursor_item) end end
-function ClearCursor() __cursor_item = nil end
+function GetCursorInfo()
+  if __cursor then return "item",__cursor[1],__link(__cursor[1]) end
+  if __cursor_item then return "item", __cursor_item, __link(__cursor_item) end
+end
+function ClearCursor()
+  if __cursor then
+    local bag=(__cursor_origin and __cursor_origin[1]) or 0
+    local slot=(__cursor_origin and __cursor_origin[2]) or 1
+    __bags[bag]=__bags[bag] or {}
+    local old=__bags[bag][slot]
+    if old and old[1]==__cursor[1] then old[2]=old[2]+__cursor[2]
+    elseif not old then __bags[bag][slot]={__cursor[1],__cursor[2]}
+    else for i=1,16 do if not __bags[0][i] then __bags[0][i]={__cursor[1],__cursor[2]}; break end end end
+  end
+  __cursor_item,__cursor,__cursor_origin=nil,nil,nil
+end
 function GetTradeSkillLine() return "Tailoring", 150, 300 end
 __TS = { { "Cloth", "header" }, { "Bolt of Linen Cloth", "easy", 2996 } }
 function GetNumTradeSkills() return #__TS end
@@ -229,11 +243,14 @@ function __load(dir)
 end
 date = os.date; time = os.time
 __sendItems = {}
-function GetSendMailItemLink(i) local id = __sendItems[i]; if id then return __link(id) end end
+function GetSendMailItemLink(i) local id = (__mailSlots and __mailSlots[i] and __mailSlots[i][1]) or __sendItems[i]; if id then return __link(id) end end
 __sendCounts = {}
-function GetSendMailItem(i) if __sendItems[i] then return "Item", __sendItems[i], "icon", __sendCounts[i] or 1 end end
+function GetSendMailItem(i)
+  if __mailSlots and __mailSlots[i] then return "Item",__mailSlots[i][1],"icon",__mailSlots[i][2] end
+  if __sendItems[i] then return "Item", __sendItems[i], "icon", __sendCounts[i] or 1 end
+end
 -- Like the game: the server confirms a moment later, then the send form is cleared.
-function SendMail(to) __lastMailTo = to; C_Timer.After(0.1, function() __fire("MAIL_SEND_SUCCESS"); __sendItems = {} end) end
+function SendMail(to) __lastMailTo = to; C_Timer.After(0.1, function() __fire("MAIL_SEND_SUCCESS"); __sendItems = {}; __mailSlots = {} end) end
 function GetTradePlayerItemLink() end
 __shopping = nil
 Auctionator = { API = { v1 = {
@@ -287,9 +304,9 @@ MailFrame = NewMock(); MailFrame._shown = false
 SendMailFrame = NewMock(); SendMailFrame._shown = true
 SendMailNameEditBox = NewMock(); SendMailSubjectEditBox = NewMock()
 __cursor = nil
-C_Container.PickupContainerItem = function(b, s) local x = __bags[b][s]; __cursor = {x[1], x[2]}; __bags[b][s] = nil end
-C_Container.SplitContainerItem = function(b, s, n) local x = __bags[b][s]; x[2] = x[2] - n; __cursor = {x[1], n} end
-function ClickSendMailItemButton(i) __mailSlots[i] = __cursor; __cursor = nil end
+C_Container.PickupContainerItem = function(b, s) local x = __bags[b][s]; __cursor = {x[1], x[2]}; __cursor_origin={b,s}; __bags[b][s] = nil end
+C_Container.SplitContainerItem = function(b, s, n) local x = __bags[b][s]; x[2] = x[2] - n; __cursor = {x[1], n}; __cursor_origin={b,s} end
+function ClickSendMailItemButton(i) local old=__mailSlots[i]; __mailSlots[i]=__cursor; __cursor=old; __fire("MAIL_SEND_INFO_UPDATE") end
 function GuildControlGetNumRanks() return 5 end
 function GuildControlGetRankName(i) return ({"Guild Master", "Officer", "Veteran", "Member", "Initiate"})[i] end
 

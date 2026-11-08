@@ -692,6 +692,7 @@ function ns.FillDonation()
   for id, n in pairs(don.pick) do if n > 0 then picks[#picks + 1] = { id, n } end end
   local money = don.money or 0
   if #picks == 0 and money <= 0 then return ns.Print("Pick something to give first (use + or Max, or the gold buttons).") end
+  if not ns.MailIsEmpty() then return end
   if MailFrameTab2 and SendMailFrame and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(don.to) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Donation for the guild bank") end
@@ -700,29 +701,9 @@ function ns.FillDonation()
   local left = {}
   for _, p in ipairs(picks) do
     local id, need = p[1], p[2]
-    for _, bag in ipairs(ns.BagList()) do
-      local n = (C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0
-      for slot = 1, n do
-        if need <= 0 or slotIndex > maxSlots then break end
-        local info = C_Container and C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag, slot)
-        local sid, count = info and info.itemID, info and info.stackCount
-        if not info and GetContainerItemInfo then
-          local _, c, _, _, _, _, link = GetContainerItemInfo(bag, slot)
-          sid, count = ns.ItemID(link), c
-        end
-        if sid == id then
-          if count <= need then
-            if C_Container and C_Container.PickupContainerItem then C_Container.PickupContainerItem(bag, slot) else PickupContainerItem(bag, slot) end
-            need = need - count
-          else
-            if C_Container and C_Container.SplitContainerItem then C_Container.SplitContainerItem(bag, slot, need) else SplitContainerItem(bag, slot, need) end
-            need = 0
-          end
-          ClickSendMailItemButton(slotIndex)
-          slotIndex = slotIndex + 1
-        end
-      end
-    end
+    local got
+    got, slotIndex = ns.AttachExactMailItem(id, need, slotIndex)
+    need = need - got
     if need > 0 then left[#left + 1] = ns.ItemLink(id) .. " x" .. need end
   end
   -- gold, and a line in the letter saying what it's for
