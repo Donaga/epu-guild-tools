@@ -1,6 +1,5 @@
 local ADDON,ns=...
 local E,UI,C,copy
-local topics={{label="All relevant guides",value="all"},{label="Class basics",value="class"},{label="Leveling",value="leveling"},{label="Talents",value="talents"},{label="My professions",value="professions"}}
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 function ns.ShowGuideLink(id)
   local r=ns.PersonalGuide(id); if not r then return end
@@ -25,13 +24,10 @@ local function ConfigureBar(bar,active)
   if not bar.guideScripts then bar.guideScripts={mine=bar.casualMine:GetScript("OnClick"),near=bar.casualNear:GetScript("OnClick")} end
   local state=ns.GuideState()
   if active then
-    bar.casualMine:Show(); bar.casualNear:Show()
-    bar.casualMine:SetLabel("Saved"); bar.casualNear:SetLabel("Topics"); bar.casualNew:SetLabel("Options")
-    bar.casualMine:SetOn(state.savedOnly==true); bar.casualNear:SetOn(state.topic and state.topic~="all")
+    bar.casualMine:Show(); bar.casualNear:Hide()
+    bar.casualMine:SetLabel("Saved"); bar.casualNew:SetLabel("Settings")
+    bar.casualMine:SetOn(state.savedOnly==true)
     bar.casualMine:SetScript("OnClick",function() state.savedOnly=not state.savedOnly; UI:Refresh() end)
-    bar.casualNear:SetScript("OnClick",function()
-      E.OpenMenu(bar.casualNear,topics,state.topic or "all",function(value) state.topic=value; UI:CloseDetails(); UI:Refresh() end)
-    end)
   else
     bar.casualMine:SetLabel("Mine"); bar.casualNear:SetLabel("My level")
     bar.casualMine:SetScript("OnClick",bar.guideScripts.mine); bar.casualNear:SetScript("OnClick",bar.guideScripts.near)
@@ -54,34 +50,59 @@ local rows=ns.CommunityRows
 ns.CommunityRows=function(g,q,state,bar)
   ConfigureBar(bar,state.kind=="guides")
   if state.kind~="guides" then return rows(g,q,state,bar) end
-  local s=ns.GuideState(); local list,p=ns.PersonalGuides(s.topic,s.savedOnly)
-  local professions={}
-  for _,prof in pairs(p.professions) do professions[#professions+1]=prof.name.." "..prof.rank end
-  table.sort(professions)
-  local out={{key="guide:profile",title=p.class and ((p.className or p.class).." · level "..tostring(p.level or "?")) or "Waiting for your character information",
-    sub=(p.focus and (p.focus.." · ") or "Class-wide focus · ")..(#professions>0 and table.concat(professions,", ") or "No learned professions detected"),onClick=function() Open("guideoptions","options") end}}
-  for _,r in ipairs(list) do
-    if E.Match(q,r.title,r.publisher,r.summary) then
-      local bracket,label=ns.GuideBracket(r,p); local progress=s.progress[r.id]
-      out[#out+1]={key="guide:"..r.id,title=r.title,sub=label.." · "..r.publisher.." · "..ns.GuideReviewLabel(r),
-        right=progress and progress.read and progress.bracket==bracket and "Reviewed" or (s.saved[r.id] and "Saved" or nil),onClick=function() Open("guide",r.id) end}
+  local s=ns.GuideState(); local list,p=ns.GuideChoices(s.savedOnly)
+  local out={{key="guide:profile",title=p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",
+    sub="What would you like help with? Choose a topic below."}}
+  for _,choice in ipairs(list) do
+    local matches=E.Match(q,choice.title,choice.hint)
+    for _,source in ipairs(choice.sources) do if E.Match(q,source.guide.title,source.guide.publisher,source.guide.summary) then matches=true end end
+    if matches then
+      local key=choice.key
+      out[#out+1]={key="guidechoice:"..key,title=choice.title,sub=choice.hint,right="Open",onClick=function() Open("guidechoice",key) end}
     end
   end
-  if #out==1 then out[#out+1]={key="guide:none",title="No matching guides",sub="Try All topics or turn off Saved. Other classes and unlearned professions remain hidden."} end
+  if #out==1 then out[#out+1]={key="guide:none",title=s.savedOnly and "No saved guides match" or "No matching guides",sub="Clear the search or turn off Saved to see your topics."} end
   return out
 end
 local footer=ns.CommunityFooter
 ns.CommunityFooter=function(kind)
-  if kind=="guides" then return "Only your character's relevant sources. Read short summaries here; copy source links for full guides. Review dates are not live patch guarantees." end
+  if kind=="guides" then return "Choose a topic, then copy its recommended guide link to your browser." end
   return footer(kind)
 end
 local details=ns.FillCommunityDetails
 ns.FillCommunityDetails=function(kind,key,det)
-  if kind=="guideoptions" then
+  if kind=="guidechoice" or kind=="guidesources" then
+    local choice,p=ns.GuideChoice(key)
+    if not choice then UI:CloseDetails(); UI:Refresh(); return true end
+    local r=choice.recommended; local s=ns.GuideState()
+    det:Reset(nil,nil,choice.title,choice.hint)
+    if kind=="guidesources" then
+      det:Buttons({{"Back",function() Open("guidechoice",key) end}})
+      for i,source in ipairs(choice.sources) do
+        local guide=source.guide
+        det:Text(guide.publisher..(i==1 and " · Recommended" or ""),C.gold)
+        det:Text(guide.title)
+        det:Text(ns.GuideReviewLabel(guide),C.muted)
+        det:Buttons({{"Copy link",function() ns.ShowGuideLink(guide.id) end},{"Source details",function() Open("guide",guide.id) end}})
+      end
+    else
+      if key=="talents" and not p.focus then
+        det:Text("Pick your playstyle to see a matching talent guide, or use the class guide below.")
+        det:Buttons({{"Choose playstyle",function() Open("guideoptions","options") end}})
+      end
+      det:Text("Start here",C.gold)
+      det:Text(r.summary)
+      det:Buttons({{"Copy guide link",function() ns.ShowGuideLink(r.id) end,accent=true}})
+      det:Text("Paste the link into your browser to read the full guide.",C.muted)
+      if r.status=="beta" or r.status=="prelaunch" then det:Text("This source includes pre-launch advice. Check current in-game tooltips for exact values.",C.gold) end
+      det:Buttons({{s.saved[r.id] and "Unsave" or "Save guide",function() ns.SetGuideSaved(r.id,not s.saved[r.id]); UI:FillDetails(); UI:Refresh() end}})
+      det:Buttons({{"Other sources",function() Open("guidesources",key) end},{"Source details / notes",function() Open("guide",r.id) end}})
+    end
+  elseif kind=="guideoptions" then
     local p=ns.GuidePlayer(); local s=ns.GuideState()
     det:Reset(nil,nil,"Your guide preferences","Private to this character")
     det:Text("Class: "..(p.className or "Loading").." · level "..tostring(p.level or "?"))
-    det:Text("Talent focus: "..(p.focus or "Class-wide; no specialization guessed"),C.gold)
+    det:Text("My playstyle: "..(p.focus or "Not chosen"),C.gold)
     det:Buttons({{"Automatic / class-wide",function() ns.SetGuideFocus(nil); UI:FillDetails(); UI:Refresh() end}})
     local buttons={}
     for _,spec in ipairs(ns.GUIDE_SPECS[p.class] or {}) do
@@ -90,8 +111,7 @@ ns.FillCommunityDetails=function(kind,key,det)
     end
     det:Buttons(buttons)
     det:Text("The game supplies your class, level and learned professions. A recognized active specialization is used when available; otherwise choose your own class's talent focus to see a matching build guide.",C.muted)
-    det:Buttons({{s.moreSources and "Show best-fit sources" or "Show alternative sources",function() s.moreSources=not s.moreSources; UI:FillDetails(); UI:Refresh() end}})
-    det:Text("Best-fit view keeps one source per purpose. Alternatives include clearly labelled beta-derived and pre-launch material. No other class or unlearned profession is revealed.",C.muted)
+    det:Text("Each topic has one starting recommendation. Find alternatives under Other sources inside that topic.",C.muted)
     det:Buttons({{"Refresh my information",function() UI:FillDetails(); UI:Refresh() end}})
   elseif kind=="guide" then
     local r,p=ns.PersonalGuide(key)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1
+
+- Simplify Your guides to one choice per task: level your class, choose talents, and improve each learned profession.
+- Put a recommended guide and copy-link action first. Move other sources, author/review metadata and private notes into detail panels.
+- Hide the Topics filter and preserve relevant saved guides without duplicating source rows. Legacy alternative-source preferences do not expand the home screen.
+- Prefer actual profession skill routes over general references, retain source cautions in details, and close profession tasks when that profession is unlearned.
+
 ## 0.14.0
 
 - Add Your guides under Guild activities, with `/epu guides` access and 107 curated Forever source entries across all nine classes and twelve professions.
