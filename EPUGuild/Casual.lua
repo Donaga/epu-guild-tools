@@ -248,23 +248,28 @@ function ns.PruneCasual()
 end
 ns.On("PLAYER_LOGIN",function()
   ns.PruneCasual()
+  local function OwnRecent()
+    local g=ns.CasualStore(); if not g then return end
+    local b={}; local any=false
+    for _,f in ipairs({"activityPosts","activityReplies","helpers"}) do
+      for id,r in pairs(g[f]) do
+        if r.who==ns.me and r.t>=ns.Now()-MAX_DURATION then
+          b[f]=b[f] or {}; b[f][id]=r; any=true
+        end
+      end
+    end
+    return any and b or nil
+  end
   -- Authors can answer a new member even when no officer is online. Forward
   -- only our own recent records, including withdrawals, never another member's.
   local hello=ns.comm.H
   ns.comm.H=function(sender,d,channel)
     if hello then hello(sender,d,channel) end
     if sender==ns.me or not ns.Member(sender) or channel~="GUILD" then return end
+    if not OwnRecent() then return end
     ns.Debounce("casualOwnHello",10+math.random()*10,function()
-      local g=ns.CasualStore(); if not g then return end
-      local b={}; local any=false
-      for _,f in ipairs({"activityPosts","activityReplies","helpers"}) do
-        for id,r in pairs(g[f]) do
-          if r.who==ns.me and r.t>=ns.Now()-MAX_DURATION then
-            b[f]=b[f] or {}; b[f][id]=r; any=true
-          end
-        end
-      end
-      if any then for _,part in ipairs(ns.SplitDelta(b)) do ns.Send("D",part) end end
+      local b=OwnRecent()
+      if b then for _,part in ipairs(ns.SplitDelta(b)) do ns.Send("D",part) end end
     end)
   end
   local function ExpiryTick()
