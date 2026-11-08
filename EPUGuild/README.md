@@ -18,6 +18,61 @@ Update the addon for everyone and update the Discord companion on the officer PC
 
 Automated simulations cover this version. Live Forever client testing remains recommended before a guild-wide rollout.
 
+## Guild activities (0.12+)
+
+Open **Guild activities** in `/epu`, or use `/epu activities`. Choose a board
+from the toolbar. Search covers titles, descriptions, member names and zones;
+**Mine** shows your own posts and activities you responded to. **My level**
+uses an activity's suggested level range, or helpers within five levels.
+These filters do not apply to starter-kit templates.
+
+- **Quest / elite help:** post what you need, the zone, a suggested level range,
+  planned group size and a lifetime of 15–240 minutes. Edit your open post or
+  close it when finished. Officers can also close a post.
+- **Dungeon groups:** post a dungeon and any preferences. Choose your role and
+  respond **I'm ready** or **Tentative**, add a note, or **Withdraw**. Ready and
+  tentative interest and role totals are separate. Levels are suggestions and
+  interest can exceed planned slots; the organiser chooses the group and
+  manually invites members. A signup is not a confirmed group slot.
+- **Available helpers:** choose **My availability**, select tank, healer, DPS,
+  crafter and/or mentor, and set a note and duration. This is opt-in, appears
+  only while online, expires automatically and does not restart at login.
+  It does not enable map location sharing.
+- **Starter kits:** officers can copy the bag, First Aid or Tailoring examples,
+  customise item quantities, choose bank supplies or craft work per line, and
+  save a reusable guild template. **Prepare kit** previews the recipient and
+  requires a guild crafter with a shared recipe for each craft line. It creates
+  one Project with normal bank/craft requests, which retain the existing
+  approval, exact-mail and delivery tracking. The same kit cannot be launched
+  again for the same member while its project remains active. Finish or cancel
+  its requests and archive the old project before repeating it. Retiring a
+  template preserves projects already created from it. An officer confirms the
+  starter-kit checklist step after reviewing delivery progress.
+
+New features require the updated addon on participating members' clients.
+Posts expire, draft fields survive background refreshes, and actions do not
+announce themselves to guild chat. Recent records can sync from their author
+when a member joins even without an officer online. Officer sync recovers
+missed guild data; old activity records are removed after 30 days. Starter-kit
+templates are retained until retired, and retirement records are retained to
+prevent old copies reappearing. The Discord companion does not manage these boards.
+
+## One mail for a member's bank requests
+
+With a mailbox open, view an approved bank request and choose **Fill mail for
+this member**, or open the recipient's Roster details and choose **Fill member
+mail**. `/epu mail <member>` prepares the same combined draft directly.
+
+The preview lists approved bank requests for that exact recipient. **Fill mail**
+combines their remaining quantities, including several requests for the same
+item, up to the game's attachment limit. Requested items must already be in
+the bank character's bags; the addon cannot mail directly from bank storage.
+It preserves an existing draft and uses the same exact-quantity safeguards as
+single-request mail. Review the attachments and click **Send** yourself.
+Only quantities actually sent are counted, oldest selected requests first.
+Missing stock or quantities beyond the attachment limit stay open, and requests
+that arrive after preparation do not consume this draft's delivery credit.
+
 ## Crafting projects
 
 The **Projects** page lets officers create a named guild goal, then **Add craft task** for each shared recipe. Shift-click an output item (or enter its item ID), choose a crafter who knows it, enter the quantity and recipient, and **Assign**. Each task creates a normal craft request: the crafter accepts or declines, and deliveries advance project progress. Multiple tasks can cover a larger guild goal such as bags for recruits or equipment for several members.

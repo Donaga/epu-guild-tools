@@ -538,6 +538,13 @@ end
 -- Requests
 ---------------------------------------------------------------------------
 -- to: which of my characters to mail it to (defaults to the one asking)
+-- Several kit lines can be created in one second; never overwrite an earlier request.
+local requestSequence=0
+local function RequestID(who)
+  local g=ns.G(); local id
+  repeat requestSequence=requestSequence+1; id=who.."-"..ns.Now().."-"..math.random(100000,999999).."-"..requestSequence until not g.requests[id]
+  return id
+end
 function ns.NewRequest(id, qty, note, to, forWho)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
@@ -546,7 +553,7 @@ function ns.NewRequest(id, qty, note, to, forWho)
   if forWho and forWho ~= ns.me then
     if not officer then return ns.Print("Only officers can make requests for other members.") end
     local now = ns.Now()
-    local rid = forWho .. "-" .. now .. "-" .. math.random(100, 999)
+    local rid = RequestID(forWho)
     note = (note or ""):match("^%s*(.-)%s*$")
     local tag = "added by " .. (ns.me:match("^(%S+)") or ns.me)
     local r = { who = forWho, item = id, qty = qty or 1, note = ((note ~= "" and (note .. " (" .. tag .. ")")) or ("Added by " .. (ns.me:match("^(%S+)") or ns.me))):sub(1, 80),
@@ -564,7 +571,7 @@ function ns.NewRequest(id, qty, note, to, forWho)
       .. " (the guild's limit, counting alts). Cancel one or wait for it to be filled.")
   end
   local now = ns.Now()
-  local rid = ns.me .. "-" .. now .. "-" .. math.random(100, 999)
+  local rid = RequestID(ns.me)
   local r = { who = ns.me, item = id, qty = qty or 1, note = (note or ""):sub(1, 80),
     status = officer and "approved" or "pending", t = now, u = now }
   if officer then r.by = ns.me end
@@ -578,6 +585,7 @@ function ns.NewRequest(id, qty, note, to, forWho)
   else
     ns.Print("Requested " .. ns.ItemLink(id) .. " x" .. r.qty .. (r.to and (" for " .. r.to) or "") .. ". An officer will review it.")
   end
+  return rid
 end
 
 -- Ask a guildmate to craft something.
@@ -590,7 +598,7 @@ function ns.NewCraftRequest(key, crafter, qty, mats, note, to)
   if not e or not crafter then return ns.Print("That recipe isn't in the guild's list.") end
   if mats ~= "bank" and mats ~= "crafter" then mats = "me" end
   local now = ns.Now()
-  local rid = ns.me .. "-" .. now .. "-" .. math.random(100, 999)
+  local rid = RequestID(ns.me)
   local r = { who = ns.me, crafter = crafter, key = key, item = e.item, spell = (not e.item) and e.name or nil,
     qty = math.max(1, math.floor(tonumber(qty) or 1)), mats = mats, note = (note or ""):sub(1, 80),
     status = "pending", t = now, u = now }

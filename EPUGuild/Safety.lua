@@ -213,6 +213,7 @@ ns.Merge = function(sender, b, catchingUp)
   local result = merge(sender, clean, catchingUp)
   if changed then ns.RebuildAlts(); ns.Changed() end
   if ns.MergePlanning and ns.MergePlanning(sender,b,trusted) then result=true end
+  if ns.MergeCasual and ns.MergeCasual(sender,b,trusted) then result=true end
   return result or changed
 end
 
@@ -226,7 +227,7 @@ function ns.AutoFillFor(recipient, items, requestID)
     if ns.PositiveInt(it[1]) and ns.PositiveInt(it[2]) then sent[it[1]]=(sent[it[1]] or 0)+it[2] end
   end
   for id,r in pairs(g.requests) do
-    if (not requestID or requestID==id) and r.status=="approved" and (r.to or r.who)==recipient
+    if (not requestID or requestID==id or (type(requestID)=="table" and requestID[id])) and r.status=="approved" and (r.to or r.who)==recipient
       and ((r.crafter==ns.me) or (not r.crafter and ns.IsTrusted(ns.me))) then rows[#rows+1]={id=id,r=r} end
   end
   table.sort(rows,function(a,b) if a.r.t~=b.r.t then return (a.r.t or 0)<(b.r.t or 0) end return a.id<b.id end)

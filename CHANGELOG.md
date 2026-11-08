@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+- Add one Guild activities page for quest/elite help, dungeon groups, helper availability and reusable starter-kit templates.
+- Support ready/tentative responses, role counts, suggested levels, Mine/My level filters, manual whispers/invites and automatic expiry. Helpers opt in for a limited time and appear only while online.
+- Keep activity drafts during background refresh; validate author ownership and recover recent authored records when a new member joins without an officer online.
+- Turn starter kits into tracked Projects with bank requests and assigned craft tasks, preview validation, duplicate protection and an officer-confirmed welcome checklist step.
+- Combine a member’s approved bank requests into one mail draft with exact remaining quantities and shared same-item attachments. Respect stock/attachment limits, preserve existing drafts, and credit only the selected requests after successful delivery.
+- Avoid same-second request ID collisions during batch kit creation.
+- Existing guild-map and exact-mail safeguards are retained. Live Forever visual validation remains pending.
+
 ## 0.11.0
 
 - Opt-in guild location sharing with world map and nearby minimap markers.

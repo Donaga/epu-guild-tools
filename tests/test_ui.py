@@ -298,7 +298,10 @@ A.ex('__ns.UI.state.recipes.crafter = nil; __ns.UI:Refresh(); __ns.UI:OpenDetail
 check("recipe details open", A.ev('__ns.UI.details.kind') == "recipe")
 A.ex('__ns.UI:SetView("crafters"); __ns.UI:OpenDetails("crafter", "Tyler Baker")')
 clients["Newbie Stone"].ex('');  tick(1)
-F = Client("Chris Stone"); clients["Chris Stone"] = F; tick(30)
+F = Client("Chris Stone"); clients["Chris Stone"] = F
+# Digest size and bundle ordering vary with Lua table order. Wait for the
+# actual paced transfer rather than assuming the whole login fits in 30s.
+tick_until(lambda: F.ev('#__ns.RecipeIndex()') == 2 and F.ev('__ns.IsDesignated("Tyler Baker", "Tailoring")') == True, timeout=60)
 check("late joiner gets recipes and guild crafters", F.ev('#__ns.RecipeIndex()') == 2 and F.ev('__ns.IsDesignated("Tyler Baker", "Tailoring")') == True)
 
 # ===================== 0.7.0 crafting features =====================

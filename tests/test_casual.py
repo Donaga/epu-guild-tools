@@ -1,0 +1,139 @@
+"""Casual activities, concurrent interest, helper expiry and starter-kit delivery."""
+from simcore import *
+for name in ['Chris Baker','Tyler Baker','Pip Baker']:
+    clients[name]=Client(name)
+tick(120)
+A,B,P=(clients[n] for n in ['Chris Baker','Tyler Baker','Pip Baker'])
+def put(name,value):
+    for c in clients.values():c.rt.globals()[name]=value
+
+pid=B.ev("__ns.SaveActivity('help',{title='Elite quest',zone='Westfall',note='No rush',minLevel=10,maxLevel=30,slots=3,minutes=30})")
+put('post',pid)
+check('ordinary member can ask for quest help',pid is not None)
+check('author joins their own post once',B.ev('#__ns.ActivityReplies(post)')==1)
+check('help post reaches other members over paced transport',tick_until(lambda:A.ev('__ns.CasualStore().activityPosts[post]') is not None,60))
+A.ex("__ns.RespondActivity(post,'h','ready','Can heal')")
+P.ex("__ns.RespondActivity(post,'t','tentative','After dinner')")
+check('independent simultaneous responses survive sync',tick_until(lambda:B.ev('__ns.ActivityCounts(post).ready')==2 and B.ev('__ns.ActivityCounts(post).tentative')==1,60))
+check('role counts separate ready and tentative volunteers',B.ev('__ns.ActivityCounts(post).h')==1 and B.ev('__ns.ActivityCounts(post).t')==0)
+P.ex("__ns.RespondActivity(post,'t','ready','Ready now')")
+check('a response updates rather than duplicating a signup',tick_until(lambda:B.ev('__ns.ActivityCounts(post).ready')==3,60) and B.ev('#__ns.ActivityReplies(post)')==3)
+A.ex("__ns.RespondActivity(post,'h','withdrawn','')")
+check('withdrawal leaves a tombstone and frees the interest count',tick_until(lambda:B.ev('__ns.ActivityCounts(post).ready')==2,60))
+A.ex("__forged={}; for k,v in pairs(__ns.CasualStore().activityPosts[post]) do __forged[k]=v end; __forged.title='Stolen'; __forged.t=__now+1; __ns.Merge('Pip Baker',{activityPosts={[post]=__forged}})")
+check('member cannot rewrite another member activity',A.ev('__ns.CasualStore().activityPosts[post].title')=='Elite quest')
+P.ex("__forged={post=post,who='Tyler Baker',role='t',state='ready',note='',t=__now+2}; __ns.Merge('Pip Baker',{activityReplies={[post..'\\030Tyler Baker']=__forged}})")
+check('members cannot sign up somebody else',P.ev("__ns.CasualStore().activityReplies[post..'\\030Tyler Baker'].role")=='d')
+check('member cannot close another author post',P.ev('__ns.CloseActivity(post)') is False)
+check('officers can moderate posts',A.ev('__ns.CloseActivity(post)') is True)
+check('closed post reaches author',tick_until(lambda:B.ev('__ns.CasualStore().activityPosts[post].status')=='closed',60))
+check('closed posts reject new responses',P.ev("__ns.RespondActivity(post,'t','ready','')") is None)
+check('invalid duration rejected',B.ev("__ns.SaveActivity('dungeon',{title='Dungeon',minutes=999})") is None)
+check('reversed level ranges rejected',B.ev("__ns.SaveActivity('dungeon',{title='Dungeon',minLevel=30,maxLevel=10})") is None)
+B.ex("for i=1,3 do __ns.SaveActivity('dungeon',{title='Group '..i,minutes=30}) end")
+check('open post limit avoids accidental repeated posting',B.ev("__ns.SaveActivity('dungeon',{title='Fourth'})") is None)
+check('invalid participant role rejected',P.ev("__ns.RespondActivity(post,'leader','ready','')") is None)
+
+B.ex("__ns.SetHelperAvailability('mhc','Can help with quests and crafting',15)")
+check('helper availability syncs',tick_until(lambda:A.ev("__ns.CasualStore().helpers['Tyler Baker']~=nil"),60))
+check('helper roles normalise predictably',A.ev("__ns.CasualStore().helpers['Tyler Baker'].roles")=='hcm')
+check('online opted-in helpers appear',bool(A.ev("__ns.ActiveHelper(__ns.CasualStore().helpers['Tyler Baker'])")))
+A.ex("__ns.roster['Tyler Baker'].online=false")
+check('offline helper is unavailable',not A.ev("__ns.ActiveHelper(__ns.CasualStore().helpers['Tyler Baker'])"))
+A.ex("__ns.roster['Tyler Baker'].online=true")
+B.ex("__ns.SetHelperAvailability('m','',15,true)")
+check('explicit helper opt-out reaches peers',tick_until(lambda:A.ev("__ns.CasualStore().helpers['Tyler Baker'].off"),60))
+check('helper state does not enable map sharing',not B.ev('__ns.db.settings.shareLocation'))
+check('availability needs a selected skill',B.ev("__ns.SetHelperAvailability('','',60)") is None)
+check('helper duration has an upper bound',B.ev("__ns.SetHelperAvailability('m','',241)") is None)
+
+check('only officers can save kit templates',B.ev("__ns.SaveKitTemplate(nil,'Fake','',{{item=2589,qty=2,mode='bank'}})") is None)
+check('invalid kit quantities rejected',A.ev("__ns.SaveKitTemplate(nil,'Bad','',{{item=2589,qty=-2,mode='bank'}})") is None)
+kid=A.ev("__ns.SaveKitTemplate(nil,'Welcome kit','Bags and cloth',{{item=30001,qty=2,mode='craft'},{item=2589,qty=3,mode='bank'}})")
+put('kit',kid)
+check('officer can save reusable mixed kit',kid is not None)
+check('kit template reaches members',tick_until(lambda:B.ev('__ns.CasualStore().kitTemplates[kit]') is not None,60))
+check('unknown recipients rejected',A.ev("__ns.LaunchStarterKit(kit,'Stranger',{[1]='Tyler Baker'})") is None)
+check('missing craft recipe fails before creating any requests',A.ev("__ns.LaunchStarterKit(kit,'Pip Baker',{[1]='Tyler Baker'})") is None)
+A.ex("__ns.G().recipes['Tyler Baker']={t=__now,profs={Tailoring={items={30001},rank=150}}}; __ns.G().mats['item:30001']={t=__now,r={2589,6}}; __ns.recipeIndex=nil")
+project=A.ev("__ns.LaunchStarterKit(kit,'Pip Baker',{[1]='Tyler Baker'})")
+put('project',project)
+check('mixed kit becomes one project with two real requests',project is not None and A.ev('#__ns.G().projects[project].tasks')==2)
+check('kit launch guards against duplicate clicking',A.ev("__ns.LaunchStarterKit(kit,'Pip Baker',{[1]='Tyler Baker'})") is None)
+check('kit materials include craft reagents and exact bank supplies',A.ev('__ns.ProjectMaterials(__ns.G().projects[project])[2589]')==15)
+check('starter kit checklist remains unconfirmed until delivery',A.ev("__ns.Checklist('Pip Baker')[1].done") is not None and A.ev("__ns.PlanningStore().onboarding['Pip Baker\\031starterkit'].done") is False)
+A.ex("for _,task in ipairs(__ns.G().projects[project].tasks) do local r=__ns.G().requests[task.rid]; if r.crafter then __ns.EditRequest(task.rid,{status='approved'}) end end")
+check('kit project and its requests sync to members',tick_until(lambda:B.ev('__ns.G().projects[project]') is not None and B.ev('#__ns.G().projects[project].tasks')==2,90))
+A.ex("for _,task in ipairs(__ns.G().projects[project].tasks) do __ns.AutoFillFor('Pip Baker',{{__ns.G().requests[task.rid].item,1}},task.rid) end")
+check('partial kit deliveries update aggregate progress',A.ev('__ns.ProjectProgress(__ns.G().projects[project])')==(1,5)) # Officer cannot fulfil another crafter's work.
+A.ex("__craft=__ns.G().projects[project].tasks[1].rid; __ns.EditRequest(__craft,{status='filled'})")
+check('completed craft work contributes to project delivery progress',A.ev('__ns.ProjectProgress(__ns.G().projects[project])')==(3,5))
+check('stale kit preview is rejected',A.ev("__ns.LaunchStarterKit(kit,'Newbie Stone',{[1]='Tyler Baker'},'obsolete')") is None)
+A.ex("local r=__ns.CasualStore().kitTemplates[kit]; __ns.SaveKitTemplate(kit,r.title,r.note,r.lines,true)")
+check('retiring a template leaves active kit projects intact',A.ev('__ns.G().projects[project].status')=='active' and A.ev('__ns.KitTemplates()[kit]') is None)
+check('retirement syncs without resurrecting the template',tick_until(lambda:B.ev('__ns.CasualStore().kitTemplates[kit].removed'),60))
+
+# Exercise each screen and verify that periodic updates do not wipe drafts.
+for c in [A,B]:
+    c.ex("__ns.UI:Show(); __ns.UI:SetView('activities')")
+    for category in ['help','dungeon','helpers','kits']:
+        c.ex(f"__ns.UI.state.activities.kind='{category}'; __ns.UI:Refresh()")
+    for kind,key in [('activityform','help'),('activityform','dungeon'),('helperform',c.name),('kit','example:bags'),('kitlaunch','example:bags')]:
+        c.rt.globals()['screenKey']=key;c.ex(f"__ns.UI:OpenDetails('{kind}',screenKey)")
+    c.ex("__ns.UI:OpenDetails('activityform','help'); __ns.UI.details.pools.box[1]:SetText('Keep this draft'); __ns.UI:Refresh()")
+    check('background refresh preserves draft for '+c.name,c.ev('__ns.UI.details.pools.box[1]:GetText()')=='Keep this draft')
+A.ex("__ns.UI:OpenDetails('kitedit','new')")
+check('all new screens render without runtime errors',sum(c.ev('__errors') or 0 for c in clients.values())==0)
+A.ex("local b=__ns.UI.bars.activities; __toolbarFits=b.leftX+b.rightX<=480")
+check('activities toolbar fits the smallest supported window',A.ev('__toolbarFits'))
+
+# Fingerprint differences recover missed records even with a recent watermark.
+A.ex("__digest=__ns.EmptyDigest(); __digest.since=__now+500; __digest.fields={}; __delta=__ns.Delta(__digest)")
+check('activity fields participate in full digest recovery',A.ev('__delta.activityPosts~=nil and __delta.helpers~=nil and __delta.kitTemplates~=nil'))
+A.ex("__parts=__ns.SplitDelta(__delta); __found=false; for _,p in ipairs(__parts) do if p.activityPosts then __found=true end end")
+check('activity data survives bounded sync splitting',A.ev('__found'))
+B.ex("__ns.SetHelperAvailability('m','',15)")
+tick(1000)
+check('availability expires without automatic renewal',not B.ev("__ns.ActiveHelper(__ns.CasualStore().helpers['Tyler Baker'])"))
+check('closed or expired posts do not appear active',not B.ev('__ns.ActiveActivity(__ns.CasualStore().activityPosts[post])'))
+# Exercise the actual form controls, not just backend functions.
+A.ex("""function __click(label)
+ for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() and b.text:GetText()==label then b:GetScript('OnClick')(b); return true end end
+ error('Missing button: '..label)
+end
+__ns.UI:OpenDetails('activityform','help')
+local b=__ns.UI.details.pools.box; b[1]:SetText('UI quest help'); b[2]:SetText('Elwynn'); b[3]:SetText('Bring company'); b[4]:SetText('1'); b[5]:SetText('60'); b[6]:SetText('4'); b[7]:SetText('30')
+__click('Post activity'); __uiPost=__ns.UI.details.key
+""")
+check('activity form creates and opens the posted activity',A.ev('__ns.CasualStore().activityPosts[__uiPost].title')=='UI quest help')
+A.ex("__ns.UI.details.pools.box[1]:SetText('Preserve volunteer note'); __ns.UI:Refresh()")
+check('live activity updates preserve a volunteer note draft',A.ev('__ns.UI.details.pools.box[1]:GetText()')=='Preserve volunteer note')
+A.ex("""__ns.UI:OpenDetails('helperform','Chris Baker'); __click('[ ] Mentor'); __ns.UI.details.pools.box[1]:SetText('New players welcome'); __ns.UI.details.pools.box[2]:SetText('30'); __click('Available')""")
+check('helper role buttons save a real availability record',A.ev("__ns.CasualStore().helpers['Chris Baker'].roles:find('m',1,true)~=nil"))
+A.ex("""__ns.UI:OpenDetails('kitedit','new'); local b=__ns.UI.details.pools.box
+b[1]:SetText('UI supply kit'); b[2]:SetText('For recruits'); b[3]:SetText('2589'); b[4]:SetText('6'); __click('Add item'); __click('Save template'); __uiKit=__ns.UI.details.key
+__click('Prepare kit'); __ns.UI.details.pools.box[1]:SetText('Newbie Stone'); __click('Create kit project')
+""")
+check('template editor and preparation wizard create tracked requests',A.ev('__ns.UI.details.kind')=='project' and A.ev("__ns.G().projects[__ns.UI.details.key].recipient")=='Newbie Stone')
+A.ex("""local cur=__ns.CasualStore().activityPosts[post]; local r={}; for k,v in pairs(cur) do r[k]=v end
+r.status='open'; r.t=__now+3; __ns.Merge('Tyler Baker',{activityPosts={[post]=r}})""")
+check('a closed post cannot resurrect from a later stale edit',A.ev('__ns.CasualStore().activityPosts[post].status')=='closed')
+A.ex("""local r={who='Tyler Baker',roles='m',note='',off=false,created=__now+9999,expires=__now+10000,t=__now+9999}
+__ns.Merge('Tyler Baker',{helpers={['Tyler Baker']=r}})""")
+check('future timestamps cannot pin helper availability',A.ev("__ns.CasualStore().helpers['Tyler Baker'].t")<A.ev('__now+9999'))
+# Own records recover for a new member without needing officer relay.
+A.ex("__ns.comm.H=function() end")
+P.ex("__ns.CasualStore().activityPosts={}")
+B.ex("__ns.comm.H('Pip Baker',__ns.EmptyDigest(),'GUILD')")
+check('authors republish their own board records when a new member joins',tick_until(lambda:P.ev('__ns.CasualStore().activityPosts[post]') is not None,60))
+A.ex("""local old=math.random; math.random=function() return 123456 end
+local a=__ns.NewRequest(2589,1,'collision test'); local b=__ns.NewRequest(4306,1,'collision test')
+__unique=(a~=b and __ns.G().requests[a].item==2589 and __ns.G().requests[b].item==4306); math.random=old""")
+check('same-second batch request IDs cannot overwrite one another',A.ev('__unique'))
+A.ex("""__ns.CasualStore().kitTemplates.aged={title='Reusable forever',note='',lines={{item=2589,qty=1,mode='bank'}},removed=false,by='Chris Baker',t=__now-60*86400}
+__ns.PruneCasual()""")
+check('reusable kit templates do not expire with short-lived activities',A.ev('__ns.KitTemplates().aged~=nil'))
+A.ex("""__ns.Merge('Chris Baker',{kitTemplates={oldsync={title='Old template',note='',lines={{item=2589,qty=1,mode='bank'}},removed=false,by='Former Officer',t=__now-60*86400}}})""")
+check('long-lived templates still recover through officer sync',A.ev('__ns.KitTemplates().oldsync~=nil'))
+print('Casual guild tests:',check.failed,'failed')
+sys.exit(1 if check.failed else 0)

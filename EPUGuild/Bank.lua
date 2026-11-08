@@ -295,16 +295,16 @@ ns.On("MAIL_SEND_INFO_UPDATE", function() attached = ReadAttachments() end)
 AfterCall("SendMail", function(to)
   local items = ReadAttachments()
   if #items == 0 then items = attached end
-  outgoing = (#items > 0) and { to = to, items = items } or nil
+  outgoing = (#items > 0) and { to = to, items = items, requestID=ns.mailRequestID, requestIDs=ns.mailRequestIDs } or nil
 end)
 ns.On("MAIL_SEND_SUCCESS", function()
   local o = outgoing
   outgoing, attached = nil, {}
-  if o then ns.AutoFillFor(o.to, o.items, ns.mailRequestID) end
-  ns.mailRequestID = nil
+  if o then ns.AutoFillFor(o.to, o.items, o.requestIDs or o.requestID) end
+  ns.mailRequestID,ns.mailRequestIDs = nil,nil
 end)
 ns.On("MAIL_FAILED", function() outgoing = nil end)
-ns.On("MAIL_CLOSED", function() outgoing, attached, ns.mailRequestID = nil, {}, nil end)
+ns.On("MAIL_CLOSED", function() outgoing, attached, ns.mailRequestID, ns.mailRequestIDs = nil, {}, nil,nil end)
 
 local tradeSnap
 ns.On("TRADE_ACCEPT_UPDATE", function()
@@ -360,6 +360,7 @@ end
 
 local function StartMail(to, subject)
   if not ns.MailIsEmpty() then return false end
+  ns.mailRequestID,ns.mailRequestIDs=nil,nil
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText(subject) end
