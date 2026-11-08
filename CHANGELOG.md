@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0
+
+- Opt-in guild location sharing with world map and nearby minimap markers.
+- Shift-click the minimap button or use `/epu map` for separate sharing and display controls; click markers to whisper.
+- Slow, disposable updates share the existing network budget, yield to sync traffic and expire after two minutes. No location history is saved.
+- Stop sharing in instances, discard queued positions on opt-out or guild changes, and remove offline members. Both members need the updated addon.
+- Bundle HereBeDragons 2.18 with Forever map support; live-client validation remains pending.
+
 ## 0.10.2
 
 - Prepare request mail for the remaining quantity and verify the actual attachment count after splitting; remove mismatched attachments, including later restacking by mail addons.

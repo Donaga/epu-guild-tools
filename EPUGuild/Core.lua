@@ -360,6 +360,7 @@ local HELP = {
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
+  "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off opts in or out",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
@@ -412,6 +413,11 @@ SlashCmdList.EPUGUILD = function(msg)
     ReloadUI()
   elseif cmd == "sync" then
     ns.FullSync()
+  elseif cmd == "map" then
+    ns.ShowGuildMapSettings()
+  elseif cmd == "sharelocation" then
+    if args~="on" and args~="off" then return ns.Print("Usage: /epu sharelocation on|off") end
+    ns.SetLocationSharing(args=="on")
   elseif cmd == "net" then
     ns.PrintNetworkStatus()
   elseif cmd == "news" then

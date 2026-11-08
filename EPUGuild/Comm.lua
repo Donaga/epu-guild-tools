@@ -135,6 +135,10 @@ end
 
 local function pump()
   local m = queue[1]
+  while m and m.valid and (GetTime()>m.expires or not m.valid()) do
+    table.remove(queue,1)
+    m=queue[1]
+  end
   if not m then sending = false return end
   local now = GetTime()
   if now<pauseUntil then C_Timer.After(pauseUntil-now+0.05,pump); return end
@@ -185,6 +189,23 @@ function ns.Send(kind, data, channel, target)
 end
 
 function ns.QueueLength() return #queue end
+
+-- Disposable, single-packet updates use the same budget but never survive a
+-- long cooldown, guild change or a revoked sharing preference.
+function ns.CancelEphemeral(kind)
+  for i=#queue,1,-1 do
+    if queue[i].ephemeral==kind then table.remove(queue,i) end
+  end
+end
+function ns.SendEphemeral(kind,data,ttl,valid)
+  ns.CancelEphemeral(kind)
+  if not IsInGuild() then return false end
+  local body="S"..kind..ns.Serialize(data)
+  if #body>MAX_SINGLE then return false end
+  queue[#queue+1]={body,"GUILD",ephemeral=kind,expires=GetTime()+ttl,valid=valid}
+  if not sending then sending=true; pump() end
+  return true
+end
 
 -- User-requested needs posts and optional milestone announcements share the
 -- same budget instead of sending several visible guild-chat lines at once.

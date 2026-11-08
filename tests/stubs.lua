@@ -60,6 +60,7 @@ function NewMock() local o = setmetatable({ _scripts = {}, _events = {} }, M); r
 function CreateFrame(kind, name, parent, template)
   local f = NewMock()
   f._parent = parent
+  if template == "BasicFrameTemplateWithInset" then f.TitleText=NewMock() end
   if kind == "Frame" or kind == "Button" or kind == "EditBox" or kind == "ScrollFrame" then f._shown = (name ~= "EPUGuildFrame") end
   table.insert(__frames, f)
   if name then _G[name] = f end

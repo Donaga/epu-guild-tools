@@ -141,3 +141,22 @@ The **EPU Discord companion** (a separate download) posts requests to a Discord 
 - Bank contents update while the bank alt is online. The bank itself is re-read each time its bank window is opened.
 - Mail logging hooks the standard mail functions. A mail addon that loads before this one and grabs mail its own way could slip past. Trades are always caught.
 - A guild member who isn't in the roster yet (just joined) won't be credited for donations until the roster refreshes.
+
+## Guild map (0.11+)
+
+Shift-click the EPU minimap button or use `/epu map` to open the guild map controls.
+Check **Share my outdoor location** to opt in on this account; it starts off.
+You can also use `/epu sharelocation on` or `/epu sharelocation off`.
+Showing world map markers and nearby minimap markers can be toggled separately.
+Click a marker to whisper; hover for name, level, class, zone, coordinates and update age.
+
+Both players need EPU 0.11 or newer, and the member being shown must opt in.
+Updates are approximate, at most once per 30 seconds while moving, with a 60-second
+heartbeat while stationary. Busy sync traffic takes priority. Markers expire after
+two minutes without an update and disappear when the roster reports the player offline.
+Sharing stops inside instances or when coordinates are unavailable. No location
+history is saved or relayed by the addon or Discord companion. Guildmates may be
+on another layer or phase, so a marker does not guarantee that you can see them.
+
+Map placement uses bundled HereBeDragons 2.18, which supports Forever and handles
+parent maps, minimap zoom, rotation and clipping. Live Forever verification is pending.
