@@ -256,13 +256,14 @@ end
 -- At login: one pop-up at most. It shows the newest announcement if you
 -- haven't read it, and says how many others are unread. (The game already
 -- prints the message of the day in chat, so that never pops up.)
-function ns.ShowUnreadNews()
+function ns.ShowUnreadNews(force)
+  if ns.AllowNewsPopup and not ns.AllowNewsPopup(force) then return end
   if not ns.Dialog then return end
   local unread = {}
-  for _, e in ipairs(ns.UnreadNews()) do if not e.motd then unread[#unread + 1] = e end end
+  for _, e in ipairs(ns.UnreadNews()) do if not e.motd and (force or not ns.NewsIsMuted or not ns.NewsIsMuted(e.id)) then unread[#unread + 1] = e end end
   if #unread == 0 then return end
   local newest
-  for _, e in ipairs(ns.NewsEntries()) do if not e.quiet then newest = e break end end
+  for _, e in ipairs(ns.NewsEntries()) do if not e.quiet and (force or not ns.NewsIsMuted or not ns.NewsIsMuted(e.id)) then newest = e break end end
   if not newest or newest.id ~= unread[1].id then
     ns.Print("You have " .. #unread .. " unread guild announcement" .. (#unread == 1 and "" or "s") .. ". Type |cffffffff/epu news|r to read them.")
     return

@@ -2709,6 +2709,7 @@ function UI:FillDetails()
       end } })
     end
   end
+  if ns.AddPersonalActions then ns.AddPersonalActions(kind,key,det) end
   det:Finish()
 end
 

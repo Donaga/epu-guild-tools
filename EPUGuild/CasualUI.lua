@@ -12,7 +12,7 @@ end
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 local function SetCategory(kind) State().kind=kind; UI:CloseDetails(); UI.search:SetText(""); UI:SetView("activities") end
 function ns.CasualFormKind(kind)
-  return kind=="activityform" or kind=="helperform" or kind=="kitedit" or kind=="kitlaunch"
+  return (ns.CommunityFormKind and ns.CommunityFormKind(kind)) or kind=="activityform" or kind=="helperform" or kind=="kitedit" or kind=="kitlaunch"
 end
 function ns.InstallCasualViews(views,env)
   E=env; UI=E.UI; C=E.C
@@ -22,8 +22,9 @@ function ns.InstallCasualViews(views,env)
     choose:SetScript("OnClick",function() E.OpenMenu(choose,categories,State().kind,function(kind) SetCategory(kind) end) end)
     local mine=bar:Add(E.Btn(bar,"Mine",46,22),"left",function(self) State().mine=not State().mine; self:SetOn(State().mine); UI:Refresh() end)
     local near=bar:Add(E.Btn(bar,"My level",70,22),"left",function(self) State().near=not State().near; self:SetOn(State().near); UI:Refresh() end)
-    bar:Add(E.Btn(bar,"New / edit",80,22),"right",function()
+    bar.casualNew=bar:Add(E.Btn(bar,"New / edit",80,22),"right",function()
       local kind=State().kind
+      if ns.CommunityNewAction and ns.CommunityNewAction(kind) then return end
       if kind=="helpers" then Open("helperform",ns.me)
       elseif kind=="kits" then
         if not ns.IsTrusted(ns.me) then return ns.Print("Officers create and apply starter-kit templates.") end
@@ -40,6 +41,7 @@ function ns.InstallCasualViews(views,env)
       bar.casualMine:SetOn(st.mine); bar.casualNear:SetOn(st.near)
       bar.casualMine:SetShown(st.kind~="kits"); bar.casualNear:SetShown(st.kind~="kits")
     end
+    if ns.CommunityRows then local extra=ns.CommunityRows(g,q,st,bar); if extra then return extra end end
     if st.kind=="kits" then
       for id,r in pairs(ns.KitTemplates()) do
         if E.Match(q,r.title,r.note) then
@@ -74,10 +76,12 @@ function ns.InstallCasualViews(views,env)
     return rows
   end,empty="Nothing matches this board. Choose another board, clear the search or turn off Mine / My level.",footer=function()
     local kind=State().kind
+    if ns.CommunityFooter then local extra=ns.CommunityFooter(kind); if extra then return extra end end
     if kind=="kits" then return "Reusable templates become tracked Projects. Officers review the recipient and crafters before creating requests." end
     if kind=="helpers" then return "Helpers opt in for 15–240 minutes and appear only while online. No automatic renewal or guild-chat announcements." end
     return "Voluntary interest, with no automatic invites. Levels are suggestions; posts close automatically at their expiry time."
   end}
+  if ns.InstallCommunityViews then ns.InstallCommunityViews(views,env,categories) end
 end
 local function RoleButtons(det,roles,changed,multiple)
   local specs={}
@@ -93,6 +97,7 @@ function ns.FillCasualDetails(kind,key,det)
   if not UI then return false end
   local g=ns.CasualStore(); if not g then return false end
   local officer=ns.IsTrusted(ns.me)
+  if ns.FillCommunityDetails and ns.FillCommunityDetails(kind,key,det) then return true end
   if kind=="activityform" then
     local r=g.activityPosts[key]
     local activity=r and r.kind or key

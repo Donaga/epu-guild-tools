@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.0
+
+- Add casual event planning with local/server time display, going/tentative/declined role signups, organiser edits, officer cancellation and personal reminders.
+- Add opt-in matching for up to eight explicitly selected quests, with paced progress updates, withdrawal and transient remote data.
+- Add a returning-player catch-up view for unread news, personal requests, active projects, upcoming events and the local digest.
+- Add private notification modes, category preferences, quiet hours, sound control, followed/muted posts and configurable reminder lead time.
+- Deduplicate reminders, coalesce queued notices, send overflow to the digest and open the relevant item when a notice is clicked.
+- Bound sync payloads and private history, preserve forms during refresh, and avoid refreshing bank pages for shared quest progress.
+- Preserve existing guild maps, starter kits, combined request mail and exact-quantity safeguards. Live Forever visual validation remains pending.
+
 ## 0.12.0
 
 - Add one Guild activities page for quest/elite help, dungeon groups, helper availability and reusable starter-kit templates.

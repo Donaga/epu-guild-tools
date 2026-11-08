@@ -214,6 +214,7 @@ ns.Merge = function(sender, b, catchingUp)
   if changed then ns.RebuildAlts(); ns.Changed() end
   if ns.MergePlanning and ns.MergePlanning(sender,b,trusted) then result=true end
   if ns.MergeCasual and ns.MergeCasual(sender,b,trusted) then result=true end
+  if ns.MergeCommunity and ns.MergeCommunity(sender,b,trusted) then result=true end
   return result or changed
 end
 
