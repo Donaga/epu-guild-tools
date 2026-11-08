@@ -23,6 +23,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install lupa "discord.py>=2.3"
+      - name: Personalized guides and reviewed catalog
+        run: python tools/build_guide_catalog.py --check && python tests/test_guides.py
       - run: python tests/test_sync.py && python tests/test_discord.py && python tests/test_itemdb.py && python tests/test_ui.py && python tests/test_guild.py && python tests/test_autosync.py && python tests/test_bankalt.py && python tests/test_reliability.py
       - name: Discord round trip with alternate message timing
         env:

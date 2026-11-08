@@ -13,6 +13,17 @@ Guild activities include quest help, dungeon groups, voluntary helpers and start
 
 The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
 
+Use `/epu guides` for **Your guides**: Forever class, leveling, talent and profession
+sources filtered to this character's class, level and learned profession skills.
+Choose a talent focus in Options if the game cannot identify one. Save sources,
+keep private notes and mark the current bracket reviewed. Best-fit sources show
+by default; optional alternatives retain beta/pre-launch labels. Short original
+summaries are available in game; **Read full guide** lets you copy a source URL
+to your browser. Notes and reading progress are never synced to the guild.
+See [guide maintenance](docs/guide-sources.md) for the source selection, review
+dates and weekly external review process. Updates reach players through normal
+addon releases; the game does not download guides in the background.
+
 ## Getting the addon (guildmates)
 - **Recommended: CurseForge.** Install the free [CurseForge app](https://www.curseforge.com/download/app), open **https://www.curseforge.com/wow/addons/epu-guild-tools** and click **Install**, then pick your *Forever* install. The app keeps it updated (turn on auto-update in its World of Warcraft settings). The project is unlisted, so use the link rather than searching.
 - **Updater:** download `EPU-Updater-x.y.z.zip` from the latest [Release](../../releases/latest), unzip it somewhere you'll keep it, and double-click **Update EPU Guild Tools**. It finds WoW: Forever, installs the addon, and updates it whenever you run it. Double-click **Update automatically at startup** once and it keeps itself current.
