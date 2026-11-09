@@ -22,6 +22,8 @@ jobs:
         run: python tools/build_guide_catalog.py --check && python tests/test_guides.py
       - name: Bank stock history and waiting requests
         run: python tests/test_bank_catalog.py
+      - name: Bank equipment visibility and stock filters
+        run: python tests/test_bank_filters.py
       - name: Addon sync simulation
         run: python tests/test_sync.py
       - name: Guild bank + Discord round trip

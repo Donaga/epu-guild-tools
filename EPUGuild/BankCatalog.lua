@@ -1,6 +1,15 @@
 -- Requestable items come from actual bank inventory/history, never wish lists
 -- or the game's complete item database. History carries no stock quantity.
 local ADDON,ns=...
+local GetItemInfo=(C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetItemInfoInstant=(C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+local function HistoricalItemClass(id)
+  local cached=ns.db and ns.db.itemClass and ns.db.itemClass[id]
+  local class=cached and cached[1]
+  if not class and GetItemInfoInstant then class=select(6,GetItemInfoInstant(id)) end
+  if not class and GetItemInfo then class=select(12,GetItemInfo(id)) end
+  return class
+end
 function ns.BankHistory(snapshot,items,holder)
   local seen={}
   for id,value in pairs((snapshot or {}).seen or {}) do if ns.PositiveInt(id) and value==true then seen[id]=true end end
@@ -17,6 +26,14 @@ function ns.BankCatalog()
   -- Donation records can predate the new persistent history field.
   for _,d in pairs(g.donations) do
     if (g.bank[d.to] or d.to==ns.GB_KEY) and ns.PositiveInt(d.item) and (tonumber(d.n) or 0)>0 then catalog[d.item]=true end
+  end
+  for id in pairs(catalog) do
+    if ns.BankCount(id)<=0 then
+      local class=HistoricalItemClass(id)
+      -- Keep the history for future restocking, but do not advertise sold-out
+      -- gear. Unknown historical items wait for item metadata to load.
+      if not class or class==2 or class==4 then catalog[id]=nil end
+    end
   end
   return catalog
 end

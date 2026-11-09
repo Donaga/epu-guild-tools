@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.2
+
+- Hide sold-out weapons and armor from the bank catalog and request pickers in game and Discord. Keep their history so they return automatically when restocked; preserve existing requests.
+- Retain sold-out materials, consumables, bags and other classified non-equipment as restockable catalog items. Unclassified historical items wait for metadata instead of appearing as unknown gear.
+- Add In stock, Available now, Awaiting restock and item-quality filters alongside categories, plus Reset to clear filters and search.
+- Export item metadata for hidden historical items so the companion can apply the same rule. Stocked gear remains visible regardless of metadata availability.
+
 ## 0.16.1
 
 - Correct guide coverage: Method Skinning stops before skill 225 and Method Herbalism before skill 205, where their published routes become unfinished or explicitly speculative. Mark the Leatherworking source as beta-derived.

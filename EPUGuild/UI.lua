@@ -844,7 +844,7 @@ end
 UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
-  bank = { cat = nil },
+  bank = { cat = nil, stock = 'all', quality = nil },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "all", role = nil, review = nil },
@@ -950,7 +950,7 @@ Views.shopping = {
 Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
   tools = function(bar)
-    UI.bankCatChip = DropChip(bar, 150, "Show one kind of item", function()
+    UI.bankCatChip = DropChip(bar, 140, "Show one kind of item", function()
       local counts = {}
       for id in pairs(ns.BankCatalog()) do local c=ns.ItemCategory(id); counts[c]=(counts[c] or 0)+1 end
       local items = { { label = "All categories", value = false } }
@@ -959,6 +959,15 @@ Views.bank = {
       end
       return items
     end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil end)
+    UI.bankStockChip=DropChip(bar,132,'Filter by recorded stock and open requests',function()
+      return {{label='All stock',value='all'},{label='In stock',value='stocked'},{label='Available now',value='available'},{label='Awaiting restock',value='restock'}}
+    end,function() return UI.state.bank.stock end,function(v) UI.state.bank.stock=v end)
+    UI.bankQualityChip=DropChip(bar,110,'Filter by item quality',function()
+      return {{label='Any quality',value=false},{label='Poor',value=0},{label='Common',value=1},{label='Uncommon',value=2},{label='Rare',value=3},{label='Epic+',value=4}}
+    end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil end)
+    UI.bankReset=bar:Add(Btn(bar,'Reset',52,22),'right',function()
+      local st=UI.state.bank; st.cat=nil; st.stock='all'; st.quality=nil; UI.search:SetText(''); UI:Refresh()
+    end,'Clear bank filters and search')
   end,
   rows = function(g, q)
     local totals, holders = {}, {}
@@ -984,7 +993,12 @@ Views.bank = {
         local name = tostring(ns.ItemName(id, true))
         local okc, cat = pcall(ns.ItemCategory, id)
         cat = (okc and type(cat) == "string") and cat or "Other"
-        if (not only or cat == only) and Match(q, name, holders[id], cat) then
+        local stock=UI.state.bank.stock or 'all'
+        local held,asked,free=ns.BankRequestStock(id)
+        local stockMatch=stock=='all' or (stock=='stocked' and held>0) or (stock=='available' and free>0) or (stock=='restock' and (held==0 or asked>held))
+        local quality=select(3,GetItemInfo(id)); local wanted=UI.state.bank.quality
+        local qualityMatch=wanted==nil or (quality and (wanted==4 and quality>=4 or quality==wanted))
+        if stockMatch and qualityMatch and (not only or cat == only) and Match(q, name, holders[id], cat) then
           groups[cat] = groups[cat] or {}
           table.insert(groups[cat], {
             key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
@@ -1021,7 +1035,7 @@ Views.bank = {
     table.sort(parts)
     return #parts > 0 and table.concat(parts, "   ") or "No bank yet. On the bank character: /epu bankalt on"
   end,
-  empty = "Nothing recorded yet. The bank character needs the addon and should open its bank once.",
+  empty = "No items match. Use Reset to clear bank filters and search. Sold-out equipment stays hidden.",
 }
 
 -- Requests --------------------------------------------------------------------
@@ -1153,7 +1167,7 @@ Views.requests = {
     if UI.state.requests.mine then summary=summary.." | Mine" end
     if UI.state.requests.crafts then summary=summary.." | Crafts" end
     local item=UI.itemBox and ns.ItemID(UI.itemBox:GetText())
-    if item then return ns.CanBankRequest(item) and ns.BankRequestAvailability(item) or 'This item has not been stocked by the guild bank. Choose one from Bank.' end
+    if item then return ns.CanBankRequest(item) and ns.BankRequestAvailability(item) or 'This item is not requestable. Sold-out equipment stays hidden; choose an item from Bank.' end
     return summary
   end,
   empty = "No requests match. Try another filter, or ask for something below.",
@@ -2905,6 +2919,10 @@ function UI:Refresh()
     if v == Views.bank then
       self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
       self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
+      self.bankStockChip:SetLabel(({all='All stock',stocked='In stock',available='Available now',restock='Awaiting restock'})[self.state.bank.stock] or 'All stock')
+      self.bankStockChip:SetOn(self.state.bank.stock~='all')
+      self.bankQualityChip:SetLabel(({[0]='Poor',[1]='Common',[2]='Uncommon',[3]='Rare',[4]='Epic+'})[self.state.bank.quality] or 'Any quality')
+      self.bankQualityChip:SetOn(self.state.bank.quality~=nil)
     end
     if v == Views.roster then
       local st = self.state.roster
