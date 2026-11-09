@@ -46,6 +46,9 @@ sources and nine Mobalytics HTTP 403 responses; blocked pages were checked with
 the web tool. No broken links were confirmed. Icy Veins text was unchanged even
 where raw-page hashes differed. Beta route table edits were read but no recipe
 quantities are copied into the addon.
+Blizzard also confirmed a November 8 hotfix increasing dungeon enemy kill XP by
+50%; class leveling sources now carry a dated note about older route comparisons.
+Source: https://us.forums.blizzard.com/en/wow/t/dungeon-enemy-xp-increased-november-8/2406595/1
 
 Player relevance is mandatory: current class, level, learned profession IDs and
 skill range, and matching talent focus for specialization entries. Never show
