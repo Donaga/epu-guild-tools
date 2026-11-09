@@ -341,6 +341,7 @@ ns.On("ADDON_LOADED", function(name)
   EPUGuildCharDB.recipes = EPUGuildCharDB.recipes or {}
   ns.db = EPUGuildDB
   ns.cdb = EPUGuildCharDB
+  if ns.ApplyGuildMapDefaults then ns.guildMapReset=ns.ApplyGuildMapDefaults() end
 end)
 
 ---------------------------------------------------------------------------
@@ -363,7 +364,7 @@ local HELP = {
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu activities|r - quest help, dungeon groups, helpers and starter kits",
-  "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off opts in or out",
+  "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",

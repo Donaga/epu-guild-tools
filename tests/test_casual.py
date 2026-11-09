@@ -4,6 +4,7 @@ for name in ['Chris Baker','Tyler Baker','Pip Baker']:
     clients[name]=Client(name)
 tick(120)
 A,B,P=(clients[n] for n in ['Chris Baker','Tyler Baker','Pip Baker'])
+B.ex('__ns.SetLocationSharing(false)') # The helper form must preserve this explicit choice.
 for c in clients.values(): c.ex('__ns.G().bank["Past bank"]={v=__now,items={},money=0,retired=true,seen={[2589]=true,[4306]=true}}')
 def put(name,value):
     for c in clients.values():c.rt.globals()[name]=value

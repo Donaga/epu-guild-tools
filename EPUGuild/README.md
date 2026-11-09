@@ -273,12 +273,17 @@ The **EPU Discord companion** (a separate download) posts requests to a Discord 
 ## Guild map (0.11+)
 
 Shift-click the EPU minimap button or use `/epu map` to open the guild map controls.
-Check **Share my outdoor location** to opt in on this account; it starts off.
+Sharing, world-map markers, minimap markers and circular class icons start on.
+The 0.16 update resets these map settings to on **once per installation**, including
+previous off settings. After that initial reset, your choices persist across reloads
+and updates. A login message explains sharing and points to these controls.
+Uncheck **Share my outdoor location** to stop sharing on this account.
 You can also use `/epu sharelocation on` or `/epu sharelocation off`.
 Showing world map markers and nearby minimap markers can be toggled separately.
 Click a marker to whisper; hover for name, level, class, zone, coordinates and update age.
 
-Both players need EPU 0.11 or newer, and the member being shown must opt in.
+Both players need EPU 0.11 or newer, and the member being shown must have sharing on.
+Use **Use class icons** to choose circular class icons or class-colored round dots.
 Updates are approximate, at most once per 30 seconds while moving, with a 60-second
 heartbeat while stationary. Busy sync traffic takes priority. Markers expire after
 two minutes without an update and disappear when the roster reports the player offline.
