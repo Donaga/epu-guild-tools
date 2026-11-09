@@ -48,7 +48,7 @@ check('old bank donation records backfill real history',B.ev('__ns.CanBankReques
 B.ex("__delta=__ns.Delta(__ns.EmptyDigest())")
 check('history is included in ordinary bank sync',B.ev('__delta.bank["Chris Baker"].seen[2589]') is True)
 
-db={'itemNames':{2589:'Linen Cloth',4306:'Silk Cloth',2996:'Bolt of Linen Cloth',14047:'Runecloth'},'guilds':{'G - R':{
+db={'itemClass':{2589:[7,5],4306:[7,5],2996:[7,5]},'itemNames':{2589:'Linen Cloth',4306:'Silk Cloth',2996:'Bolt of Linen Cloth',14047:'Runecloth'},'guilds':{'G - R':{
  'bank':{'Bank':{'v':1,'items':{2589:10},'seen':{2589:True,4306:True}},'Retired':{'items':{2996:99},'retired':True}},
  'needs':{'list':{14047:100}},'requests':{'a':{'who':'Tyler Baker','item':2589,'qty':7,'status':'approved','t':1},'b':{'who':'Pip Baker','item':2589,'qty':6,'status':'pending','t':2}}}}}
 gd=core.GuildData(db)

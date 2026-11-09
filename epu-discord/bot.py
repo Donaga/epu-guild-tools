@@ -303,7 +303,7 @@ def help_embed() -> discord.Embed:
         "Use `/link` for each alt; `/unlink` removes one."))
     e.add_field(name="2. Ask for something", inline=False, value=(
         "`/request item:` choose an item the bank currently holds or has stocked before, then "
-        "set `qty:`. The picker shows stock and available quantities; unavailable items wait for restock. Add a `note:` for the officers, "
+        "set `qty:`. The picker shows stock and available quantities. Sold-out supplies can wait for restock; weapons and armor must be in stock. Add a `note:` for the officers, "
         "and `character:` if it should be mailed to an alt.\n"
         "Your request is posted here. An officer approves it and mails it to you, and the post updates as it goes: "
         "**Pending, Approved, Filled** (or **Rejected** with a reason)."))
@@ -877,7 +877,7 @@ async def request_cmd(interaction: discord.Interaction, item: str, qty: app_comm
     item_id, name = core.resolve_item(item, known)
     if item_id is None or item_id not in known:
         await interaction.response.send_message(
-            "Choose an item the guild bank currently holds or has stocked before. If stock information is missing, ask an officer to sync and /reload.", ephemeral=True)
+            "Choose an item the guild bank currently holds or a supply it has stocked before. Sold-out weapons and armor are hidden. If stock information is missing, ask an officer to sync and /reload.", ephemeral=True)
         return
     name = name or f"item {item_id}"
     held,asked,free=gd.bank_request_stock(item_id,state.data['inbox'])

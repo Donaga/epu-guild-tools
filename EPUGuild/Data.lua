@@ -553,7 +553,7 @@ end
 function ns.NewRequest(id, qty, note, to, forWho)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
-  if not ns.CanBankRequest(id) then ns.Print('Choose an item the guild bank has stocked before. Open Bank or sync with an officer first.'); return nil end
+  if not ns.CanBankRequest(id) then ns.Print('Choose an item from Bank. Weapons and armor must be in stock; other supplies can be requested from stock history. Sync with an officer if stock data is missing.'); return nil end
   qty=qty or 1
   if not ns.PositiveInt(qty,1000) then ns.Print('Choose a whole quantity from 1 to 1000.'); return nil end
   local officer = ns.IsTrusted(ns.me)

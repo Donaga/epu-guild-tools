@@ -28,11 +28,17 @@ function ns.CacheItemNames()
   local function add(id)
     if type(id) ~= "number" or (names[id] and classes[id]) then return end
     local name, _, _, _, _, _, _, _, _, _, _, classID, subclassID = GetItemInfo(id)
+    if not classID and GetItemInfoInstant then
+      local _,_,_,_,_,c,sc=GetItemInfoInstant(id); classID,subclassID=c,sc
+    end
     if name then names[id] = name end
     if classID then classes[id] = { classID, subclassID or 0 } end
   end
   for id in pairs(g.needs.list) do add(id) end
-  for _, s in pairs(g.bank) do for id in pairs(s.items or {}) do add(id) end end
+  for _, s in pairs(g.bank) do
+    for id in pairs(s.items or {}) do add(id) end
+    for id in pairs(s.seen or {}) do add(id) end
+  end
   for id in pairs(ns.BankCatalog()) do add(id) end
   for _, r in pairs(g.requests) do add(r.item) end
   for _, d in pairs(g.donations) do add(d.item) end

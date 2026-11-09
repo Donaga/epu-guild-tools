@@ -474,7 +474,8 @@ class GuildData:
         for d in (self.g.get('donations') or {}).values():
             if d.get('item') and int(d.get('n') or 0) > 0 and (d.get('to') in self.bank or d.get('to') == 'Guild Bank'):
                 ids.add(int(d['item']))
-        return {i: self.item_name(i) for i in ids}
+        return {i: self.item_name(i) for i in ids
+                if self.bank_count(i)>0 or (i in self.item_class and self.item_class[i][0] not in (2,4))}
 
     def bank_request_records(self, queued=()):
         records = dict(self.requests)

@@ -81,6 +81,12 @@ Leave the window open while you play. It should say `Logged in as ... Watching .
 If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program Files`. Right-click `...\_forever_\Interface\AddOns\EPUGuild` → **Properties → Security → Edit**, select **Users**, and tick **Modify**. Or run start.bat once as administrator.
 
 ## Using it
+Sold-out weapons and armor are excluded from `/bank` and `/request`; other
+classified supplies can remain available for restock requests. Their history is
+kept, so gear returns automatically when stocked again. If historical item
+categories are missing, update the addon and `/reload` on the officer character
+to export metadata. Existing requests are preserved.
+
 **Members (in Discord)**
 - `/link` with your character's full name, e.g. `/link character:Tyler Stonefist`. The list autocompletes from the guild roster, and a first name works if only one member has it. Your first link is your main.
   - If the addon already knows your alts (they've logged in with it), linking one character links all of them.

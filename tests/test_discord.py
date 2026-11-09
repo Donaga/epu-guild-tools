@@ -281,7 +281,7 @@ check("help post fits Discord's limits (%d chars)" % len(he), len(he) < 6000 and
 
 # Exercise the actual Discord handlers without making network calls.
 old_read,old_state,old_flush,old_post=bot.read_latest,bot.state,bot.flush_inbox,bot.post_or_edit
-catalog_gd=core.GuildData({'itemNames':{2589:'Linen Cloth',4306:'Silk Cloth',2996:'Bolt of Linen Cloth'},'guilds':{'G - R':{'bank':{'Bank':{'items':{2589:5},'seen':{4306:True}}}}}})
+catalog_gd=core.GuildData({'itemClass':{4306:[7,5]},'itemNames':{2589:'Linen Cloth',4306:'Silk Cloth',2996:'Bolt of Linen Cloth'},'guilds':{'G - R':{'bank':{'Bank':{'items':{2589:5},'seen':{4306:True}}}}}})
 bot.read_latest=lambda:catalog_gd
 bot.state=core.State(os.path.join(tempfile.mkdtemp(),'state.json'))
 bot.state.characters_for=lambda _:['Tyler Baker']
@@ -302,6 +302,11 @@ try:
     entry=bot.state.data['inbox'][0]
     message=bot.request_embed('d-'+entry['id'],dict(entry,status='pending'),catalog_gd)
     check('Discord request card clearly marks waiting quantity',any(f.name=='Awaiting restock' and '3' in f.value for f in message.fields))
+    catalog_gd.bank['Bank']['seen'][30001]=True
+    catalog_gd.item_class[30001]=(2,7)
+    count=len(bot.state.data['inbox'])
+    asyncio.run(bot.request_cmd.callback(interaction,'id:30001',1))
+    check('Discord direct requests reject sold-out historical equipment',len(bot.state.data['inbox'])==count)
 finally:
     bot.read_latest,bot.state,bot.flush_inbox,bot.post_or_edit=old_read,old_state,old_flush,old_post
 

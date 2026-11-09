@@ -22,6 +22,14 @@ existing snapshots and recorded bank donations seed history, but previously lost
 history cannot be reconstructed. Upgrade the Discord companion too for matching
 request rules, then sync and `/reload` on the bank/officer character.
 
+Sold-out weapons and armor are hidden from the bank catalog and request pickers;
+they reappear when restocked. Other classified supplies remain available for
+restock requests. Historical items without category metadata wait for item data
+instead of appearing as unknown equipment. Bank filters combine item category,
+**In stock**, **Available now**, **Awaiting restock** and quality; **Reset** clears
+the filters and search. Available now subtracts open requests; In stock shows
+physically recorded quantities even when already requested.
+
 The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
 
 Guild map markers now use circular class icons. `/epu map` also offers round dots.
