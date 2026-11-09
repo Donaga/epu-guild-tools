@@ -91,6 +91,7 @@ ns.FillCommunityDetails=function(kind,key,det)
         det:Buttons({{"Choose playstyle",function() Open("guideoptions","options") end}})
       end
       det:Text("Start here",C.gold)
+      if r.notice then det:Text(r.notice,C.gold) end
       det:Text(r.summary)
       det:Buttons({{"Copy guide link",function() ns.ShowGuideLink(r.id) end,accent=true}})
       det:Text("Paste the link into your browser to read the full guide.",C.muted)
@@ -119,6 +120,7 @@ ns.FillCommunityDetails=function(kind,key,det)
     local s=ns.GuideState(); local bracket,label=ns.GuideBracket(r,p); local progress=s.progress[key] or {}
     det:Reset(nil,nil,r.title,r.publisher.." · "..r.author)
     det:Text(label,C.gold); det:Text(r.summary)
+    if r.notice then det:Text(r.notice,C.gold) end
     if r.profession then
       det:Text("Start at your current skill section in the full guide. Check recipes you actually know, the trainer's current requirements and material prices before crafting. Ask a guild crafter or helper when a route does not fit your supplies.")
       det:Text("Reviewed coverage: skill "..(r.minSkill or 1).."–"..(r.maxSkill or 300)..". Quantities in a route are estimates; no shopping list is generated automatically.",C.muted)

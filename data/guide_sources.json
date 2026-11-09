@@ -8,20 +8,22 @@
     "No fixed talent allocation, quest waypoint or bulk shopping list is copied or automatically applied.",
     "Method early crafting routes are capped at skill 224 where the author describes coverage through 225.",
     "Automatic source health checks do not count as a content review.",
-    "Official tuning announced for November 10 requires renewed content checks after it lands."
+    "Official tuning announced for November 10 requires renewed content checks after it lands.",
+    "2026-11-09: Rechecked source text and official tuning. Corrected focused class-path labels, partial Skinning/Herbalism coverage and Leatherworking beta status. November 10 tuning remains announced, not confirmed live. Nine automated Mobalytics requests returned 403; relevant pages were read through the web tool instead. Icy Veins text remained unchanged despite raw hash changes."
   ],
   "patchSources": [
     "https://us.forums.blizzard.com/en/wow/t/class-tuning-incoming-november-10/2404092",
-    "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-6-2026/2403040"
+    "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-6-2026/2403040",
+    "https://us.forums.blizzard.com/en/wow/t/dungeon-enemy-xp-increased-november-8/2406595/1"
   ],
   "guides": [
     {
       "id": "moba-druid",
-      "title": "Druid leveling paths",
+      "title": "Feral Druid leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/druid-leveling-guide",
       "publisher": "Mobalytics",
       "author": "yumytv",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Feral-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -29,12 +31,14 @@
       "group": "druid-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "DRUID",
       "updated": "2026-11-04",
-      "pageHash": "f17c1031738e3f7fd4409a40587b2be0db4b9a26477daa1efe6e263a58140a66"
+      "pageHash": "f17c1031738e3f7fd4409a40587b2be0db4b9a26477daa1efe6e263a58140a66",
+      "focus": "Feral",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-druid",
@@ -56,7 +60,8 @@
       "class": "DRUID",
       "updated": "2026-11-07",
       "pageHash": "a1678f9105ece4aa8c10702ef99cef6e7781a3e88016bfe78f40257b32fae342",
-      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips."
+      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-druid",
@@ -118,7 +123,8 @@
       "class": "DRUID",
       "spec": "Balance",
       "updated": "2026-11-04",
-      "pageHash": "fb6518bdc1ad931b1a40f06a74329e37f518226581e5247350791f6be16177c4"
+      "pageHash": "fb6518bdc1ad931b1a40f06a74329e37f518226581e5247350791f6be16177c4",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-druid-feral",
@@ -140,7 +146,8 @@
       "class": "DRUID",
       "spec": "Feral",
       "updated": "2026-11-04",
-      "pageHash": "8e0d81a8a9acee5e333f72a80c27c8f077288c31a90a447869d9445a38dc9419"
+      "pageHash": "8e0d81a8a9acee5e333f72a80c27c8f077288c31a90a447869d9445a38dc9419",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-druid-restoration",
@@ -162,15 +169,16 @@
       "class": "DRUID",
       "spec": "Restoration",
       "updated": "2026-11-04",
-      "pageHash": "ae35871d7e8385fa12630d0179cb415561f258704f701a4c77b171378c9b7f69"
+      "pageHash": "ae35871d7e8385fa12630d0179cb415561f258704f701a4c77b171378c9b7f69",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-hunter",
-      "title": "Hunter leveling paths",
+      "title": "Beast Mastery Hunter leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/hunter-leveling-guide",
       "publisher": "Mobalytics",
       "author": "Feor",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Beast Mastery-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -178,11 +186,13 @@
       "group": "hunter-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "HUNTER",
-      "updated": "2026-11-07"
+      "updated": "2026-11-08",
+      "focus": "Beast Mastery",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-hunter",
@@ -198,13 +208,14 @@
       "group": "hunter-leveling",
       "priority": 2,
       "status": "prelaunch",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "HUNTER",
-      "updated": "2026-11-03",
-      "pageHash": "0370a6508da0a0fa9b7b3fd32a887561919452fa090f15415d701e542ae57744",
-      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips."
+      "updated": "2026-11-08",
+      "pageHash": "e9e541c92eb4e5ae2e5d9f9c5038cc3c7a1c70f3adf8d923b770f3ae4a940981",
+      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-hunter",
@@ -266,7 +277,8 @@
       "class": "HUNTER",
       "spec": "Beast Mastery",
       "updated": "2026-11-04",
-      "pageHash": "288fe8e782755f774fee0729137948af6588f13f910f0fbe11ee9ca3d35e45e2"
+      "pageHash": "288fe8e782755f774fee0729137948af6588f13f910f0fbe11ee9ca3d35e45e2",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-hunter-marksmanship",
@@ -288,7 +300,8 @@
       "class": "HUNTER",
       "spec": "Marksmanship",
       "updated": "2026-11-04",
-      "pageHash": "28b33755d192d7835dfdb713b3afb2b65cdf999f39269b63305a7a6858795285"
+      "pageHash": "28b33755d192d7835dfdb713b3afb2b65cdf999f39269b63305a7a6858795285",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-hunter-survival",
@@ -310,15 +323,16 @@
       "class": "HUNTER",
       "spec": "Survival",
       "updated": "2026-11-04",
-      "pageHash": "d5efa5586f4901910bc7ae0feb392ab85c40eddccece48c115886d7644985ad8"
+      "pageHash": "d5efa5586f4901910bc7ae0feb392ab85c40eddccece48c115886d7644985ad8",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-mage",
-      "title": "Mage leveling paths",
+      "title": "Frost Mage leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/mage-leveling-guide",
       "publisher": "Mobalytics",
       "author": "Asuna_qt",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Frost-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -326,12 +340,14 @@
       "group": "mage-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "MAGE",
       "updated": "2026-11-04",
-      "pageHash": "4a5ee7a76a3b83c897224b15deba89653c728e6a5cf62b5e0effe2ecedc48223"
+      "pageHash": "4a5ee7a76a3b83c897224b15deba89653c728e6a5cf62b5e0effe2ecedc48223",
+      "focus": "Frost",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-mage",
@@ -347,13 +363,14 @@
       "group": "mage-leveling",
       "priority": 2,
       "status": "prelaunch",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "MAGE",
-      "updated": "2026-11-03",
-      "pageHash": "f3702dbf1148431dea008a4208f469b3e42056d2becdb3d225a24b992f97c8ea",
-      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips."
+      "updated": "2026-11-08",
+      "pageHash": "58a52c7b064fa78107b291f1871217124467ac55afd23383f2b532adc8c2e95b",
+      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-mage",
@@ -415,7 +432,8 @@
       "class": "MAGE",
       "spec": "Arcane",
       "updated": "2026-11-04",
-      "pageHash": "a915782275fd13eae7e13535f9e86a0ac47175e86ee1235a7a202cde01ddd760"
+      "pageHash": "a915782275fd13eae7e13535f9e86a0ac47175e86ee1235a7a202cde01ddd760",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-mage-fire",
@@ -437,7 +455,8 @@
       "class": "MAGE",
       "spec": "Fire",
       "updated": "2026-11-04",
-      "pageHash": "582a412bbc5f211ccff859846c904fc5535f5562dbace902434beceed6877045"
+      "pageHash": "582a412bbc5f211ccff859846c904fc5535f5562dbace902434beceed6877045",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-mage-frost",
@@ -459,15 +478,16 @@
       "class": "MAGE",
       "spec": "Frost",
       "updated": "2026-11-04",
-      "pageHash": "f68ee7bfd38e8f194a15f591842b563dfb595d9e4ba5079784cf0c54e07f53c9"
+      "pageHash": "f68ee7bfd38e8f194a15f591842b563dfb595d9e4ba5079784cf0c54e07f53c9",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-paladin",
-      "title": "Paladin leveling paths",
+      "title": "Retribution Paladin leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/paladin-leveling-guide",
       "publisher": "Mobalytics",
       "author": "yumytv",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Retribution-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -475,11 +495,13 @@
       "group": "paladin-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "PALADIN",
-      "updated": "2026-11-05"
+      "updated": "2026-11-09",
+      "focus": "Retribution",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-paladin",
@@ -495,12 +517,13 @@
       "group": "paladin-leveling",
       "priority": 2,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "PALADIN",
-      "updated": "2026-11-04",
-      "pageHash": "9bf33430f33052785d3885e021f4899cdd1f5e6c0053f2d2149712499f93b142"
+      "updated": "2026-11-09",
+      "pageHash": "1edc81fbf18b77d717162bbbaed0c5cf73a011deadeae4ea368b2570c8c501ed",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-paladin",
@@ -562,7 +585,8 @@
       "class": "PALADIN",
       "spec": "Holy",
       "updated": "2026-11-04",
-      "pageHash": "b2da5d0c49796e3053fad6f4ed3be26c9722ecf80d667f80be98c095e431a694"
+      "pageHash": "b2da5d0c49796e3053fad6f4ed3be26c9722ecf80d667f80be98c095e431a694",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-paladin-protection",
@@ -584,7 +608,8 @@
       "class": "PALADIN",
       "spec": "Protection",
       "updated": "2026-11-04",
-      "pageHash": "11f68e16a133bfa551709f74e2a70b8fe41e7e3744572918d9bede38075a8af3"
+      "pageHash": "11f68e16a133bfa551709f74e2a70b8fe41e7e3744572918d9bede38075a8af3",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-paladin-retribution",
@@ -606,15 +631,16 @@
       "class": "PALADIN",
       "spec": "Retribution",
       "updated": "2026-11-04",
-      "pageHash": "cbc651f72fd9cd8cd6c0ba224882957ef97ba52dc6181acddc40163cf4c1d154"
+      "pageHash": "cbc651f72fd9cd8cd6c0ba224882957ef97ba52dc6181acddc40163cf4c1d154",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-priest",
-      "title": "Priest leveling paths",
+      "title": "Shadow Priest leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/priest-leveling-guide",
       "publisher": "Mobalytics",
       "author": "Twicks",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Shadow-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -622,11 +648,13 @@
       "group": "priest-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "PRIEST",
-      "updated": "2026-11-04"
+      "updated": "2026-11-04",
+      "focus": "Shadow",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-priest",
@@ -647,7 +675,8 @@
       "maxLevel": 59,
       "class": "PRIEST",
       "updated": "2026-11-06",
-      "pageHash": "e1c6b73a5a9a8d86a707c0f78bceae6ddf9935ce6ae1bda612e1a8da0e0b4a24"
+      "pageHash": "e1c6b73a5a9a8d86a707c0f78bceae6ddf9935ce6ae1bda612e1a8da0e0b4a24",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-priest",
@@ -709,7 +738,8 @@
       "class": "PRIEST",
       "spec": "Discipline",
       "updated": "2026-11-04",
-      "pageHash": "0d8d14a205493d36048a9fb14a8ae4eb124c96bf9dac103c2855aedee23e019c"
+      "pageHash": "0d8d14a205493d36048a9fb14a8ae4eb124c96bf9dac103c2855aedee23e019c",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-priest-holy",
@@ -731,7 +761,8 @@
       "class": "PRIEST",
       "spec": "Holy",
       "updated": "2026-11-04",
-      "pageHash": "275bea61f6842068cdc408bbcff481fce32f79ca2b25227174fc37360eb05e7b"
+      "pageHash": "275bea61f6842068cdc408bbcff481fce32f79ca2b25227174fc37360eb05e7b",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-priest-shadow",
@@ -753,15 +784,16 @@
       "class": "PRIEST",
       "spec": "Shadow",
       "updated": "2026-11-04",
-      "pageHash": "d8a28b83e4ed06fd4e5c4d64908e7e2735d33369b2c0261a4ddc530321fb440a"
+      "pageHash": "d8a28b83e4ed06fd4e5c4d64908e7e2735d33369b2c0261a4ddc530321fb440a",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-rogue",
-      "title": "Rogue leveling paths",
+      "title": "Combat Rogue leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/rogue-leveling-guide",
       "publisher": "Mobalytics",
       "author": "Djexde",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Combat-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -769,11 +801,13 @@
       "group": "rogue-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "ROGUE",
-      "updated": "2026-11-05"
+      "updated": "2026-11-05",
+      "focus": "Combat",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-rogue",
@@ -794,7 +828,8 @@
       "maxLevel": 59,
       "class": "ROGUE",
       "updated": "2026-11-07",
-      "pageHash": "0cb0c13390d7d934afe4a020bc0f82e442f6548d8bf82694c20ac8cc00d6fa22"
+      "pageHash": "0cb0c13390d7d934afe4a020bc0f82e442f6548d8bf82694c20ac8cc00d6fa22",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-rogue",
@@ -856,7 +891,8 @@
       "class": "ROGUE",
       "spec": "Assassination",
       "updated": "2026-11-04",
-      "pageHash": "378501b3bb472a5f092cfccd0f15470d8b5d97655358865fd642c2aa86d06adf"
+      "pageHash": "378501b3bb472a5f092cfccd0f15470d8b5d97655358865fd642c2aa86d06adf",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-rogue-combat",
@@ -878,7 +914,8 @@
       "class": "ROGUE",
       "spec": "Combat",
       "updated": "2026-11-04",
-      "pageHash": "5d65f8940805ddbf55685a74e6f148d1cf644adade4c339aff0e82b49966c9e0"
+      "pageHash": "5d65f8940805ddbf55685a74e6f148d1cf644adade4c339aff0e82b49966c9e0",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-rogue-subtlety",
@@ -900,15 +937,16 @@
       "class": "ROGUE",
       "spec": "Subtlety",
       "updated": "2026-11-04",
-      "pageHash": "68b194feb20b57da897303028e15803a6e080f00d7d7bfd0587548c60859f963"
+      "pageHash": "68b194feb20b57da897303028e15803a6e080f00d7d7bfd0587548c60859f963",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-shaman",
-      "title": "Shaman leveling paths",
+      "title": "Enhancement Shaman leveling path",
       "url": "https://mobalytics.gg/wow-forever/classes/shaman-leveling-guide",
       "publisher": "Mobalytics",
       "author": "Tiqqle",
-      "summary": "Creator-authored leveling rotations and talent paths for this class. Use the level controls in the full guide.",
+      "summary": "A Enhancement-focused leveling path with talent and rotation sections. Use the source level controls; this is not a guide to every specialization of the class.",
       "topics": [
         "leveling",
         "talents"
@@ -916,11 +954,13 @@
       "group": "shaman-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "SHAMAN",
-      "updated": "2026-11-06"
+      "updated": "2026-11-08",
+      "focus": "Enhancement",
+      "notice": "Blizzard announced Enhancement stat changes for November 10 and advises collecting Strength/Attack Power gear now. This source still ranks Intellect first; recheck gearing after tuning. The changes are not yet confirmed live. November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-shaman",
@@ -936,13 +976,14 @@
       "group": "shaman-leveling",
       "priority": 2,
       "status": "prelaunch",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "SHAMAN",
-      "updated": "2026-11-03",
-      "pageHash": "54db5847cfead38ba884097945876b3d914f44d186f775e60d3bdcd0481b5899",
-      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips."
+      "updated": "2026-11-08",
+      "pageHash": "28a37d55266d1c655a07208adafbc11adadddc3e859bf424c50f198570b25762",
+      "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-shaman",
@@ -1004,7 +1045,8 @@
       "class": "SHAMAN",
       "spec": "Elemental",
       "updated": "2026-11-04",
-      "pageHash": "0a22e401e24d1a4685d97d436f103099ef905a27a25dee0e4d33f62c9f0cf503"
+      "pageHash": "0a22e401e24d1a4685d97d436f103099ef905a27a25dee0e4d33f62c9f0cf503",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-shaman-enhancement",
@@ -1020,13 +1062,14 @@
       "group": "shaman-focus",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "SHAMAN",
       "spec": "Enhancement",
       "updated": "2026-11-04",
-      "pageHash": "491e1fdcfda5a6508ec853ae7ab2cf16e864e3455bd38c030988d1db7b513bd4"
+      "pageHash": "491e1fdcfda5a6508ec853ae7ab2cf16e864e3455bd38c030988d1db7b513bd4",
+      "notice": "Blizzard announced Enhancement stat changes for November 10 and advises collecting Strength/Attack Power gear now. Recheck this build and gearing after the hotfix; announced changes are not yet confirmed live. November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-shaman-restoration",
@@ -1048,7 +1091,8 @@
       "class": "SHAMAN",
       "spec": "Restoration",
       "updated": "2026-11-04",
-      "pageHash": "260df27c926bed0141b7e52e444cccf14fd39722393082918c23ab19ee5e2ef8"
+      "pageHash": "260df27c926bed0141b7e52e444cccf14fd39722393082918c23ab19ee5e2ef8",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-warlock",
@@ -1068,7 +1112,8 @@
       "minLevel": 1,
       "maxLevel": 59,
       "class": "WARLOCK",
-      "updated": "2026-11-06"
+      "updated": "2026-11-06",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-warlock",
@@ -1084,12 +1129,13 @@
       "group": "warlock-leveling",
       "priority": 2,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "WARLOCK",
-      "updated": "2026-11-04",
-      "pageHash": "9a40e023a60db910a6087a103cf79d34b9ab89791313e8108da2a9ac43d5844c"
+      "updated": "2026-11-08",
+      "pageHash": "c29d5447d1b5d3baf2adcb18fbe41d0fc048ae6f8e2231cd75aa9c1d0f60e25a",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-warlock",
@@ -1151,7 +1197,8 @@
       "class": "WARLOCK",
       "spec": "Affliction",
       "updated": "2026-11-04",
-      "pageHash": "86819049204d0afc879fc463e56e708b82b9a921a98acbf99d01fc82eaab3944"
+      "pageHash": "86819049204d0afc879fc463e56e708b82b9a921a98acbf99d01fc82eaab3944",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-warlock-demonology",
@@ -1173,7 +1220,8 @@
       "class": "WARLOCK",
       "spec": "Demonology",
       "updated": "2026-11-04",
-      "pageHash": "29a46a7e7212944fbe0171701cf5899ed0ddbc34759dc57acc0a610d5e18d15e"
+      "pageHash": "29a46a7e7212944fbe0171701cf5899ed0ddbc34759dc57acc0a610d5e18d15e",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-warlock-destruction",
@@ -1195,7 +1243,8 @@
       "class": "WARLOCK",
       "spec": "Destruction",
       "updated": "2026-11-04",
-      "pageHash": "2995da36f38aca6c17ae17a4ce9a8b85dbd93f7eaabbfbc81d6414928f5b4e52"
+      "pageHash": "2995da36f38aca6c17ae17a4ce9a8b85dbd93f7eaabbfbc81d6414928f5b4e52",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "moba-warrior",
@@ -1211,12 +1260,13 @@
       "group": "warrior-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "WARRIOR",
-      "updated": "2026-11-06",
-      "pageHash": "4dded1bd8062d3de4d4efb2fe0af6595430e7e9c2f24c8306ca7adfe957c7676"
+      "updated": "2026-11-09",
+      "pageHash": "4dded1bd8062d3de4d4efb2fe0af6595430e7e9c2f24c8306ca7adfe957c7676",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "method-warrior",
@@ -1232,12 +1282,13 @@
       "group": "warrior-leveling",
       "priority": 2,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "WARRIOR",
       "updated": "2026-11-04",
-      "pageHash": "d8c42f1392dc822f6f9b19760d69ce3dd31312e24b2574cdbd5f4c2ce9e3d0fd"
+      "pageHash": "fcc4362b7320f35fd704adbcd4a3e23d28a897ff7bbd41af1a7c46699f2c3e93",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "overview-warrior",
@@ -1299,7 +1350,8 @@
       "class": "WARRIOR",
       "spec": "Arms",
       "updated": "2026-11-04",
-      "pageHash": "e43c07eba6c88435d424b38a64eab1644d0ed317b051c4d847b7057b3c14ca03"
+      "pageHash": "e43c07eba6c88435d424b38a64eab1644d0ed317b051c4d847b7057b3c14ca03",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-warrior-fury",
@@ -1321,7 +1373,8 @@
       "class": "WARRIOR",
       "spec": "Fury",
       "updated": "2026-11-04",
-      "pageHash": "8dbf137f54f5e371c967244d596025baa5af02aa1509f1eddb245086ba353070"
+      "pageHash": "8dbf137f54f5e371c967244d596025baa5af02aa1509f1eddb245086ba353070",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "spec-warrior-protection",
@@ -1343,7 +1396,8 @@
       "class": "WARRIOR",
       "spec": "Protection",
       "updated": "2026-11-04",
-      "pageHash": "07f91f99f5a0eab325f082a563f52ba89475821ddae9d0bd6ed77b04c7d0136b"
+      "pageHash": "07f91f99f5a0eab325f082a563f52ba89475821ddae9d0bd6ed77b04c7d0136b",
+      "notice": "November 8 hotfix: dungeon enemy kill XP increased by 50%. Older quest-versus-dungeon comparisons may predate this change."
     },
     {
       "id": "route-alchemy",
@@ -1607,12 +1661,12 @@
       "group": "enchanting-route",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 333,
-      "updated": "2026-11-07",
-      "pageHash": "ccb185a7f511ffe521ed5cb0704c2040ab579134c9f8213bccc46f7fea4c392e",
+      "updated": "2026-11-08",
+      "pageHash": "8cc20a81bfe007f9de95f7a0402b9b8f247b4dad2af62a8a7a464d12b81cb955",
       "maxSkill": 224
     },
     {
@@ -1890,20 +1944,20 @@
       "url": "https://www.method.gg/wow-forever/herbalism-in-wow-forever-leveling-guide-herbalism-items-enchants-trainers",
       "publisher": "Method",
       "author": "Roguery",
-      "summary": "An authored route with trainer and material sections. This entry is limited to the early skill range covered by the reviewed article.",
+      "summary": "Herbalism training and gathering routes through skill 205. The author explicitly describes later routes as untested speculation from beta; choose another route from skill 205.",
       "topics": [
         "professions"
       ],
       "group": "herbalism-route",
       "priority": 1,
-      "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "status": "beta",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 182,
       "updated": "2026-11-05",
       "pageHash": "99c817d908cb4cab7fc5b3546f6cb81c257cf295b5d88e2fea8b36e89296466f",
-      "maxSkill": 299
+      "maxSkill": 204
     },
     {
       "id": "reference-herbalism",
@@ -1973,14 +2027,14 @@
       "url": "https://www.method.gg/wow-forever/leatherworking-in-wow-forever-leveling-guide-and-trainers",
       "publisher": "Method",
       "author": "Tayder",
-      "summary": "An authored route with trainer and material sections. This entry is limited to the early skill range covered by the reviewed article.",
+      "summary": "A beta-derived Leatherworking route through skill 225. The author retains a pre-launch disclaimer and has not completed 225-300 testing; compare live trainer requirements.",
       "topics": [
         "professions"
       ],
       "group": "leatherworking-route",
       "priority": 1,
-      "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "status": "beta",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 165,
@@ -2118,20 +2172,20 @@
       "url": "https://www.method.gg/wow-forever/skinning-in-wow-forever-leveling-guide-skinning-items-enchants-trainers",
       "publisher": "Method",
       "author": "Tayder",
-      "summary": "An authored route with trainer and material sections. This entry is limited to the early skill range covered by the reviewed article.",
+      "summary": "Trainer locations and an early Skinning route through skill 225. The author still marks the 225-300 extension as unfinished; choose a broader route from skill 225.",
       "topics": [
         "professions"
       ],
       "group": "skinning-route",
       "priority": 1,
-      "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "status": "prelaunch",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 393,
       "updated": "2026-11-06",
       "pageHash": "0645a5ce25195214ba81d1f32109b49caed3f189a7e789a6bc295e097023dd18",
-      "maxSkill": 299
+      "maxSkill": 224
     },
     {
       "id": "reference-skinning",
@@ -2208,12 +2262,12 @@
       "group": "tailoring-route",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-09",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 197,
-      "updated": "2026-11-05",
-      "pageHash": "957556996124703b68add702c8cc351d5fb90bab7b55ab2c7638cab0b82c649f",
+      "updated": "2026-11-09",
+      "pageHash": "55a03daab031b88cc26aac7bed942a3908088e15f05e05deffd0b4a7406d4baf",
       "maxSkill": 224
     },
     {

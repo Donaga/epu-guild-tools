@@ -17,6 +17,7 @@ for label,edit in [
     ('invalid level',lambda r:r.update(maxLevel=70)),
     ('invalid profession',lambda r:r.update(profession=999)),
     ('bad priority',lambda r:r.update(priority=0)),
+    ('other-class source focus',lambda r:r.update(focus='Arms')),
 ]:
     bad=copy.deepcopy(data);edit(bad['guides'][0])
     try:build.validate(bad);rejected=False
@@ -128,5 +129,19 @@ for class_name in sorted(build.CLASSES):
     A.rt.globals()['testClass']=class_name
     A.ex("UnitClass=function() return testClass,testClass end; UnitLevel=function() return 20 end; __ns.GuideState().savedOnly=false")
     check(class_name+' has only its own class guides',A.ev("(function() local count=0 for _,r in ipairs(__ns.PersonalGuides()) do if r.class then if r.class~=testClass then return false end count=count+1 end end return count>=3 end)()"))
+F=Client('Chris Baker')
+F.ex("UnitClass=function() return 'Mage','MAGE' end; UnitLevel=function() return 20 end; GetProfessions=nil; GetProfessionInfo=nil; GetNumSkillLines=function() return 0 end; __ns.SetGuideSaved('moba-mage',true); __ns.SetGuideFocus('Fire')")
+check('focused leveling sources cannot leak into a different chosen focus',F.ev('__ns.PersonalGuide("moba-mage")') is None)
+check('saved guides cannot bypass source focus',F.ev("(function() for _,r in ipairs(__ns.PersonalGuides(nil,true)) do if r.id=='moba-mage' then return false end end return true end)()"))
+F.ex("__ns.SetGuideFocus(nil)")
+check('unchosen focus still offers clearly labelled class leveling paths',F.ev('__ns.PersonalGuide("moba-mage").title')=='Frost Mage leveling path')
+F.ex("C_SkillInfo={GetSkillLineInfoByID=function(id) if id==182 then return {skillID=id,name='Herbalism',rank=__rank or 204} elseif id==393 then return {skillID=id,name='Skinning',rank=225} end end}")
+check('Skinning 225 no longer recommends an unfinished early route',F.ev('__ns.PersonalGuide("method-prof-skinning")') is None)
+check('Herbalism early route ends before speculative section',F.ev('__ns.PersonalGuide("method-prof-herbalism")') is not None)
+F.ex('__rank=205')
+check('Herbalism 205 uses a broader route',F.ev('__ns.PersonalGuide("method-prof-herbalism")') is None and F.ev('__ns.PersonalGuide("route-herbalism")') is not None)
+F.ex("UnitClass=function() return 'Shaman','SHAMAN' end; __ns.SetGuideFocus('Enhancement')")
+check('recommended Enhancement route carries announced-tuning caution', 'not yet confirmed live' in F.ev('__ns.GuideChoice("leveling").recommended.notice'))
+check('leveling route notes the confirmed dungeon XP hotfix','dungeon enemy kill XP increased by 50%' in F.ev('__ns.GuideChoice("leveling").recommended.notice'))
 print('Guide checks:',check.failed,'failed')
 sys.exit(bool(check.failed))
