@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import glob
+import hashlib
 import io
 import json
 import os
@@ -465,6 +466,64 @@ class GuildData:
             names.setdefault(row["id"], row["name"])
         return names
 
+    def bank_catalog(self) -> dict[int, str]:
+        ids = set()
+        for holder, snapshot in self.bank.items():
+            ids.update(int(i) for i, n in (snapshot.get('items') or {}).items() if int(n or 0) > 0)
+            ids.update(int(i) for i, seen in (snapshot.get('seen') or {}).items() if seen is True)
+        for d in (self.g.get('donations') or {}).values():
+            if d.get('item') and int(d.get('n') or 0) > 0 and (d.get('to') in self.bank or d.get('to') == 'Guild Bank'):
+                ids.add(int(d['item']))
+        return {i: self.item_name(i) for i in ids}
+
+    def bank_request_records(self, queued=()):
+        records = dict(self.requests)
+        for entry in queued:
+            if entry.get('kind') == 'request' and 'd-' + entry['id'] not in records:
+                records['d-' + entry['id']] = dict(entry, status='pending')
+        return records
+
+    def bank_request_stock(self, item_id, queued=()):
+        held, asked = self.bank_count(item_id), 0
+        for r in self.bank_request_records(queued).values():
+            if status_of(r) not in ('pending', 'approved'):
+                continue
+            remaining = max(0, int(r.get('qty') or 0) - int(r.get('delivered') or 0))
+            if not is_craft(r) and r.get('item') == item_id:
+                asked += remaining
+            elif is_craft(r) and status_of(r) == 'approved' and r.get('mats') == 'bank':
+                asked += sum(n * remaining for i, n in self.mats_for(r.get('key')) if i == item_id)
+        return held, asked, max(0, held - asked)
+
+    def requestable_items(self, queued=()):
+        out = []
+        for item_id, name in self.bank_catalog().items():
+            held, asked, free = self.bank_request_stock(item_id, queued)
+            out.append(dict(id=item_id, name=name, count=held, requested=asked, available=free))
+        return sorted(out, key=lambda r: (r['available'] == 0, r['count'] == 0, r['name'].lower(), r['id']))
+
+    def request_restock(self, rid, request=None, queued=()):
+        records = self.bank_request_records(queued)
+        if request is not None:
+            records[rid] = request
+        r = records.get(rid)
+        if not r or is_craft(r) or status_of(r) not in ('pending', 'approved'):
+            return 0
+        pool, queue = self.bank_count(r.get('item')), []
+        for key, value in records.items():
+            if status_of(value) not in ('pending', 'approved'):
+                continue
+            need = max(0, int(value.get('qty') or 0) - int(value.get('delivered') or 0))
+            if not is_craft(value) and value.get('item') == r.get('item'):
+                queue.append((status_of(value) != 'approved', value.get('t') or 0, key, need))
+            elif is_craft(value) and status_of(value) == 'approved' and value.get('mats') == 'bank':
+                pool = max(0, pool - sum(n * need for i, n in self.mats_for(value.get('key')) if i == r.get('item')))
+        for _, _, key, need in sorted(queue):
+            if key == rid:
+                return max(0, need - pool)
+            pool = max(0, pool - need)
+        return 0
+
     def shopping_list(self) -> list[dict]:
         """Same rule as the addon's Shopping tab: need target plus approved
         requests, minus what's banked."""
@@ -660,14 +719,22 @@ class State:
     def posted(self, rid: str) -> dict | None:
         return self.data["posted"].get(rid)
 
-    def set_posted(self, rid: str, message_id: int, status: str):
+    def set_posted(self, rid: str, message_id: int, status: str, signature=None):
         self.data["posted"][rid] = {"message_id": message_id, "status": status}
+        if signature is not None:
+            self.data['posted'][rid]['signature']=signature
         self.save()
 
 
 # ---------------------------------------------------------------------------
 # Change detection
 # ---------------------------------------------------------------------------
+def request_signature(gd, rid, r, queued=()):
+    stock = None
+    if gd and r.get('item') and not is_craft(r) and status_of(r) in ('pending','approved'):
+        stock = [gd.bank_count(r['item']),gd.request_restock(rid,r,queued)]
+    return hashlib.sha256(json.dumps([r,stock],sort_keys=True,ensure_ascii=True).encode()).hexdigest()
+
 def diff(gd: GuildData, state: State) -> dict:
     """What to post or edit in Discord since the last read.
 
@@ -684,7 +751,7 @@ def diff(gd: GuildData, state: State) -> dict:
         if posted is None:
             if st in ("pending", "approved") or (primed and st != "cancelled"):
                 out["new_requests"].append((rid, r))
-        elif posted.get("status") != st:
+        elif posted.get("status") != st or (posted.get('signature') is not None and posted['signature']!=request_signature(gd,rid,r,state.data['inbox'])):
             out["changed_requests"].append((rid, r))
     seen = set(state.data.get("donations_seen", []))
     new_seen = []

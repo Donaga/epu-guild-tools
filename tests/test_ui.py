@@ -101,6 +101,7 @@ B.ex(f'local d = __ns.G().donations["{did}"]; d.void = nil; d.u = d.u + 5; __ns.
 check("member can't un-void", A.ev(f'__ns.G().donations["{did}"].void') == True)
 
 # --- officer policy: max open requests ---
+for c in (A,B): c.ex('__ns.G().bank["Chris Baker"].seen[118]=true; __ns.G().bank["Chris Baker"].seen[858]=true')
 A.ex('__ns.SetPolicy("maxOpen", 1)'); tick(3)
 check("policy syncs", B.ev('__ns.G().policy.maxOpen') == 1)
 B.ex('__ns.NewRequest(118, 1, "")'); tick(2)

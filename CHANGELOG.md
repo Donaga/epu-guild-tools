@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0
+
+- Limit bank requests to currently or previously stocked items, while allowing sold-out items and excess quantities to wait for restock.
+- Preserve bank item history across scans, depletion, retirement and legacy snapshot updates, and backfill recorded bank donations.
+- Show quantities in the bank browser and request pickers; subtract open bank requests and approved bank-paid crafting materials from available stock.
+- Mark waiting quantities on request rows/details and Discord messages. Recheck quantities when stock or requests change; do not claim live reservations.
+- Apply matching catalog rules to Discord autocomplete and direct `/request` entries; include unimported Discord requests without double counting.
+- Refresh Discord request messages when stock changes, preserve rejected form drafts, and validate starter-kit bank items before creating a project.
+- Remove the full-game item download from bot startup. Craft requests and needs still support items outside bank history.
+
 ## 0.14.1
 
 - Simplify Your guides to one choice per task: level your class, choose talents, and improve each learned profession.

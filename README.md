@@ -11,6 +11,17 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 
 Guild activities include quest help, dungeon groups, voluntary helpers and starter-kit templates. Officers can combine a member’s approved bank requests into one mail draft.
 
+Bank requests are limited to items currently or previously stocked by the guild
+bank. The Bank page and request pickers show quantities; sold-out items remain
+available for waiting requests. Open bank requests and approved bank-paid craft
+materials reduce the displayed available count. Requests needing more stock say
+**Awaiting restock**. Counts are estimates from the latest shared bank snapshots,
+not live reservations; approval and delivery remain manual. Craft requests are
+separate. New stock-history metadata retains item IDs after depletion/retirement;
+existing snapshots and recorded bank donations seed history, but previously lost
+history cannot be reconstructed. Upgrade the Discord companion too for matching
+request rules, then sync and `/reload` on the bank/officer character.
+
 The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
 
 Use `/epu guides` for **Your guides**: Forever class, leveling, talent and profession

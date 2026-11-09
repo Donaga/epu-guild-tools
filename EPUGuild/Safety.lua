@@ -176,6 +176,11 @@ ns.Merge = function(sender, b, catchingUp)
       local ok = type(key)=="string" and type(s)=="table" and ns.StampOK(s.v) and type(s.items)=="table"
       if ok then
         for id,n in pairs(s.items) do if not ns.PositiveInt(id) or not ns.PositiveInt(n) then ok=false; break end end
+        if s.seen~=nil then
+          if type(s.seen)~='table' then ok=false else
+            for id,value in pairs(s.seen) do if not ns.PositiveInt(id) or value~=true then ok=false; break end end
+          end
+        end
       end
       if ok and (s.money==nil or (type(s.money)=="number" and s.money>=0 and s.money<=1e15)) then clean.bank[key]=s end
     end
