@@ -363,7 +363,7 @@ local HELP = {
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
-  "|cffffd100/epu activities|r - quest help, dungeon groups, helpers and starter kits",
+  "|cffffd100/epu activities|r - scheduled activities, signups, quick help and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",

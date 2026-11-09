@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+- Make Activities the default guild board, with Dungeon, Leveling, Quest / elite help, Fishing, Profession, Farming and Other types. Preserve the quick-help boards, helpers and starter kits.
+- Add suggested level ranges, type/date filters and a local month picker with daily activity counts. Preserve local/server time displays, upcoming-event reminders and personal drafts.
+- Add Helper, Crafter and Mentor signup roles alongside Tank, Healer and DPS. Show participants, tentative responses and volunteer notes.
+- Add optional WoW guild-calendar drafts, completed with WoW's own Create button. Fall back to copyable title/details when the client does not support preparation. Never overwrite an open calendar draft or automatically publish.
+- Read attendees from the matching open WoW guild event, including members without EPU. Merge the local display by member, prefer calendar status and retain EPU roles/notes. Snapshots are session-only, expire after three minutes and are not relayed as other members' authored responses.
+- Offer explicit responses in both systems for your own signup while the linked event is open. Await WoW confirmation; never modify another member's calendar status. Titles, times, cancellation and event approval still require review in both calendars.
+- Validate native links using an EPU description marker, organiser, title and realm start time. Do not silently match unrelated or moved events.
+
 ## 0.16.2
 
 - Hide sold-out weapons and armor from the bank catalog and request pickers in game and Discord. Keep their history so they return automatically when restocked; preserve existing requests.

@@ -52,6 +52,8 @@ jobs:
         run: python tests/test_donation_bags.py
       - name: Calendar catch-up and personal notifications
         run: python tests/test_community.py
+      - name: Typed activities and native calendar signups
+        run: python tests/test_activity_calendar.py
       - name: Opt-in quest matching
         run: python tests/test_quest_matching.py
       - name: Casual guild activities and starter kits

@@ -2,6 +2,9 @@
 -- in session memory; neither the event store nor the companion saves that data.
 local ADDON, ns = ...
 local DAY=86400
+ns.EVENT_TYPES={dungeon="Dungeon",leveling="Leveling",quest="Quest / elite help",fishing="Fishing",profession="Profession",farming="Farming",other="Other"}
+ns.EVENT_TYPE_ORDER={"dungeon","leveling","quest","fishing","profession","farming","other"}
+ns.EVENT_ROLES={t="Tank",h="Healer",d="DPS",g="Helper",c="Crafter",m="Mentor"}
 for _,f in ipairs({"guildEvents","eventResponses"}) do ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]=f end
 local baselines={}
 function ns.CommunityState()
@@ -35,11 +38,14 @@ local function ValidEvent(id,r)
     and ns.StampOK(r.created) and r.created<=r.t and Int(r.starts,r.created-300,r.t+28*DAY)
     and Int(r.ends,r.starts+15*60,r.starts+8*3600) and Int(r.slots,2,40)
     and (r.status=="scheduled" or r.status=="cancelled")
+    and (r.kind==nil or ns.EVENT_TYPES[r.kind]~=nil)
+    and (r.minLevel==nil or Int(r.minLevel,1,100))
+    and (r.maxLevel==nil or Int(r.maxLevel,r.minLevel or 1,100))
 end
 local function ValidResponse(id,r)
   return Revision(r) and Text(r.event,180,true) and Text(r.who,80,true) and ns.Member(r.who)
     and id==r.event.."\030"..r.who and (r.state=="going" or r.state=="tentative" or r.state=="declined")
-    and (r.role=="t" or r.role=="h" or r.role=="d") and Text(r.note,160)
+    and ns.EVENT_ROLES[r.role]~=nil and Text(r.note,160)
 end
 local serial=0
 local pending={}
@@ -65,11 +71,12 @@ function ns.SaveGuildEvent(opts,id)
   local starts=tonumber(opts.starts); local minutes=tonumber(opts.minutes)
   if not Int(starts,ns.Now()+60,ns.Now()+28*DAY) or not Int(minutes,15,480) then return ns.Print("Choose a future start within 28 days, lasting 15–480 minutes.") end
   local r={who=ns.me,by=ns.me,title=Clean(opts.title,80),note=Clean(opts.note,500),zone=Clean(opts.zone,80),
-    starts=starts,ends=starts+minutes*60,slots=tonumber(opts.slots) or 5,status="scheduled",created=cur and cur.created or ns.Now(),t=cur and cur.t or ns.Now()}
-  if not ValidEvent(id,r) then return ns.Print("Enter an event title and a planned group size from 2 to 40.") end
+    starts=starts,ends=starts+minutes*60,slots=tonumber(opts.slots) or 5,status="scheduled",created=cur and cur.created or ns.Now(),t=cur and cur.t or ns.Now(),
+    kind=opts.kind or (cur and cur.kind) or "other",minLevel=tonumber(opts.minLevel) or (cur and cur.minLevel) or 1,maxLevel=tonumber(opts.maxLevel) or (cur and cur.maxLevel) or 60}
+  if not ValidEvent(id,r) then return ns.Print("Choose an activity type, title, 2–40 players and a suggested level range from 1 to 100 (minimum no higher than maximum).") end
   g.guildEvents[id]=r; Publish("guildEvents",id,r)
   ns.FollowUpdates("event",id,true)
-  if not cur then ns.RespondGuildEvent(id,"going",((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d","") end
+  if not cur then ns.RespondGuildEvent(id,"going",r.kind=="dungeon" and (((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d") or "g","") end
   return id
 end
 function ns.CancelGuildEvent(id)
@@ -87,13 +94,17 @@ function ns.RespondGuildEvent(id,state,role,note)
   g.eventResponses[key]=r; Publish("eventResponses",key,r)
   ns.FollowUpdates("event",id,state~="declined"); return true
 end
-function ns.EventResponses(id)
+function ns.AddonEventResponses(id)
   local g=ns.CasualStore(); local out={}
   for _,r in pairs(g and g.eventResponses or {}) do if r.event==id and ns.Member(r.who) then out[#out+1]=r end end
   table.sort(out,function(a,b) return a.who<b.who end); return out
 end
+function ns.EventResponses(id)
+  local out=ns.AddonEventResponses(id)
+  return ns.WithCalendarResponses and ns.WithCalendarResponses(id,out) or out
+end
 function ns.EventCounts(id)
-  local n={going=0,tentative=0,declined=0,t=0,h=0,d=0}
+  local n={going=0,tentative=0,declined=0,t=0,h=0,d=0,g=0,c=0,m=0}
   for _,r in ipairs(ns.EventResponses(id)) do n[r.state]=n[r.state]+1; if r.state=="going" then n[r.role]=n[r.role]+1 end end
   return n
 end
@@ -112,7 +123,7 @@ end
 function ns.MergeCommunity(sender,b,trusted)
   local g=ns.CasualStore(); if not g then return false end
   local changed=false
-  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t"}},
+  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel"}},
     eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t"}}}
   for f,d in pairs(definitions) do
     if type(b[f])=="table" then
