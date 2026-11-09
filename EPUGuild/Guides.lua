@@ -82,6 +82,7 @@ function ns.GuideRelevant(r,p)
   if r.class and r.class~=p.class then return false end
   if p.level<(r.minLevel or 1) or p.level>(r.maxLevel or 60) then return false end
   if r.spec and r.spec~=p.focus then return false end
+  if r.focus and p.focus and r.focus~=p.focus then return false end
   if r.faction and r.faction~=p.faction then return false end
   if r.profession then
     local prof=p.professions[r.profession]

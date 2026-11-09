@@ -29,6 +29,24 @@ build 1.60.1.70790; a data snapshot is not proof of later tuning compatibility.
 Some general zone pages have stale or inconsistent ranges and were excluded.
 Do not substitute Classic, Season of Discovery or Retail advice for Forever.
 
+The November 9 review corrected Method Skinning to skill 224 and Herbalism to
+204: their later sections are explicitly unfinished or speculative. Leatherworking
+retains a beta disclaimer. A `focus` label identifies a class leveling path aimed
+at one playstyle; it remains a labelled option before a playstyle is chosen and
+is hidden when a different focus is chosen. A stricter `spec` entry requires a
+matching chosen/detected specialization. Saved guides bypass neither filter.
+Short `notice` fields flag verified conflicts or announced changes without
+inventing post-hotfix builds.
+
+November 10 Enhancement tuning remains announced as of this review. Blizzard
+advises collecting Strength/Attack Power equipment now; some linked material
+still prioritizes Intellect. Show the caution, then recheck after the hotfix.
+Do not guess new talent allocations. The full automated check found 98 accessible
+sources and nine Mobalytics HTTP 403 responses; blocked pages were checked with
+the web tool. No broken links were confirmed. Icy Veins text was unchanged even
+where raw-page hashes differed. Beta route table edits were read but no recipe
+quantities are copied into the addon.
+
 Player relevance is mandatory: current class, level, learned profession IDs and
 skill range, and matching talent focus for specialization entries. Never show
 other classes or unlearned professions through saved guides or alternatives.

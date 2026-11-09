@@ -9,6 +9,7 @@ TARGET=ROOT/'EPUGuild/GuideCatalog.lua'
 HOSTS={'www.method.gg','mobalytics.gg','www.icy-veins.com','www.wow-professions.com','www.60.tools','www.wowhead.com','forevermastery.com'}
 CLASSES={'DRUID','HUNTER','MAGE','PALADIN','PRIEST','ROGUE','SHAMAN','WARLOCK','WARRIOR'}
 PROFESSIONS={129,164,165,171,182,185,186,197,202,333,356,393}
+FOCUSES={'DRUID':{'Balance','Feral','Restoration'},'HUNTER':{'Beast Mastery','Marksmanship','Survival'},'MAGE':{'Arcane','Fire','Frost'},'PALADIN':{'Holy','Protection','Retribution'},'PRIEST':{'Discipline','Holy','Shadow'},'ROGUE':{'Assassination','Combat','Subtlety'},'SHAMAN':{'Elemental','Enhancement','Restoration'},'WARLOCK':{'Affliction','Demonology','Destruction'},'WARRIOR':{'Arms','Fury','Protection'}}
 
 def validate(data):
     if data.get('edition')!='Forever' or data.get('schema')!=1:raise ValueError('Unsupported guide registry')
@@ -21,6 +22,8 @@ def validate(data):
         if u.hostname not in {'www.60.tools','forevermastery.com'} and 'forever' not in u.path:raise ValueError('Wrong game edition')
         if r.get('class') not in CLASSES|{None} or r.get('profession') not in PROFESSIONS|{None}:raise ValueError('Unknown player filter')
         if r.get('spec') and not r.get('class'):raise ValueError('Specialization requires a class')
+        if r.get('focus') and r['focus'] not in FOCUSES.get(r.get('class'),set()):raise ValueError('Invalid source focus')
+        if r.get('notice') and (not isinstance(r['notice'],str) or len(r['notice'])>400):raise ValueError('Invalid source notice')
         if not isinstance(r.get('group'),str) or not r['group']:raise ValueError('Missing source group')
         if type(r.get('priority')) is not int or not 1<=r['priority']<=10:raise ValueError('Invalid source priority')
         if not r.get('class') and not r.get('profession') and not r.get('faction'):raise ValueError('Guide must have a relevance filter')

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1
+
+- Correct guide coverage: Method Skinning stops before skill 225 and Method Herbalism before skill 205, where their published routes become unfinished or explicitly speculative. Mark the Leatherworking source as beta-derived.
+- Label focused Mobalytics paths accurately and hide them when a different talent focus is selected, including saved sources.
+- Refresh verified publisher dates and add an Enhancement gearing caution for announced November 10 tuning; do not describe planned changes as already live.
+- Preserve character relevance, private bookmarks/notes and the simplified guide navigation. No game-state, map-reset or bot changes.
+
 ## 0.16.0
 
 - Replace square guild-map markers with circular class icons on the world map and minimap. Unknown classes use a round dot; `/epu map` can switch all markers to class-colored dots.
