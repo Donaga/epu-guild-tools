@@ -55,6 +55,12 @@ function M:GetParent() return self._parent end
 function M:SetParent(p) self._parent = p end
 function M:CreateFontString() local f = NewMock(); f._parent = self; return f end
 function M:CreateTexture() local t = NewMock(); t._parent = self; return t end
+function M:SetTexture(value) self._texture=value end
+function M:GetTexture() return self._texture end
+function M:SetTexCoord(...) self._coords={...} end
+function M:GetTexCoord() return unpack(self._coords or {0,1,0,1}) end
+function M:SetVertexColor(...) self._color={...} end
+function M:GetVertexColor() return unpack(self._color or {1,1,1,1}) end
 function NewMock() local o = setmetatable({ _scripts = {}, _events = {} }, M); return o end
 
 function CreateFrame(kind, name, parent, template)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0
+
+- Replace square guild-map markers with circular class icons on the world map and minimap. Unknown classes use a round dot; `/epu map` can switch all markers to class-colored dots.
+- Enable location sharing and both map displays by default. On the first load of this update, reset those map settings and the icon style to on for all upgraded installations, including prior off settings, as requested for the guild rollout.
+- Show a one-time login notice explaining that outdoor locations are shared and where to change it. Preserve each player's choices after this initial reset.
+- Keep location expiry, instance withdrawal, private session-only coordinates, paced traffic, hover information and click-to-whisper behavior.
+
 ## 0.15.0
 
 - Limit bank requests to currently or previously stocked items, while allowing sold-out items and excess quantities to wait for restock.

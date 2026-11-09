@@ -1,10 +1,27 @@
--- Guild positions are live, voluntary and session-only. Never sync or save them.
+-- Guild positions are live and session-only. Never sync or save them.
 local ADDON, ns = ...
 local locations, markers, pool = {}, {}, {}
 local TTL, INTERVAL, HEARTBEAT = 120, 30, 60
 local last, lastSent, guild, panel
 local ref = "EPUGuildLocations"
 ns.guildLocations = locations
+
+-- One reset requested for the guild's rollout. Thereafter preserve individual
+-- choices, including explicit opt-outs, across reloads and future updates.
+function ns.ApplyGuildMapDefaults()
+  local s=ns.db and ns.db.settings; if not s then return false end
+  local reset=(tonumber(s.guildMapSetup) or 0)<1
+  for _,key in ipairs({'shareLocation','guildWorldMap','guildMinimap','guildClassIcons'}) do
+    if reset or s[key]==nil then s[key]=true end
+  end
+  if reset then s.guildMapSetup=1 end
+  return reset
+end
+local circle='Interface\\CharacterFrame\\TempPortraitAlphaMask'
+local classes='Interface\\TargetingFrame\\UI-Classes-Circles'
+-- Classic class atlas layout; used when the global table is unavailable.
+local classCoords={WARRIOR={0,0.25,0,0.25},MAGE={0.25,0.5,0,0.25},ROGUE={0.5,0.75,0,0.25},DRUID={0.75,1,0,0.25},
+  HUNTER={0,0.25,0.25,0.5},SHAMAN={0.25,0.5,0.25,0.5},PRIEST={0.5,0.75,0.25,0.5},WARLOCK={0.75,1,0.25,0.5},PALADIN={0,0.25,0.5,0.75}}
 
 local function Setting(key) return ns.db and ns.db.settings[key] end
 local function Number(n,lo,hi)
@@ -51,12 +68,13 @@ local function Tooltip(self)
   GameTooltip:AddLine("Players may be in another layer or phase.",0.7,0.7,0.7)
   GameTooltip:Show()
 end
-local function Icon()
+local function Icon(size)
   local f=CreateFrame("Button",nil,UIParent)
-  f:SetSize(14,14)
+  f:SetSize(size,size)
+  f.rim=f:CreateTexture(nil,'BACKGROUND')
+  f.rim:SetAllPoints(); f.rim:SetTexture(circle); f.rim:SetVertexColor(0.05,0.05,0.05,1)
   f.dot=f:CreateTexture(nil,"ARTWORK")
-  f.dot:SetAllPoints()
-  f.dot:SetTexture("Interface\\Buttons\\WHITE8X8")
+  f.dot:SetPoint('CENTER'); f.dot:SetSize(size-2,size-2)
   f:SetScript("OnEnter",Tooltip)
   f:SetScript("OnLeave",function() GameTooltip:Hide() end)
   f:SetScript("OnClick",function(self)
@@ -76,17 +94,23 @@ function ns.RefreshGuildMap()
     else
       local pair=markers[name]
       if not pair then
-        pair=table.remove(pool) or {world=Icon(),mini=Icon()}
+        pair=table.remove(pool) or {world=Icon(20),mini=Icon(18)}
         markers[name]=pair
         pair.world.member=name; pair.mini.member=name
       end
       -- Re-register only on movement/settings change, not each expiry tick.
-      local key=p.map..":"..p.x..":"..p.y..":"..tostring(Setting("guildWorldMap"))..":"..tostring(Setting("guildMinimap"))
+      local key=p.map..":"..p.x..":"..p.y..":"..tostring(Setting("guildWorldMap"))..":"..tostring(Setting("guildMinimap"))..':'..tostring(Setting('guildClassIcons'))..':'..tostring(r.classFile)
       if pair.key~=key then
         pins:RemoveWorldMapIcon(ref,pair.world); pins:RemoveMinimapIcon(ref,pair.mini)
         local color=RAID_CLASS_COLORS and RAID_CLASS_COLORS[r.classFile]
+        local coords=r.classFile and ((CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[r.classFile]) or classCoords[r.classFile])
         for _,f in ipairs({pair.world,pair.mini}) do
-          f.dot:SetVertexColor(color and color.r or 0.3,color and color.g or 1,color and color.b or 0.4)
+          if Setting('guildClassIcons')~=false and coords then
+            f.dot:SetTexture(classes); f.dot:SetTexCoord(unpack(coords)); f.dot:SetVertexColor(1,1,1,1)
+          else
+            f.dot:SetTexture(circle); f.dot:SetTexCoord(0,1,0,1)
+            f.dot:SetVertexColor(color and color.r or 0.3,color and color.g or 1,color and color.b or 0.4,1)
+          end
         end
         if Setting("guildWorldMap")~=false then pins:AddWorldMapIconMap(ref,pair.world,p.map,p.x,p.y,HBD_PINS_WORLDMAP_SHOW_WORLD or 3) end
         if Setting("guildMinimap")~=false then pins:AddMinimapIconMap(ref,pair.mini,p.map,p.x,p.y,true,false) end
@@ -161,6 +185,7 @@ function ns.RefreshGuildMapSettings()
   panel.share:SetChecked(Setting("shareLocation")==true)
   panel.world:SetChecked(Setting("guildWorldMap")~=false)
   panel.mini:SetChecked(Setting("guildMinimap")~=false)
+  panel.icons:SetChecked(Setting('guildClassIcons')~=false)
   local n=0
   for _ in pairs(locations) do n=n+1 end
   panel.status:SetText(n.." guildmate(s) sharing recently. "..(Pins() and "" or "Map library unavailable. ").."Markers expire after two minutes; layers and phases may differ.")
@@ -168,7 +193,7 @@ end
 function ns.ShowGuildMapSettings()
   if not panel then
     panel=CreateFrame("Frame","EPUGuildMapSettings",UIParent,"BasicFrameTemplateWithInset")
-    panel:SetSize(380,265); panel:SetPoint("CENTER"); panel:SetFrameStrata("DIALOG")
+    panel:SetSize(380,310); panel:SetPoint("CENTER"); panel:SetFrameStrata("DIALOG")
     panel:SetMovable(true); panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
     panel:SetScript("OnDragStart",panel.StartMoving); panel:SetScript("OnDragStop",panel.StopMovingOrSizing)
     panel.TitleText:SetText("EPU Guild Map")
@@ -182,11 +207,12 @@ function ns.ShowGuildMapSettings()
       b:SetScript("OnClick",function(self) callback(self:GetChecked()==true); ns.RefreshGuildMap(); ns.RefreshGuildMapSettings() end)
       panel[key]=b
     end
-    Check("share","Share my outdoor location (opt in)",-38,ns.SetLocationSharing)
+    Check("share","Share my outdoor location",-38,ns.SetLocationSharing)
     Check("world","Show guildmates on the world map",-76,function(on) ns.db.settings.guildWorldMap=on end)
     Check("mini","Show nearby guildmates on the minimap",-114,function(on) ns.db.settings.guildMinimap=on end)
+    Check('icons','Use class icons (off = round dots)',-152,function(on) ns.db.settings.guildClassIcons=on end)
     panel.status=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-    panel.status:SetPoint("TOPLEFT",20,-160); panel.status:SetWidth(340); panel.status:SetJustifyH("LEFT")
+    panel.status:SetPoint("TOPLEFT",20,-198); panel.status:SetWidth(340); panel.status:SetJustifyH("LEFT")
     local hint=panel:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
     hint:SetPoint("BOTTOMLEFT",20,18); hint:SetWidth(340)
     hint:SetText("Both players need EPU 0.11+. No location history is saved. Click a marker to whisper.")
@@ -202,6 +228,10 @@ end)
 ns.On("PLAYER_LOGOUT",function() ns.CancelEphemeral("L"); Clear() end)
 ns.On("PLAYER_LOGIN",function()
   ResetGuild()
+  if ns.guildMapReset then
+    ns.Print('Guild map enabled: your outdoor location is shared with guildmates. Use /epu map to change sharing, displays and icons.')
+    ns.guildMapReset=nil
+  end
   local function Tick()
     ns.UpdateGuildLocation(); ns.RefreshGuildMapSettings()
     C_Timer.After(5,Tick)

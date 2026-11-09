@@ -24,6 +24,13 @@ request rules, then sync and `/reload` on the bank/officer character.
 
 The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
 
+Guild map markers now use circular class icons. `/epu map` also offers round dots.
+The 0.16 rollout enables outdoor location sharing, both map displays and class icons
+once for everyone who updates, including installations with previous off settings.
+Subsequent player choices are preserved. Members need the update and `/reload`;
+this cannot reset installations that have not updated. Use `/epu sharelocation off`
+or the map controls to stop sharing. Location history is not saved.
+
 Use `/epu guides` for **Your guides**: Forever class, leveling, talent and profession
 sources filtered to this character's class, level and learned profession skills.
 Choose a talent focus in Settings if the game cannot identify one. The home screen
