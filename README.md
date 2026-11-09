@@ -9,7 +9,9 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 | [`updater/`](updater/) | One-click updater for guildmates (Windows). Ships as `EPU-Updater-x.y.z.zip` on each release. |
 | [`tests/`](tests/) | Simulators that run the addon outside WoW, with stubbed game functions, plus the Discord file round trip. |
 
-Guild activities include quest help, dungeon groups, voluntary helpers and starter-kit templates. Officers can combine a member’s approved bank requests into one mail draft.
+Guild activities include scheduled dungeons, leveling, quest help, fishing, professions, farming and other group plans, with a month picker and volunteer signups. Quick-help boards, voluntary helpers and starter kits remain available. Officers can combine a member’s approved bank requests into one mail draft.
+
+Use `/epu activities` or `/epu calendar` for the activity agenda. Optional WoW guild-calendar copies let members without EPU see an event. Open the linked native event to refresh its attendees into a combined signup view, or explicitly send your own response to both. Native snapshots expire after three minutes; event edits/cancellations remain separate. See [Activities and calendar](docs/activities-calendar.md) for publishing, linking and limitations.
 
 Bank requests are limited to items currently or previously stocked by the guild
 bank. The Bank page and request pickers show quantities; sold-out items remain

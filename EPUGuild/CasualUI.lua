@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 local E, UI, C
-local categories={{label="Quest / elite help",value="help"},{label="Dungeon groups",value="dungeon"},{label="Available helpers",value="helpers"},{label="Starter kits",value="kits"}}
+local categories={{label="Activities",value="events"},{label="Quick quest help",value="help"},{label="Quick dungeon",value="dungeon"},{label="Available helpers",value="helpers"},{label="Starter kits",value="kits"}}
 local drafts={}
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
@@ -16,7 +16,7 @@ function ns.CasualFormKind(kind)
 end
 function ns.InstallCasualViews(views,env)
   E=env; UI=E.UI; C=E.C
-  UI.state.activities={kind="help",mine=false,near=false}
+  UI.state.activities={kind="events",mine=false,near=false}
   views.activities={label="Guild activities",icon="Interface\\Icons\\INV_Misc_GroupLooking",tools=function(bar)
     local choose=bar:Add(E.Btn(bar,"Quest / elite help",126,22),"left")
     choose:SetScript("OnClick",function() E.OpenMenu(choose,categories,State().kind,function(kind) SetCategory(kind) end) end)
