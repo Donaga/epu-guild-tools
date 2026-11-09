@@ -21,6 +21,7 @@ B.ex('SlashCmdList.EPUGUILD("need 2589 5")')
 check("member blocked locally", B.ev("__ns.G().needs.list[2589]") == 200)
 
 # Bank alt with a big inventory (forces chunked messages)
+C.ex('__ns.G().bank["Epu Bank"]={v=0,items={},seen={[4306]=true,[2996]=true}}') # Previously stocked, currently sold out.
 C.ex('__bags[0] = {{2589, 20}, {2589, 20}, {14047, 7}}; __money = 123456')
 C.ex('for i = 1, 60 do local bag = 1 + math.floor((i-1)/16); __bags[bag] = __bags[bag] or {}; __bags[bag][((i-1)%16)+1] = {30000+i, i} end')
 C.ex('local banks = {-1,5,6,7,8,9,10}; for i = 61, 150 do local bag = banks[1 + math.floor((i-61)/16)]; __bags[bag] = __bags[bag] or {}; __bags[bag][((i-61)%16)+1] = {30000+i, i} end')

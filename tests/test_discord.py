@@ -67,6 +67,7 @@ rid_game = ch["new_requests"][0][0]
 st.set_posted(rid_game, 111, "pending")
 
 # --- companion -> game: Discord request + approval of the in-game request ---
+A.ex('__ns.G().bank["Guild Bank"].seen[2996]=true') # A sold-out item previously held by the bank.
 item_id, name = core.resolve_item("id:2996", gd.known_items() | {2996: "Bolt of Linen Cloth"})
 e = st.queue_request("tyler", item_id, name, 2, 'needs "quotes" \\ and\nnewline', "tyler")
 st.queue_status(rid_game, "approved", "Chris (Discord)")
@@ -277,6 +278,32 @@ check("cloth goes under Cloth", any(f.name.endswith("Cloth") and "Bolt of Linen 
 check("craft request embed", emb.title.startswith("Craft: Linen Bag") and any(f.name == "Crafter" for f in emb.fields))
 he = bot.help_embed()
 check("help post fits Discord's limits (%d chars)" % len(he), len(he) < 6000 and all(len(f.value) <= 1024 for f in he.fields))
+
+# Exercise the actual Discord handlers without making network calls.
+old_read,old_state,old_flush,old_post=bot.read_latest,bot.state,bot.flush_inbox,bot.post_or_edit
+catalog_gd=core.GuildData({'itemNames':{2589:'Linen Cloth',4306:'Silk Cloth',2996:'Bolt of Linen Cloth'},'guilds':{'G - R':{'bank':{'Bank':{'items':{2589:5},'seen':{4306:True}}}}}})
+bot.read_latest=lambda:catalog_gd
+bot.state=core.State(os.path.join(tempfile.mkdtemp(),'state.json'))
+bot.state.characters_for=lambda _:['Tyler Baker']
+bot.flush_inbox=lambda:None
+sent=[]
+async def capture_post(*args):pass
+async def capture_response(content=None,**kwargs):sent.append(content)
+bot.post_or_edit=capture_post
+interaction=types.SimpleNamespace(user=types.SimpleNamespace(id=123,display_name='Test member'),response=types.SimpleNamespace(send_message=capture_response))
+try:
+    choices=asyncio.run(bot.item_autocomplete(interaction,''))
+    check('Discord picker excludes every cached but never-stocked item',set(c.value for c in choices)=={'id:2589','id:4306'})
+    check('Discord picker marks historical sold-out items',any(c.value=='id:4306' and 'Out of stock' in c.name for c in choices))
+    asyncio.run(bot.request_cmd.callback(interaction,'id:2996',1))
+    check('direct Discord item IDs cannot bypass bank catalog',not bot.state.data['inbox'] and 'stocked before' in sent[-1])
+    asyncio.run(bot.request_cmd.callback(interaction,'id:4306',3))
+    check('Discord allows sold-out waiting requests with an explicit explanation',len(bot.state.data['inbox'])==1 and 'Awaiting restock: 3' in sent[-1])
+    entry=bot.state.data['inbox'][0]
+    message=bot.request_embed('d-'+entry['id'],dict(entry,status='pending'),catalog_gd)
+    check('Discord request card clearly marks waiting quantity',any(f.name=='Awaiting restock' and '3' in f.value for f in message.fields))
+finally:
+    bot.read_latest,bot.state,bot.flush_inbox,bot.post_or_edit=old_read,old_state,old_flush,old_post
 
 for c in (A, B):
     c.ex('__ns.UI:Show()')

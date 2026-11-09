@@ -155,6 +155,9 @@ def request_embed(rid: str, r: dict, gd: core.GuildData | None, note_extra: str 
         e.add_field(name="Delivered", value=f"{r['delivered']} / {r.get('qty', 1)}", inline=True)
     if gd and r.get("item") and not craft:
         e.add_field(name="In bank", value=str(gd.bank_count(r["item"])), inline=True)
+        waiting=gd.request_restock(rid,r,state.data['inbox'])
+        if waiting:
+            e.add_field(name='Awaiting restock',value=str(waiting)+' remaining items need restocking',inline=False)
     if r.get("note"):
         e.add_field(name="Note", value=r["note"], inline=False)
     if st == "rejected" and r.get("reason"):
@@ -189,12 +192,12 @@ async def post_or_edit(rid: str, r: dict, gd: core.GuildData | None, note_extra:
         try:
             msg = await ch.fetch_message(posted["message_id"])
             await msg.edit(embed=embed, view=view)
-            state.set_posted(rid, msg.id, st)
+            state.set_posted(rid, msg.id, st,core.request_signature(gd,rid,r,state.data['inbox']))
             return
         except discord.NotFound:
             pass
     msg = await ch.send(embed=embed, view=view)
-    state.set_posted(rid, msg.id, st)
+    state.set_posted(rid, msg.id, st,core.request_signature(gd,rid,r,state.data['inbox']))
 
 
 # ---------------------------------------------------------------------------
@@ -299,8 +302,8 @@ def help_embed() -> discord.Embed:
         "An officer verifies each character with `/approve_link`. Your first approved link is your **main**. "
         "Use `/link` for each alt; `/unlink` removes one."))
     e.add_field(name="2. Ask for something", inline=False, value=(
-        "`/request item:` start typing the name and pick it from the list (every item in the game is there), then "
-        "set `qty:`. A Wowhead Forever link or item ID works too. Add a `note:` for the officers, "
+        "`/request item:` choose an item the bank currently holds or has stocked before, then "
+        "set `qty:`. The picker shows stock and available quantities; unavailable items wait for restock. Add a `note:` for the officers, "
         "and `character:` if it should be mailed to an alt.\n"
         "Your request is posted here. An officer approves it and mails it to you, and the post updates as it goes: "
         "**Pending, Approved, Filled** (or **Rejected** with a reason)."))
@@ -836,18 +839,9 @@ async def revoke_link_cmd(interaction: discord.Interaction, user: discord.Member
 
 async def item_autocomplete(interaction: discord.Interaction, current: str):
     gd = read_latest()
-    known = gd.known_items() if gd else {}
     cur = current.lower()
-    # items the guild has dealt with first, then everything else in the game
-    hits = sorted((name, i) for i, name in known.items() if cur in name.lower())[:25]
-    seen = {i for _, i in hits}
-    for i, name in items_db.search(current, 25):
-        if len(hits) >= 25:
-            break
-        if i not in seen:
-            hits.append((name, i))
-            seen.add(i)
-    return [app_commands.Choice(name=name[:100], value=f"id:{i}") for name, i in hits]
+    rows=[r for r in (gd.requestable_items(state.data['inbox']) if gd else []) if cur in r['name'].lower()][:25]
+    return [app_commands.Choice(name=(r['name']+f" — {r['count']} in bank, {r['available']} available"+(' · Out of stock' if r['count']==0 else ''))[:100],value=f"id:{r['id']}") for r in rows]
 
 
 def load_items():
@@ -860,7 +854,7 @@ def load_items():
 
 
 @tree.command(name="request", description="Ask the guild bank for an item", guild=GUILD)
-@app_commands.describe(item="Start typing an item name, or paste a Wowhead link", qty="How many",
+@app_commands.describe(item="Choose a currently or previously stocked bank item", qty="How many; unavailable quantities wait for restock",
                        note="Anything the officers should know", character="Which of your characters to mail it to (default: your main)")
 @app_commands.autocomplete(item=item_autocomplete, character=my_chars_autocomplete)
 async def request_cmd(interaction: discord.Interaction, item: str, qty: app_commands.Range[int, 1, 1000] = 1,
@@ -879,21 +873,23 @@ async def request_cmd(interaction: discord.Interaction, item: str, qty: app_comm
             return
         to = match[0] if match[0] != who else None
     gd = read_latest()
-    known = gd.known_items() if gd else {}
+    known = gd.bank_catalog() if gd else {}
     item_id, name = core.resolve_item(item, known)
-    if item_id is None:
+    if item_id is None or item_id not in known:
         await interaction.response.send_message(
-            "I don't know that item yet. Pick one from the list, or paste its Wowhead link "
-            "(e.g. https://www.wowhead.com/forever/item=253668/pattern-woolen-reagent-bag) or its item ID.", ephemeral=True)
+            "Choose an item the guild bank currently holds or has stocked before. If stock information is missing, ask an officer to sync and /reload.", ephemeral=True)
         return
     name = name or f"item {item_id}"
+    held,asked,free=gd.bank_request_stock(item_id,state.data['inbox'])
     e = state.queue_request(who, item_id, name, int(qty), note, interaction.user.display_name, to)
     flush_inbox()
     rid = "d-" + e["id"]
     r = {"who": who, "item": item_id, "itemName": name, "qty": int(qty), "note": note,
-         "discord": interaction.user.display_name, "status": "pending", **({"to": to} if to else {})}
+         "discord": interaction.user.display_name, "status": "pending", "t":e['t'], **({"to": to} if to else {})}
     await interaction.response.send_message(
-        f"Got it. Your request for {name} x{qty}{f' (mail to {to})' if to else ''} is queued and reaches the game at the next officer login or /reload.",
+        f"Got it. Your request for {name} x{qty}{f' (mail to {to})' if to else ''} is queued and reaches the game at the next officer login or /reload. "
+        +f"Latest snapshot: {held} in bank, {free} available after open requests. "
+        +(f"Awaiting restock: {max(0,int(qty)-free)}." if int(qty)>free else ''),
         ephemeral=True)
     await post_or_edit(rid, r, gd, "Queued from Discord.")
 
@@ -952,11 +948,11 @@ async def needs_cmd(interaction: discord.Interaction):
 async def bank_cmd(interaction: discord.Interaction, search: str):
     gd = read_latest()
     s = search.lower()
-    rows = [r for r in (gd.bank_items() if gd else []) if s in r["name"].lower()]
+    rows = [r for r in (gd.requestable_items(state.data['inbox']) if gd else []) if s in r["name"].lower()]
     if not rows:
         await interaction.response.send_message(f"Nothing matching \"{search}\" in the bank.", ephemeral=True)
         return
-    lines = [f"{r['name']}: {r['count']}" for r in rows[:25]]
+    lines = [f"{r['name']}: {r['count']} in bank, {r['available']} available"+(' — Out of stock; requests wait for restock' if r['count']==0 else '') for r in rows[:25]]
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 
@@ -1001,8 +997,8 @@ async def on_ready():
         check_channel(cid)
     await ensure_help_post()
     await backfill_announcements()
-    if cfg["item_db"]:
-        await asyncio.to_thread(load_items)
+    # Bank requests use actual stock history; a full-game download is no longer
+    # needed for startup or autocomplete. Legacy item_db settings are harmless.
     if not release_loop.is_running():
         release_loop.start()
     poll.change_interval(seconds=cfg["poll_seconds"])

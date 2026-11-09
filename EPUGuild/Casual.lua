@@ -192,6 +192,7 @@ function ns.LaunchStarterKit(id,target,assignments,revision)
   local plan={}
   for i,l in ipairs(kit.lines) do
     local crafter
+    if l.mode~='craft' and not ns.CanBankRequest(l.item) then return ns.Print('The bank has not stocked '..ns.ItemName(l.item,true)..'. Use a craft task or stock this item before applying the kit.') end
     if l.mode=="craft" then
       crafter=ns.Member(assignments[i]); local e=ns.RecipeFor("item:"..l.item); local capable=false
       for _,c in ipairs(e and e.crafters or {}) do if c.who==crafter then capable=true end end

@@ -952,11 +952,7 @@ Views.bank = {
   tools = function(bar)
     UI.bankCatChip = DropChip(bar, 150, "Show one kind of item", function()
       local counts = {}
-      for _, s in pairs((ns.G() or {}).bank or {}) do
-        if not s.retired then
-          for id in pairs(s.items or {}) do local c = ns.ItemCategory(id); counts[c] = (counts[c] or 0) + 1 end
-        end
-      end
+      for id in pairs(ns.BankCatalog()) do local c=ns.ItemCategory(id); counts[c]=(counts[c] or 0)+1 end
       local items = { { label = "All categories", value = false } }
       for _, c in ipairs(ns.CATEGORIES) do
         if counts[c] then items[#items + 1] = { label = c, value = c, right = tostring(counts[c]) } end
@@ -966,6 +962,7 @@ Views.bank = {
   end,
   rows = function(g, q)
     local totals, holders = {}, {}
+    for id in pairs(ns.BankCatalog()) do totals[id]=0 end
     for alt, s in pairs(g.bank) do
       if not s.retired then
         for id, c in pairs(type(s.items) == "table" and s.items or {}) do
@@ -991,7 +988,7 @@ Views.bank = {
           groups[cat] = groups[cat] or {}
           table.insert(groups[cat], {
             key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-            title = name, sub = holders[id], right = tostring(c), count = c, sort = name,
+            title = name, sub = ns.BankRequestAvailability(id), right = c>0 and tostring(c) or 'Out of stock', count = c, sort = name,
             onClick = function() UI:OpenDetails("item", id) end,
           })
         end
@@ -1098,6 +1095,10 @@ Views.requests = {
         end
         if r.to and r.to ~= r.who then parts[#parts + 1] = "|cfff2c14e-> " .. r.to .. "|r" end
         parts[#parts + 1] = Ago(r.t)
+        if not r.crafter then
+          local waiting=ns.RequestRestock(rid)
+          if waiting>0 then parts[#parts+1]='|cfff2c14eAwaiting restock: '..waiting..'|r' end
+        end
         if r.via == "discord" then parts[#parts + 1] = "|cff8b9cffDiscord|r" end
         if r.status == "rejected" and r.reason and r.reason ~= "" then parts[#parts + 1] = "|cffff6b6b" .. r.reason .. "|r"
         elseif r.note and r.note ~= "" then parts[#parts + 1] = "\"" .. r.note .. "\"" end
@@ -1151,6 +1152,8 @@ Views.requests = {
     if Q()~="" then summary=summary..' | Search: "'..Q()..'" (X clears)' end
     if UI.state.requests.mine then summary=summary.." | Mine" end
     if UI.state.requests.crafts then summary=summary.." | Crafts" end
+    local item=UI.itemBox and ns.ItemID(UI.itemBox:GetText())
+    if item then return ns.CanBankRequest(item) and ns.BankRequestAvailability(item) or 'This item has not been stocked by the guild bank. Choose one from Bank.' end
     return summary
   end,
   empty = "No requests match. Try another filter, or ask for something below.",
@@ -1750,9 +1753,9 @@ local function SubmitComposer()
         end
         return ns.Print("No guild member named \"" .. typed .. "\".")
       end
-      ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), nil, who)
+      if not ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), nil, who) then return end
     else
-      ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), UI:ForTarget())
+      if not ns.NewRequest(id, tonumber(UI.qtyBox:GetText()) or 1, UI.noteBox:GetText(), UI:ForTarget()) then return end
     end
   end
   ClearComposer()
@@ -1826,12 +1829,12 @@ function ns.ItemCandidates()
   return ids
 end
 
-function ns.MatchItems(text, max)
+function ns.MatchItems(text, max, bankOnly)
   text = (text or ""):lower():match("^%s*(.-)%s*$")
   local out = {}
   if #text < 2 then return out end
   local names = (ns.db and ns.db.itemNames) or {}
-  for id in pairs(ns.ItemCandidates()) do
+  for id in pairs(bankOnly and ns.BankCatalog() or ns.ItemCandidates()) do
     local name = GetItemInfo(id) or names[id]
     if name then
       local l = name:lower()
@@ -1909,14 +1912,15 @@ end
 function UI:SuggestItems(box)
   local text = box:GetText() or ""
   if text:find("|H", 1, true) or text:find("^item:") then sug:Hide(); return end   -- already a real item
-  local found = ns.MatchItems(text, 8)
+  local bankOnly=self.composerMode~='need'
+  local found = ns.MatchItems(text, 8,bankOnly)
   local list = {}
   for i, m in ipairs(found) do
     local have = ns.BankCount and ns.BankCount(m.id) or 0
     local q = select(3, GetItemInfo(m.id))
     local c = q and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
     list[i] = { text = (c and c.hex or "") .. m.name .. (c and c.hex and "|r" or ""), value = m.id, icon = ns.ItemIcon(m.id),
-      right = have > 0 and ("bank has " .. have) or nil }
+      right = bankOnly and (have>0 and (have..' in bank') or 'Out of stock') or (have > 0 and ("bank has " .. have) or nil) }
   end
   self:ShowSuggestions(box, list, function(b, id) b:SetText(select(2, GetItemInfo(id)) or ("item:" .. id)) end)
 end
@@ -1949,6 +1953,9 @@ local function WireSuggestions(box, suggest)
 end
 WireSuggestions(UI.forBox, UI.Suggest)
 WireSuggestions(UI.itemBox, UI.SuggestItems)
+UI.itemBox:HookScript('OnTextChanged',function()
+  if UI.view=='requests' then ns.Debounce('requestStockHint',0.1,function() UI.footerText:SetText(Views.requests.footer(ns.G())) end) end
+end)
 UI.itemBox.onEnter = function(self)
   if UI:AcceptSuggestion(true) then return end
   SubmitComposer()
@@ -2517,6 +2524,8 @@ function UI:FillDetails()
     det:Text("Requested by " .. ns.WhoLabel(r.who) .. ((r.via == "discord") and " via Discord" or ""))
     if r.by and r.status ~= "pending" then det:Text("Last changed by " .. r.by .. " " .. Ago(r.u), C.muted) end
     det:Text("In bank: " .. ns.BankCount(r.item) .. "   You carry: " .. ns.ItemCount(r.item), C.muted)
+    local waiting=ns.RequestRestock(key)
+    if waiting>0 then det:Text('Awaiting restock: '..waiting..' of the remaining '..ns.Remaining(r)..'. Stock is based on the latest shared bank snapshot.',C.gold) end
     det:Gap()
     local own, pending = (r.who == ns.me), (r.status == "pending" or r.status == "open")
     local canEdit = officer or (own and pending)
@@ -2586,9 +2595,9 @@ function UI:FillDetails()
       det:Buttons({ { "Save", function() ns.SetNeed(key, tonumber(t:GetText()) or target, choice) end, accent = true },
         { "Remove", function() ns.SetNeed(key, 0); UI:CloseDetails() end } })
     end
-    det:Buttons({ { "Request this", function()
+    if ns.CanBankRequest(key) then det:Buttons({ { "Request this", function()
       UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
-    end } })
+    end } }) end
 
   elseif kind == "item" then
     local holders = {}
@@ -2598,10 +2607,12 @@ function UI:FillDetails()
     det:Reset(ns.ItemIcon(key), Quality(key), ns.ItemName(key, true), "In bank: " .. ns.BankCount(key))
     for _, h in ipairs(holders) do det:Text(h) end
     if #holders == 0 then det:Text("None in the bank right now.", C.muted) end
+    det:Text(ns.BankRequestAvailability(key),C.gold)
+    if ns.BankCount(key)==0 then det:Text('Previously stocked. You can request this item and wait for a restock.',C.muted) end
     det:Gap()
-    det:Buttons({ { "Request this", function()
+    if ns.CanBankRequest(key) then det:Buttons({ { "Request this", function()
       UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
-    end, accent = true } })
+    end, accent = true } }) end
     if officer then
       det:Buttons({ { "Add as a need", function()
         UI:SetView("needs"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()

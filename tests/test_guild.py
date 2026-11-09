@@ -11,6 +11,7 @@ A, B, N, GM = clients["Chris Baker"], clients["Tyler Baker"], clients["Newbie St
 for c in clients.values():
     c.ex('__toasts = {}; __ns.Notify = function(t, m) table.insert(__toasts, t .. ": " .. (m or "")) end')
 tick(25)
+for c in clients.values(): c.ex('__ns.G().bank["Past bank"]={v=__now,items={},money=0,retired=true,seen={[2589]=true,[4306]=true}}')
 shown = "(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then n = n + 1 end end return n end)()"
 def toasts(c):
     n = c.ev('#__toasts')

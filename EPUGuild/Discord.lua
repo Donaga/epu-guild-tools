@@ -33,6 +33,7 @@ function ns.CacheItemNames()
   end
   for id in pairs(g.needs.list) do add(id) end
   for _, s in pairs(g.bank) do for id in pairs(s.items or {}) do add(id) end end
+  for id in pairs(ns.BankCatalog()) do add(id) end
   for _, r in pairs(g.requests) do add(r.item) end
   for _, d in pairs(g.donations) do add(d.item) end
   for _, rec in pairs(g.recipes or {}) do
@@ -67,7 +68,9 @@ end
 -- companion ("d-<entry id>") so it can tie its Discord message to it.
 function ns.CreateRequestFor(who, item, qty, note, discord, rid, to)
   local g = ns.G()
-  if not g or g.requests[rid] then return end
+  if not g then return end
+  if g.requests[rid] then return rid end
+  if not ns.CanBankRequest(item) or not ns.PositiveInt(tonumber(qty) or 1,1000) then return end
   local now = ns.Now()
   local r = { who = ns.Member(who) or ns.Short(who), item = item, qty = tonumber(qty) or 1, note = (note or ""):sub(1, 80),
     status = "pending", t = now, u = now, via = "discord", discord = discord }
@@ -76,6 +79,7 @@ function ns.CreateRequestFor(who, item, qty, note, discord, rid, to)
   g.requests[rid] = r
   ns.Send("D", { req = { [rid] = r } })
   ns.Changed()
+  return rid
 end
 
 function ns.ProcessInbox()
@@ -103,8 +107,10 @@ function ns.ProcessInbox()
       if e.kind == "request" then
         local item = ResolveItem(e)
         if item and e.who then
-          ns.CreateRequestFor(e.who, item, e.qty, e.note, e.discord, "d-" .. e.id, e.to)
-          ok = true
+          ok = ns.CreateRequestFor(e.who, item, e.qty, e.note, e.discord, "d-" .. e.id, e.to)~=nil
+          if not ok and now-(tonumber(e.t) or now)>7*DAY then
+            ok=true; ns.Print('Dropped a Discord request outside the bank catalog: '..tostring(e.itemName or item))
+          end
         elseif now - (tonumber(e.t) or now) > 7 * DAY then
           ok = true    -- item never resolved; give up
           ns.Print("Dropped a Discord request for an unknown item: " .. tostring(e.itemName or e.item))
@@ -150,7 +156,7 @@ function ns.ProcessInbox()
     ns.Print("Applied " .. applied .. " request update" .. (applied == 1 and "" or "s") .. " from Discord.")
   end
   if waiting > 0 then
-    ns.Print(waiting .. " Discord update(s) are waiting on item info or sync; they'll retry on the next /reload.")
+    ns.Print(waiting .. " Discord update(s) are waiting on item info, bank catalog or sync; they'll retry on the next /reload.")
   end
 end
 

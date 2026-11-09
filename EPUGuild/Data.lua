@@ -220,11 +220,16 @@ function ns.Merge(sender, b, catchingUp)
     for alt, snap in pairs(b.bank) do
       if type(snap) == "table" and type(snap.v) == "number" then
         local cur = Real(g, "bank", alt, g.bank[alt])
+        local seen=ns.BankHistory(cur,snap.items,alt)
+        for id in pairs(snap.seen or {}) do seen[id]=true end
         if not cur or ns.Newer(snap, cur, "v") then
           snap.items = snap.items or {}
+          snap.seen=seen
           g.bank[alt] = snap
           Confirm(g, "bank", alt)
           changed = true
+        elseif ns.Fingerprint(cur.seen)~=ns.Fingerprint(seen) then
+          cur.seen=seen; changed=true
         end
       end
     end
@@ -548,6 +553,9 @@ end
 function ns.NewRequest(id, qty, note, to, forWho)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
+  if not ns.CanBankRequest(id) then ns.Print('Choose an item the guild bank has stocked before. Open Bank or sync with an officer first.'); return nil end
+  qty=qty or 1
+  if not ns.PositiveInt(qty,1000) then ns.Print('Choose a whole quantity from 1 to 1000.'); return nil end
   local officer = ns.IsTrusted(ns.me)
   -- officers can file a request in another member's name
   if forWho and forWho ~= ns.me then

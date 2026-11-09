@@ -57,16 +57,17 @@ function ns.ScanGuildBank()
   -- empty entry recorded earlier instead of listing an empty "Guild Bank".
   if n == 0 and money == 0 then
     if cur and not cur.retired and ns.IsTrusted(ns.me) then
-      g.bank[GB_KEY] = { v = ns.NextVersion(cur.v), money = 0, items = {}, retired = true, guild = true }
+      g.bank[GB_KEY] = { v = ns.NextVersion(cur.v), money = 0, items = {}, seen=ns.BankHistory(cur,nil,GB_KEY), retired = true, guild = true }
       ns.Send("D", { bank = { [GB_KEY] = g.bank[GB_KEY] } })
       ns.Changed()
     end
     return
   end
-  if cur and cur.money == money and ns.SameCounts(cur.items, items) then
+  local seen=ns.BankHistory(cur,items,GB_KEY)
+  if cur and cur.money == money and ns.SameCounts(cur.items, items) and ns.Fingerprint(cur.seen)==ns.Fingerprint(seen) then
     if ns.Now()-(cur.bankTime or 0)<60 then return end
   end
-  g.bank[GB_KEY] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, bankTime = ns.Now(), guild = true }
+  g.bank[GB_KEY] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, seen=seen, bankTime = ns.Now(), guild = true }
   ns.Changed()
   if ns.IsTrusted(ns.me) then
     ns.Debounce("gbBroadcast", 5, function()

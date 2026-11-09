@@ -113,8 +113,9 @@ function ns.SnapshotBank()
   local money = GetMoney()
 
   local cur = g.bank[ns.me]
-  if cur and not cur.retired and cur.money == money and ns.SameCounts(cur.items, items) then return end
-  g.bank[ns.me] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, bankTime = cdb.bankTime }
+  local seen=ns.BankHistory(cur,items,ns.me)
+  if cur and not cur.retired and cur.money == money and ns.SameCounts(cur.items, items) and ns.Fingerprint(cur.seen)==ns.Fingerprint(seen) then return end
+  g.bank[ns.me] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, seen=seen, bankTime = cdb.bankTime }
   ns.Changed()
 
   if not ns.IsTrusted(ns.me) and not warnedTrust then
@@ -141,7 +142,7 @@ function ns.SetBankAlt(on)
   else
     ns.cdb.bankAlt = false
     local cur = g.bank[ns.me]
-    g.bank[ns.me] = { v = ns.NextVersion(cur and cur.v), retired = true, items = {}, money = 0 }
+    g.bank[ns.me] = { v = ns.NextVersion(cur and cur.v), retired = true, items = {}, seen=ns.BankHistory(cur,nil,ns.me), money = 0 }
     ns.Send("D", { bank = { [ns.me] = g.bank[ns.me] } })
     ns.Changed()
     ns.Print(ns.me .. " is no longer a bank alt.")
