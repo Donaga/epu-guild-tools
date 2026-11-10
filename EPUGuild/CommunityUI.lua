@@ -2,6 +2,37 @@ local ADDON,ns=...
 local E,UI,C
 local DAY=86400
 local labels={events="Activities",invites="Guild invites",quests="Quest matching",catchup="Catch-up",notifications="Notifications"}
+local dungeonGroups={
+  {label='Classic · Early', entries={
+    {'Ragefire Chasm','Orgrimmar'}, {'The Deadmines','Westfall'}, {'Wailing Caverns','The Barrens'},
+    {'Shadowfang Keep','Silverpine Forest'}, {'Blackfathom Deeps','Ashenvale'}, {'The Stockade','Stormwind City'},
+    {'Gnomeregan','Dun Morogh'}, {'Razorfen Kraul','The Barrens'},
+  }},
+  {label='Classic · Mid levels', entries={
+    {'Scarlet Monastery: Graveyard','Tirisfal Glades'}, {'Scarlet Monastery: Library','Tirisfal Glades'},
+    {'Scarlet Monastery: Armory','Tirisfal Glades'}, {'Scarlet Monastery: Cathedral','Tirisfal Glades'},
+    {'Razorfen Downs','The Barrens'}, {'Uldaman','Badlands'}, {'Zul’Farrak','Tanaris'}, {'Maraudon','Desolace'},
+    {'Sunken Temple','Swamp of Sorrows'},
+  }},
+  {label='Classic · Late', entries={
+    {'Blackrock Depths','Blackrock Mountain'}, {'Lower Blackrock Spire','Blackrock Mountain'},
+    {'Upper Blackrock Spire','Blackrock Mountain'}, {'Dire Maul: East','Feralas'}, {'Dire Maul: North','Feralas'},
+    {'Dire Maul: West','Feralas'}, {'Scholomance','Western Plaguelands'},
+    {'Stratholme: Main Gate','Eastern Plaguelands'}, {'Stratholme: Service Gate','Eastern Plaguelands'},
+  }},
+  -- Suggested ranges from Blizzard's Forever dungeon overview (news/24301455).
+  {label='Forever dungeons', entries={
+    {'Hall of Thanes','Ironforge',13,18}, {'Ruins of Lordaeron','Tirisfal Glades',15,20},
+    {'Excavation Site','Wetlands',24,29}, {'City of Dalaran','Alterac Mountains',28,33},
+    {'The Drowned City','Stranglethorn Vale',35,40}, {'Krol’dok Stronghold','Riverglades',40,45},
+    {'Alcaz Prison','Dustwallow Marsh',48,53}, {'Blackmaw Hold','Azshara',55,60},
+    {'Shaper’s Terrace','Un’Goro Crater',58,60},
+  }},
+}
+local dungeons={}
+for _,group in ipairs(dungeonGroups) do
+  for _,entry in ipairs(group.entries) do dungeons[entry[1]]=entry end
+end
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
@@ -10,11 +41,21 @@ function ns.InstallCommunityViews(views,env,categories)
   for _,key in ipairs({"invites","quests","catchup","notifications"}) do categories[#categories+1]={label=labels[key],value=key} end
 end
 local picker
-function ns.ShowActivityDatePicker(initial,chosen)
+local function PickDate(day)
+  if picker.withTime then
+    picker.selected = day
+    picker:Paint(ns.ActivityCalendarDays(picker.year,picker.month))
+  else
+    picker:Hide()
+    picker.chosen(day)
+  end
+end
+
+function ns.ShowActivityDatePicker(initial,chosen,clock)
   if not picker then
     picker=CreateFrame("Frame","EPUGuildActivityDatePicker",UI,"BasicFrameTemplateWithInset")
     tinsert(UISpecialFrames,"EPUGuildActivityDatePicker")
-    picker:SetSize(420,350); picker:SetPoint("CENTER"); picker:SetFrameStrata("DIALOG")
+    picker:SetSize(420,350); picker:SetPoint("CENTER"); picker:SetFrameStrata("DIALOG"); picker:SetClampedToScreen(true)
     picker.TitleText:SetText("Activity calendar · local dates")
     picker.heading=picker:CreateFontString(nil,"OVERLAY","GameFontNormal")
     picker.heading:SetPoint("TOP",0,-36)
@@ -25,7 +66,7 @@ function ns.ShowActivityDatePicker(initial,chosen)
     end
     for i=1,42 do
       local b=E.Btn(picker,"",52,30); b:SetPoint("TOPLEFT",12+((i-1)%7)*56,-82-math.floor((i-1)/7)*34)
-      b:SetScript("OnClick",function() local fn=picker.chosen; local key=b.day.key; picker:Hide(); fn(key) end)
+      b:SetScript("OnClick",function() PickDate(b.day.key) end)
       picker.days[i]=b
     end
     local function Move(step)
@@ -34,22 +75,85 @@ function ns.ShowActivityDatePicker(initial,chosen)
     end
     local prev=E.Btn(picker,"<",32,22); prev:SetPoint("TOPLEFT",12,-32); prev:SetScript("OnClick",function() Move(-1) end)
     local next=E.Btn(picker,">",32,22); next:SetPoint("TOPRIGHT",-12,-32); next:SetScript("OnClick",function() Move(1) end)
-    local clear=E.Btn(picker,"All dates",85,22); clear:SetPoint("BOTTOMLEFT",12,12)
-    clear:SetScript("OnClick",function() picker:Hide(); picker.chosen(nil) end)
-    local today=E.Btn(picker,"Today",65,22); today:SetPoint("BOTTOMRIGHT",-12,12)
-    today:SetScript("OnClick",function() picker:Hide(); picker.chosen(date("%Y-%m-%d",ns.Now())) end)
+    picker.clear=E.Btn(picker,"All dates",85,22); picker.clear:SetPoint("BOTTOMLEFT",12,12)
+    picker.clear:SetScript("OnClick",function() PickDate(nil) end)
+    picker.today=E.Btn(picker,"Today",65,22)
+    local function Jump(offset)
+      local d=date('*t',ns.Now())
+      local at=time({year=d.year,month=d.month,day=d.day+offset,hour=12,min=0,sec=0})
+      local day=date('*t',at)
+      picker.year,picker.month=day.year,day.month
+      PickDate(date('%Y-%m-%d',at))
+    end
+    picker.today:SetScript("OnClick",function() Jump(0) end)
+    picker.tomorrow=E.Btn(picker,"Tomorrow",85,22); picker.tomorrow:SetPoint('BOTTOMLEFT',82,12)
+    picker.tomorrow:SetScript('OnClick',function() Jump(1) end)
+    picker.timeText=picker:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
+    picker.timeText:SetPoint('TOPLEFT',12,-327)
+    local function ClockMenu(button,values,key,label)
+      local items={}
+      for _,value in ipairs(values) do items[#items+1]={label=label(value),value=value} end
+      E.OpenMenu(button,items,picker[key],function(value)
+        picker[key]=value
+        picker:Paint(ns.ActivityCalendarDays(picker.year,picker.month))
+      end)
+    end
+    picker.hourButton=E.Btn(picker,'',70,22); picker.hourButton:SetPoint('TOPLEFT',12,-348)
+    picker.hourButton:SetScript('OnClick',function(self)
+      ClockMenu(self,{1,2,3,4,5,6,7,8,9,10,11,12},'hour',tostring)
+    end)
+    picker.minuteButton=E.Btn(picker,'',78,22); picker.minuteButton:SetPoint('LEFT',picker.hourButton,'RIGHT',6,0)
+    picker.minuteButton:SetScript('OnClick',function(self)
+      local minutes={0,15,30,45}
+      if picker.minute%15~=0 then minutes[#minutes+1]=picker.minute; table.sort(minutes) end
+      ClockMenu(self,minutes,'minute',function(value) return string.format('%02d',value) end)
+    end)
+    picker.periodButton=E.Btn(picker,'',60,22); picker.periodButton:SetPoint('LEFT',picker.minuteButton,'RIGHT',6,0)
+    picker.periodButton:SetScript('OnClick',function(self) ClockMenu(self,{'AM','PM'},'period',tostring) end)
+    picker.apply=E.Btn(picker,'Set date & time',112,22,'accent'); picker.apply:SetPoint('BOTTOMRIGHT',-12,12)
+    picker.apply:SetScript('OnClick',function()
+      if not picker.startValue then return end
+      picker:Hide()
+      picker.chosen(picker.startValue)
+    end)
+    picker.hint=picker:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
+    picker.hint:SetPoint('BOTTOMLEFT',12,43)
     function picker:Paint(days)
-      self.heading:SetText(string.format("%04d-%02d",self.year,self.month))
+      self.heading:SetText(date('%B %Y',time({year=self.year,month=self.month,day=1,hour=12,min=0,sec=0})))
       for i,day in ipairs(days) do
         local b=self.days[i]; b.day=day
         b:SetLabel(day.day..(day.count>0 and (" ("..day.count..")") or "")); b:SetAlpha(day.month==self.month and 1 or 0.45)
         b.tip=day.key.." · "..day.count.." upcoming activities"; b:SetOn(day.key==self.selected)
       end
+      if not self.withTime then return end
+      self.hourButton:SetLabel('Hour: '..self.hour)
+      self.minuteButton:SetLabel(string.format('Min: %02d',self.minute))
+      self.periodButton:SetLabel(self.period)
+      local hour=self.hour%12+(self.period=='PM' and 12 or 0)
+      local value=self.selected and string.format('%s %02d:%02d',self.selected,hour,self.minute)
+      local start=value and ns.ParseEventLocal(value)
+      self.startValue=start and start>=ns.Now()+60 and start<=ns.Now()+28*DAY and value or nil
+      self.apply:SetEnabled(self.startValue~=nil)
+      self.hint:SetText(self.startValue and date('%a, %b %d at %I:%M %p',start) or 'Choose a valid future time within 28 days.')
+      self.timeText:SetText('Start time (your local time)')
     end
   end
   local y,m=tostring(initial or date("%Y-%m-%d",ns.Now())):match("^(%d+)%-(%d+)")
   if not y or tonumber(y)<2000 or tonumber(y)>2100 or not m or tonumber(m)<1 or tonumber(m)>12 then local c=date("*t",ns.Now()); y,m=c.year,c.month end
   local days,year,month=ns.ActivityCalendarDays(tonumber(y),tonumber(m))
+  picker.withTime=clock~=nil
+  picker:SetSize(420,picker.withTime and 430 or 350)
+  picker.TitleText:SetText(picker.withTime and 'Choose date & time' or 'Activity calendar · local dates')
+  picker.clear:SetShown(not picker.withTime)
+  picker.today:ClearAllPoints()
+  picker.today:SetPoint(picker.withTime and 'BOTTOMLEFT' or 'BOTTOMRIGHT',picker.withTime and 12 or -12,12)
+  for _,widget in ipairs({picker.tomorrow,picker.hourButton,picker.minuteButton,picker.periodButton,picker.apply,picker.hint,picker.timeText}) do
+    widget:SetShown(picker.withTime)
+  end
+  local h,mn=tostring(clock or ''):match('^(%d%d):(%d%d)$')
+  h,mn=tonumber(h),tonumber(mn)
+  if not h or h>23 or not mn or mn>59 then h,mn=19,0 end
+  picker.hour=(h+11)%12+1; picker.minute=mn; picker.period=h>=12 and 'PM' or 'AM'
   picker.year=year; picker.month=month; picker.chosen=chosen; picker.selected=initial; picker:Paint(days); picker:Show()
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" end
@@ -191,26 +295,58 @@ function ns.FillCommunityDetails(kind,key,det)
     if not presets[activityType] then activityType="other" end
     local preset=presets[activityType]
     local expanded=draft and draft.expanded or false
+    local dungeon=cur and cur.dungeon
+    if draft then dungeon=draft.dungeon end
+    local defaultZone=(GetZoneText and GetZoneText()) or ''
     det:Reset(nil,nil,cur and "Edit guild event" or "New guild event","Dates use your computer's local timezone")
     local typeLabel=det:Text("Type: "..ns.EVENT_TYPES[activityType],C.gold)
     local title,zone,note,when,duration,slots,low,high,summary
+    local function UpdateLabels()
+      typeLabel:SetText('Type: '..ns.EVENT_TYPES[activityType]..(dungeon and (' · '..dungeon) or ''))
+      summary:SetText(duration:GetText()..' minutes · '..slots:GetText()..' players · levels '..low:GetText()..'–'..high:GetText())
+      det.casualDraft=true
+    end
+    local function ApplyType(value)
+      local old,new=presets[activityType],presets[value]
+      if not cur then
+        if title:GetText()==old[1] then title:SetText(new[1]) end
+        if duration:GetText()==tostring(old[2]) then duration:SetText(tostring(new[2])) end
+        if slots:GetText()==tostring(old[3]) then slots:SetText(tostring(new[3])) end
+      end
+      if value~='dungeon' then dungeon=nil end
+      activityType=value
+      UpdateLabels()
+    end
+    local function ApplyDungeon(name)
+      local old=dungeons[dungeon]
+      local choice=dungeons[name]
+      ApplyType('dungeon')
+      if title:GetText()=='' or title:GetText()==presets.dungeon[1] or title:GetText()==dungeon then title:SetText(name) end
+      if zone:GetText()=='' or (not cur and zone:GetText()==defaultZone) or (old and zone:GetText()==old[2]) then zone:SetText(choice[2]) end
+      if low:GetText()==tostring(old and old[3] or 1) and high:GetText()==tostring(old and old[4] or 60) then
+        low:SetText(tostring(choice[3] or 1)); high:SetText(tostring(choice[4] or 60))
+      end
+      dungeon=name
+      UpdateLabels()
+    end
     det:Buttons({{"Choose type",function(self)
       local options={}
       for _,value in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[value],value=value} end
-      E.OpenMenu(self,options,activityType,function(value)
-        local old,new=presets[activityType],presets[value]
-        if not cur then
-          if title:GetText()==old[1] then title:SetText(new[1]) end
-          if duration:GetText()==tostring(old[2]) then duration:SetText(tostring(new[2])) end
-          if slots:GetText()==tostring(old[3]) then slots:SetText(tostring(new[3])) end
+      E.OpenMenu(self,options,activityType,ApplyType)
+    end},{'Choose dungeon',function(self)
+      local groups={}
+      for i,group in ipairs(dungeonGroups) do groups[#groups+1]={label=group.label,value=i} end
+      E.OpenMenu(self,groups,nil,function(index)
+        local entries={}
+        for _,entry in ipairs(dungeonGroups[index].entries) do
+          entries[#entries+1]={label=entry[1],value=entry[1],right=entry[3] and (entry[3]..'–'..entry[4]) or nil}
         end
-        activityType=value;det.casualDraft=true;typeLabel:SetText("Type: "..ns.EVENT_TYPES[value])
-        summary:SetText(duration:GetText().." minutes · "..slots:GetText().." players · levels "..low:GetText().."–"..high:GetText())
+        E.OpenMenu(self,entries,dungeon,ApplyDungeon)
       end)
     end}})
     local values=draft and draft.values or {}
     title=det:Field("Title",values[1] or (cur and cur.title) or preset[1],160)
-    zone=det:Field("Meet at",values[2] or (cur and cur.zone) or (GetZoneText and GetZoneText()) or "",160)
+    zone=det:Field("Meet at",values[2] or (cur and cur.zone) or defaultZone,160)
     note=det:Field("Details",values[3] or (cur and cur.note) or "",160)
     when=det:Field("Local start",values[4] or date("%Y-%m-%d %H:%M",cur and cur.starts or ns.Now()+1800),160)
     local before=det.y
@@ -223,9 +359,10 @@ function ns.FillCommunityDetails(kind,key,det)
       det.y=before
     end
     summary=det:Text(duration:GetText().." minutes · "..slots:GetText().." players · levels "..low:GetText().."–"..high:GetText(),C.muted)
+    if dungeon then UpdateLabels() end
     det:Buttons({{expanded and 'Hide group options' or 'Group options',function()
       local values={} for i=1,8 do values[i]=det.pools.box[i]:GetText() end
-      det.eventFormDraft={values=values,kind=activityType,expanded=not expanded};UI:FillDetails()
+      det.eventFormDraft={values=values,kind=activityType,dungeon=dungeon,expanded=not expanded};UI:FillDetails()
     end}})
     local function Soon(minutes) when:SetText(date('%Y-%m-%d %H:%M',ns.Now()+minutes*60));det.casualDraft=true end
     det:Buttons({{'In 15 min',function() Soon(15) end},{'In 1 hour',function() Soon(60) end},{'Next 7pm',function()
@@ -233,12 +370,11 @@ function ns.FillCommunityDetails(kind,key,det)
       local start=time(d);if start<=ns.Now()+60 then d.day=d.day+1;d.isdst=nil;start=time(d) end
       when:SetText(date('%Y-%m-%d %H:%M',start));det.casualDraft=true
     end}})
-    det:Buttons({{"Pick date",function()
-      ns.ShowActivityDatePicker(when:GetText():sub(1,10),function(day)
-        if not day then return end
-        local clock=when:GetText():match(" (%d%d:%d%d)$") or "19:00"
-        when:SetText(day.." "..clock); det.casualDraft=true
-      end)
+    det:Buttons({{"Pick date & time",function()
+      local initial=when:GetText()
+      ns.ShowActivityDatePicker(initial:sub(1,10),function(value)
+        if det.kind=='eventform' and det.key==key then when:SetText(value); det.casualDraft=true end
+      end,initial:match(' (%d%d:%d%d)$') or '19:00')
     end}})
     local preview=det:Text("",C.gold)
     det.y=det.y-30; preview:SetHeight(44)
@@ -253,7 +389,7 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Buttons({{cur and "Save event" or "Create event",function()
       local start=ns.ParseEventLocal(when:GetText())
       if not start then return ns.Print("Enter a valid local date and time as YYYY-MM-DD HH:MM.") end
-      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText())},cur and key)
+      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText())},cur and key)
       if id then s.lastEventType=activityType;Open("event",id) end
     end,accent=true}})
   elseif kind=="event" then
@@ -261,7 +397,7 @@ function ns.FillCommunityDetails(kind,key,det)
     local localTime,server=ns.EventTimes(r.starts)
     det:Reset(nil,nil,r.title,r.status=="cancelled" and "Cancelled" or (r.ends<=ns.Now() and "Ended" or "Guild event"))
     det:Text("Local: "..localTime.."\nServer (current offset): "..server,C.gold)
-    det:Text(ns.EVENT_TYPES[r.kind or "other"].." · Suggested levels "..(r.minLevel or 1).."–"..(r.maxLevel or 60).."\nOrganiser: "..r.who.."\nMeet at: "..r.zone.."\nDuration: "..math.floor((r.ends-r.starts)/60).." minutes")
+    det:Text(ns.EVENT_TYPES[r.kind or "other"].." · Suggested levels "..(r.minLevel or 1).."–"..(r.maxLevel or 60)..(r.dungeon and r.dungeon~=r.title and ("\nDungeon: "..r.dungeon) or "").."\nOrganiser: "..r.who.."\nMeet at: "..r.zone.."\nDuration: "..math.floor((r.ends-r.starts)/60).." minutes")
     det:Text(r.note)
     local n=ns.EventCounts(key)
     det:Text(n.going.." going / "..r.slots.." planned · "..n.tentative.." tentative")

@@ -82,4 +82,4 @@ jobs:
       - run: pip install "pyinstaller>=6,<7"
       - name: Build standalone Windows helper
         shell: pwsh
-        run: ./tools/build_sync_helper.ps1 -Version 0.19.1
+        run: ./tools/build_sync_helper.ps1 -Version 0.20.0

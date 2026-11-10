@@ -116,7 +116,7 @@ local GROUPS = {
   { "req", "don" },
   { "news", "feed" },
   { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps" },
-  { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses" },
+  { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses", "syncHelpers" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time
 
