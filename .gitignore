@@ -8,4 +8,8 @@ __pycache__/
 *.pyc
 *.tmp
 dist/
+build/
+*.spec
+sync-helper/config.json
+sync-helper/state.json
 epu-discord/testwow/

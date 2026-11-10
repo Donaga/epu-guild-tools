@@ -104,13 +104,27 @@ function ns.ProcessInbox()
     if type(e) == "table" and e.id and not done[e.id] then pending = pending + 1 end
   end
   if pending == 0 then return end
-  if not ns.IsTrusted(ns.me) then return end   -- officers apply Discord actions
+  local officer=ns.IsTrusted(ns.me)
+  if not officer and not (ns.IsSyncHelper and ns.IsSyncHelper(ns.me)) then return end
 
   local applied, waiting = 0, 0
   for _, e in ipairs(inbox) do
     if type(e) == "table" and e.id and not done[e.id] then
       local ok = false
-      if e.kind == "request" then
+      local key=ns.GuildKey()
+      local wrongGuild=e.bridge and (type(e.guild)~='string' or (key~=e.guild and key:sub(1,#e.guild+3)~=e.guild..' - '))
+      if e.bridge and (wrongGuild or type(e.bridgeIssued)~='number' or now-e.bridgeIssued>86400 or e.bridgeIssued>now+300) then
+        ok=true -- stale/cross-guild helper actions are discarded, never applied
+      elseif e.kind == "guild_invite" then
+        ok=ns.ImportGuildInvite(e)
+      elseif not officer and e.kind=='request' then
+        local item=ResolveItem(e)
+        if item and e.who then ok=ns.CreateRequestFor(e.who,item,e.qty,e.note,e.discord,'d-'..e.id,e.to)~=nil end
+      elseif not officer then
+        ok=false -- whitelisted helpers cannot import officer-only actions
+      elseif e.kind=='sync_helper' then
+        ok=ns.SetSyncHelper(e.who,e.enabled==true)
+      elseif e.kind == "request" then
         local item = ResolveItem(e)
         if item and e.who then
           ok = ns.CreateRequestFor(e.who, item, e.qty, e.note, e.discord, "d-" .. e.id, e.to)~=nil

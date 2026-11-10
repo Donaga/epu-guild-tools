@@ -11,6 +11,10 @@ Guild bank and guild helper tools for **E Pluribus Unum** on WoW: Forever.
 
 Guild activities include scheduled dungeons, leveling, quest help, fishing, professions, farming and other group plans, with a month picker and volunteer signups. Quick-help boards, voluntary helpers and starter kits remain available. Officers can combine a member’s approved bank requests into one mail draft.
 
+Discord guild invite requests use `/guildinvite` with required first/last-name fields, or a standalone `Character: First Last` line in the configured channel. Eligible inviters get an in-game alert and manual Invite button. Game-confirmed invitations return a ✅ to the original Discord request. See [guild invite requests](docs/guild-invites.md).
+
+The [Windows sync helper](sync-helper/README.md) lets whitelisted characters relay invite/new pending bank requests and return filtered public game snapshots to the existing bot through shared OneDrive or Google Drive folders. No Discord token or rank change is needed. Officer approvals remain separate; login or `/reload` is still required. Each volunteer has an individual connection folder, and the bot can mirror it to both providers.
+
 Use `/epu activities` or `/epu calendar` for the activity agenda. Optional WoW guild-calendar copies let members without EPU see an event. Open the linked native event to refresh its attendees into a combined signup view, or explicitly send your own response to both. Native snapshots expire after three minutes; event edits/cancellations remain separate. See [Activities and calendar](docs/activities-calendar.md) for publishing, linking and limitations.
 
 Bank requests are limited to items currently or previously stocked by the guild

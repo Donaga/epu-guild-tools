@@ -156,7 +156,7 @@ import importlib, json as _j
 cfgdir = tempfile.mkdtemp()
 _j.dump({"token": "x.y.z", "server_id": "1", "channel_id": "2", "wow_path": WOW}, open(os.path.join(cfgdir, "config.json"), "w"))
 import shutil as _s
-for f in ("bot.py", "epu_core.py"):
+for f in ("bot.py", "epu_core.py",'shared_bridge.py'):
     _s.copy(os.path.join(os.path.dirname(core.__file__), f), cfgdir)
 sys.path.insert(0, cfgdir)
 bot = importlib.import_module("bot")

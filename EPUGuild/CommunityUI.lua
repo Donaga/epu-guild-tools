@@ -1,13 +1,13 @@
 local ADDON,ns=...
 local E,UI,C
 local DAY=86400
-local labels={events="Activities",quests="Quest matching",catchup="Catch-up",notifications="Notifications"}
+local labels={events="Activities",invites="Guild invites",quests="Quest matching",catchup="Catch-up",notifications="Notifications"}
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
 function ns.InstallCommunityViews(views,env,categories)
   E=env; UI=E.UI; C=E.C
-  for _,key in ipairs({"quests","catchup","notifications"}) do categories[#categories+1]={label=labels[key],value=key} end
+  for _,key in ipairs({"invites","quests","catchup","notifications"}) do categories[#categories+1]={label=labels[key],value=key} end
 end
 local picker
 function ns.ShowActivityDatePicker(initial,chosen)
@@ -54,7 +54,8 @@ function ns.ShowActivityDatePicker(initial,chosen)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" end
 function ns.CommunityNewAction(kind)
-  if kind=="events" then Open("eventform","new")
+  if kind=='invites' then Open('invitehelp','help')
+  elseif kind=="events" then Open("eventform","new")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
   elseif kind=="notifications" then Open("noticeform","all")
@@ -71,6 +72,7 @@ local function ItemLabel(token)
 end
 function ns.CommunityRows(g,q,st,bar)
   if bar and bar.casualAvailability then
+    bar.casualAvailability:SetShown(st.kind~='invites')
     bar.casualAvailability:SetLabel(st.kind=="events" and "Calendar" or "My availability")
     bar.casualAvailability:SetScript("OnClick",st.kind=="events" and function()
       ns.ShowActivityDatePicker(st.eventDate,function(day) st.eventDate=day; UI:Refresh() end)
@@ -95,7 +97,7 @@ function ns.CommunityRows(g,q,st,bar)
       end)
       bar.casualAvailability:SetOn(st.eventDate~=nil)
     else bar.casualAvailability:SetOn(false) end
-    bar.casualNew:SetLabel(st.kind=="events" and "New event" or (st.kind=="catchup" and "Review" or (st.kind=="quests" and "Sharing" or "Settings")))
+    bar.casualNew:SetLabel(st.kind=='invites' and 'How it works' or (st.kind=="events" and "New event" or (st.kind=="catchup" and "Review" or (st.kind=="quests" and "Sharing" or "Settings"))))
   end
   if st.kind=="events" then
     for id,r in pairs(g.guildEvents) do
@@ -110,6 +112,19 @@ function ns.CommunityRows(g,q,st,bar)
       end
     end
     table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
+  elseif st.kind=='invites' then
+    if not ns.CanInviteGuild() then
+      out[1]={key='invitepermission',title='Guild invite permission required',sub='The game must report that this character can invite members.'}; return out
+    end
+    local seen={}
+    for id,r in pairs(g.inviteRequests or {}) do
+      if ns.ActiveGuildInvite(r) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) and not seen[r.who:lower()] and E.Match(q,r.who,r.requester) then
+        seen[r.who:lower()]=true
+        local outcome=ns.GuildInviteOutcome(id)
+        out[#out+1]={key='invite:'..id,title=r.who,sub='Requested by '..r.requester..' on Discord · '..date('%m-%d %H:%M',r.posted),right=outcome and 'Invite sent' or 'Needs invite',onClick=function() Open('guildinvite',id) end}
+      end
+    end
+    table.sort(out,function(a,b) return a.title<b.title end)
   elseif st.kind=="quests" then
     out[1]={key="questsettings",title="Quest sharing: "..(s.shareQuests and "on" or "off"),sub="Only explicitly selected quests are shared; up to eight. Click to change sharing.",onClick=function() Open("questsettings","settings") end}
     local quests,reason=ns.CurrentQuests(); local rows={}
@@ -143,7 +158,8 @@ function ns.CommunityRows(g,q,st,bar)
   return out
 end
 function ns.CommunityFooter(kind)
-  if kind=="events" then return (State().eventDate and ("Date: "..State().eventDate.." · Calendar > All dates to clear. ") or "Calendar selects a date; numbers show activities. ").."Local dates; open an activity for server time and signups."
+  if kind=='invites' then return 'Discord requests arrive after the companion officer logs in or /reloads, then sync. Invitations are manual; requests expire after 7 days.'
+  elseif kind=="events" then return (State().eventDate and ("Date: "..State().eventDate.." · Calendar > All dates to clear. ") or "Calendar selects a date; numbers show activities. ").."Local dates; open an activity for server time and signups."
   elseif kind=="quests" then return "Exact quest IDs match; phases and quest-chain eligibility can differ. Shared progress expires after three minutes."
   elseif kind=="catchup" then return "Latest relevant updates from data synced so far; active projects and upcoming events remain visible after review."
   elseif kind=="notifications" then return "Personal settings stay on this character. Quiet hours use your local clock; digests are read in Catch-up." end
@@ -256,6 +272,26 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Field("Copy title",ns.EventCalendarTitle(r),160)
     det:Field("Copy details",ns.EventCalendarDescription(key,r),160)
     det:Text("If draft preparation is unavailable, create a Guild event manually and copy these fields. The creator, copied title and server date/time must match. WoW limits the copy to 31 title / 255 description characters; full details stay in EPU. Use Ctrl+A / Ctrl+C in each field.",C.muted)
+  elseif kind=='guildinvite' then
+    local r=g.inviteRequests[key]
+    if not r or not ns.CanInviteGuild() then UI:CloseDetails(); return true end
+    det:Reset(nil,nil,r.who,'Discord guild invite request')
+    det:Text('Requested by: '..r.requester..'\nReceived: '..date('%Y-%m-%d %H:%M',r.posted))
+    det:Text('Confirm the character name before inviting. A request is not proof of character ownership. The game decides whether the name is valid and the player can join.',C.muted)
+    det:Field('Copy invite','/ginvite '..r.who,160)
+    local outcome=ns.GuildInviteOutcome(key)
+    if outcome then det:Text((outcome.phase=='joined' and 'Joined the guild' or 'Invite sent')..' · reported by '..outcome.by..' at '..date('%m-%d %H:%M',outcome.t),C.gold)
+    else det:Text('No game-confirmed invitation recorded yet.',C.muted) end
+    if ns.ActiveGuildInvite(r) then det:Buttons({{outcome and 'Invite again' or 'Invite',function() ns.InviteRequestedCharacter(key) end,accent=true}})
+    else det:Text(ns.Member(r.who) and 'This character is already in the guild.' or 'This request was withdrawn or expired.',C.gold) end
+    det:Buttons({{'Dismiss for me',function()
+      s.inviteDismissed=s.inviteDismissed or {}; s.inviteDismissed[key]=r.who; UI:CloseDetails(); UI:Refresh()
+    end}})
+  elseif kind=='invitehelp' then
+    det:Reset(nil,nil,'Guild invite requests','From #guild-invite-requests')
+    det:Text('Use /guildinvite in Discord and enter the required first and last name, or post a standalone line:\nCharacter: Donaga Gaelige')
+    det:Text('Only that explicit format is imported. Conversation, code examples, quotes and bot messages are ignored. Duplicate active names are suppressed. Editing/deleting an accepted message updates/withdraws its request after another import.')
+    det:Text('The companion officer must log in or /reload to load new requests. Online addon users then receive them through guild sync. Only characters with the game’s guild-invite permission receive alerts. Notifications respect quiet hours and personal settings. No automatic invites.',C.muted)
   elseif kind=="questsettings" then
     det:Reset(nil,nil,"Selected quest sharing",s.shareQuests and "Sharing is on" or "Sharing starts off")
     local n=0 for _ in pairs(s.selectedQuests) do n=n+1 end

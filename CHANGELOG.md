@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.0
+
+- Add `/guildinvite` in Discord with required first and last name fields, plus strict `Character: First Last` imports from a configured channel. Ignore chat, bot posts, quotes, code examples and ambiguous names; deduplicate requests, handle edits/deletions and expire old requests.
+- Alert only characters with the game's guild-invite permission. Add `/epu invites`, manual Invite and a copyable `/ginvite` command. Match native success messages or roster joins before reporting completion; return ✅ to the original Discord message. A button click alone never confirms an invitation.
+- Add an officer-controlled, per-character sync-helper whitelist, including explicit alts. Helpers can import invites/new pending bank requests, but cannot change approvals, officer announcements or the whitelist.
+- Add a standalone Windows shared-folder helper with folder browsing, optional Windows startup, clear queued/exported/received status, authenticated packets, stale/replay guards and duplicate-safe imports.
+- Support OneDrive and Google Drive desktop folders, including mirrored copies for different volunteers. Keep the central Discord token private and transfer only filtered public guild data and verified receipts; preserve local officer inbox actions.
+- Hold new inbox kinds until the updated addon is installed. Add filtered public snapshot merging and receipts back to the central bot. WoW still needs login or `/reload`; cloud-provider sharing remains an organiser setup step.
+
 ## 0.17.1
 
 - Keep the minimap button outside the actual minimap edge, using its current width, height and reported round/square/corner shape instead of a fixed radius. Reposition when the map resizes; choose a nearby visible edge position when the screen boundary blocks the preferred angle.

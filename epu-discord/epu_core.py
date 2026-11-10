@@ -580,6 +580,28 @@ def load_guild_data(sv_path: str, guild_key: str | None = None) -> GuildData:
 # ---------------------------------------------------------------------------
 # Companion state (links, posted messages, queued inbox entries)
 # ---------------------------------------------------------------------------
+def invite_character(first: str, last: str) -> str:
+    parts = [str(first).strip(), str(last).strip()]
+    for part in parts:
+        if not 1 <= len(part) <= 24 or not part[0].isalpha() or not part[-1].isalpha() or not all(c.isalpha() or c in "'’" for c in part):
+            raise ValueError("Enter just the character's first name and last name in separate fields (letters, with internal apostrophes allowed).")
+    return ' '.join(parts)
+
+def invite_from_message(text: str) -> str | None:
+    """Only an explicit, unquoted Character: line. Never guess from chat."""
+    found=[]; fenced=False
+    for line in str(text).splitlines():
+        line=line.strip()
+        if line.startswith('```'):
+            fenced=not fenced; continue
+        if fenced or line.startswith(('>', '`')): continue
+        if re.match(r'^character\s*:',line,re.I):
+            match=re.fullmatch(r'character\s*:\s*(\S+)\s+(\S+)\s*',line,re.I)
+            if not match: return None
+            try: found.append(invite_character(*match.groups()))
+            except ValueError: return None
+    return found[0] if len(found)==1 else None
+
 class State:
     def __init__(self, path: str):
         self.path = path
@@ -657,6 +679,34 @@ class State:
         return chars[0] if chars else None
 
     # Inbox
+    def queue_guild_invite(self, source: str, who: str | None, requester: str, user: str, posted: int) -> bool:
+        now=int(time.time()); sources=self.data.setdefault('invite_sources',{})
+        sources={k:v for k,v in sources.items() if now-int(v.get('posted',0))<14*86400}
+        self.data['invite_sources']=sources
+        old=sources.get(source)
+        if who is None and not old: return False
+        if posted>now+300 or now-posted>7*86400: return False
+        if who is not None:
+            parts=who.split()
+            if len(parts)!=2: raise ValueError('A first and last name are required.')
+            who=invite_character(*parts)
+            if old and old['who']==who and not old.get('cancelled'): return False
+            if not old:
+                if any(v['who'].casefold()==who.casefold() and not v.get('cancelled') and now-v['posted']<7*86400 for v in sources.values()): return False
+                if sum(v.get('user')==str(user) and now-v.get('updated',0)<3600 for v in sources.values())>=5:
+                    raise ValueError('You have submitted five requests recently. Please wait before submitting another.')
+                if len(sources)>=200: raise ValueError('The invite queue is full. Please ask an officer.')
+        elif old.get('cancelled'): return False
+        revision=max(int(time.time()*1000),(old or {}).get('revision',0)+1)
+        requester=''.join(c for c in str(requester) if ord(c)>=32 and c not in '|').encode('utf-8')[:80].decode('utf-8',errors='ignore')
+        record={'who':who or old['who'],'requester':requester, 'user':str(user),'posted':int(posted),'updated':now,'revision':revision,'cancelled':who is None}
+        sources[source]=record
+        # Keep only the newest pending revision for each source.
+        self.data['inbox']=[e for e in self.data['inbox'] if not (e.get('kind')=='guild_invite' and e.get('source')==source)]
+        self.data['inbox'].append({'id':uuid.uuid4().hex[:16],'kind':'guild_invite','source':source,'who':record['who'],
+                                  'requester':record['requester'],'posted':record['posted'],'cancelled':record['cancelled'],'revision':revision,'t':now})
+        self.save(); return True
+
     def queue_request(self, who: str, item_id: int | None, item_name: str, qty: int, note: str, discord_name: str,
                       to: str | None = None) -> dict:
         e = {"id": uuid.uuid4().hex[:10], "kind": "request", "who": who, "item": item_id, "itemName": item_name,

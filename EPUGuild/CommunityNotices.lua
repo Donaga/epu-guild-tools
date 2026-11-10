@@ -1,6 +1,6 @@
 -- Personal routing: instant, digest or off, with local quiet hours and mutes.
 local ADDON,ns=...
-ns.NOTICE_CATEGORIES={catchup="Returning-player hint",requests="Bank requests",crafts="Craft requests",news="Guild news",milestones="Milestones",activities="Followed activities",projects="Followed projects",events="Followed events",reminders="Event reminders"}
+ns.NOTICE_CATEGORIES={catchup="Returning-player hint",requests="Bank requests",crafts="Craft requests",news="Guild news",milestones="Milestones",activities="Followed activities",projects="Followed projects",events="Followed events",reminders="Event reminders",invites="Guild invite requests"}
 local function Clock(value)
   local h,m=tostring(value or ""):match("^(%d%d):(%d%d)$")
   h,m=tonumber(h),tonumber(m)
@@ -22,6 +22,7 @@ function ns.InQuietHours()
   return a<b and now>=a and now<b or a>b and (now>=a or now<b)
 end
 function ns.NotificationPolicy(category,key,kind)
+  if category=='invites' and not ns.CanInviteGuild() then return 'off' end
   local s=ns.CommunityState(); if not s then return "instant" end
   if key and s.muted[ns.PersonalToken(kind or category,key)] then return "off" end
   local mode=s.mode or "instant"
@@ -61,10 +62,12 @@ function ns.DeferOverflowNotice(title,text,icon,context)
 end
 function ns.OpenPersonalNotice(c)
   if not c or not c.kind or not c.key or not ns.UI then return false end
-  local view=({event="activities",activity="activities",project="projects",request="requests",news="news"})[c.kind]
+  if c.kind=='guildinvite' and not ns.CanInviteGuild() then return false end
+  local view=({event="activities",activity="activities",guildinvite="activities",project="projects",request="requests",news="news"})[c.kind]
   if not view then return false end
   ns.UI:Show()
-  if c.kind=="event" then ns.UI.state.activities.kind="events"
+  if c.kind=="guildinvite" then ns.UI.state.activities.kind='invites'
+  elseif c.kind=="event" then ns.UI.state.activities.kind="events"
   elseif c.kind=="activity" then local r=ns.CasualStore().activityPosts[c.key]; ns.UI.state.activities.kind=r and r.kind or "help" end
   ns.UI:SetView(view); ns.UI:OpenDetails(c.kind,c.key); return true
 end
