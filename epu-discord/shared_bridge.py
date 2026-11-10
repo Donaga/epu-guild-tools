@@ -5,8 +5,8 @@ from pathlib import Path
 import epu_core as core
 
 MAX_BYTES=8*1024*1024
-KINDS={'guild_invite','request'}
-FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','inviteRequests','inviteOutcomes'}
+KINDS={'guild_invite','request','event_response'}
+FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
 WIRE={'requests':'req','donations':'don','crafters':'craft'}
 def safe(value,depth=0):
     if depth>24: raise ValueError('Bridge data is too deeply nested')
@@ -121,15 +121,21 @@ def reconcile_helper_acks(cfg,state):
             elif e.get('kind')=='request':
                 r=(g.get('requests') or {}).get('d-'+e['id']) or {}
                 if r.get('who')==e.get('who') and r.get('item')==e.get('item') and r.get('qty')==e.get('qty') and e.get('item'):remove.add(e['id'])
+            elif e.get('kind')=='event_response':
+                r=(g.get('eventResponses') or {}).get(e.get('event','')+'\x1e'+e.get('who','')) or {}
+                if r.get('sourceID')==e['id'] or r.get('t',0)>e.get('t',0):remove.add(e['id'])
     if remove:
         state.data['inbox']=[e for e in state.data['inbox'] if e['id'] not in remove];state.save()
 def publish(cfg,state):
-    received={h:p['sequence'] for h,p in read_helper_uploads(cfg)}
+    uploads=dict(read_helper_uploads(cfg))
+    received={h:p['sequence'] for h,p in uploads.items()}
     for helper,entry in cfg.get('sync_helpers',{}).items():
         folders=entry.get('folders') or []
         if not folders:continue
         enabled=entry.get('enabled',True)
-        entries=[dict(e,guild=cfg['guild_key']) for e in state.data['inbox'] if e.get('kind') in KINDS] if enabled else []
+        capabilities=(uploads.get(helper,{}).get('payload') or {}).get('capabilities') or []
+        kinds={'guild_invite','request'} | ({'event_response'} if 'event_response' in capabilities else set())
+        entries=[dict(e,guild=cfg['guild_key']) for e in state.data['inbox'] if e.get('kind') in kinds] if enabled else []
         payload={'enabled':enabled,'characters':entry.get('characters',[]),'entries':entries,'received_sequence':received.get(helper,0)}
         digest=hashlib.sha256(canonical(payload)).hexdigest()
         last=state.data.setdefault('bridge_feeds',{}).get(helper) or {}
@@ -159,7 +165,8 @@ def helper_cycle(config,local):
         existing=list(parsed.values()) if isinstance(parsed,dict) else parsed
     owned=set(local.get('owned_ids') or [])
     other=[e for e in existing if isinstance(e,dict) and e.get('id') not in owned]
-    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries] if payload.get('enabled') else []
+    event_supported='EventBridge.lua' in toc.read_text(encoding='utf-8').splitlines()
+    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries if e.get('kind')!='event_response' or event_supported] if payload.get('enabled') else []
     core.write_inbox(str(target),other+stage)
     local['owned_ids']=[e['id'] for e in stage];local['feed_sequence']=feed['sequence']
     if not payload.get('enabled'):return 'Helper access disabled by the organiser.'
@@ -172,12 +179,13 @@ def helper_cycle(config,local):
             character=gd.db.get('syncHelperCharacter')
             if character not in allowed or not guild_matches(gd.key,guild) or gd.db.get('syncHelperGuild')!=gd.key:continue
             signature=hashlib.sha256(Path(path).read_bytes()).hexdigest()
-            if signature!=local.get('uploaded') or time.time()-local.get('uploaded_at',0)>300:
+            capabilities=['event_response'] if 'EventBridge.lua' in toc.read_text(encoding='utf-8').splitlines() else []
+            if signature!=local.get('uploaded') or capabilities!=local.get('capabilities') or time.time()-local.get('uploaded_at',0)>300:
                 snap=public_snapshot(gd,character)
                 acked=[e['id'] for e in entries if e['id'] in gd.inbox_done]
-                packet=envelope(helper,guild,'upload',{'snapshot':snap,'acked':acked},secret,max(time.time_ns()//1000000,local.get('upload_sequence',0)+1))
+                packet=envelope(helper,guild,'upload',{'snapshot':snap,'acked':acked,'capabilities':capabilities},secret,max(time.time_ns()//1000000,local.get('upload_sequence',0)+1))
                 atomic(folder/'to-bot.json',packet)
-                local.update(uploaded=signature,uploaded_at=time.time(),upload_sequence=packet['sequence'])
+                local.update(uploaded=signature,uploaded_at=time.time(),upload_sequence=packet['sequence'],capabilities=capabilities)
             receipt='Bot received your game snapshot.' if payload.get('received_sequence',0)>=local.get('upload_sequence',1) else 'Game snapshot exported; waiting for cloud transfer and bot receipt.'
             return str(len(stage))+' queued update(s) ready. '+receipt+' /reload to import incoming updates.'
         except (OSError,ValueError,KeyError,TypeError):continue

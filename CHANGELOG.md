@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.0
+
+- Show Online, Offline, Unknown and short-lived reported presence in the guild invite list. Add an explicit Add to Friends action and permission-gated online alerts with quiet-hour/dismissal support, paced ephemeral sightings and reconnect cooldowns. Never poll /who or automatically change friends/invite anyone.
+- Simplify event creation with activity presets, suggested meeting place, quick local start times and collapsed group options. Preserve custom values and drafts when choosing a type or expanding options.
+- Mirror EPU guild events to one maintained Discord #events card with dates, plans, confirmed signup names/roles and separately labelled pending responses. Add verified-character signup buttons and role selection through the existing officer/helper bridge. Update cancelled/ended events and disable their buttons; never ping members automatically.
+- Gate event actions behind updated addon/helper support so older helpers continue receiving invite and bank requests. Return public EPU events/signups through helpers, preserving newer game decisions. Native WoW calendar attendee snapshots remain local.
+- Fix announcement/detail headings retaining a fixed height from the event date preview and overlapping following text.
+- Verify officer bank status changes return through helpers without granting approval permission or overwriting newer data.
+
 ## 0.18.0
 
 - Add `/guildinvite` in Discord with required first and last name fields, plus strict `Character: First Last` imports from a configured channel. Ignore chat, bot posts, quotes, code examples and ambiguous names; deduplicate requests, handle edits/deletions and expire old requests.

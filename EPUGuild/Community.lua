@@ -46,6 +46,8 @@ local function ValidResponse(id,r)
   return Revision(r) and Text(r.event,180,true) and Text(r.who,80,true) and ns.Member(r.who)
     and id==r.event.."\030"..r.who and (r.state=="going" or r.state=="tentative" or r.state=="declined")
     and ns.EVENT_ROLES[r.role]~=nil and Text(r.note,160)
+    and (r.via==nil or (r.via=='discord' and Text(r.bridgeBy,80,true) and ns.Member(r.bridgeBy)
+      and Text(r.sourceID,80,true) and ns.PositiveInt(r.sourceRevision,1e15)))
 end
 local serial=0
 local pending={}
@@ -124,12 +126,13 @@ function ns.MergeCommunity(sender,b,trusted)
   local g=ns.CasualStore(); if not g then return false end
   local changed=false
   local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel"}},
-    eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t"}}}
+    eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t","via","bridgeBy","sourceID","sourceRevision"}}}
   for f,d in pairs(definitions) do
     if type(b[f])=="table" then
       local size=Count(g[f])
       for id,r in pairs(b[f]) do
-        if type(id)=="string" and d.valid(id,r) and (trusted or r.who==sender) then
+        if type(id)=="string" and d.valid(id,r) and (trusted or r.who==sender
+          or (f=='eventResponses' and ns.ValidBridgeEventResponse and ns.ValidBridgeEventResponse(sender,r))) then
           local cur=g[f][id]; local allowed=true
           if cur and f=="guildEvents" then
             allowed=r.who==cur.who and r.created==cur.created and (cur.status~="cancelled" or r.status=="cancelled")

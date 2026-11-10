@@ -61,6 +61,10 @@ jobs:
         run: python tests/test_activity_calendar.py
       - name: Explicit Discord guild invite requests
         run: python tests/test_invites.py
+      - name: Invite presence and online alerts
+        run: python tests/test_invite_presence.py
+      - name: Discord events and delegated signups
+        run: python tests/test_event_sync.py
       - name: Two-way shared-folder helper
         run: python tests/test_shared_bridge.py
       - name: Opt-in quest matching

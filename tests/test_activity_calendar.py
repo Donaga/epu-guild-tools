@@ -115,6 +115,18 @@ check('native draft includes link marker and server clock',A.ev('__set.descripti
 check('existing native draft is never overwritten',A.ev('__ns.PrepareWoWCalendar(event)') is False and A.ev('__created')==1)
 A.ex("CalendarCreateEventFrame:Hide(); __dayEvents={{title='Relaxed fishing',calendarType='GUILD_EVENT'}}")
 check('matching title on same date prevents duplicate draft',A.ev('__ns.PrepareWoWCalendar(event)') is False and A.ev('__created')==1)
+A.ex("__ns.UI:OpenDetails('eventform','new')")
+check('new event has a useful title and group options start collapsed',bool(A.ev('__ns.UI.details.pools.box[1]:GetText()')) and not A.ev('__ns.UI.details.pools.box[5]:IsShown()'))
+A.ex("__ns.UI.details.pools.box[1]:SetText('My custom event');__ns.UI.details.pools.box[3]:SetText('Bring bait');__click('Group options')")
+check('expanding options preserves edits',A.ev('__ns.UI.details.pools.box[1]:GetText()')=='My custom event' and A.ev('__ns.UI.details.pools.box[3]:GetText()')=='Bring bait' and A.ev('__ns.UI.details.pools.box[5]:IsShown()'))
+A.ex("__ns.UI.details.pools.box[6]:SetText('12');__click('Hide group options');__click('Choose type');EPUGuildMenu.rows[1]:Click()")
+check('type preset preserves custom title and group size',A.ev('__ns.UI.details.pools.box[1]:GetText()')=='My custom event' and A.ev('__ns.UI.details.pools.box[6]:GetText()')=='12')
+A.ex("__click('In 15 min')")
+check('quick start uses local time and preserves draft',abs(A.ev('__ns.ParseEventLocal(__ns.UI.details.pools.box[4]:GetText())-__now')-900)<60)
+# Reuse the fixed-height date preview as the news heading, reproducing the
+# screenshot sequence rather than only exercising a fresh font string.
+A.ex("__ginfo='A friendly guild. Everyone is welcome.';__motd='Welcome!';__ns.UI.details.pools.text[2]:SetHeight(44);__ns.UI:OpenDetails('motd','motd')")
+check('news heading clears stale fixed text height',A.ev('__ns.UI.details.pools.text[2]._h')==14)
 check('new activity UI raises no runtime errors',A.ev('__errors') in (None,0))
 print('Typed activities and native calendar:',check.failed,'failed')
 sys.exit(bool(check.failed))
