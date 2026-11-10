@@ -3024,6 +3024,8 @@ ns.On("MAIL_SHOW", function() if UI:IsShown() then UI:Refresh() end end)
 ---------------------------------------------------------------------------
 local mb = CreateFrame("Button", "EPUGuildMinimapButton", Minimap)
 mb:SetSize(31, 31)
+mb:SetHitRectInsets(-6,-6,-6,-6)
+mb:SetClampedToScreen(true)
 mb:SetFrameStrata("MEDIUM")
 mb:SetFrameLevel(8)
 mb:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -3038,39 +3040,139 @@ mbBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 mbBorder:SetSize(53, 53)
 mbBorder:SetPoint("TOPLEFT")
 
+local buttonPanel
+local buttonShapes={
+  SQUARE={false,false,false,false},
+  ["CORNER-TOPLEFT"]={true,false,false,false},["CORNER-TOPRIGHT"]={false,false,true,false},
+  ["CORNER-BOTTOMLEFT"]={false,true,false,false},["CORNER-BOTTOMRIGHT"]={false,false,false,true},
+  ["SIDE-LEFT"]={true,true,false,false},["SIDE-RIGHT"]={false,false,true,true},
+  ["SIDE-TOP"]={true,false,true,false},["SIDE-BOTTOM"]={false,true,false,true},
+  ["TRICORNER-TOPLEFT"]={true,true,true,false},["TRICORNER-TOPRIGHT"]={true,false,true,true},
+  ["TRICORNER-BOTTOMLEFT"]={true,true,false,true},["TRICORNER-BOTTOMRIGHT"]={false,true,true,true},
+}
+local function ButtonGap()
+  local n=tonumber(ns.db.settings.minimapGap)
+  return n and n==n and math.max(16,math.min(80,n)) or 20
+end
+function ns.MinimapButtonOffset(angle,width,height,shape,gap)
+  angle=tonumber(angle) or 200
+  if angle~=angle or angle==math.huge or angle==-math.huge then angle=200 end
+  local a=math.rad(angle%360); local x,y=math.cos(a),math.sin(a)
+  local corners=buttonShapes[shape]; local quadrant=(x<0 and 1 or 3)+(y<0 and 1 or 0)
+  if corners and not corners[quadrant] then
+    local edge=math.max(math.abs(x),math.abs(y)); x,y=x/edge,y/edge
+  end
+  return x*(width/2+gap),y*(height/2+gap)
+end
 local function PlaceButton()
-  local a = math.rad(ns.db.settings.minimapAngle or 200)
+  if not ns.db then return end
+  local w,h=Minimap:GetWidth(),Minimap:GetHeight()
+  if not w or not h or w<=0 or h<=0 then return end
+  local shape=GetMinimapShape and GetMinimapShape() or "ROUND"
+  local x,y=ns.MinimapButtonOffset(ns.db.settings.minimapAngle,w,h,shape,ButtonGap())
+  -- Screen clamping alone can push a button back over a map at the screen
+  -- edge. Prefer the nearest perimeter position with room for the grab area.
+  local mx,my=Minimap:GetCenter(); local scale=Minimap:GetEffectiveScale()
+  if mx and my and scale and scale>0 then
+    local sw=UIParent:GetWidth()*UIParent:GetEffectiveScale()/scale
+    local sh=UIParent:GetHeight()*UIParent:GetEffectiveScale()/scale
+    local function Fits(dx,dy) return mx+dx>=22 and mx+dx<=sw-22 and my+dy>=22 and my+dy<=sh-22 end
+    if not Fits(x,y) then
+      for delta=5,180,5 do
+        local found=false
+        for _,direction in ipairs({1,-1}) do
+          local dx,dy=ns.MinimapButtonOffset((tonumber(ns.db.settings.minimapAngle) or 200)+delta*direction,w,h,shape,ButtonGap())
+          if Fits(dx,dy) then x,y=dx,dy; found=true; break end
+        end
+        if found then break end
+      end
+    end
+  end
+  mb:SetFrameLevel(math.max(8,Minimap:GetFrameLevel()+10))
   mb:ClearAllPoints()
-  mb:SetPoint("CENTER", Minimap, "CENTER", math.cos(a) * 80, math.sin(a) * 80)
+  mb:SetPoint("CENTER", Minimap, "CENTER", x,y)
 end
 
 function ns.UpdateMinimapButton()
+  if not ns.db then return end
   if ns.db.settings.hideMinimap then mb:Hide() else mb:Show(); PlaceButton() end
+  if buttonPanel then
+    buttonPanel.lock:SetLabel(ns.db.settings.minimapLocked and "Unlock dragging" or "Lock dragging")
+    buttonPanel.visible:SetLabel(ns.db.settings.hideMinimap and "Show button" or "Hide button")
+    buttonPanel.status:SetText("Distance from edge: "..ButtonGap().." · "..(ns.db.settings.minimapLocked and "Dragging locked" or "Drag around the minimap edge"))
+  end
+end
+function ns.ResetMinimapButton()
+  ns.db.settings.minimapAngle=200; ns.db.settings.minimapGap=20
+  ns.db.settings.hideMinimap=false; ns.db.settings.minimapLocked=false
+  ns.UpdateMinimapButton()
+end
+function ns.ShowMinimapButtonSettings()
+  if not buttonPanel then
+    local p=CreateFrame("Frame","EPUGuildButtonSettings",UIParent,"BasicFrameTemplateWithInset")
+    buttonPanel=p; p:SetSize(400,330); p:SetPoint("CENTER"); p:SetFrameStrata("DIALOG")
+    p.TitleText:SetText("EPU minimap button")
+    tinsert(UISpecialFrames,"EPUGuildButtonSettings")
+    local hint=Font(p,12,C.text); hint:SetPoint("TOPLEFT",20,-38); hint:SetWidth(360); hint:SetWordWrap(true)
+    hint:SetText("Choose a position or drag the button around the edge. Add space to avoid other minimap buttons.")
+    local presets={{"Top left",135},{"Top",90},{"Top right",45},{"Left",180},{"Reset",false},{"Right",0},{"Bottom left",225},{"Bottom",270},{"Bottom right",315}}
+    p.presets={}
+    for i,spec in ipairs(presets) do
+      local angle=spec[2]; local b=Btn(p,spec[1],112,26)
+      b:SetPoint("TOPLEFT",20+((i-1)%3)*124,-82-math.floor((i-1)/3)*32)
+      b:SetScript("OnClick",function()
+        if angle==false then ns.ResetMinimapButton() else ns.db.settings.minimapAngle=angle; ns.db.settings.hideMinimap=false; ns.UpdateMinimapButton() end
+      end)
+      p.presets[i]=b
+    end
+    p.closer=Btn(p,"Closer",112,24); p.closer:SetPoint("TOPLEFT",20,-190)
+    p.closer:SetScript("OnClick",function() ns.db.settings.minimapGap=math.max(16,ButtonGap()-8); ns.UpdateMinimapButton() end)
+    p.further=Btn(p,"Further out",112,24); p.further:SetPoint("TOPLEFT",144,-190)
+    p.further:SetScript("OnClick",function() ns.db.settings.minimapGap=math.min(80,ButtonGap()+8); ns.UpdateMinimapButton() end)
+    p.status=Font(p,11,C.muted); p.status:SetPoint("TOPLEFT",20,-228); p.status:SetWidth(360); p.status:SetWordWrap(true)
+    p.lock=Btn(p,"Lock dragging",170,24); p.lock:SetPoint("BOTTOMLEFT",20,22)
+    p.lock:SetScript("OnClick",function() ns.db.settings.minimapLocked=not ns.db.settings.minimapLocked; mb:SetScript("OnUpdate",nil); ns.UpdateMinimapButton() end)
+    p.visible=Btn(p,"Hide button",170,24); p.visible:SetPoint("BOTTOMRIGHT",-20,22)
+    p.visible:SetScript("OnClick",function() ns.db.settings.hideMinimap=not ns.db.settings.hideMinimap; ns.UpdateMinimapButton() end)
+  end
+  ns.UpdateMinimapButton(); buttonPanel:Show()
 end
 
-mb:SetScript("OnClick", function(_, button)
+mb:SetScript("OnClick", function(self, button)
+  if self.suppressClickUntil and GetTime()<=self.suppressClickUntil then return end
   if IsShiftKeyDown() and ns.ShowGuildMapSettings then ns.ShowGuildMapSettings()
   elseif button == "RightButton" then ns.FullSync() else UI:Toggle() end
 end)
 mb:SetScript("OnDragStart", function(self)
+  if ns.db.settings.minimapLocked then return end
+  GameTooltip_Hide()
   self:SetScript("OnUpdate", function()
     local mx, my = Minimap:GetCenter()
     local px, py = GetCursorPosition()
     local s = Minimap:GetEffectiveScale()
-    ns.db.settings.minimapAngle = math.deg(math.atan2(py / s - my, px / s - mx))
+    if not mx or not my or not s or s<=0 then return end
+    local x=(px/s-mx)/(Minimap:GetWidth()/2+ButtonGap())
+    local y=(py/s-my)/(Minimap:GetHeight()/2+ButtonGap())
+    if x==0 and y==0 then return end
+    ns.db.settings.minimapAngle = math.deg(math.atan2(y,x))%360
     PlaceButton()
   end)
 end)
-mb:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+mb:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil); self.suppressClickUntil=GetTime()+0.25 end)
+mb:SetScript("OnHide",function(self) self:SetScript("OnUpdate",nil) end)
 mb:SetScript("OnEnter", function(self)
   GameTooltip:SetOwner(self, "ANCHOR_LEFT")
   GameTooltip:SetText("EPU Guild Tools")
   GameTooltip:AddLine("Left-click: open window", 1, 1, 1)
   GameTooltip:AddLine("Right-click: resync with officers", 1, 1, 1)
   GameTooltip:AddLine("Shift-click: guild map settings", 1, 1, 1)
-  GameTooltip:AddLine("Drag: move button", 1, 1, 1)
+  GameTooltip:AddLine(ns.db.settings.minimapLocked and "Dragging locked" or "Drag: move around the edge", 1, 1, 1)
+  GameTooltip:AddLine("/epu button: position, spacing and reset", 1, 1, 1)
   GameTooltip:Show()
 end)
 mb:SetScript("OnLeave", GameTooltip_Hide)
 
 ns.On("PLAYER_LOGIN", ns.UpdateMinimapButton)
+ns.On("PLAYER_ENTERING_WORLD",ns.UpdateMinimapButton)
+ns.On("UI_SCALE_CHANGED",ns.UpdateMinimapButton)
+Minimap:HookScript("OnSizeChanged",PlaceButton)

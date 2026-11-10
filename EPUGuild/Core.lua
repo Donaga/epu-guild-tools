@@ -366,6 +366,7 @@ local HELP = {
   "|cffffd100/epu activities|r - scheduled activities, signups, quick help and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
+  "|cffffd100/epu button|r - position, spacing, lock and reset the minimap button",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
   "|cffffd100/epu milestones|r - guildmates' milestone pop-ups on/off;  |cffffd100/epu milestonechat|r - also announce your own in guild chat",
@@ -457,9 +458,14 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.UI:SetSize(700, 470)
     ns.UI:ClearAllPoints()
     ns.UI:SetPoint("CENTER")
-  elseif cmd == "minimap" then
-    ns.db.settings.hideMinimap = not ns.db.settings.hideMinimap
-    ns.UpdateMinimapButton()
+  elseif cmd == "button" or cmd == "minimap" then
+    local action=args:lower()
+    if action=="reset" then ns.ResetMinimapButton()
+    elseif cmd=="button" or action=="settings" then ns.ShowMinimapButtonSettings()
+    elseif action=="show" or action=="hide" or action=="" then
+      ns.db.settings.hideMinimap=action=="hide" or (action=="" and not ns.db.settings.hideMinimap)
+      ns.UpdateMinimapButton()
+    else ns.Print("Use /epu button, /epu minimap show, /epu minimap hide or /epu minimap reset.") end
   else
     for _, line in ipairs(HELP) do ns.Print(line) end
   end

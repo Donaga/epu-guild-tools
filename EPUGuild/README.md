@@ -240,6 +240,8 @@ If WoW reports message throttling, EPU pauses and retries with increasing delays
 /epu sync                    ask online officers for a full resync (also: right-click minimap button)
 /epu save                    save now (a /reload) so the Discord companion sees the latest
 /epu minimap                 show/hide the minimap button
+/epu button                  position presets, spacing, lock and visibility controls
+/epu minimap reset           recover a misplaced/hidden minimap button
 ```
 
 ## How sharing works
@@ -273,6 +275,11 @@ The **EPU Discord companion** (a separate download) posts requests to a Discord 
 ## Guild map (0.11+)
 
 Shift-click the EPU minimap button or use `/epu map` to open the guild map controls.
+Choose **Move minimap button**, or use `/epu button`, to position the addon button
+without dragging. Pick one of eight positions, adjust its distance from the edge,
+lock dragging or reset it. The button follows the actual minimap size and reported
+round/square shape. `/epu minimap reset` shows the button at its default position
+and unlocks it. Left-click still opens EPU; right-click still resyncs.
 Sharing, world-map markers, minimap markers and circular class icons start on.
 The 0.16 update resets these map settings to on **once per installation**, including
 previous off settings. After that initial reset, your choices persist across reloads
