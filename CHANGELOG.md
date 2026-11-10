@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.19.1
+
+- Default bank and crafting requests to the character placing them. The bank request form has a visible Mail to dropdown with full character names.
+- Show the requester and delivery address separately. Officers can choose another recipient and must save that change before preparing mail.
+- Send individual request changes ahead of bulk guild sync at the existing send rate. Officers receive alerts for new orders and digest entries for recent orders recovered during sync.
+
 ## 0.19.0
 
 - Show Online, Offline, Unknown and short-lived reported presence in the guild invite list. Add an explicit Add to Friends action and permission-gated online alerts with quiet-hour/dismissal support, paced ephemeral sightings and reconnect cooldowns. Never poll /who or automatically change friends/invite anyone.

@@ -874,6 +874,14 @@ local Views = {}
 local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "activities", "projects", "onboarding", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
+local function AddDropdownArrow(b)
+  b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
+  b.arrow = b:CreateTexture(nil, "ARTWORK")
+  b.arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+  b.arrow:SetSize(12, 12); b.arrow:SetPoint("RIGHT", -5, -2)
+  b.arrow:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
+end
+
 -- A toolbar button that opens a dropdown menu.
 --   items() -> { {label, value, right} }, current() -> value, set(value)
 local function DropChip(bar, w, tip, items, current, set, side)
@@ -881,11 +889,7 @@ local function DropChip(bar, w, tip, items, current, set, side)
   b = bar:Add(Btn(bar, "", w, 22), side or "left", function()
     OpenMenu(b, items(), current(), function(v) set(v); UI:Refresh() end)
   end, tip)
-  b.text:ClearAllPoints(); b.text:SetPoint("LEFT", 8, 0); b.text:SetPoint("RIGHT", -20, 0); b.text:SetJustifyH("LEFT")
-  b.arrow = b:CreateTexture(nil, "ARTWORK")
-  b.arrow:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
-  b.arrow:SetSize(12, 12); b.arrow:SetPoint("RIGHT", -5, -2)
-  b.arrow:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
+  AddDropdownArrow(b)
   return b
 end
 
@@ -1113,7 +1117,7 @@ Views.requests = {
           parts[#parts + 1] = "|cff6ea8ffcraft by " .. (ns.IAmCrafter(r) and "you" or r.crafter) .. "|r"
           parts[#parts + 1] = ({ me = "they send mats", bank = "bank sends mats", crafter = "crafter's mats" })[r.mats or "me"]
         end
-        if r.to and r.to ~= r.who then parts[#parts + 1] = "|cfff2c14e-> " .. r.to .. "|r" end
+        if r.to and r.to ~= r.who then table.insert(parts, 1, "|cfff2c14eMail to " .. r.to .. "|r") end
         parts[#parts + 1] = Ago(r.t)
         if not r.crafter then
           local waiting=ns.RequestRestock(rid)
@@ -1728,30 +1732,49 @@ UI.kindBtn:SetScript("OnClick", function(self)
   UI.kind = (UI.kind == "restock") and "goal" or "restock"
   self:SetLabel(UI.kind == "goal" and "One-time goal" or "Restock")
 end)
-UI.forIndex = 1
-UI.forBtn = Btn(composer, "For: me", 104, 22)
+UI.forBtn = Btn(composer, "Mail to: me", 104, 22)
 UI.forBtn:SetPoint("LEFT", UI.noteBox, "RIGHT", 6, 0)
-UI.forBtn.tip = "Which of your characters it should be mailed to. Click to cycle."
+AddDropdownArrow(UI.forBtn)
+local function RequestRecipients()
+  local chars = { ns.me }
+  for _, name in ipairs(ns.MyChars()) do
+    if name ~= ns.me then chars[#chars + 1] = name end
+  end
+  return chars
+end
 function UI:ForTarget()
-  local chars = ns.MyChars()
-  if self.forIndex > #chars then self.forIndex = 1 end
-  return chars[self.forIndex]
+  for _, name in ipairs(RequestRecipients()) do
+    if name == self.requestTo then return name end
+  end
+  return ns.me
 end
 function UI:UpdateForButton()
   local t = self:ForTarget() or ns.me or "me"
-  self.forBtn:SetLabel("For: " .. (t:match("^(%S+)") or t))
+  self.forBtn:SetLabel("Mail to: " .. (t:match("^(%S+)") or t))
+  self.forBtn.tip = "Mail to: " .. t .. ". Click to choose another character."
 end
-UI.forBtn:SetScript("OnClick", function() UI.forIndex = UI.forIndex + 1; UI:UpdateForButton() end)
+UI.forBtn:SetScript("OnClick", function(self)
+  local choices = {}
+  for _, name in ipairs(RequestRecipients()) do
+    choices[#choices + 1] = { label = name, value = name, right = name == ns.me and "Current toon" or nil }
+  end
+  OpenMenu(self, choices, UI:ForTarget(), function(name)
+    UI.requestTo = name
+    UI:UpdateForButton()
+  end)
+end)
 -- officers: type any guild member's name (partial is fine if it's unique)
-UI.forBox = Box(composer, 110, "For: me")
+UI.forBox = Box(composer, 110, "Request for…")
 UI.forBox:SetPoint("LEFT", UI.noteBox, "RIGHT", 6, 0)
 UI.forBox:Hide()
-UI.forBox.tip = "Officers: type a guild member's name to request it for them."
+UI.forBox.tip = "Enter a guild character's name to request for them. Leave blank to request for your current character."
 UI.action = Btn(composer, "Request", 90, 22, "accent")
 UI.action:SetPoint("RIGHT", -10, 0)
 
 local function ClearComposer()
   UI.itemBox:SetText(""); UI.qtyBox:SetText(""); UI.noteBox:SetText(""); UI.forBox:SetText("")
+  UI.requestTo = nil
+  UI:UpdateForButton()
 end
 
 local function SubmitComposer()
@@ -2498,7 +2521,7 @@ function UI:FillDetails()
       ask.mats = MATS_ORDER[MatsIndex() % #MATS_ORDER + 1]
       UI:FillDetails()
     end, tip = "Who provides the materials. Click to change." } })
-    local chars = ns.MyChars()
+    local chars = RequestRecipients()
     if #chars > 1 then
       if ask.forIndex > #chars then ask.forIndex = 1 end
       det:Buttons({ { "Send it to: " .. chars[ask.forIndex], function()
@@ -2541,7 +2564,9 @@ function UI:FillDetails()
     local p = PILL[r.status] or { r.status }
     det:Reset(ns.ItemIcon(r.item), Quality(r.item), ns.ItemName(r.item, true), p[1] .. "  ·  requested " .. Ago(r.t))
     det:Text("Delivered: " .. (r.delivered or 0) .. " / " .. r.qty .. "   Remaining: " .. ns.Remaining(r))
-    det:Text("Requested by " .. ns.WhoLabel(r.who) .. ((r.via == "discord") and " via Discord" or ""))
+    det:Text("Requested by " .. r.who .. ((r.via == "discord") and " via Discord" or ""))
+    local savedRecipient = r.to or r.who
+    local recipientLine = det:Text("Mail to: " .. savedRecipient, C.gold)
     if r.by and r.status ~= "pending" then det:Text("Last changed by " .. r.by .. " " .. Ago(r.u), C.muted) end
     det:Text("In bank: " .. ns.BankCount(r.item) .. "   You carry: " .. ns.ItemCount(r.item), C.muted)
     local waiting=ns.RequestRestock(key)
@@ -2557,21 +2582,33 @@ function UI:FillDetails()
       for _, a in ipairs(ns.AltsOf(r.who)) do chars[#chars + 1] = a end
       local main = ns.MainOf(r.who)
       if main ~= r.who then table.insert(chars, 1, main) end
-      local seen, uniq = {}, {}
-      for _, c in ipairs(chars) do if not seen[c] then seen[c] = true; uniq[#uniq + 1] = c end end
-      local idx = 1
-      for i, c in ipairs(uniq) do if c == (r.to or r.who) then idx = i end end
-      det.toChoice = uniq[idx]
-      det:Buttons({ { "Mail to: " .. uniq[idx], function(self)
-        idx = idx % #uniq + 1
-        det.toChoice = uniq[idx]
-        self:SetLabel("Mail to: " .. uniq[idx])
-      end, tip = (#uniq > 1) and ("Click to pick another of " .. ns.MainOf(r.who) .. "'s characters") or "No other characters known for this player" } })
+      local seen, choices = {}, {}
+      for _, name in ipairs(chars) do
+        if not seen[name] then
+          seen[name] = true
+          choices[#choices + 1] = { label = name, value = name, right = name == r.who and "Requester" or nil }
+        end
+      end
+      if not seen[savedRecipient] then
+        choices[#choices + 1] = { label = savedRecipient, value = savedRecipient }
+      end
+      det.toChoice = savedRecipient
+      if #choices > 1 then
+        det:Buttons({ { "Change recipient", function(self)
+          OpenMenu(self, choices, det.toChoice, function(name)
+            det.toChoice = name
+            det.casualDraft = name ~= savedRecipient
+            recipientLine:SetText("Mail to: " .. name .. (name ~= savedRecipient and " (unsaved)" or ""))
+          end)
+        end, tip = "Choose the delivery character, then click Save changes." } })
+      end
       local reason = officer and det:Field("Reason", r.reason or "", 160) or nil
       det:Buttons({ { "Save changes", function()
-        ns.EditRequest(key, { qty = qty:GetText(), note = note:GetText(), to = det.toChoice,
-          reason = reason and reason:GetText() or nil })
-        ns.Print("Request updated.")
+        if ns.EditRequest(key, { qty = qty:GetText(), note = note:GetText(), to = det.toChoice,
+          reason = reason and reason:GetText() or nil }) then
+          UI:FillDetails()
+          ns.Print("Request updated.")
+        end
       end, accent = true } })
       if officer then
         det:Text("Set status", C.muted)
@@ -2580,10 +2617,18 @@ function UI:FillDetails()
         end end
         det:Buttons({ { "Pending", Set("pending") }, { "Approve", Set("approved") }, { "Fill", Set("filled") }, { "Reject", Set("rejected"), tip = "Type a reason above first if you like" } })
         if r.status == "approved" then
-          if #ns.MemberMailPlan(r.to or r.who)>1 then
-            det:Buttons({{"Fill mail for this member",function() UI:OpenDetails("membermail",r.to or r.who) end}})
+          local function RecipientSaved()
+            local current = g.requests[key]
+            if current and det.toChoice == (current.to or current.who) then return true end
+            ns.Print("Save changes to the recipient before preparing mail.")
+            return false
           end
-          det:Buttons({ { "Mail it", function() ns.MailRequest(key) end, accent = true,
+          if #ns.MemberMailPlan(r.to or r.who)>1 then
+            det:Buttons({{"Fill mail for this member",function()
+              if RecipientSaved() then UI:OpenDetails("membermail", det.toChoice) end
+            end}})
+          end
+          det:Buttons({ { "Mail it", function() if RecipientSaved() then ns.MailRequest(key) end end, accent = true,
             tip = "With a mailbox open: fills in " .. (r.to or r.who) .. " and attaches " .. r.qty .. " from your bags. You click Send." } })
         end
       end
@@ -2592,7 +2637,6 @@ function UI:FillDetails()
       end
     else
       if r.note and r.note ~= "" then det:Text("Note: " .. r.note) end
-      if r.to and r.to ~= r.who then det:Text("Mail to: " .. r.to) end
       if r.status == "rejected" and r.reason then det:Text("Reason: " .. r.reason, C.red) end
       det:Text(own and "An officer is handling this. Ask them in game or on Discord to change it." or "Only officers and the requester can change this.", C.muted)
     end
@@ -2833,7 +2877,7 @@ function UI:SetView(key)
   if not Views[key] then key = "needs" end
   if self.view ~= key then
     if det:IsShown() then det:Hide(); det.kind, det.key = nil, nil; self.selected = nil end
-    self.forIndex = 1
+    self.requestTo = nil
   end
   self.view = key
   for k, b in pairs(self.nav) do

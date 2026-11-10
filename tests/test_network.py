@@ -56,4 +56,23 @@ check('persistent throttle still retains the message', A.ev('__ns.QueueLength()'
 A.ex('SlashCmdList.EPUGUILD("net")')
 check('network diagnostics remain available', A.ev('__log[#__log]:find("Network:",1,true) ~= nil') is True)
 check('no runtime errors', (A.ev('__errors') or 0)==0)
+
+officer = Client('Chris Baker')
+member = Client('Tyler Baker')
+clients.update({c.name: c for c in (officer, member)})
+tick(90)
+officer.ex('''__notice=nil; __ns.Notify=function(title) __notice=title end''')
+member.ex('''__ns.G().bank.Bank={v=__now,money=0,items={[2589]=20},seen={[2589]=true}}
+__ns.Send('D',{recipes={bulk=string.rep('x',130000)}})
+__rid=__ns.NewRequest(2589,1,'')''')
+rid=member.ev('__rid')
+officer.rt.globals()['__rid']=rid
+check('large background sync remains queued', member.ev('__ns.QueueLength()')>500)
+check('officer receives new order while the large sync is still queued',
+      tick_until(lambda: officer.ev('__ns.G().requests[__rid]~=nil'), 4) and member.ev('__ns.QueueLength()')>500)
+check('live order alerts the officer', officer.ev('__notice')=='New guild bank request')
+member.ex('''__cancelled=__ns.NewRequest(2589,2,''); __ns.EditRequest(__cancelled,{status='cancelled'})''')
+officer.rt.globals()['__cancelled']=member.ev('__cancelled')
+check('request creation and immediate cancellation keep their order',
+      tick_until(lambda: officer.ev('(__ns.G().requests[__cancelled] or {}).status')=='cancelled', 5))
 sys.exit(1 if check.failed else 0)

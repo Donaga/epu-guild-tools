@@ -32,4 +32,36 @@ check('combined Mine and Crafts scopes agree with menu',A.ev(shown)==1 and count
 A.ex('__ns.UI.search:SetText("no such name")')
 check('no matching search has zero menu results',A.ev(shown)==0 and count('all')=='0')
 check('filtering causes no runtime errors',(A.ev('__errors') or 0)==0)
+
+B=Client('Tyler Baker')
+B.ex('''__ns.RegisterMe()
+__ns.db.accountChars[__ns.GuildKey()]={['Tyler Baker']=__now,['Pip Baker']=__now-10}
+__ns.G().bank.Bank={v=__now,money=0,items={[2589]=20},seen={[2589]=true}}
+__ns.UI:Show(); __ns.UI:SetView('requests')
+function __submit()
+  local ui=__ns.UI;ui.itemBox:SetText('2589');ui.action:Click()
+end
+''')
+check('request composer defaults to the logged-in alt', B.ev('__ns.MyMain()')=='Pip Baker' and B.ev('__ns.UI:ForTarget()')=='Tyler Baker')
+B.ex('__submit()')
+check('default delivery stays with the requesting character', B.ev('(function() for _,r in pairs(__ns.G().requests) do return r.who=="Tyler Baker" and r.to==nil end end)()'))
+B.ex('__ns.UI.forBtn:Click(); EPUGuildMenu.rows[2]:Click(); __submit()')
+check('choosing another character sends that recipient on the new request', B.ev('(function() for _,r in pairs(__ns.G().requests) do if r.to=="Pip Baker" then return true end end end)()'))
+check('next request defaults back to the logged-in character', B.ev('__ns.UI:ForTarget()')=='Tyler Baker')
+
+A.ex('''__ns.G().requests.delivery={who='Tyler Baker',to='Pip Baker',item=2589,qty=1,status='approved',t=__now,u=__now}
+__ns.MailRequest=function(id) local r=__ns.G().requests[id]; __mailed=r.to or r.who end
+__ns.UI:OpenDetails('request','delivery')
+function __click(label)
+  for _, button in ipairs(__ns.UI.details.pools.btn) do
+    if button:IsShown() and button.text:GetText()==label then button:Click(); return end
+  end
+  error('Missing button '..label)
+end
+__click('Change recipient'); EPUGuildMenu.rows[1]:Click(); __ns.UI:Refresh(); __click('Mail it')
+''')
+check('an unsaved recipient survives refresh and blocks mail preparation',
+      A.ev('__ns.UI.details.toChoice')=='Tyler Baker' and A.ev('__mailed') is None)
+A.ex("__click('Save changes'); __click('Mail it')")
+check('saving the new recipient enables mail to that character', A.ev('__mailed')=='Tyler Baker')
 sys.exit(1 if check.failed else 0)
