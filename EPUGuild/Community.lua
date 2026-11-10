@@ -39,6 +39,7 @@ local function ValidEvent(id,r)
     and Int(r.ends,r.starts+15*60,r.starts+8*3600) and Int(r.slots,2,40)
     and (r.status=="scheduled" or r.status=="cancelled")
     and (r.kind==nil or ns.EVENT_TYPES[r.kind]~=nil)
+    and (r.dungeon==nil or (r.kind=="dungeon" and Text(r.dungeon,80,true)))
     and (r.minLevel==nil or Int(r.minLevel,1,100))
     and (r.maxLevel==nil or Int(r.maxLevel,r.minLevel or 1,100))
 end
@@ -75,6 +76,7 @@ function ns.SaveGuildEvent(opts,id)
   local r={who=ns.me,by=ns.me,title=Clean(opts.title,80),note=Clean(opts.note,500),zone=Clean(opts.zone,80),
     starts=starts,ends=starts+minutes*60,slots=tonumber(opts.slots) or 5,status="scheduled",created=cur and cur.created or ns.Now(),t=cur and cur.t or ns.Now(),
     kind=opts.kind or (cur and cur.kind) or "other",minLevel=tonumber(opts.minLevel) or (cur and cur.minLevel) or 1,maxLevel=tonumber(opts.maxLevel) or (cur and cur.maxLevel) or 60}
+  if r.kind == 'dungeon' then r.dungeon = opts.dungeon end
   if not ValidEvent(id,r) then return ns.Print("Choose an activity type, title, 2–40 players and a suggested level range from 1 to 100 (minimum no higher than maximum).") end
   g.guildEvents[id]=r; Publish("guildEvents",id,r)
   ns.FollowUpdates("event",id,true)
@@ -125,7 +127,7 @@ end
 function ns.MergeCommunity(sender,b,trusted)
   local g=ns.CasualStore(); if not g then return false end
   local changed=false
-  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel"}},
+  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel","dungeon"}},
     eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t","via","bridgeBy","sourceID","sourceRevision"}}}
   for f,d in pairs(definitions) do
     if type(b[f])=="table" then

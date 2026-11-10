@@ -39,10 +39,10 @@ check('activities toolbar fits minimum width',A.ev('__bar.leftX+__bar.rightX<=48
 A.ex("__ns.UI.state.activities.kind='help'; __ns.UI:Refresh(); __bar.casualNear:Click(); __bar.casualAvailability:Click()")
 check('switching board restores level and availability controls',A.ev('__ns.UI.state.activities.near') is True and A.ev('__ns.UI.details.kind')=='helperform')
 A.ex("__ns.UI.state.activities.kind='events'; __ns.UI:Refresh()")
-A.ex("__ns.UI:OpenDetails('eventform','new'); __click('Choose type'); EPUGuildMenu.rows[4]:Click(); __click('Pick date')")
+A.ex("__ns.UI:OpenDetails('eventform','new'); __click('Choose type'); EPUGuildMenu.rows[4]:Click(); __click('Pick date & time')")
 check('date picker creates all 42 cells',A.ev('#EPUGuildActivityDatePicker.days')==42)
-A.ex("EPUGuildActivityDatePicker.days[20]:Click()")
-check('date selection preserves the form and local time',A.ev('__ns.UI.details.kind')=='eventform' and len(A.ev('__ns.UI.details.pools.box[4]:GetText()'))==16)
+A.ex("local p=EPUGuildActivityDatePicker; p.tomorrow:Click(); p.hourButton:Click(); EPUGuildMenu.rows[7]:Click(); p.minuteButton:Click(); for _,r in ipairs(EPUGuildMenu.rows) do if r:IsShown() and r.value==30 then r:Click(); break end end; p.periodButton:Click(); EPUGuildMenu.rows[2]:Click(); p.apply:Click()")
+check('date and clock selectors apply 7:30 PM to the form',A.ev('__ns.UI.details.kind')=='eventform' and A.ev('__ns.UI.details.pools.box[4]:GetText()')[-5:]=='19:30')
 A.ex("""local b=__ns.UI.details.pools.box
 b[1]:SetText('UI fishing'); b[4]:SetText(date('%Y-%m-%d %H:%M',__now+7200)); b[7]:SetText('5'); b[8]:SetText('60'); __click('Create event'); __ui=__ns.UI.details.key""")
 check('actual type menu and form create fishing activity',A.ev('__ns.CasualStore().guildEvents[__ui].kind')=='fishing' and A.ev('__ns.CasualStore().guildEvents[__ui].minLevel')==5)
@@ -123,6 +123,13 @@ A.ex("__ns.UI.details.pools.box[6]:SetText('12');__click('Hide group options');_
 check('type preset preserves custom title and group size',A.ev('__ns.UI.details.pools.box[1]:GetText()')=='My custom event' and A.ev('__ns.UI.details.pools.box[6]:GetText()')=='12')
 A.ex("__click('In 15 min')")
 check('quick start uses local time and preserves draft',abs(A.ev('__ns.ParseEventLocal(__ns.UI.details.pools.box[4]:GetText())-__now')-900)<60)
+A.ex("__ns.UI:OpenDetails('eventform','new'); __click('Choose dungeon'); EPUGuildMenu.rows[4]:Click(); EPUGuildMenu.rows[3]:Click()")
+check('Forever dungeon populates title, meeting area and suggested levels', A.ev('__ns.UI.details.pools.box[1]:GetText()')=='Excavation Site' and A.ev('__ns.UI.details.pools.box[2]:GetText()')=='Wetlands' and A.ev('__ns.UI.details.pools.box[7]:GetText()')=='24')
+A.ex("__ns.UI.details.pools.box[1]:SetText('Sunday guild run'); __click('Group options'); __click('Create event'); __pickedEvent=__ns.UI.details.key")
+picked=A.ev('__pickedEvent')
+B.rt.globals()['__pickedEvent']=picked
+check('named dungeon and custom title survive saving and sync', tick_until(lambda:B.ev("(__ns.CasualStore().guildEvents[__pickedEvent] or {}).dungeon")=='Excavation Site',60) and B.ev('__ns.CasualStore().guildEvents[__pickedEvent].title')=='Sunday guild run')
+A.ex("__ns.UI:OpenDetails('eventform','new')")
 # Reuse the fixed-height date preview as the news heading, reproducing the
 # screenshot sequence rather than only exercising a fresh font string.
 A.ex("__ginfo='A friendly guild. Everyone is welcome.';__motd='Welcome!';__ns.UI.details.pools.text[2]:SetHeight(44);__ns.UI:OpenDetails('motd','motd')")

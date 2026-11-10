@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.0
+
+- Choose a dungeon when scheduling a guild event. EPU can fill the title and meeting area, with suggested levels for Forever dungeons. Custom titles and meeting locations stay editable.
+- Set the event date and time in one picker with Today and Tomorrow shortcuts, AM/PM controls, and a preview in local time.
+- Officers can approve sync helpers by exact guild rank. Explicit character approvals and removals take precedence, and each volunteer still needs a private connection folder.
+
 ## 0.19.1
 
 - Default bank and crafting requests to the character placing them. The bank request form has a visible Mail to dropdown with full character names.

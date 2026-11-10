@@ -3,9 +3,44 @@ local ADDON,ns=...
 ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]='inviteRequests'
 ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]='syncHelpers'
 ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]='inviteOutcomes'
+local RANK_RULE = '@rank'
 function ns.IsSyncHelper(name)
-  local g=ns.CasualStore(); local r=g and g.syncHelpers[name]
-  return r and r.enabled==true or false
+  local g = ns.CasualStore()
+  name = ns.Short(name)
+  if not g or not name or name == RANK_RULE then return false end
+  local character = g.syncHelpers[name]
+  if character then return character.enabled == true end
+  local rule = g.syncHelpers[RANK_RULE]
+  if not rule or not rule.enabled or type(rule.rank) ~= 'string' then return false end
+  local member = ns.roster[name]
+  local rank = member and member.rankName
+  if name == ns.me then rank = select(2, GetGuildInfo('player')) end
+  return type(rank) == 'string' and rank:lower() == rule.rank:lower()
+end
+function ns.SetSyncHelperRank(rank)
+  if not ns.IsTrusted(ns.me) then ns.Print('Only officers can change sync-helper approval.'); return false end
+  local g = ns.CasualStore()
+  if not g then return false end
+  rank = type(rank) == 'string' and rank:match('^%s*(.-)%s*$') or ''
+  if rank == '' or #rank > 80 or rank:find('[%c|]') then return false end
+  if rank:lower() ~= 'off' then
+    local match
+    for _, member in pairs(ns.roster) do
+      if type(member.rankName) == 'string' and member.rankName:lower() == rank:lower() then
+        match = member.rankName
+        break
+      end
+    end
+    if not match then ns.Print('Enter an exact rank name from the guild roster.'); return false end
+    rank = match
+  end
+  local old = g.syncHelpers[RANK_RULE]
+  local rule = { rank = rank, enabled = rank ~= 'off', by = ns.me, t = ns.NextVersion(old and old.t) }
+  g.syncHelpers[RANK_RULE] = rule
+  ns.Send('D', {syncHelpers = {[RANK_RULE] = rule}})
+  ns.Changed()
+  ns.Print(rule.enabled and ('Sync helper rank: '..rank..'. Each helper still needs their own connection folder.') or 'Rank-based helper approval turned off.')
+  return true
 end
 function ns.SetSyncHelper(name,enabled)
   if not ns.IsTrusted(ns.me) then ns.Print('Only officers can change the sync-helper whitelist.'); return false end
@@ -53,8 +88,9 @@ ns.MergeCommunity=function(sender,b,trusted)
   if trusted and g and type(b.syncHelpers)=='table' then
     for name,r in pairs(b.syncHelpers) do
       if type(name)=='string' and #name<=80 and type(r)=='table' and type(r.enabled)=='boolean' and type(r.by)=='string' and #r.by<=80
+        and (name ~= RANK_RULE or (type(r.rank) == 'string' and #r.rank > 0 and #r.rank <= 80 and not r.rank:find('[%c|]')))
         and ns.StampOK(r.t) and r.t<=ns.Now()+300 and ns.Newer(r,g.syncHelpers[name],'t') then
-        g.syncHelpers[name]={enabled=r.enabled,by=r.by,t=r.t}; changed=true
+        g.syncHelpers[name]={enabled=r.enabled,by=r.by,t=r.t,rank=name == RANK_RULE and r.rank or nil}; changed=true
       end
     end
   end

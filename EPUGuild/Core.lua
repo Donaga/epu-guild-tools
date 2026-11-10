@@ -369,6 +369,7 @@ local HELP = {
   "|cffffd100/epu button|r - position, spacing, lock and reset the minimap button",
   "|cffffd100/epu invites|r - Discord guild invite requests (guild-invite permission required)",
   "|cffffd100/epu synchelper add / remove <First Last>|r - officers: whitelist each helper character",
+  "|cffffd100/epu synchelper rank <rank name / off>|r - officers: set or turn off rank approval",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
   "|cffffd100/epu milestones|r - guildmates' milestone pop-ups on/off;  |cffffd100/epu milestonechat|r - also announce your own in guild chat",
@@ -463,7 +464,8 @@ SlashCmdList.EPUGUILD = function(msg)
   elseif cmd=='synchelper' then
     local action,name=args:match('^(%S+)%s+(.+)$')
     if action=='add' or action=='remove' then ns.SetSyncHelper(name,action=='add')
-    else ns.Print('Use /epu synchelper add First Last or /epu synchelper remove First Last. Add each alt explicitly.') end
+    elseif action=='rank' then ns.SetSyncHelperRank(name)
+    else ns.Print('Use /epu synchelper add First Last, remove First Last, or rank Rank Name. Use rank off to turn off rank approval.') end
   elseif cmd == "button" or cmd == "minimap" then
     local action=args:lower()
     if action=="reset" then ns.ResetMinimapButton()
