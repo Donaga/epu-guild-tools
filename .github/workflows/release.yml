@@ -14,8 +14,23 @@ jobs:
       - name: Staged updater and inbox preservation
         shell: pwsh
         run: ./tests/test_updater.ps1 -ScratchRoot $env:RUNNER_TEMP
+  helper:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pyinstaller>=6,<7"
+      - name: Build standalone Windows helper
+        shell: pwsh
+        run: ./tools/build_sync_helper.ps1 -Version ("${{ github.event.release.tag_name }}".TrimStart('v'))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sync-helper
+          path: dist/EPU-Sync-Helper-*.zip
   release:
-    needs: updater
+    needs: [updater,helper]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +59,10 @@ jobs:
         run: python tests/test_community.py
       - name: Typed activities and native calendar signups
         run: python tests/test_activity_calendar.py
+      - name: Explicit Discord guild invite requests
+        run: python tests/test_invites.py
+      - name: Two-way shared-folder helper
+        run: python tests/test_shared_bridge.py
       - name: Opt-in quest matching
         run: python tests/test_quest_matching.py
       - name: Casual guild activities and starter kits
@@ -54,6 +73,10 @@ jobs:
         run: python tests/test_guild_map.py
       - name: Exact request mail and attachment safeguards
         run: python tests/test_exact_mail.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: sync-helper
+          path: dist
       - name: Build zips
         run: |
           VERSION="${{ github.event.release.tag_name }}"

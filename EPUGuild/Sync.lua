@@ -40,7 +40,8 @@ local function FieldDigests(g)
   for wire,field in pairs(FIELDS) do
     local confirmed={}
     for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=v end end
-    out[wire]=ns.Fingerprint(confirmed)
+    -- The optional invite bridge adds no hello traffic when it has no records.
+    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
   end
   return out
 end

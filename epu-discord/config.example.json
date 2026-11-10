@@ -14,6 +14,8 @@
   "feed_channel_id": "",
   "announce_channel_id": "",
   "import_channel_id": "1551997847359193218",
+  "invite_requests_channel_id": "",
+  "sync_helpers": {},
   "import_days": 30,
   "post_motd": true,
   "help_post": true,

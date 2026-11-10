@@ -17,12 +17,15 @@ import logging
 from datetime import datetime, timedelta, timezone
 import os
 import sys
+import time
+import uuid
 
 import discord
 from discord import app_commands
 from discord.ext import tasks
 
 import epu_core as core
+import shared_bridge as bridge
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("epu")
@@ -61,6 +64,8 @@ def load_config() -> dict:
     cfg.setdefault("curseforge_url", "https://www.curseforge.com/wow/addons/epu-guild-tools")   # the recommended way to install
     cfg.setdefault("post_milestones", True)       # level-ups, first mounts, new members... in Discord
     cfg.setdefault("import_channel_id", "")       # an existing #announcements channel to copy into the game
+    cfg.setdefault("invite_requests_channel_id", "")
+    cfg.setdefault('sync_helpers',{})
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
     cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
@@ -74,7 +79,7 @@ def load_config() -> dict:
 cfg = load_config()
 state = core.State(os.path.join(HERE, "state.json"))
 intents = discord.Intents.default()
-if cfg["import_channel_id"]:
+if cfg["import_channel_id"] or cfg["invite_requests_channel_id"]:
     intents.message_content = True   # needed to read the announcements channel (turn it on in the Developer Portal)
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
@@ -83,6 +88,7 @@ GUILD = discord.Object(id=int(cfg["server_id"]))
 items_db = core.ItemDB(HERE)
 latest: core.GuildData | None = None
 latest_mtime = 0.0
+latest_source_mtime = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -96,24 +102,39 @@ def sv_path() -> str | None:
 
 
 def read_latest(force=False) -> core.GuildData | None:
-    global latest, latest_mtime
+    global latest, latest_mtime,latest_source_mtime
     path = sv_path()
     if not path:
         return latest
     m = os.path.getmtime(path)
-    if force or m != latest_mtime or latest is None:
+    if force or m != latest_source_mtime or latest is None:
         try:
             latest = core.load_guild_data(path, cfg.get("guild_key"))
-            latest_mtime = m
+            latest_source_mtime = m
         except Exception:
             log.exception("Couldn't read %s (WoW may be mid-save); will retry", path)
-    return latest
+    try:combined,fingerprint=bridge.merge_public(latest,cfg)
+    except (OSError,ValueError,TypeError,KeyError):combined,fingerprint=latest,''
+    latest_mtime=str(latest_source_mtime)+':'+fingerprint
+    return combined
 
 
 def flush_inbox():
     try:
-        core.write_inbox(core.inbox_path(cfg["wow_path"]), state.data["inbox"])
-    except OSError as e:
+        bridge.reconcile_helper_acks(cfg,state)
+        bridge.publish(cfg,state)
+    except (OSError,ValueError,KeyError,TypeError):
+        log.warning('Shared helper folder is unavailable or invalid; the local officer bridge will continue.')
+    try:
+        entries=state.data['inbox']
+        toc=os.path.join(cfg['wow_path'],'Interface','AddOns','EPUGuild','EPUGuild.toc')
+        try:
+            with open(toc,encoding='utf-8') as f: invites_supported='InviteRequests.lua' in f.read().splitlines()
+        except OSError: invites_supported=False
+        if not invites_supported: entries=[e for e in entries if e.get('kind') not in {'guild_invite','sync_helper'}]
+        entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
+        core.write_inbox(core.inbox_path(cfg["wow_path"]), entries)
+    except (OSError,ValueError,KeyError,TypeError) as e:
         log.error("Couldn't write Inbox.lua (%s). Check folder permissions; see README.", e)
 
 
@@ -335,6 +356,8 @@ def help_embed() -> discord.Embed:
         "WoW addons can't use the internet, so the bot and the game swap notes through files. Those are written when an "
         "officer types `/reload` or `/epu save`, or logs in or out. Requests made here reach the game, and changes made "
         "in game reach Discord, at the next one of those, usually within the same play session."))
+    if cfg.get('invite_requests_channel_id'):
+        e.add_field(name='Ask to join the guild',inline=False,value='In #guild-invite-requests, type `/guildinvite` and select the command, then fill in your character’s first and last name. Alternatively post a standalone `Character: First Last` line. Eligible guildmates receive an in-game request after the companion officer’s next login or `/reload`. Invitations are manual.')
     cf = cfg["curseforge_url"]
     e.add_field(name="Get the addon: CurseForge (recommended)", inline=False, value=(
         "1. Install the free **CurseForge app** from https://www.curseforge.com/download/app and sign in (a free "
@@ -483,6 +506,7 @@ async def poll():
     global polled_mtime
     flush_inbox()
     gd = read_latest()
+    if gd is not None: await post_invite_results(gd)
     if gd is None or latest_mtime == polled_mtime:
         return
     try:
@@ -590,6 +614,72 @@ async def post_motd(text: str):
 
 
 # --- copying an existing announcements channel into the game ---------------
+async def import_invite_message(message: discord.Message, edit: bool = False) -> bool:
+    cid=cfg.get('invite_requests_channel_id')
+    if not cid or str(message.channel.id)!=str(cid) or not message.guild or str(message.guild.id)!=str(cfg['server_id']): return False
+    if getattr(message.author,'bot',False) or getattr(message,'webhook_id',None) or message.type not in (discord.MessageType.default,discord.MessageType.reply): return False
+    who=core.invite_from_message(message.content)
+    source='m'+str(message.id)
+    if who is None and (not edit or source not in state.data.get('invite_sources',{})): return False
+    try:
+        changed=state.queue_guild_invite(source,who,message.author.display_name,str(message.author.id),int(message.created_at.timestamp()))
+    except ValueError:
+        return False
+    if changed: flush_inbox()
+    return changed
+
+@tree.command(name='guildinvite',description='Ask to join the WoW guild using your character’s first and last name',guild=GUILD)
+@app_commands.describe(first_name="Your character's first name",last_name="Your character's last name")
+async def guildinvite_cmd(interaction: discord.Interaction, first_name: str, last_name: str):
+    cid=cfg.get('invite_requests_channel_id')
+    if not cid or str(interaction.guild_id)!=str(cfg['server_id']) or str(interaction.channel_id)!=str(cid):
+        await interaction.response.send_message('Use this command in #guild-invite-requests. An officer must configure invite_requests_channel_id first.',ephemeral=True); return
+    try:
+        who=core.invite_character(first_name,last_name)
+        changed=state.queue_guild_invite('c'+str(interaction.id),who,interaction.user.display_name,str(interaction.user.id),int(datetime.now(timezone.utc).timestamp()))
+    except ValueError as error:
+        await interaction.response.send_message(str(error),ephemeral=True); return
+    if changed: flush_inbox()
+    await interaction.response.send_message(('Guild invite requested\nCharacter: '+who+'\nQueued for an eligible guildmate’s next bridge import. ✅ will mean the game confirmed an invite was sent or the character joined.') if changed else ('An active request already exists for '+who+'. No duplicate alert was created.'),ephemeral=not changed,allowed_mentions=discord.AllowedMentions.none())
+    if changed:
+        reply=await interaction.original_response()
+        state.data['invite_sources']['c'+str(interaction.id)]['message_id']=reply.id;state.save()
+
+async def post_invite_results(gd):
+    cid=cfg.get('invite_requests_channel_id')
+    if not cid:return
+    channel=client.get_channel(int(cid))
+    if not channel:return
+    reacted=state.data.setdefault('invite_reactions',{})
+    for source,request in state.data.get('invite_sources',{}).items():
+        outcomes=[r for r in (gd.g.get('inviteOutcomes') or {}).values() if isinstance(r,dict) and r.get('source')==source and r.get('who')==request['who'] and r.get('requestRevision')==request.get('revision') and r.get('phase') in ('sent','joined')]
+        desired=bool(outcomes) and not request.get('cancelled')
+        old=reacted.get(source)
+        current=request.get('revision')
+        if desired and old==current:continue
+        if not desired and not old:continue
+        mid=request.get('message_id') or (int(source[1:]) if source.startswith('m') else None)
+        if not mid:continue
+        try:
+            message=await channel.fetch_message(mid)
+            if desired:await message.add_reaction('✅');reacted[source]=current
+            else:await message.remove_reaction('✅',client.user);reacted.pop(source,None)
+            state.save()
+        except discord.NotFound:
+            reacted.pop(source,None)
+        except discord.HTTPException as error:
+            log.warning('Could not update an invite-request checkmark; check View Channel, Read Message History and Add Reactions permissions (%s).',error.status)
+
+def queue_helper_whitelist():
+    desired=sorted({name for helper in cfg.get('sync_helpers',{}).values() if helper.get('enabled',True) for name in helper.get('characters',[])})
+    previous=state.data.get('helper_config_characters',[])
+    if desired==previous:return
+    for name in sorted(set(desired)|set(previous)):
+        enabled=name in desired
+        if enabled==(name in previous):continue
+        state.data['inbox'].append({'id':'helper-'+uuid.uuid4().hex[:16],'kind':'sync_helper','who':name,'enabled':enabled,'t':int(time.time())})
+    state.data['helper_config_characters']=desired;state.save()
+
 async def may_import(message: discord.Message) -> bool:
     if message.author.id == client.user.id or message.type not in (discord.MessageType.default, discord.MessageType.reply):
         return False
@@ -661,12 +751,20 @@ async def backfill_announcements():
 
 @client.event
 async def on_message(message: discord.Message):
+    if cfg.get('invite_requests_channel_id') and str(message.channel.id)==str(cfg['invite_requests_channel_id']):
+        await import_invite_message(message); return
     if cfg["import_channel_id"] and str(message.channel.id) == str(cfg["import_channel_id"]):
         await import_message(message)
 
 
 @client.event
 async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
+    if cfg.get('invite_requests_channel_id') and str(payload.channel_id)==str(cfg['invite_requests_channel_id']):
+        ch=client.get_channel(payload.channel_id)
+        if ch:
+            try: await import_invite_message(await ch.fetch_message(payload.message_id),edit=True)
+            except discord.HTTPException: pass
+        return
     if not cfg["import_channel_id"] or str(payload.channel_id) != str(cfg["import_channel_id"]):
         return
     if str(payload.message_id) not in state.data.get("imported", {}):
@@ -681,6 +779,12 @@ async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
 
 @client.event
 async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+    if cfg.get('invite_requests_channel_id') and str(payload.channel_id)==str(cfg['invite_requests_channel_id']):
+        source='m'+str(payload.message_id)
+        if source not in state.data.get('invite_sources',{}):source=next((k for k,v in state.data.get('invite_sources',{}).items() if v.get('message_id')==payload.message_id),source)
+        old=state.data.get('invite_sources',{}).get(source)
+        if old and state.queue_guild_invite(source,None,old['requester'],old['user'],old['posted']): flush_inbox()
+        return
     if not cfg["import_channel_id"] or str(payload.channel_id) != str(cfg["import_channel_id"]):
         return
     imported = state.data.get("imported", {})
@@ -689,6 +793,15 @@ async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
         imported.pop(str(payload.message_id), None)
         state.save()
         flush_inbox()
+
+@client.event
+async def on_raw_bulk_message_delete(payload: discord.RawBulkMessageDeleteEvent):
+    if not cfg.get('invite_requests_channel_id') or str(payload.channel_id)!=str(cfg['invite_requests_channel_id']): return
+    changed=False
+    for mid in payload.message_ids:
+        source='m'+str(mid); old=state.data.get('invite_sources',{}).get(source)
+        if old: changed=state.queue_guild_invite(source,None,old['requester'],old['user'],old['posted']) or changed
+    if changed: flush_inbox()
 
 
 @tree.command(name="announce", description="Officers: post a guild announcement (also pops up in game)", guild=GUILD)
@@ -992,7 +1105,7 @@ async def on_ready():
     await tree.sync(guild=GUILD)
     path = sv_path()
     log.info("Logged in as %s. Watching %s", client.user, path or "(no EPUGuild SavedVariables yet - log in once with the addon)")
-    flush_inbox()
+    queue_helper_whitelist();flush_inbox()
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
     await ensure_help_post()
@@ -1011,6 +1124,6 @@ if __name__ == "__main__":
     try:
         client.run(cfg["token"], log_handler=None)
     except discord.errors.PrivilegedIntentsRequired:
-        sys.exit("To copy the announcements channel the bot needs the Message Content Intent.\n"
+        sys.exit("To read announcement/invite-request messages the bot needs the Message Content Intent.\n"
                  "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
-                 "Or leave import_channel_id blank in config.json to skip copying announcements.")
+                 "Or leave import_channel_id and invite_requests_channel_id blank to disable message imports.")

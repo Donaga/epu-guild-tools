@@ -367,6 +367,8 @@ local HELP = {
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
   "|cffffd100/epu button|r - position, spacing, lock and reset the minimap button",
+  "|cffffd100/epu invites|r - Discord guild invite requests (guild-invite permission required)",
+  "|cffffd100/epu synchelper add / remove <First Last>|r - officers: whitelist each helper character",
   "|cffffd100/epu scale <0.6-1.5>|r - make the window smaller or bigger",
   "|cffffd100/epu tooltips|r, |cffffd100markers|r, |cffffd100notices|r, |cffffd100donate|r - turn tooltip lines, bag coins, pop-ups or the mailbox panel on/off",
   "|cffffd100/epu milestones|r - guildmates' milestone pop-ups on/off;  |cffffd100/epu milestonechat|r - also announce your own in guild chat",
@@ -420,8 +422,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
-  elseif cmd == "guides" or cmd == "calendar" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then
-    ns.UI.state.activities.kind=({guides="guides",calendar="events",quests="quests",catchup="catchup",notifications="notifications"})[cmd]
+  elseif cmd == "guides" or cmd == "calendar" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" or cmd=='invites' then
+    ns.UI.state.activities.kind=({invites='invites',guides="guides",calendar="events",quests="quests",catchup="catchup",notifications="notifications"})[cmd]
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
   elseif cmd == "activities" then
     ns.UI:Show(); ns.UI:SetView("activities")
@@ -458,6 +460,10 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.UI:SetSize(700, 470)
     ns.UI:ClearAllPoints()
     ns.UI:SetPoint("CENTER")
+  elseif cmd=='synchelper' then
+    local action,name=args:match('^(%S+)%s+(.+)$')
+    if action=='add' or action=='remove' then ns.SetSyncHelper(name,action=='add')
+    else ns.Print('Use /epu synchelper add First Last or /epu synchelper remove First Last. Add each alt explicitly.') end
   elseif cmd == "button" or cmd == "minimap" then
     local action=args:lower()
     if action=="reset" then ns.ResetMinimapButton()

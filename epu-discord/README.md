@@ -1,5 +1,9 @@
 # EPU Discord companion
 
+## Shared-folder volunteers and guild invitations (0.18)
+
+See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge.
+
 ## 0.10 identity and recovery changes
 
 Upgrade this companion together with the addon. Old, unverified Discord links are preserved under `legacy_links` in state.json for reference, but no longer authorize requests. Each member uses `/link character:` and an officer verifies the person in game, then runs `/approve_link user: character:`. Verify each character separately. One character cannot belong to multiple Discord accounts; an officer can resolve mistakes with `/revoke_link user: character:`. `/unlink` still removes your own links.
