@@ -1,6 +1,7 @@
 """Two PCs and two cloud folder locations, using actual Lua inbox imports."""
 from simcore import *
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'epu-discord'))
 import tempfile,shutil,json
 import epu_core as core
 import shared_bridge as bridge

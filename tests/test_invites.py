@@ -1,6 +1,7 @@
 """Explicit Discord names, command fields, trusted import and invite permissions."""
 from simcore import *
 from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'epu-discord'))
 import tempfile,json,shutil,importlib,types,asyncio
 from datetime import datetime,timezone
 import epu_core as core
