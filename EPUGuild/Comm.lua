@@ -172,14 +172,29 @@ function ns.Send(kind, data, channel, target)
   if channel == "GUILD" and not IsInGuild() then return end
   local body = kind .. ns.Serialize(data)
   if #body > 262144 or #queue > 12000 then return false end
+  -- Individual request changes should not wait behind a full guild snapshot.
+  -- Keep their order and send them through the same rate limit and cooldown.
+  local requests = kind == "D" and channel == "GUILD" and type(data) == "table"
+    and next(data) == "req" and next(data, "req") == nil and data.req
+  local first = type(requests) == "table" and next(requests)
+  local priority = first and next(requests, first) == nil
+  local position = #queue + 1
+  if priority then
+    position = 1
+    while queue[position] and queue[position].request do position = position + 1 end
+  end
+  local function Enqueue(message)
+    table.insert(queue, position, { message, channel, target, request = priority })
+    position = position + 1
+  end
   if #body + 1 <= MAX_SINGLE then
-    queue[#queue + 1] = { "S" .. body, channel, target }
+    Enqueue("S" .. body)
   else
     msgCounter = (msgCounter % 999) + 1
     local n = math.ceil(#body / CHUNK)
     for i = 1, n do
       local part = body:sub((i - 1) * CHUNK + 1, i * CHUNK)
-      queue[#queue + 1] = { "P" .. msgCounter .. ":" .. i .. ":" .. n .. ":" .. part, channel, target }
+      Enqueue("P" .. msgCounter .. ":" .. i .. ":" .. n .. ":" .. part)
     end
   end
   if not sending then

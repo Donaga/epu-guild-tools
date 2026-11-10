@@ -339,7 +339,7 @@ function ns.OnRequestChanged(rid, r, oldStatus)
     elseif r.status == "rejected" then
       ns.Notify("Request declined", name .. ((r.reason and r.reason ~= "") and (": " .. r.reason) or ""), icon)
     end
-  elseif not oldStatus and not mine[r.who] and ns.IsTrusted(ns.me) and (r.status == "pending" or r.status == "open")
+  elseif not oldStatus and not mine[r.who] and ns.IsTrusted(ns.me) and ns.IsActiveRequest(r)
     and Setting("officerNotices", true) then
     ns.Notify("New guild bank request", ns.WhoLabel(r.who) .. " wants " .. name .. " x" .. r.qty .. ".", icon)
   end

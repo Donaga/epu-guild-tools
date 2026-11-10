@@ -247,7 +247,13 @@ function ns.Merge(sender, b, catchingUp)
           g.requests[id] = r
           Confirm(g, "req", id)
           changed = true
-          if ns.OnRequestChanged and (oldStatus or not catchingUp) then pcall(ns.OnRequestChanged, id, r, oldStatus) end
+          -- Recent bank orders recovered during sync can go to the officer's
+          -- digest. Older orders and craft requests keep the normal catch-up rules.
+          local recentBankOrder = catchingUp and not r.crafter and ns.IsTrusted(ns.me)
+            and ns.IsActiveRequest(r) and type(r.t) == "number" and r.t >= ns.Now() - 900
+          if ns.OnRequestChanged and (oldStatus or not catchingUp or recentBankOrder) then
+            pcall(ns.OnRequestChanged, id, r, oldStatus)
+          end
         end
       end
     end
