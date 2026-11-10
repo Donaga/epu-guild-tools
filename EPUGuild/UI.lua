@@ -776,10 +776,16 @@ end
 function det:Text(str, color)
   local fs = self:Take("text", function() local f = Font(self.body, 11, C.text); f:SetWordWrap(true); return f end)
   fs:SetPoint("TOPLEFT", 12, self.y)
+  -- Pooled rows may previously have been a fixed-height live preview. Restore
+  -- automatic measurement before laying out the next paragraph or heading.
+  fs:SetHeight(0)
+  fs:SetWordWrap(true); fs:SetNonSpaceWrap(true); fs:SetJustifyV("TOP")
   fs:SetWidth(DETAILS_W - 24)
   fs:SetText(str)
   SetColor(fs, color or C.text)
-  self.y = self.y - math.max(14, (fs:GetStringHeight() or 14)) - 6
+  local height=math.max(14,math.ceil(fs:GetStringHeight() or 14))
+  fs:SetHeight(height)
+  self.y = self.y - height - 8
   return fs
 end
 

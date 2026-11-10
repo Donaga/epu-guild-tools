@@ -26,6 +26,7 @@ from discord.ext import tasks
 
 import epu_core as core
 import shared_bridge as bridge
+from event_sync import EventSync
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("epu")
@@ -65,6 +66,7 @@ def load_config() -> dict:
     cfg.setdefault("post_milestones", True)       # level-ups, first mounts, new members... in Discord
     cfg.setdefault("import_channel_id", "")       # an existing #announcements channel to copy into the game
     cfg.setdefault("invite_requests_channel_id", "")
+    cfg.setdefault('events_channel_id','')
     cfg.setdefault('sync_helpers',{})
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
     cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
@@ -129,9 +131,11 @@ def flush_inbox():
         entries=state.data['inbox']
         toc=os.path.join(cfg['wow_path'],'Interface','AddOns','EPUGuild','EPUGuild.toc')
         try:
-            with open(toc,encoding='utf-8') as f: invites_supported='InviteRequests.lua' in f.read().splitlines()
-        except OSError: invites_supported=False
+            with open(toc,encoding='utf-8') as f: modules=f.read().splitlines()
+            invites_supported='InviteRequests.lua' in modules
+        except OSError: invites_supported=False;modules=[]
         if not invites_supported: entries=[e for e in entries if e.get('kind') not in {'guild_invite','sync_helper'}]
+        if 'EventBridge.lua' not in modules:entries=[e for e in entries if e.get('kind')!='event_response']
         entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
         core.write_inbox(core.inbox_path(cfg["wow_path"]), entries)
     except (OSError,ValueError,KeyError,TypeError) as e:
@@ -507,6 +511,9 @@ async def poll():
     flush_inbox()
     gd = read_latest()
     if gd is not None: await post_invite_results(gd)
+    if gd is not None:
+        try:await events.refresh(gd)
+        except Exception as e:explain(e,'update guild events',cfg.get('events_channel_id'))
     if gd is None or latest_mtime == polled_mtime:
         return
     try:
@@ -858,6 +865,7 @@ async def apply_status(interaction: discord.Interaction, rid: str, status: str, 
 async def on_interaction(interaction: discord.Interaction):
     if interaction.type != discord.InteractionType.component:
         return
+    if await events.handle(interaction):return
     cid = (interaction.data or {}).get("custom_id", "")
     if not cid.startswith("epu:"):
         return
@@ -1118,6 +1126,8 @@ async def on_ready():
     if not poll.is_running():
         poll.start()
 
+
+events=EventSync(cfg,state,client,read_latest,flush_inbox)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

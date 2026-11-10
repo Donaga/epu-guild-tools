@@ -117,6 +117,8 @@ function ns.ProcessInbox()
         ok=true -- stale/cross-guild helper actions are discarded, never applied
       elseif e.kind == "guild_invite" then
         ok=ns.ImportGuildInvite(e)
+      elseif e.kind=='event_response' then
+        ok=ns.ImportEventResponse(e)
       elseif not officer and e.kind=='request' then
         local item=ResolveItem(e)
         if item and e.who then ok=ns.CreateRequestFor(e.who,item,e.qty,e.note,e.discord,'d-'..e.id,e.to)~=nil end

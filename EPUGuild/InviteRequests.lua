@@ -38,8 +38,10 @@ end
 function ns.NotifyGuildInvites()
   if not ns.CanInviteGuild() then return end
   local g=ns.CasualStore(); local s=ns.CommunityState(); if not g or not s then return end
+  if ns.RefreshGuildInvitePresence then ns.RefreshGuildInvitePresence() end
   for id,r in pairs(g.inviteRequests) do
-    if ns.ActiveGuildInvite(r) and not ns.GuildInviteOutcome(id) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) then
+    local presence=ns.GuildInvitePresence and ns.GuildInvitePresence(r.who)
+    if presence~='online' and presence~='reported' and ns.ActiveGuildInvite(r) and not ns.GuildInviteOutcome(id) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) then
       ns.Notify('Guild invite requested',r.who..' · Discord: '..r.requester,nil,{category='invites',kind='guildinvite',key=id,revision=r.who..':'..r.posted})
     end
   end

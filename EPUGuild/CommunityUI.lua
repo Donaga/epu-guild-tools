@@ -121,7 +121,8 @@ function ns.CommunityRows(g,q,st,bar)
       if ns.ActiveGuildInvite(r) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) and not seen[r.who:lower()] and E.Match(q,r.who,r.requester) then
         seen[r.who:lower()]=true
         local outcome=ns.GuildInviteOutcome(id)
-        out[#out+1]={key='invite:'..id,title=r.who,sub='Requested by '..r.requester..' on Discord · '..date('%m-%d %H:%M',r.posted),right=outcome and 'Invite sent' or 'Needs invite',onClick=function() Open('guildinvite',id) end}
+        local _,presence=ns.GuildInvitePresence(r.who)
+        out[#out+1]={key='invite:'..id,title=r.who,sub='Requested by '..r.requester..' on Discord · '..date('%m-%d %H:%M',r.posted),right=presence..' · '..(outcome and 'Invite sent' or 'Needs invite'),onClick=function() Open('guildinvite',id) end}
       end
     end
     table.sort(out,function(a,b) return a.title<b.title end)
@@ -184,21 +185,53 @@ function ns.FillCommunityDetails(kind,key,det)
   if kind=="eventform" then
     local cur=g.guildEvents[key]
     if cur and cur.who~=ns.me then UI:CloseDetails(); return true end
+    local draft=det.eventFormDraft;det.eventFormDraft=nil
+    local presets={dungeon={"Guild dungeon run",90,5},leveling={"Level together",60,5},quest={"Quest help",60,5},fishing={"Guild fishing trip",60,10},profession={"Profession help",60,5},farming={"Farm together",60,5},other={"Guild get-together",60,10}}
+    local activityType=draft and draft.kind or (cur and cur.kind) or s.lastEventType or "leveling"
+    if not presets[activityType] then activityType="other" end
+    local preset=presets[activityType]
+    local expanded=draft and draft.expanded or false
     det:Reset(nil,nil,cur and "Edit guild event" or "New guild event","Dates use your computer's local timezone")
-    local title=det:Field("Title",cur and cur.title or "",160)
-    local zone=det:Field("Meet at",cur and cur.zone or "",160)
-    local note=det:Field("Details",cur and cur.note or "",160)
-    local when=det:Field("Local start",date("%Y-%m-%d %H:%M",cur and cur.starts or ns.Now()+DAY),160)
-    local duration=det:Field("Minutes",tostring(cur and (cur.ends-cur.starts)/60 or 60),60,true)
-    local slots=det:Field("Players",tostring(cur and cur.slots or 5),60,true)
-    local low=det:Field("Min level",tostring(cur and cur.minLevel or 1),60,true)
-    local high=det:Field("Max level",tostring(cur and cur.maxLevel or 60),60,true)
-    local activityType=cur and cur.kind or "other"
     local typeLabel=det:Text("Type: "..ns.EVENT_TYPES[activityType],C.gold)
+    local title,zone,note,when,duration,slots,low,high,summary
     det:Buttons({{"Choose type",function(self)
       local options={}
       for _,value in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[value],value=value} end
-      E.OpenMenu(self,options,activityType,function(value) activityType=value; det.casualDraft=true; typeLabel:SetText("Type: "..ns.EVENT_TYPES[value]) end)
+      E.OpenMenu(self,options,activityType,function(value)
+        local old,new=presets[activityType],presets[value]
+        if not cur then
+          if title:GetText()==old[1] then title:SetText(new[1]) end
+          if duration:GetText()==tostring(old[2]) then duration:SetText(tostring(new[2])) end
+          if slots:GetText()==tostring(old[3]) then slots:SetText(tostring(new[3])) end
+        end
+        activityType=value;det.casualDraft=true;typeLabel:SetText("Type: "..ns.EVENT_TYPES[value])
+        summary:SetText(duration:GetText().." minutes · "..slots:GetText().." players · levels "..low:GetText().."–"..high:GetText())
+      end)
+    end}})
+    local values=draft and draft.values or {}
+    title=det:Field("Title",values[1] or (cur and cur.title) or preset[1],160)
+    zone=det:Field("Meet at",values[2] or (cur and cur.zone) or (GetZoneText and GetZoneText()) or "",160)
+    note=det:Field("Details",values[3] or (cur and cur.note) or "",160)
+    when=det:Field("Local start",values[4] or date("%Y-%m-%d %H:%M",cur and cur.starts or ns.Now()+1800),160)
+    local before=det.y
+    duration=det:Field("Minutes",values[5] or tostring(cur and (cur.ends-cur.starts)/60 or preset[2]),60,true)
+    slots=det:Field("Players",values[6] or tostring(cur and cur.slots or preset[3]),60,true)
+    low=det:Field("Min level",values[7] or tostring(cur and cur.minLevel or 1),60,true)
+    high=det:Field("Max level",values[8] or tostring(cur and cur.maxLevel or 60),60,true)
+    if not expanded then
+      for i=5,8 do det.pools.box[i]:Hide();det.pools.label[i]:Hide() end
+      det.y=before
+    end
+    summary=det:Text(duration:GetText().." minutes · "..slots:GetText().." players · levels "..low:GetText().."–"..high:GetText(),C.muted)
+    det:Buttons({{expanded and 'Hide group options' or 'Group options',function()
+      local values={} for i=1,8 do values[i]=det.pools.box[i]:GetText() end
+      det.eventFormDraft={values=values,kind=activityType,expanded=not expanded};UI:FillDetails()
+    end}})
+    local function Soon(minutes) when:SetText(date('%Y-%m-%d %H:%M',ns.Now()+minutes*60));det.casualDraft=true end
+    det:Buttons({{'In 15 min',function() Soon(15) end},{'In 1 hour',function() Soon(60) end},{'Next 7pm',function()
+      local d=date('*t',ns.Now());d.hour=19;d.min=0;d.sec=0;d.isdst=nil
+      local start=time(d);if start<=ns.Now()+60 then d.day=d.day+1;d.isdst=nil;start=time(d) end
+      when:SetText(date('%Y-%m-%d %H:%M',start));det.casualDraft=true
     end}})
     det:Buttons({{"Pick date",function()
       ns.ShowActivityDatePicker(when:GetText():sub(1,10),function(day)
@@ -221,7 +254,7 @@ function ns.FillCommunityDetails(kind,key,det)
       local start=ns.ParseEventLocal(when:GetText())
       if not start then return ns.Print("Enter a valid local date and time as YYYY-MM-DD HH:MM.") end
       local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText())},cur and key)
-      if id then Open("event",id) end
+      if id then s.lastEventType=activityType;Open("event",id) end
     end,accent=true}})
   elseif kind=="event" then
     local r=g.guildEvents[key]; if not r then UI:CloseDetails(); return true end
@@ -277,12 +310,15 @@ function ns.FillCommunityDetails(kind,key,det)
     if not r or not ns.CanInviteGuild() then UI:CloseDetails(); return true end
     det:Reset(nil,nil,r.who,'Discord guild invite request')
     det:Text('Requested by: '..r.requester..'\nReceived: '..date('%Y-%m-%d %H:%M',r.posted))
+    local _,presence,source=ns.GuildInvitePresence(r.who)
+    det:Text(presence..' · '..source,C.gold)
+    det:Text('Add to Friends to receive login updates. Unknown means the game has not provided a current result. Online sightings expire after two minutes; another member’s report is advisory.',C.muted)
     det:Text('Confirm the character name before inviting. A request is not proof of character ownership. The game decides whether the name is valid and the player can join.',C.muted)
     det:Field('Copy invite','/ginvite '..r.who,160)
     local outcome=ns.GuildInviteOutcome(key)
     if outcome then det:Text((outcome.phase=='joined' and 'Joined the guild' or 'Invite sent')..' · reported by '..outcome.by..' at '..date('%m-%d %H:%M',outcome.t),C.gold)
     else det:Text('No game-confirmed invitation recorded yet.',C.muted) end
-    if ns.ActiveGuildInvite(r) then det:Buttons({{outcome and 'Invite again' or 'Invite',function() ns.InviteRequestedCharacter(key) end,accent=true}})
+    if ns.ActiveGuildInvite(r) then det:Buttons({{outcome and 'Invite again' or 'Invite',function() ns.InviteRequestedCharacter(key) end,accent=true},{'Add to Friends',function() ns.TrackGuildInvite(key) end}})
     else det:Text(ns.Member(r.who) and 'This character is already in the guild.' or 'This request was withdrawn or expired.',C.gold) end
     det:Buttons({{'Dismiss for me',function()
       s.inviteDismissed=s.inviteDismissed or {}; s.inviteDismissed[key]=r.who; UI:CloseDetails(); UI:Refresh()

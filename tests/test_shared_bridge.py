@@ -51,6 +51,14 @@ bridge.reconcile_helper_acks(cfg,state)
 check('verified game receipts clear only imported helper actions',[e['kind'] for e in state.data['inbox']]==['status'])
 bridge.publish(cfg,state);shutil.copy(gdroot/'to-game.json',remote/'to-game.json')
 check('bot receipt is shown after return transfer','Bot received' in bridge.helper_cycle(helper,local))
+A.ex("__ns.SetRequestStatus(bankId,'approved')")
+check('actual officer approval reaches helper',tick_until(lambda:B.ev('__ns.G().requests[bankId].status')=='approved',60))
+B.ex('__dumpSV("'+str(sv).replace('\\','/')+'")');bridge.helper_cycle(helper,local)
+shutil.copy(remote/'to-bot.json',gdroot/'to-bot.json');approved,_=bridge.merge_public(base,cfg)
+check('helper exports officer status back to Discord without approval rights',approved.requests['d-'+bank['id']]['status']=='approved' and not B.ev('__ns.IsTrusted(__ns.me)'))
+base.g['requests']['d-'+bank['id']]={**approved.requests['d-'+bank['id']],'status':'filled','u':approved.requests['d-'+bank['id']]['u']+1}
+newer,_=bridge.merge_public(base,cfg)
+check('older helper snapshot cannot roll back newer officer action',newer.requests['d-'+bank['id']]['status']=='filled')
 before=(addon/'Inbox.lua').read_bytes();raw=json.loads((remote/'to-game.json').read_text());raw['payload']['entries']=[{'kind':'status','id':'forged'}];bridge.atomic(remote/'to-game.json',raw)
 try:bridge.helper_cycle(helper,local);tamper=False
 except ValueError:tamper=True
