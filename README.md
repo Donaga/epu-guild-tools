@@ -35,6 +35,9 @@ physically recorded quantities even when already requested.
 The event calendar, selected-quest matching, returning-player catch-up and private notification controls are available under Guild activities.
 
 Guild map markers now use circular class icons. `/epu map` also offers round dots.
+For the addon button, `/epu button` offers position presets, spacing, lock and
+visibility controls. `/epu minimap reset` recovers it if hidden or misplaced.
+The button follows the actual minimap edge and has a larger drag target.
 The 0.16 rollout enables outdoor location sharing, both map displays and class icons
 once for everyone who updates, including installations with previous off settings.
 Subsequent player choices are preserved. Members need the update and `/reload`;

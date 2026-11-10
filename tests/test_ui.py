@@ -406,6 +406,62 @@ fits = A.ev('(function() local bad = {} for _, k in ipairs({"needs","shopping","
 check("every toolbar fits at the smallest window size (%s)" % (fits or "ok"), fits == "")
 check("addon loads on a client missing CRAFT_SHOW and friends", A.ev('__ns.handlers.TRADE_SKILL_SHOW ~= nil') == True)
 
+# Button position follows the actual map size/shape, with accessible recovery.
+A.ex("""__mb=EPUGuildMinimapButton; __point={}
+__mb.SetPoint=function(_,...) __point={...} end
+Minimap.GetWidth=function() return 240 end; Minimap.GetHeight=function() return 180 end
+Minimap.GetCenter=function() return 100,200 end; Minimap.GetEffectiveScale=function() return 2 end
+UIParent.GetWidth=function() return 1920 end; UIParent.GetHeight=function() return 1080 end
+GetMinimapShape=function() return 'ROUND' end
+__ns.db.settings.minimapAngle=0; __ns.db.settings.minimapGap=nil; __ns.UpdateMinimapButton()
+""")
+check('button follows a larger minimap instead of a fixed radius',A.ev('__point[4]')==140 and A.ev('__point[5]')==0)
+A.ex("__ns.db.settings.minimapAngle=45; __ns.UpdateMinimapButton()")
+check('round minimap button stays outside its elliptical edge',A.ev('math.abs((__point[4]/140)^2+(__point[5]/110)^2-1)<0.00001'))
+A.ex("GetMinimapShape=function() return 'SQUARE' end; __ns.UpdateMinimapButton()")
+check('square minimap button follows the corner',A.ev('math.abs(__point[4]-140)<0.00001 and math.abs(__point[5]-110)<0.00001'))
+A.ex("""GetMinimapShape=function() return 'CORNER-TOPLEFT' end
+local x,y=__ns.MinimapButtonOffset(135,240,180,'CORNER-TOPLEFT',20)
+__rounded=math.abs(x)<140 and math.abs(y)<110
+x,y=__ns.MinimapButtonOffset(315,240,180,'CORNER-TOPLEFT',20)
+__square=math.abs(x-140)<0.00001 and math.abs(y+110)<0.00001
+SlashCmdList.EPUGUILD('button'); EPUGuildButtonSettings.presets[6]:Click()
+""")
+check('mixed minimap shapes follow rounded and square quadrants',A.ev('__rounded and __square'))
+check('position controls work without dragging',A.ev('__ns.db.settings.minimapAngle')==0 and A.ev('EPUGuildButtonSettings:IsShown()'))
+A.ex("EPUGuildButtonSettings.further:Click()")
+check('spacing control moves button further outside',A.ev('__ns.db.settings.minimapGap')==28)
+A.ex("for i=1,20 do EPUGuildButtonSettings.further:Click() end; __maxGap=__ns.db.settings.minimapGap; for i=1,20 do EPUGuildButtonSettings.closer:Click() end")
+check('spacing cannot move button into map or arbitrarily far away',A.ev('__maxGap')==80 and A.ev('__ns.db.settings.minimapGap')==16)
+A.ex("EPUGuildButtonSettings.lock:Click(); __mb:GetScript('OnDragStart')(__mb)")
+check('locked button ignores dragging',A.ev('__mb:GetScript("OnUpdate")') is None)
+A.ex("""EPUGuildButtonSettings.lock:Click(); __ns.db.settings.minimapGap=20
+GetCursorPosition=function() return 200,180 end
+__mb:GetScript('OnDragStart')(__mb); __mb:GetScript('OnUpdate')(__mb)
+""")
+check('dragging uses effective scale and map dimensions',abs(A.ev('__ns.db.settings.minimapAngle')-270)<0.00001)
+A.ex("""__mb:GetScript('OnDragStop')(__mb)
+__toggle=0; __oldToggle=__ns.UI.Toggle; __ns.UI.Toggle=function() __toggle=__toggle+1 end
+IsShiftKeyDown=function() return false end
+__mb:GetScript('OnClick')(__mb,'LeftButton'); __advance(0.3); __mb:GetScript('OnClick')(__mb,'LeftButton')
+__ns.UI.Toggle=__oldToggle
+SlashCmdList.EPUGUILD('minimap hide')
+""")
+check('releasing a drag does not accidentally open the addon',A.ev('__toggle')==1)
+check('explicit hide works',not A.ev('__mb:IsShown()'))
+A.ex("SlashCmdList.EPUGUILD('minimap reset')")
+check('reset recovers a hidden button and unlocks it',A.ev('__mb:IsShown() and not __ns.db.settings.minimapLocked and __ns.db.settings.minimapAngle==200 and __ns.db.settings.minimapGap==20'))
+A.ex("""__ns.db.settings.minimapAngle=0; Minimap.GetWidth=function() return 320 end
+Minimap:GetScript('OnSizeChanged')(Minimap)
+""")
+check('resized minimap automatically repositions button',A.ev('__point[4]')==180)
+A.ex("""Minimap.GetCenter=function() return 940,400 end; GetMinimapShape=function() return 'ROUND' end
+__ns.db.settings.minimapAngle=0; __ns.UpdateMinimapButton()
+""")
+check('screen-edge placement stays on perimeter instead of clamping inside',A.ev('940+__point[4]<=938 and math.abs((__point[4]/180)^2+(__point[5]/110)^2-1)<0.00001'))
+check('screen-edge fallback preserves preferred saved angle',A.ev('__ns.db.settings.minimapAngle')==0)
+A.ex("__ns.ShowGuildMapSettings(); EPUGuildMapSettings.buttonSettings:Click()")
+check('map settings expose button position controls',A.ev('EPUGuildButtonSettings:IsShown()'))
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.1
+
+- Keep the minimap button outside the actual minimap edge, using its current width, height and reported round/square/corner shape instead of a fixed radius. Reposition when the map resizes; choose a nearby visible edge position when the screen boundary blocks the preferred angle.
+- Enlarge the grab area, account for scale while dragging, and prevent a drag release from accidentally opening the addon.
+- Add `/epu button` with eight position presets, Closer / Further out, lock, show/hide and Reset. `/epu minimap reset` recovers a hidden or misplaced button; bare `/epu minimap` retains its visibility toggle.
+- Link the position controls from `/epu map`. Preserve saved angles, visibility choices and existing click shortcuts. No map-sharing reset or companion update.
+
 ## 0.17.0
 
 - Make Activities the default guild board, with Dungeon, Leveling, Quest / elite help, Fishing, Profession, Farming and Other types. Preserve the quick-help boards, helpers and starter kits.
