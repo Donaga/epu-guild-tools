@@ -6,6 +6,7 @@ local memberTools={
   {key="quests", title="Quest matching", hint="Find guildmates working on the same quests."},
   {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications."},
   {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours."},
+  {key="market", title="Gathering market", hint="Compare herb sales and see the estimated margins on your learned crafts.", open=function() ns.ShowGatheringMarket() end},
 }
 local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={
@@ -103,7 +104,7 @@ function ns.InstallCommunityViews(views,env)
         for _,tool in ipairs(memberTools) do
           if E.Match(q,tool.title,tool.hint) then
             local key=tool.key
-            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=function() ns.OpenMemberTools(key) end}
+            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=tool.open or function() ns.OpenMemberTools(key) end}
           end
         end
         return rows

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.22.0
+
+- The Gathering market pilot charts herb prices, daily sales, and sell-through when the selected source provides them. Use the skill filter to find herbs your character can gather.
+- My crafts compares the market value of outputs and reagents for learned recipes with known quantities. Open a profession window to record its recipes.
+
 ## 0.21.4
 
 - The Events bubble uses the EPU guild crest and shows the number of upcoming events.

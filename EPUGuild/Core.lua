@@ -368,6 +368,7 @@ local HELP = {
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
+  "|cffffd100/epu market|r - compare herb demand and the estimated margins on your learned crafts",
   "|cffffd100/epu activities|r - scheduled activities, signups, quick help and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
@@ -428,6 +429,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
+  elseif cmd == "market" then
+    ns.ShowGatheringMarket()
   elseif cmd == "invites" then
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("invites")
   elseif cmd == "guides" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then

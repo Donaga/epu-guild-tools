@@ -856,9 +856,9 @@ end
 --   ids[itemID] = true, names[lowercase] = true, spells = { enchant names },
 --   diff[key] = "o" | "y" | "g" (orange/yellow/green: still gives skill points),
 --   mats[key] = { itemID, count, itemID, count, ... }
-local function SaveRecipes(prof, rank, ids, names, spells, diff, mats)
+local function SaveRecipes(prof, rank, ids, names, spells, diff, mats, market)
   if not prof or not ns.cdb then return end
-  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, spells = spells, diff = diff, mats = mats, t = ns.Now() }
+  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, spells = spells, diff = diff, mats = mats, market = market, t = ns.Now() }
   ns.Debounce("publishRecipes", 2, function() ns.PublishRecipes() end)
 end
 ns.SaveRecipes = SaveRecipes
@@ -1087,7 +1087,7 @@ local function ScanTradeSkill()
   if not GetTradeSkillLine or not GetNumTradeSkills then return end
   local prof, rank = GetTradeSkillLine()
   if not prof or prof == "UNKNOWN" then return end
-  local ids, names, spells, diff, mats = {}, {}, {}, {}, {}
+  local ids, names, spells, diff, mats, market = {}, {}, {}, {}, {}, {}
   for i = 1, GetNumTradeSkills() do
     local name, kind = GetTradeSkillInfo(i)
     if name and kind ~= "header" and kind ~= "subheader" then
@@ -1098,16 +1098,25 @@ local function ScanTradeSkill()
       diff[key] = CLASSIC_DIFF[kind]
       if GetTradeSkillNumReagents then
         local r = {}
-        for j = 1, (GetTradeSkillNumReagents(i) or 0) do
+        local reagentCount = GetTradeSkillNumReagents(i) or 0
+        local complete = reagentCount > 0
+        for j = 1, reagentCount do
           local _, _, count = GetTradeSkillReagentInfo(i, j)
           local rid = ns.ItemID(GetTradeSkillReagentItemLink and GetTradeSkillReagentItemLink(i, j))
           if rid and count then r[#r + 1] = rid; r[#r + 1] = count end
+          if not rid or not ns.PositiveInt(count) then complete = false end
         end
         if #r > 0 then mats[key] = r end
+        if id and complete and GetTradeSkillNumMade then
+          local minimum, maximum = GetTradeSkillNumMade(i)
+          if ns.PositiveInt(minimum, 1000) and minimum == maximum then
+            market[id] = {quantity = minimum, reagents = r}
+          end
+        end
       end
     end
   end
-  SaveRecipes(prof, rank, ids, names, spells, diff, mats)
+  SaveRecipes(prof, rank, ids, names, spells, diff, mats, market)
 end
 
 -- Enchanting (and Beast Training) use the separate Craft window in vanilla.
@@ -1150,7 +1159,7 @@ local function ScanModern()
   if not prof or prof == "" then return end
   if T.IsTradeSkillLinked and T.IsTradeSkillLinked() then return end      -- someone else's window
   if T.IsTradeSkillGuild and T.IsTradeSkillGuild() then return end
-  local ids, names, spells, diff, mats = {}, {}, {}, {}, {}
+  local ids, names, spells, diff, mats, market = {}, {}, {}, {}, {}, {}
   for _, recipeID in ipairs(T.GetAllRecipeIDs() or {}) do
     local r = T.GetRecipeInfo(recipeID)
     if r and r.learned and r.name then
@@ -1162,15 +1171,19 @@ local function ScanModern()
       if id then ids[id] = true; key = "item:" .. id else spells[#spells + 1] = r.name; key = "spell:" .. r.name end
       diff[key] = MODERN_DIFF[r.relativeDifficulty]
       local list = {}
-      for _, slot in ipairs((sch and sch.reagentSlotSchematics) or {}) do
+      local slots = (sch and sch.reagentSlotSchematics) or {}
+      local fixed = id and sch and ns.PositiveInt(sch.quantityMin, 1000) and sch.quantityMin == sch.quantityMax
+      for _, slot in ipairs(slots) do
         local basic = (slot.reagentType == nil) or (Enum and Enum.CraftingReagentType and slot.reagentType == Enum.CraftingReagentType.Basic)
         local rg = slot.reagents and slot.reagents[1]
         if basic and rg and rg.itemID and slot.quantityRequired then list[#list + 1] = rg.itemID; list[#list + 1] = slot.quantityRequired end
+        if not basic or not rg or #slot.reagents ~= 1 or not rg.itemID or not ns.PositiveInt(slot.quantityRequired) then fixed = false end
       end
       if #list > 0 then mats[key] = list end
+      if fixed and #slots > 0 and #list == 2 * #slots then market[id] = {quantity = sch.quantityMin, reagents = list} end
     end
   end
-  if next(names) then SaveRecipes(prof, rank, ids, names, spells, diff, mats) end
+  if next(names) then SaveRecipes(prof, rank, ids, names, spells, diff, mats, market) end
 end
 
 local function ScanAny()

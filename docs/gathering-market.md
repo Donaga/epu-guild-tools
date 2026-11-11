@@ -1,0 +1,11 @@
+# Gathering market pilot
+
+Open **Member tools → Gathering market** or type `/epu market`. The initial catalog covers standard herbs and three Forever herb records. **My skill** limits the list to herbs with a known requirement at or below your current Herbalism rank. **Herb guides** opens the personal guide library for route advice. Your character level is shown for context.
+
+- **AHledger** reads the median price and estimated units sold per day from your Forever market. Hollow points mean sell-through data is unavailable. The list sorts priced herbs by estimated market gold per day. [AHledger API and data credit](https://ahledger.com/developers)
+- **TSM** reads regional average sale price, units sold per day, and sell-through. The list sorts herbs with data by average sale price multiplied by sell-through. This comparison assumes similar stack sizes. [TSM price sources](https://support.tradeskillmaster.com/custom-strings/which-price-sources-can-i-use-and-what-do-they-mean) · [TSM sale metrics](https://support.tradeskillmaster.com/en_US/custom-strings/which-value-sources-can-i-use-and-what-do-they-mean)
+- **Auctionator** reads last-scanned listing prices and sorts by price. Without sales volume, herbs stay in the list with no plotted point.
+
+Hover a point or list row for the item, price, sales volume, sell-through, and gathering requirement. Source data can be missing or out of date. Refresh your source and click **Refresh** in EPU. The chart compares market opportunities under equal gathering yields. Actual gold per hour also depends on units gathered per hour, travel time, auction fees, and what you can sell.
+
+Open each learned profession after installing the update. **My crafts** shows tradeable recipes with fixed output quantities and a complete reagent list. It ranks them by estimated output value minus reagent value per craft, before fees. Gathered reagents count at market value because you could sell them directly. Missing prices leave the margin blank. Recipes with variable or unknown outputs, and services such as enchants, stay outside this pilot.
