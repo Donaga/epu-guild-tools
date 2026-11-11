@@ -82,9 +82,17 @@ check('slash command opens the same invite list',A.ev('__ns.UI.view=="invites"')
 A.ex('__ns.UI:SetView("activities"); __ns.UI.state.activities.kind="events"; __ns.OpenPersonalNotice({kind="guildinvite",key="c200"})')
 check('invite alert opens the request without changing the activities board',A.ev('__ns.UI.view=="invites" and __ns.UI.details.key=="c200" and __ns.UI.state.activities.kind=="events"'))
 check('invite details expose complete /ginvite command',A.ev('__ns.UI.details.pools.box[1]:GetText()')=='/ginvite Fresh Applicant')
-A.ex("__invited=nil; C_GuildInfo.Invite=function(who) __invited=who end")
-check('manual action sends exact full name',A.ev("__ns.InviteRequestedCharacter('c200')") is True and A.ev('__invited')=='Fresh Applicant')
-check('clicking Invite alone does not report confirmation',A.ev("__ns.GuildInviteOutcome('c200')") is None)
+A.ex("""__invited=nil; C_GuildInfo.Invite=function(who) __invited=who end
+ChatFrameUtil={OpenChat=function(text) __chatDraft=text end}
+for _,button in ipairs(__ns.UI.details.pools.btn) do
+  if button:IsShown() and button.text:GetText()=='Open invite in chat' then button:Click(); break end
+end""")
+check('invite button prepares the full command without calling the invite API',A.ev("__chatDraft=='/ginvite Fresh Applicant' and __invited==nil"))
+check('preparing a chat command does not report confirmation',A.ev("__ns.GuildInviteOutcome('c200')") is None)
+A.ex("ChatFrameUtil.GetActiveWindow=function() return {GetText=function() return 'Unsent chat' end} end; __chatDraft=nil")
+check('preparing an invite preserves an existing chat draft',not A.ev("__ns.PrepareGuildInvite('c200')") and A.ev('__chatDraft') is None)
+A.ex("ChatFrameUtil=nil; ChatFrame_OpenChat=function(text) __chatDraft=text end")
+check('legacy chat API also opens the prepared command',A.ev("__ns.PrepareGuildInvite('c200') and __chatDraft=='/ginvite Fresh Applicant'"))
 A.ex("ERR_GUILD_INVITE_S='You have invited %s to join your guild.'; __fire('CHAT_MSG_SYSTEM','Cannot find player Fresh Applicant.')")
 check('failed invite message does not mark sent',A.ev("__ns.GuildInviteOutcome('c200')") is None)
 A.ex("__fire('CHAT_MSG_SYSTEM','You have invited Fresh Applicant to join your guild.')")
@@ -101,8 +109,8 @@ check('bot checks the request message only once after game confirmation',reactio
 bot.state.data['invite_sources']['c200']['cancelled']=True
 asyncio.run(bot.post_invite_results(reaction_gd))
 check('withdrawal removes the bot checkmark',reaction_calls[-1]==('remove','✅'))
-A.ex('CanGuildInvite=function() return false end; __invited=nil')
-check('permission is rechecked at click time',A.ev("__ns.InviteRequestedCharacter('c200')") is False and A.ev('__invited') is None)
+A.ex('CanGuildInvite=function() return false end; __chatDraft=nil')
+check('permission is rechecked at click time',A.ev("__ns.PrepareGuildInvite('c200')") is False and A.ev('__chatDraft') is None)
 check('personal notifications suppress queued notices after permission loss',A.ev("__ns.NotificationPolicy('invites')")=='off')
 A.ex('__ns.UI:Refresh()')
 check('sidebar hides guild invites when the character loses invite permission',not A.ev('__ns.UI.nav.invites:IsShown()'))
