@@ -55,6 +55,7 @@ function M:GetParent() return self._parent end
 function M:SetParent(p) self._parent = p end
 function M:CreateFontString() local f = NewMock(); f._parent = self; return f end
 function M:CreateTexture() local t = NewMock(); t._parent = self; return t end
+function M:CreateLine() return NewMock() end
 function M:SetTexture(value) self._texture=value end
 function M:GetTexture() return self._texture end
 function M:SetTexCoord(...) self._coords={...} end

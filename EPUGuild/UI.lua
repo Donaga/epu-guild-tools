@@ -871,7 +871,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "invites", "crafters", "recipes", "activities", "membertools", "projects", "onboarding", "sync", "officer" }
+local ORDER = { "news", "needs", "shopping", "market", "bank", "requests", "donations", "roster", "invites", "crafters", "recipes", "activities", "membertools", "projects", "onboarding", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 local function AddDropdownArrow(b)
@@ -1666,6 +1666,8 @@ Views.onboarding = {
 
 if ns.InstallCasualViews then ns.InstallCasualViews(Views,{Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI}) end
 
+Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
+
 Views.officer = {
   label = "Officer", icon = "Interface\\Icons\\INV_Misc_Key_03", officer = true,
   count = function() return InboxWaiting(), C.goldBg, C.gold end,
@@ -2145,7 +2147,7 @@ do
         local n = ns.ArchiveFinished()
         ns.Print("Tidied " .. n .. " finished request" .. (n == 1 and "" or "s") .. ". They're still under the All filter.")
       end, "Hides filled, rejected and cancelled requests from the default views, for everyone." },
-    { "Profession coverage", function() UI:OpenDetails("coverage", "all") end, "Which professions the guild has, who's best, and the gaps." },
+    { "Profession coverage", function() UI:OpenDetails("coverage", "all") end, "Which professions the guild has, who's best, the gaps, and the guild focus." },
     { "Officer log", function() UI:OpenDetails("log", "all") end, "Who approved, rejected, voided or changed what, and when." },
   }
   local x = 14
@@ -2541,16 +2543,44 @@ function UI:FillDetails()
 
   elseif kind == "coverage" then
     det:Reset("Interface\\Icons\\INV_Misc_Note_01", 1, "Profession coverage", "Who the guild has for each profession")
+    local focusList = ns.GuildFocus and ns.GuildFocus() or {}
+    local focus = {}
+    for _, f in ipairs(focusList) do focus[f.prof] = f end
+    if #focusList > 0 then
+      local parts = {}
+      for _, f in ipairs(focusList) do
+        parts[#parts + 1] = f.prof .. (f.goal > 0
+          and string.format(" (goal %d: %d of %d player%s there)", f.goal, f.atGoal, f.players, f.players == 1 and "" or "s")
+          or string.format(" (%d player%s)", f.players, f.players == 1 and "" or "s"))
+      end
+      det:Text("|cfff2c14eGuild focus:|r " .. table.concat(parts, ", "))
+      det:Text("Members see the focus in Market, with their own progress.", C.muted)
+      det:Gap()
+    elseif officer then
+      det:Text("Mark the professions the guild wants more of with Set as focus. Members see the guild focus in Market.", C.muted)
+      det:Gap()
+    end
     local gaps = {}
     for _, row in ipairs(ns.Coverage()) do
+      local f = focus[row.prof]
+      local tag = f and ("  |cfff2c14e· focus" .. (f.goal > 0 and (" " .. f.goal) or "") .. "|r") or ""
       if row.count == 0 then
-        det:Text("|cffff6b6b" .. row.prof .. ": nobody yet|r")
+        det:Text("|cffff6b6b" .. row.prof .. ": nobody yet|r" .. tag)
         gaps[#gaps + 1] = row.prof
       else
         local guild = #row.guild > 0 and ("  " .. STAR .. " " .. table.concat(row.guild, ", ")) or "  |cfff2c14eno guild crafter|r"
         det:Text(row.prof .. ": " .. row.count .. (row.count == 1 and " player" or " players")
           .. ", best " .. row.best .. ((row.online > 0) and ("  ·  |cff4ade80" .. row.online .. " online|r") or "")
-          .. (row.recipes > 0 and ("  ·  " .. row.recipes .. " recipes") or "") .. "\n" .. guild)
+          .. (row.recipes > 0 and ("  ·  " .. row.recipes .. " recipes") or "") .. tag .. "\n" .. guild)
+      end
+      if officer and ns.SetGuildFocus then
+        local prof = row.prof
+        det:Buttons({ { f and "Change focus" or "Set as focus", function(self)
+          OpenMenu(self, ns.GuildFocusChoices(), f and f.goal or false, function(goal)
+            ns.SetGuildFocus(prof, goal ~= false and goal or nil)
+            UI:FillDetails()
+          end)
+        end, tip = "Focus professions are shown to every member in Market, with an optional skill goal." } })
       end
       det.y = det.y + 2
     end
@@ -2880,7 +2910,7 @@ function UI:SetView(key)
   if self.view ~= key then
     if det:IsShown() then det:Hide(); det.kind, det.key = nil, nil; self.selected = nil end
     self.requestTo = nil
-    if key == "invites" then self.search:SetText("") end
+    if key == "invites" or key == "market" then self.search:SetText("") end
   end
   self.view = key
   for k, b in pairs(self.nav) do
@@ -2892,9 +2922,11 @@ function UI:SetView(key)
   local v = Views[key]
   if not v.bar then v.bar = NewBar(v); UI.bars = UI.bars or {}; UI.bars[key] = v.bar end
   v.bar:Show()
+  toolbar:SetShown(key ~= "market")
+  ns.SetGatheringMarketVisible(key == "market", content, footer)
   officerScroll:SetShown(v.custom == true)
   officerPage:Show()
-  scroll:SetShown(not v.custom)
+  scroll:SetShown(not v.custom and key ~= "market")
   scroll:SetVerticalScroll(0)
   self:Layout()
   self:Refresh()
@@ -2919,7 +2951,7 @@ function UI:Refresh()
     visibility[key] = (not v.officer or officer) and (not v.visible or v.visible())
     if visibility[key] then nVisible = nVisible + 1 end
   end
-  local step = math.max(20, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
+  local step = math.max(18, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local visible = visibility[key]
@@ -2945,7 +2977,7 @@ function UI:Refresh()
   end
   if Views[self.view].officer and not officer then return self:SetView("needs") end
 
-  if not g then
+  if not g and self.view ~= "market" then
     ShowRows({}, 400)
     self.empty:SetText("Join a guild to use EPU Guild Tools.")
     self.empty:Show()
@@ -2956,8 +2988,8 @@ function UI:Refresh()
   end
 
   local gold = 0
-  for _, s in pairs(g.bank) do if not s.retired then gold = gold + (s.money or 0) end end
-  goldText:SetText(Money(gold) .. "  |cff7e8590on hand|r")
+  for _, s in pairs(g and g.bank or {}) do if not s.retired then gold = gold + (s.money or 0) end end
+  goldText:SetText(g and (Money(gold) .. "  |cff7e8590on hand|r") or "")
   if ns.newestVersion then
     syncText:SetText("|cfff2c14eUpdate available: v" .. ns.newestVersion .. "|r")
   elseif ns.SyncStatus then
@@ -2966,6 +2998,14 @@ function UI:Refresh()
     syncText:SetText("|cff" .. hex .. label .. "|r")
   else
     syncText:SetText("v" .. ns.VERSION)
+  end
+
+  if self.view == "market" then
+    self.empty:Hide()
+    thumb:Hide()
+    self.footerText:SetText("Market prices and daily sales are estimates.")
+    ns.RefreshGatheringMarket()
+    return
   end
 
   local v = Views[self.view]

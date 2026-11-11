@@ -59,6 +59,8 @@ jobs:
         run: python tests/test_community.py
       - name: Gathering and crafting market pilot
         run: python tests/test_gathering_market.py
+      - name: Guild focus and guild-wide market
+        run: python tests/test_guild_market.py
       - name: Typed activities and native calendar signups
         run: python tests/test_activity_calendar.py
       - name: Explicit Discord guild invite requests

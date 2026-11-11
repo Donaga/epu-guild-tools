@@ -5,7 +5,7 @@
 ## Version: 0.22.0
 ## SavedVariables: EPUGuildDB
 ## SavedVariablesPerCharacter: EPUGuildCharDB
-## OptionalDeps: AHledger, TradeSkillMaster, Auctionator, GatherMate2, Polestar
+## OptionalDeps: AHledger, TradeSkillMaster, Auctionator, GatherMate2
 ## IconTexture: Interface\AddOns\EPUGuild\Media\logo
 
 Libs/Libraries.xml
@@ -30,6 +30,7 @@ GuideCatalog.lua
 Guides.lua
 GuidesUI.lua
 GatheringMarket.lua
+GatheringSpots.lua
 GatheringRoute.lua
 QuestMatching.lua
 Sync.lua

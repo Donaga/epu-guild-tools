@@ -2,9 +2,18 @@
 
 ## 0.22.0
 
-- The Gathering market pilot charts herb prices, daily sales, and sell-through when the selected source provides them. Use the skill filter to find herbs your character can gather.
-- My crafts compares the market value of outputs and reagents for learned recipes with known quantities. Open a profession window to record its recipes.
-- Start an herb route to follow Polestar's arrow through unvisited GatherMate2 spots in the current zone.
+- Market has its own tab in the guild window with three views: Craft, Buy & Craft, and Gather. It reads prices from AHledger, TSM, or Auctionator and shows which one is in use and how old its prices are.
+- Craft profit is what you would make now: the sale price is the current lowest listing, less the 5% faction AH cut. Rows say when nothing is listed and a median is used instead.
+- Ingredients sold by vendors, such as thread, flux, vials and dyes, use the vendor price. Shopping lists mark them.
+- Rows carry a short tag when it applies: Sells now, Slow, Thin margin, No listings, or Loss.
+- Craft plans a batch around materials already in your bags, expands known intermediate recipes and compares buying the missing ingredients with buying their base materials. Sort: Skill-ups finds the cheapest orange and yellow recipes for leveling a profession.
+- Buy & Craft shows profitable learned recipes with daily sales and sorts by sales volume, profit, profit %, sale price, or both profit and demand. The gold highlight follows the sort you choose.
+- Scope: Guild shows everything your guildmates can craft at current prices, with who can make it. Ask a crafter opens the recipe so you can send a craft request. Crafters need this version and must open each profession once before their recipes appear.
+- Officers can set a guild focus from Officer, Profession coverage: the professions the guild wants more of, with an optional skill goal. Coverage shows progress toward each goal. Members see the focus in Market with their own skill, and a nudge when they have a free profession slot.
+- Gather compares herbs, ores, skins, and fish. Selecting a material shows how many guildmates can gather it. Save your observed units per hour for a material and zone, then sort by estimated gross gold per hour.
+- Follow EPU's own movable arrow through recorded herb or ore spots in your zone. Use `/epu route` for herbs and `/epu route ore` for mining. Starter spots cover 19 zones, and GatherMate2 spots are read when installed.
+- Gather opens on your current zone when it has recorded spots. Record spot works whatever your skill.
+- Open each crafting profession once after updating. If EPU cannot read a profession, it now says so instead of staying on "Open to scan".
 
 ## 0.21.4
 

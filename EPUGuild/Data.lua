@@ -856,12 +856,29 @@ end
 --   ids[itemID] = true, names[lowercase] = true, spells = { enchant names },
 --   diff[key] = "o" | "y" | "g" (orange/yellow/green: still gives skill points),
 --   mats[key] = { itemID, count, itemID, count, ... }
-local function SaveRecipes(prof, rank, ids, names, spells, diff, mats, market)
+--   market[itemID] = { quantity, reagents, alts = { other recipes for the same item } },
+--   stats = { total, priced, variable, options, service }: why learned recipes are or are not in Market
+local function SaveRecipes(prof, rank, ids, names, spells, diff, mats, market, professionID, stats)
   if not prof or not ns.cdb then return end
-  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, spells = spells, diff = diff, mats = mats, market = market, t = ns.Now() }
+  ns.cdb.recipes[prof] = { rank = rank, ids = ids, names = names, spells = spells, diff = diff, mats = mats,
+    market = market, professionID = professionID, stats = stats, t = ns.Now() }
   ns.Debounce("publishRecipes", 2, function() ns.PublishRecipes() end)
+  if ns.RefreshGatheringMarket then ns.RefreshGatheringMarket() end
 end
 ns.SaveRecipes = SaveRecipes
+
+-- Market compares fixed-output recipes with one fixed reagent list. Two recipes for
+-- the same item are both kept so Market can compare the cheaper one.
+local function AddMarketRecipe(market, id, quantity, reagents)
+  local entry, first = {quantity = quantity, reagents = reagents}, market[id]
+  if not first then market[id] = entry; return end
+  first.alts = first.alts or {}
+  if #first.alts < 5 then first.alts[#first.alts + 1] = entry end
+end
+local function Tally(stats, reason)
+  stats.total = stats.total + 1
+  stats[reason] = (stats[reason] or 0) + 1
+end
 
 -- Is this item bind-on-pickup? (nil while the client hasn't loaded the item)
 function ns.IsBoP(id)
@@ -897,8 +914,25 @@ function ns.PublishRecipes(force)
       if r.diff and r.diff[k] then diff[k] = r.diff[k]; dsig[#dsig + 1] = sp .. r.diff[k] end
       if r.mats and r.mats[k] then mats[k] = r.mats[k] end
     end
-    profs[prof] = { rank = r.rank, at = r.t, items = items, spells = spells, diff = next(diff) and diff or nil }
+    -- Market data for the guild view: m marks a scan that knows which recipes have a
+    -- fixed output and ingredient list; mq holds outputs other than 1; nm lists the rest.
+    local mq, nm, msig
+    if r.market then
+      for _, id in ipairs(items) do
+        local entry = r.market[id]
+        if not entry then
+          nm = nm or {}; nm[#nm + 1] = id
+        elseif entry.quantity ~= 1 then
+          mq = mq or {}; mq[id] = entry.quantity
+        end
+      end
+      msig = "m" .. table.concat(nm or {}, ",")
+      for _, id in ipairs(items) do if mq and mq[id] then msig = msig .. ";" .. id .. "x" .. mq[id] end end
+    end
+    profs[prof] = { rank = r.rank, at = r.t, items = items, spells = spells, diff = next(diff) and diff or nil,
+      m = r.market and 1 or nil, mq = mq, nm = nm }
     sig[#sig + 1] = prof .. ":" .. tostring(r.rank) .. ":" .. table.concat(items, ",") .. ":" .. table.concat(spells, ",") .. ":" .. table.concat(dsig, ",")
+      .. ":" .. (msig or "")
   end
   table.sort(sig)
   local signature = table.concat(sig, "|")
@@ -1088,6 +1122,7 @@ local function ScanTradeSkill()
   local prof, rank = GetTradeSkillLine()
   if not prof or prof == "UNKNOWN" then return end
   local ids, names, spells, diff, mats, market = {}, {}, {}, {}, {}, {}
+  local stats = {total = 0, priced = 0}
   for i = 1, GetNumTradeSkills() do
     local name, kind = GetTradeSkillInfo(i)
     if name and kind ~= "header" and kind ~= "subheader" then
@@ -1107,16 +1142,19 @@ local function ScanTradeSkill()
           if not rid or not ns.PositiveInt(count) then complete = false end
         end
         if #r > 0 then mats[key] = r end
+        local reason = not id and "service" or not complete and "options" or "variable"
         if id and complete and GetTradeSkillNumMade then
           local minimum, maximum = GetTradeSkillNumMade(i)
           if ns.PositiveInt(minimum, 1000) and minimum == maximum then
-            market[id] = {quantity = minimum, reagents = r}
+            AddMarketRecipe(market, id, minimum, r)
+            reason = "priced"
           end
         end
+        Tally(stats, reason)
       end
     end
   end
-  SaveRecipes(prof, rank, ids, names, spells, diff, mats, market)
+  SaveRecipes(prof, rank, ids, names, spells, diff, mats, market, nil, stats)
 end
 
 -- Enchanting (and Beast Training) use the separate Craft window in vanilla.
@@ -1159,7 +1197,9 @@ local function ScanModern()
   if not prof or prof == "" then return end
   if T.IsTradeSkillLinked and T.IsTradeSkillLinked() then return end      -- someone else's window
   if T.IsTradeSkillGuild and T.IsTradeSkillGuild() then return end
+  if T.IsNPCCrafting and T.IsNPCCrafting() then return end
   local ids, names, spells, diff, mats, market = {}, {}, {}, {}, {}, {}
+  local stats = {total = 0, priced = 0}
   for _, recipeID in ipairs(T.GetAllRecipeIDs() or {}) do
     local r = T.GetRecipeInfo(recipeID)
     if r and r.learned and r.name then
@@ -1180,19 +1220,40 @@ local function ScanModern()
         if not basic or not rg or #slot.reagents ~= 1 or not rg.itemID or not ns.PositiveInt(slot.quantityRequired) then fixed = false end
       end
       if #list > 0 then mats[key] = list end
-      if fixed and #slots > 0 and #list == 2 * #slots then market[id] = {quantity = sch.quantityMin, reagents = list} end
+      local simple = #slots > 0 and #list == 2 * #slots
+      if fixed and simple then
+        AddMarketRecipe(market, id, sch.quantityMin, list)
+        Tally(stats, "priced")
+      elseif not id then
+        Tally(stats, "service")
+      elseif simple and not (ns.PositiveInt(sch.quantityMin, 1000) and sch.quantityMin == sch.quantityMax) then
+        Tally(stats, "variable")
+      else
+        Tally(stats, "options")
+      end
     end
   end
-  if next(names) then SaveRecipes(prof, rank, ids, names, spells, diff, mats, market) end
+  local professionID = (info and info.professionID) or (child and child.parentProfessionID)
+  if next(names) then SaveRecipes(prof, rank, ids, names, spells, diff, mats, market, professionID, stats) end
 end
 
+local scanFailed
 local function ScanAny()
-  if GetNumTradeSkills and (GetNumTradeSkills() or 0) > 0 then ScanTradeSkill() else pcall(ScanModern) end
+  if GetNumTradeSkills and (GetNumTradeSkills() or 0) > 0 then return ScanTradeSkill() end
+  -- The modern profession window is the live path on Forever. Say so once if it
+  -- stops working instead of leaving Market on "Open a profession to scan".
+  local ok, err = pcall(ScanModern)
+  if not ok and not scanFailed then
+    scanFailed = true
+    ns.Print("EPU could not read this profession's recipes, so Market and the crafter directory may be out of date. Please report the error that follows.")
+    geterrorhandler()(err)
+  end
 end
 
 ns.On("TRADE_SKILL_SHOW", function() C_Timer.After(0.5, ScanAny) end)
 ns.On("TRADE_SKILL_UPDATE", function() ns.Debounce("tradescan", 1, ScanAny) end)
 ns.On("TRADE_SKILL_LIST_UPDATE", function() ns.Debounce("tradescan", 1, ScanAny) end)
+ns.On("TRADE_SKILL_DATA_SOURCE_CHANGED", function() ns.Debounce("tradescan", 1, ScanAny) end)
 ns.On("CRAFT_SHOW", function() C_Timer.After(0.5, ScanCraft) end)
 ns.On("CRAFT_UPDATE", function() ns.Debounce("craftscan", 1, ScanCraft) end)
 
