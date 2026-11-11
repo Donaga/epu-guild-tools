@@ -66,5 +66,34 @@ for _,row in ipairs(__ns.UI.rows) do
 end
 """)
 check('Member tools opens the in-game chart', A.ev('EPUGuildGatheringMarket:IsShown() and EPUGuildGatheringMarket.context:GetText():find("plotted")~=nil'))
+
+A.ex("""
+local hbd, ace = {}, {}
+__routeX, __routeMap = .1, 37
+hbd.GetPlayerZonePosition = function() return __routeX,.2,__routeMap end
+hbd.GetZoneSize = function() return 1000,1000 end
+local gather = {
+  GetNodesForZone = function(_,map,kind) assert(map==37 and kind=='Herb Gathering'); return ipairs({1,2,3}) end,
+  DecodeLoc = function(_,key) return ({.15,.4,.8})[key],.2 end,
+}
+ace.GetAddon = function(_,name) if name=='GatherMate2' then return gather end end
+LibStub = function(name) return ({['HereBeDragons-2.0']=hbd,['AceAddon-3.0']=ace})[name] end
+__waypoints = {}
+Polestar = {Nav={API={
+  Navigate=function(owner,map,x,y,title) __routeOwner=owner; table.insert(__waypoints,x); return true end,
+  Active=function() return __routeOwner~=nil,__routeOwner end,
+  Cancel=function(owner) if owner==__routeOwner then __routeOwner=nil end end,
+}}}
+SlashCmdList.EPUGUILD('route')
+""")
+check('the route starts at the nearest recorded spot', A.ev('__waypoints[1]')==.15)
+A.ex('__routeX=.15; __advance(1.1)')
+check('arrival advances to the next unvisited spot', A.ev('__waypoints[2]')==.4)
+A.ex("SlashCmdList.EPUGUILD('route next')")
+check('manual skip continues through unvisited spots', A.ev('__waypoints[3]')==.8)
+A.ex('__routeX=.8; __routeOwner="AnotherAddon"; __advance(1.1)')
+check('route leaves a replacement waypoint alone even at arrival', A.ev('__routeOwner=="AnotherAddon" and #__waypoints==3'))
+A.ex("SlashCmdList.EPUGUILD('route'); __routeMap=42; __advance(1.1)")
+check('leaving the zone clears the route’s waypoint', A.ev('__routeOwner') is None)
 check('no addon runtime errors', (A.ev('__errors') or 0)==0)
 sys.exit(bool(check.failed))

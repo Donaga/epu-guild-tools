@@ -4,6 +4,7 @@
 
 - The Gathering market pilot charts herb prices, daily sales, and sell-through when the selected source provides them. Use the skill filter to find herbs your character can gather.
 - My crafts compares the market value of outputs and reagents for learned recipes with known quantities. Open a profession window to record its recipes.
+- Start an herb route to follow Polestar's arrow through unvisited GatherMate2 spots in the current zone.
 
 ## 0.21.4
 
