@@ -41,7 +41,7 @@ local function FieldDigests(g)
     local confirmed={}
     for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=v end end
     -- The optional invite bridge adds no hello traffic when it has no records.
-    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
+    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
   end
   return out
 end
@@ -115,7 +115,7 @@ local GROUPS = {
   { "needs", "policy", "bank" },
   { "req", "don" },
   { "news", "feed" },
-  { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps" },
+  { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps", "guildFocus" },
   { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses", "syncHelpers" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time

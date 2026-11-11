@@ -35,17 +35,21 @@ local rows=ns.CommunityRows
 ns.CommunityRows=function(g,q,state,bar)
   if state.kind~="guides" then return rows(g,q,state,bar) end
   local s=ns.GuideState(); local list,p=ns.GuideChoices(s.savedOnly)
-  local out={{key="guide:profile",title=p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",
-    sub="What would you like help with? Choose a topic below."}}
+  local professions=state.guideScope=="profession"
+  local out={{key="guide:profile",title=professions and "Your professions" or p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",
+    sub=professions and "Choose a learned profession to see advice for your current skill." or "What would you like help with? Choose a topic below."}}
   for _,choice in ipairs(list) do
     local matches=E.Match(q,choice.title,choice.hint)
     for _,source in ipairs(choice.sources) do if E.Match(q,source.guide.title,source.guide.publisher,source.guide.summary) then matches=true end end
-    if matches then
+    if matches and (not professions or choice.recommended.profession) then
       local key=choice.key
       out[#out+1]={key="guidechoice:"..key,title=choice.title,sub=choice.hint,right="Open",onClick=function() Open("guidechoice",key) end}
     end
   end
-  if #out==1 then out[#out+1]={key="guide:none",title=s.savedOnly and "No saved guides match" or "No matching guides",sub="Clear the search or turn off Saved to see your topics."} end
+  if #out==1 then
+    local hint=professions and q=="" and not s.savedOnly and "Learn a profession to see its guide here." or "Clear the search or turn off Saved to see your topics."
+    out[#out+1]={key="guide:none",title=s.savedOnly and "No saved guides match" or "No matching guides",sub=hint}
+  end
   return out
 end
 local footer=ns.CommunityFooter

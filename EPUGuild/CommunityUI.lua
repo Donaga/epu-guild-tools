@@ -6,6 +6,7 @@ local memberTools={
   {key="quests", title="Quest matching", hint="Find guildmates working on the same quests."},
   {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications."},
   {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours."},
+  {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.", open=function() ns.ShowGatheringMarket() end},
 }
 local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={
@@ -62,11 +63,12 @@ local function InviteRows(g,q)
   return out
 end
 
-function ns.OpenMemberTools(kind)
+function ns.OpenMemberTools(kind, guideScope)
   UI:Show()
   UI:CloseDetails()
   UI.search:SetText("")
   UI.state.membertools.kind=kind
+  UI.state.membertools.guideScope=guideScope
   UI:SetView("membertools")
 end
 
@@ -89,6 +91,7 @@ function ns.InstallCommunityViews(views,env)
         state.savedOnly=not state.savedOnly
         UI:Refresh()
       end)
+      bar.allGuides=bar:Add(E.Btn(bar,"All guides",74,22),"right",function() ns.OpenMemberTools("guides") end)
     end,
     rows=function(g,q)
       local state=UI.state.membertools
@@ -98,12 +101,13 @@ function ns.InstallCommunityViews(views,env)
       bar.toolTitle:SetShown(not isHome)
       bar.toolAction:SetShown(not isHome)
       bar.saved:SetShown(state.kind=="guides")
+      bar.allGuides:SetShown(state.kind=="guides" and state.guideScope=="profession")
       if isHome then
         local rows={}
         for _,tool in ipairs(memberTools) do
           if E.Match(q,tool.title,tool.hint) then
             local key=tool.key
-            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=function() ns.OpenMemberTools(key) end}
+            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=tool.open or function() ns.OpenMemberTools(key) end}
           end
         end
         return rows
@@ -112,7 +116,10 @@ function ns.InstallCommunityViews(views,env)
         if tool.key==state.kind then bar.toolTitle:SetText(tool.title); break end
       end
       bar.toolAction:SetLabel(toolActions[state.kind])
-      if state.kind=="guides" then bar.saved:SetOn(ns.GuideState().savedOnly==true) end
+      if state.kind=="guides" then
+        if state.guideScope=="profession" then bar.toolTitle:SetText("Profession guides") end
+        bar.saved:SetOn(ns.GuideState().savedOnly==true)
+      end
       return ns.CommunityRows(g,q,state)
     end,
     empty="Nothing to show here yet.",
