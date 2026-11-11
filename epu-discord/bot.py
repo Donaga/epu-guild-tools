@@ -26,7 +26,7 @@ from discord.ext import tasks
 
 import epu_core as core
 import shared_bridge as bridge
-from event_sync import EventSync
+from event_sync import EventSync, KINDS as EVENT_KINDS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("epu")
@@ -135,7 +135,8 @@ def flush_inbox():
             invites_supported='InviteRequests.lua' in modules
         except OSError: invites_supported=False;modules=[]
         if not invites_supported: entries=[e for e in entries if e.get('kind') not in {'guild_invite','sync_helper'}]
-        if 'EventBridge.lua' not in modules:entries=[e for e in entries if e.get('kind')!='event_response']
+        unsupported={kind for kind,module in bridge.EVENT_MODULES.items() if module not in modules}
+        entries=[e for e in entries if e.get('kind') not in unsupported]
         entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
         core.write_inbox(core.inbox_path(cfg["wow_path"]), entries)
     except (OSError,ValueError,KeyError,TypeError) as e:
@@ -634,6 +635,32 @@ async def import_invite_message(message: discord.Message, edit: bool = False) ->
         return False
     if changed: flush_inbox()
     return changed
+
+@tree.command(name='guildevent', description='Schedule a guild activity in EPU from #events', guild=GUILD)
+@app_commands.describe(
+    title='Event name',
+    start='Date and time with UTC offset, e.g. 2026-11-20 19:00 -05:00',
+    details='What guildmates should know',
+    meet_at='Zone or meeting spot',
+    activity='Kind of guild activity',
+    minutes='Duration in minutes',
+    players='Planned group size',
+    organiser='Full name of one of your verified guild characters (defaults to your first link)',
+)
+@app_commands.choices(activity=[app_commands.Choice(name=label, value=key) for key, label in EVENT_KINDS.items()])
+async def guildevent_cmd(
+    interaction: discord.Interaction,
+    title: app_commands.Range[str, 1, 80],
+    start: app_commands.Range[str, 1, 32],
+    details: app_commands.Range[str, 0, 500] = '',
+    meet_at: app_commands.Range[str, 0, 80] = '',
+    activity: str = 'other',
+    minutes: app_commands.Range[int, 15, 480] = 60,
+    players: app_commands.Range[int, 2, 40] = 5,
+    organiser: app_commands.Range[str, 1, 80] = '',
+):
+    await events.create(interaction, title, start, details, meet_at, activity, minutes, players, organiser)
+
 
 @tree.command(name='guildinvite',description='Ask to join the WoW guild using your character’s first and last name',guild=GUILD)
 @app_commands.describe(first_name="Your character's first name",last_name="Your character's last name")

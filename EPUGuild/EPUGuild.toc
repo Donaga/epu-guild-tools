@@ -2,7 +2,7 @@
 ## Title: EPU Guild Tools
 ## Notes: Guild bank wish list, item requests, donation log, crafter directory and recipe lookup for E Pluribus Unum.
 ## Author: Chris Baker
-## Version: 0.20.4
+## Version: 0.21.0
 ## SavedVariables: EPUGuildDB
 ## SavedVariablesPerCharacter: EPUGuildCharDB
 ## IconTexture: Interface\AddOns\EPUGuild\Media\logo
@@ -22,6 +22,7 @@ Community.lua
 InviteRequests.lua
 InvitePresence.lua
 EventBridge.lua
+EventCreateBridge.lua
 ActivityCalendar.lua
 CommunityUI.lua
 GuideCatalog.lua

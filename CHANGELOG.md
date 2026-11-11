@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.0
+
+- Use /guildevent in Discord #events to schedule a guild activity as your verified character. After the bridge imports it, open Guild activities to sign up or prepare its WoW calendar draft.
+
 ## 0.20.4
 
 - Member tools puts Your guides, Quest matching, Catch-up, and Notifications together in a visible sidebar page.

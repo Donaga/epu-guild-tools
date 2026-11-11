@@ -1,12 +1,33 @@
 """Public EPU event cards. Discord responses remain pending until game receipt."""
 from __future__ import annotations
-import hashlib,json,time,uuid
+from datetime import datetime
+import hashlib,json,re,time,uuid
 import discord
 
 ROLES={'t':'Tank','h':'Healer','d':'DPS','g':'Helper','c':'Crafter','m':'Mentor'}
 KINDS={'dungeon':'Dungeon','leveling':'Leveling','quest':'Quest help','fishing':'Fishing','profession':'Profession','farming':'Farming','other':'Other'}
 def token(event):return hashlib.sha256(event.encode()).hexdigest()[:24]
 def active(r):return r.get('status')=='scheduled' and r.get('ends',0)>time.time()
+
+def event_start(value):
+    """Parse an explicit wall time and offset, independent of the bot's clock zone."""
+    match = re.fullmatch(r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) (UTC|[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00)', value.strip(), re.ASCII)
+    if match:
+        day, clock, offset = match.groups()
+        try:
+            return int(datetime.fromisoformat(day + 'T' + clock + ('+00:00' if offset == 'UTC' else offset)).timestamp())
+        except (ValueError, OverflowError, OSError):
+            pass
+    raise ValueError('Enter a start like 2026-11-20 19:00 -05:00 or 2026-11-21 00:00 UTC.')
+
+def event_text(value, limit, label, required=False):
+    value = ' '.join(value.split())
+    if (required and not value) or len(value.encode('utf-8')) > limit or re.search(r'[\x00-\x1f\x7f|]', value):
+        raise ValueError(f'Use plain text for {label}, up to {limit} bytes.')
+    return value
+
+def event_id(entry):
+    return entry['who'] + '\x1f' + entry['id']
 
 def responses(gd,event):
     return sorted((r for r in (gd.g.get('eventResponses') or {}).values()
@@ -52,6 +73,61 @@ def card(gd,state,event,r):
 class EventSync:
     def __init__(self,cfg,state,client,read,flush):self.cfg,self.state,self.client,self.read,self.flush=cfg,state,client,read,flush
 
+    async def create(self, interaction, title, start, details='', meet_at='', activity='other', minutes=60, players=5, organiser=''):
+        async def reply(message):
+            await interaction.response.send_message(message, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+        channel = self.cfg.get('events_channel_id')
+        if not channel or str(interaction.guild_id) != str(self.cfg['server_id']) or str(interaction.channel_id) != str(channel):
+            await reply('Use /guildevent in #events.')
+            return
+        gd = self.read()
+        if gd is None:
+            await reply('The game snapshot is unavailable. Try again after a guild sync.')
+            return
+        linked = [name for name in self.state.characters_for(interaction.user.id) if name in gd.members]
+        if not linked:
+            await reply('Link a current guild character with /link and have an officer verify it first.')
+            return
+        name = ' '.join(organiser.split()).casefold()
+        who = next((character for character in linked if character.casefold() == name), None) if name else linked[0]
+        if not who:
+            await reply('Choose one of your verified guild characters: ' + ', '.join(linked))
+            return
+        now = int(time.time())
+        try:
+            starts = event_start(start)
+            if not now + 60 <= starts <= now + 28 * 86400:
+                raise ValueError('Choose a start at least one minute from now and within the next 28 days.')
+            title = event_text(title, 80, 'the title', required=True)
+            details = event_text(details, 500, 'the details')
+            meet_at = event_text(meet_at, 80, 'the meeting place')
+            if activity not in KINDS or not 15 <= minutes <= 480 or not 2 <= players <= 40:
+                raise ValueError('Choose an activity type, 15–480 minutes, and 2–40 players.')
+        except ValueError as error:
+            await reply(str(error))
+            return
+        entry = {
+            'id': 'D:' + str(interaction.id), 'kind': 'event_create', 'guild': self.cfg['guild_key'],
+            'who': who, 'title': title, 'note': details, 'zone': meet_at, 'activity': activity,
+            'starts': starts, 'minutes': minutes, 'slots': players, 't': now,
+        }
+        records = gd.g.get('guildEvents') or {}
+        inbox = self.state.data['inbox']
+        if event_id(entry) in records or any(e['id'] == entry['id'] for e in inbox):
+            await reply('This event was already queued or imported.')
+            return
+        count = sum(active(r) and r.get('who') == who for r in records.values())
+        count += sum(e.get('kind') == 'event_create' and e.get('who') == who and e['starts'] > now
+                     and event_id(e) not in records for e in inbox)
+        if count >= 10 or len(inbox) >= 2000:
+            await reply('The event queue is full. Wait for guild sync or close an existing event.')
+            return
+        inbox.append(entry)
+        self.state.save()
+        self.flush()
+        await reply(f'Event queued for {who} at <t:{starts}:F>. It will appear in EPU and get a signup card here after a bridge user imports it and saves the game data. Open it as {who} to prepare the WoW calendar draft.')
+
     async def handle(self,interaction):
         data=interaction.data or {};cid=data.get('custom_id','')
         if not cid.startswith('epuevent:'):return False
@@ -91,7 +167,12 @@ class EventSync:
         if str(getattr(getattr(channel,'guild',None),'id',''))!=str(self.cfg['server_id']):raise ValueError('Events channel belongs to another server')
         # Superseded/expired pending responses must not linger forever.
         before=len(self.state.data['inbox'])
+        records = gd.g.get('guildEvents') or {}
         for e in list(self.state.data['inbox']):
+            if e.get('kind') == 'event_create':
+                if event_id(e) in records or e['starts'] <= time.time():
+                    self.state.data['inbox'].remove(e)
+                continue
             if e.get('kind')!='event_response':continue
             r=(gd.g.get('eventResponses') or {}).get(e.get('event','')+'\x1e'+e.get('who','')) or {}
             event=(gd.g.get('guildEvents') or {}).get(e.get('event'))
