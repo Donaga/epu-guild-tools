@@ -75,6 +75,7 @@ Copy `config.example.json` to `config.json` and fill it in:
 - `import_channel_id`: an existing Discord announcements channel to copy into the game. New posts there (and ones from the last `import_days` days when the bot starts) show up in the addon's News page and pop up in game for everyone; edits and deletions follow. The first line of a post becomes the title. Set `import_officers_only` to `true` if people other than officers can post in that channel. **This needs the Message Content Intent:** Developer Portal > your application > Bot > Privileged Gateway Intents > turn on *Message Content Intent* > Save. The bot also needs *View Channel* and *Read Message History* in that channel. Leave it blank to turn copying off.
 - `post_motd`: when the in-game guild message of the day changes, post it to the announcements channel (default on).
 - `status_channel_id`: where the pinned status post lives. Leave it blank to use the request channel, or point it at a read-only `#bank-status` channel. Set `status_post` to `false` to turn it off. If you delete the post, the bot makes and pins a new one at the next refresh.
+  When Discord updates wait two minutes for game sync, this post shows **WoW reload would help**. A companion user or eligible helper can log in or reload when convenient. EPU reminds the importer to reload again or log out to save the results back.
 - `account`: leave blank unless you have several WoW accounts. Otherwise set it to the folder name under `WTF\Account`.
 
 ### 4. Run it

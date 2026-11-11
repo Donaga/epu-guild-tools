@@ -165,6 +165,40 @@ check("status embed builds", emb.title == "Guild Bank Status" and [f.name for f 
 check("status channel falls back to request channel", bot.cfg["status_channel_id"] == "2")
 print("   ", emb.fields[0].value, "|", emb.fields[2].value)
 
+# The reminder must change even when the WoW save file has not changed.
+import asyncio
+pending_inbox = bot.state.data["inbox"]
+bot.state.data["inbox"] = [
+    {"id": "reload-test", "kind": "event_create", "who": A.name, "t": int(bot.time.time()), "starts": int(bot.time.time()) + 3600},
+]
+check("fresh Discord action does not prompt a reload", bot.waiting_for_reload(gd) == 0)
+bot.state.data["inbox"][0]["t"] -= 121
+check("aged Discord action appears on the pinned status card",
+      any(f.name == "WoW reload would help" and "1 Discord update" in f.value for f in bot.status_embed(gd).fields))
+original_poll = bot.flush_inbox, bot.read_latest, bot.post_invite_results, bot.events.refresh, bot.update_status
+original_status = bot.status_reload_count, bot.polled_mtime
+observed = []
+async def skip_poll_step(_gd):
+    pass
+async def record_status(snapshot):
+    bot.status_reload_count = bot.waiting_for_reload(snapshot)
+    observed.append(bot.status_reload_count)
+bot.flush_inbox = lambda: None
+bot.read_latest = lambda: gd
+bot.post_invite_results = bot.events.refresh = skip_poll_step
+bot.update_status = record_status
+bot.status_reload_count = 0
+bot.polled_mtime = bot.latest_mtime
+asyncio.run(bot.poll.coro())
+asyncio.run(bot.poll.coro())
+gd.inbox_done["reload-test"] = 1
+asyncio.run(bot.poll.coro())
+check("unchanged snapshot shows the reminder once and clears it when acknowledged", observed == [1, 0])
+gd.inbox_done.pop("reload-test")
+bot.flush_inbox, bot.read_latest, bot.post_invite_results, bot.events.refresh, bot.update_status = original_poll
+bot.status_reload_count, bot.polled_mtime = original_status
+bot.state.data["inbox"] = pending_inbox
+
 # --- milestones and announcements, both ways ---
 B.ex('__fire("PLAYER_LEVEL_UP", 20)'); tick(3)
 A.ex('__ns.PostNews("Welcome", "Mail donations to the bank")'); tick(3)
