@@ -8,7 +8,9 @@ Open an activity to volunteer as Going or Tentative, choose a role and leave a n
 
 ## Optional WoW calendar copy
 
-EPU works without WoW's calendar. If the client supports it, the organiser can open **WoW calendar > Prepare WoW draft**. Review the native guild signup event and press WoW's **Create** button. This makes the event visible to guild members who do not use EPU. EPU never presses Create or changes a currently open native event/draft.
+EPU events are not automatically published to WoW's calendar. **Create event** saves the EPU activity only. **Create + WoW calendar** also prepares a native guild signup draft when supported. Review it and press WoW's **Create** button to publish it for members without EPU. Opening the calendar alone does not publish an activity.
+
+For an existing activity, the organising character can open **WoW calendar > Prepare WoW draft**, then press WoW's **Create** button. Other characters see the organiser's full name and instructions to ask them to publish; they cannot create a linked copy on the organiser's behalf. EPU never presses Create or changes a currently open native event/draft. An EPU signup alone does not confirm that a WoW copy exists.
 
 If preparation is unavailable, create a guild signup event manually using **Copy title** and **Copy details**. Select each field and use Ctrl+A / Ctrl+C. Keep the `[EPU:...]` marker in the description, and match the organiser, copied title and server start time exactly. WoW's native form limits its title to 31 characters and description to 255; EPU retains the full activity text and shortens only the calendar copy. Native availability, guild permissions, date limits and event locks still apply.
 
