@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.1
+
+- A movable Events bubble shows how many guild events are upcoming. Click to open Events, hover to see the next event, or right-click to open notification settings.
+- Turn on Announce in guild chat when creating an event to post its title, start time, and the shortcut to sign up.
+
 ## 0.20.0
 
 - Choose a dungeon when scheduling a guild event. EPU can fill the title and meeting area, with suggested levels for Forever dungeons. Custom titles and meeting locations stay editable.

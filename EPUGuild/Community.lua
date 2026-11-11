@@ -61,6 +61,7 @@ local function Publish(f,id,r)
     if b and ns.GuildKey()==key then ns.Send("D",b) end
   end)
   ns.Changed()
+  if f=='guildEvents' and ns.RefreshEventBubble then ns.RefreshEventBubble() end
 end
 function ns.SaveGuildEvent(opts,id)
   local g=ns.CasualStore(); if not g then return end
@@ -79,6 +80,14 @@ function ns.SaveGuildEvent(opts,id)
   if r.kind == 'dungeon' then r.dungeon = opts.dungeon end
   if not ValidEvent(id,r) then return ns.Print("Choose an activity type, title, 2–40 players and a suggested level range from 1 to 100 (minimum no higher than maximum).") end
   g.guildEvents[id]=r; Publish("guildEvents",id,r)
+  if not cur and opts.announceGuild then
+    local _, realm = ns.EventTimes(r.starts)
+    local when = realm ~= 'Unavailable' and (realm..' realm time') or (date('!%Y-%m-%d %H:%M',r.starts)..' UTC')
+    local title = r.title:gsub('[%c|]', '')
+    if ns.SendGuildChat('Guild event: '..title..' ('..when..'). Open EPU Events with /epu calendar to sign up.') == false then
+      ns.Print('Event created. Guild chat announcement could not be queued.')
+    end
+  end
   ns.FollowUpdates("event",id,true)
   if not cur then ns.RespondGuildEvent(id,"going",r.kind=="dungeon" and (((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d") or "g","") end
   return id
@@ -147,7 +156,10 @@ function ns.MergeCommunity(sender,b,trusted)
       end
     end
   end
-  if changed then ns.Changed() end
+  if changed then
+    ns.Changed()
+    if b.guildEvents and ns.RefreshEventBubble then ns.RefreshEventBubble() end
+  end
   return changed
 end
 

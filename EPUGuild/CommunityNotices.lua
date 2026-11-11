@@ -186,7 +186,11 @@ function ns.MaybeReturningHint()
   return true
 end
 ns.On("PLAYER_LOGIN",function()
-  local function Tick() ns.CheckEventReminders(); C_Timer.After(30,Tick) end
+  local function Tick()
+    ns.CheckEventReminders()
+    ns.RefreshEventBubble()
+    C_Timer.After(30,Tick)
+  end
   C_Timer.After(45,Tick)
   local attempts=0
   local function Returning()
