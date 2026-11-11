@@ -113,7 +113,8 @@ function ns.ProcessInbox()
       local ok = false
       local key=ns.GuildKey()
       local wrongGuild=e.bridge and (type(e.guild)~='string' or (key~=e.guild and key:sub(1,#e.guild+3)~=e.guild..' - '))
-      if e.bridge and (wrongGuild or type(e.bridgeIssued)~='number' or now-e.bridgeIssued>86400 or e.bridgeIssued>now+300) then
+      local staleBridge=e.bridge and (wrongGuild or type(e.bridgeIssued)~='number' or now-e.bridgeIssued>86400 or e.bridgeIssued>now+300)
+      if staleBridge then
         ok=true -- stale/cross-guild helper actions are discarded, never applied
       elseif e.kind == "guild_invite" then
         ok=ns.ImportGuildInvite(e)
@@ -170,14 +171,14 @@ function ns.ProcessInbox()
       end
       if ok then
         done[e.id] = now
-        applied = applied + 1
+        if not staleBridge and e.kind~="sync_helper" then applied = applied + 1 end
       else
         waiting = waiting + 1
       end
     end
   end
   if applied > 0 then
-    ns.Print("Applied " .. applied .. " request update" .. (applied == 1 and "" or "s") .. " from Discord.")
+    ns.Print("Processed " .. applied .. " Discord update(s). When convenient, /reload or log out to save the results back to Discord.")
   end
   if waiting > 0 then
     ns.Print(waiting .. " Discord update(s) are waiting on item info, bank catalog or sync; they'll retry on the next /reload.")

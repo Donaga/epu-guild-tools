@@ -246,11 +246,40 @@ CATEGORY_EMOJI = {"Cloth": "\U0001F9F5", "Leather": "\U0001F9E5", "Metal & Stone
                   "Weapons & Armor": "\u2694\uFE0F", "Recipes": "\U0001F4DC", "Other": "\U0001F4E6"}
 
 
-def status_embed(gd: core.GuildData) -> discord.Embed:
+def waiting_for_reload(gd: core.GuildData) -> int:
+    now = time.time()
+    kinds = {'request', 'status', 'news', 'news_remove', 'checklist', 'guild_invite', 'event_create', 'event_response'}
+    events_by_id = gd.g.get('guildEvents') or {}
+    count = 0
+    for entry in state.data['inbox']:
+        kind = entry.get('kind')
+        if kind not in kinds or entry['id'] in gd.inbox_done or entry.get('t', now) > now - 120:
+            continue
+        if kind == 'guild_invite' and now - entry['t'] >= 7 * 86400:
+            continue
+        if kind == 'event_create' and (entry['starts'] <= now or entry['who'] + '\x1f' + entry['id'] in events_by_id):
+            continue
+        if kind == 'event_response':
+            event = events_by_id.get(entry.get('event'))
+            if (event and (event.get('status') != 'scheduled' or event.get('ends', 0) <= now)) or now - entry['t'] >= 7 * 86400:
+                continue
+        count += 1
+    return count
+
+
+def status_embed(gd: core.GuildData, reload_count: int | None = None) -> discord.Embed:
     st = gd.status_summary()
     e = discord.Embed(title="Guild Bank Status", color=discord.Color.blurple())
     if cfg["logo_url"]:
         e.set_thumbnail(url=cfg["logo_url"])
+    if reload_count is None:
+        reload_count = waiting_for_reload(gd)
+    if reload_count:
+        updates = "update is" if reload_count == 1 else "updates are"
+        e.add_field(name="WoW reload would help", inline=False, value=(
+            f"{reload_count} Discord {updates} waiting for game sync. "
+            "A companion user or eligible helper can log in or type `/reload` when convenient."
+        ))
     need_lines = []
     for n in st["needs"]:
         frac = n["have"] / n["target"]
@@ -288,25 +317,32 @@ def status_embed(gd: core.GuildData) -> discord.Embed:
     return e
 
 
+status_reload_count = None
+
+
 async def update_status(gd: core.GuildData):
+    global status_reload_count
     if not cfg["status_post"]:
         return
     ch = client.get_channel(int(cfg["status_channel_id"]))
     if ch is None:
         log.error("Status channel %s not found", cfg["status_channel_id"])
         return
-    embed = status_embed(gd)
+    reload_count = waiting_for_reload(gd)
+    embed = status_embed(gd, reload_count)
     mid = state.data.get("status_message_id")
     if mid:
         try:
             msg = await ch.fetch_message(mid)
             await msg.edit(embed=embed)
+            status_reload_count = reload_count
             return
         except discord.NotFound:
             pass
     msg = await ch.send(embed=embed)
     state.data["status_message_id"] = msg.id
     state.save()
+    status_reload_count = reload_count
     try:
         await msg.pin()
     except discord.Forbidden:
@@ -515,7 +551,14 @@ async def poll():
     if gd is not None:
         try:await events.refresh(gd)
         except Exception as e:explain(e,'update guild events',cfg.get('events_channel_id'))
-    if gd is None or latest_mtime == polled_mtime:
+    if gd is None:
+        return
+    if latest_mtime == polled_mtime:
+        if cfg["status_post"] and waiting_for_reload(gd) != status_reload_count:
+            try:
+                await update_status(gd)
+            except Exception as e:
+                explain(e, "update the reload reminder", cfg["status_channel_id"])
         return
     try:
         await refresh(gd)

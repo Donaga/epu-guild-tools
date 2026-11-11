@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.2
+
+- The pinned Discord status post shows when updates have waited two minutes for a WoW reload. After importing updates, EPU explains how to save the results back to Discord.
+
 ## 0.21.1
 
 - Guild invite requests open a prepared /ginvite command in WoW chat. Review the name and press Enter to send the invitation.
