@@ -1,6 +1,8 @@
 """Public EPU event cards. Discord responses remain pending until game receipt."""
 from __future__ import annotations
 from datetime import datetime
+from functools import lru_cache
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 import hashlib,json,re,time,uuid
 import discord
 
@@ -9,16 +11,82 @@ KINDS={'dungeon':'Dungeon','leveling':'Leveling','quest':'Quest help','fishing':
 def token(event):return hashlib.sha256(event.encode()).hexdigest()[:24]
 def active(r):return r.get('status')=='scheduled' and r.get('ends',0)>time.time()
 
-def event_start(value):
-    """Parse an explicit wall time and offset, independent of the bot's clock zone."""
-    match = re.fullmatch(r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) (UTC|[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00)', value.strip(), re.ASCII)
-    if match:
-        day, clock, offset = match.groups()
+COMMON_TIME_ZONES = {
+    'America/New_York': 'Eastern (US) · New York',
+    'America/Chicago': 'Central (US) · Chicago',
+    'America/Denver': 'Mountain (US) · Denver',
+    'America/Los_Angeles': 'Pacific (US) · Los Angeles',
+    'America/Phoenix': 'Arizona · Phoenix',
+    'America/Anchorage': 'Alaska · Anchorage',
+    'Pacific/Honolulu': 'Hawaii · Honolulu',
+    'UTC': 'UTC',
+    'Europe/London': 'United Kingdom · London',
+    'Europe/Paris': 'Central Europe · Paris',
+    'Asia/Kolkata': 'India · Kolkata',
+    'Asia/Manila': 'Philippines · Manila',
+    'Australia/Sydney': 'Australia · Sydney',
+    'Pacific/Auckland': 'New Zealand · Auckland',
+}
+
+
+@lru_cache(maxsize=1)
+def known_time_zones():
+    return sorted(available_timezones())
+
+
+def time_zone_choices(query):
+    words = query.casefold().replace('_', ' ').split()
+    matches = []
+    zones = dict(COMMON_TIME_ZONES)
+    if words:
+        for zone in known_time_zones():
+            zones.setdefault(zone, zone.replace('_', ' ').replace('/', ' / '))
+    for zone, label in zones.items():
+        searchable = (label + ' ' + zone).casefold().replace('_', ' ')
+        if all(word in searchable for word in words):
+            matches.append(discord.app_commands.Choice(name=label, value=zone))
+            if len(matches) == 25:
+                break
+    return matches
+
+
+def event_start(value, time_zone=''):
+    """Convert an event's wall time using a named zone or an explicit offset."""
+    match = re.fullmatch(
+        r'(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})(?: (UTC|[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00))?',
+        value.strip(), re.ASCII,
+    )
+    if not match:
+        raise ValueError('Enter a start like 2026-11-20 19:00 and choose a time zone.')
+    day, clock, offset = match.groups()
+    try:
+        wall = datetime.fromisoformat(day + 'T' + clock)
+    except ValueError:
+        raise ValueError('Enter a valid date and 24-hour start time.') from None
+    if offset:
+        if time_zone:
+            raise ValueError('Choose a time zone or put a UTC offset in the start field. Use only one.')
+        return int(datetime.fromisoformat(wall.isoformat() + ('+00:00' if offset == 'UTC' else offset)).timestamp())
+    if not time_zone:
+        raise ValueError('Select a time zone, such as Eastern (US) or UTC.')
+    try:
+        zone = ZoneInfo(time_zone)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise ValueError('Choose a time zone from the suggestions. Search by city or region.') from None
+    candidates = set()
+    for fold in (0, 1):
+        instant = int(wall.replace(tzinfo=zone, fold=fold).timestamp())
         try:
-            return int(datetime.fromisoformat(day + 'T' + clock + ('+00:00' if offset == 'UTC' else offset)).timestamp())
-        except (ValueError, OverflowError, OSError):
-            pass
-    raise ValueError('Enter a start like 2026-11-20 19:00 -05:00 or 2026-11-21 00:00 UTC.')
+            matches_wall_time = datetime.fromtimestamp(instant, zone).replace(tzinfo=None) == wall
+        except (OverflowError, OSError, ValueError):
+            raise ValueError('Choose a start within the next 28 days.') from None
+        if matches_wall_time:
+            candidates.add(instant)
+    if not candidates:
+        raise ValueError('That local time is skipped by a clock change. Pick another start time.')
+    if len(candidates) > 1:
+        raise ValueError('That local time happens twice because the clocks change. Pick another time or enter the UTC offset with the start.')
+    return candidates.pop()
 
 def event_text(value, limit, label, required=False):
     value = ' '.join(value.split())
@@ -73,7 +141,7 @@ def card(gd,state,event,r):
 class EventSync:
     def __init__(self,cfg,state,client,read,flush):self.cfg,self.state,self.client,self.read,self.flush=cfg,state,client,read,flush
 
-    async def create(self, interaction, title, start, details='', meet_at='', activity='other', minutes=60, players=5, organiser=''):
+    async def create(self, interaction, title, start, details='', meet_at='', activity='other', minutes=60, players=5, organiser='', time_zone=''):
         async def reply(message):
             await interaction.response.send_message(message, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
@@ -96,7 +164,7 @@ class EventSync:
             return
         now = int(time.time())
         try:
-            starts = event_start(start)
+            starts = event_start(start, time_zone)
             if not now + 60 <= starts <= now + 28 * 86400:
                 raise ValueError('Choose a start at least one minute from now and within the next 28 days.')
             title = event_text(title, 80, 'the title', required=True)

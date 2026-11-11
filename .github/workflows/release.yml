@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install lupa "discord.py>=2.3"
+      - run: pip install lupa -r epu-discord/requirements.txt
       - name: Personalized guides and reviewed catalog
         run: python tools/build_guide_catalog.py --check && python tests/test_guides.py
       - name: Bank stock history and waiting requests

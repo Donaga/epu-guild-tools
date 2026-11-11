@@ -8,7 +8,7 @@ Open an activity to volunteer as Going or Tentative, choose a role and leave a n
 
 ## Schedule from Discord
 
-In **#events**, use `/guildevent`. Enter a title and a start time with a UTC offset, such as `2026-11-20 19:00 -05:00` or `2026-11-21 00:00 UTC`. Discord shows the saved start in each viewer's local time. You can also select an activity type and enter the meeting place, details, duration, and planned group size.
+In **#events**, use `/guildevent`. Enter a title and local start time like `2026-11-20 19:00`, then use **time_zone** to pick a zone such as **Eastern (US)** or search for your city. The bot uses the offset in effect on the event date. You can still enter an explicit offset such as `2026-11-20 19:00 -05:00` with the time zone field blank. Discord shows the saved start in each viewer's local time. You can also select an activity type and enter the meeting place, details, duration, and planned group size.
 
 An officer must verify your in-game character with `/link` and `/approve_link` first. The first verified character still in the guild is the default organiser. Use **organiser** to choose a different verified guild character by full name.
 

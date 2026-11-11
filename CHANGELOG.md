@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.3
+
+- The /guildevent time zone picker accepts familiar zone names and city searches. The companion uses the offset in effect on the event date.
+
 ## 0.21.2
 
 - The pinned Discord status post shows when updates have waited two minutes for a WoW reload. After importing updates, EPU explains how to save the results back to Discord.

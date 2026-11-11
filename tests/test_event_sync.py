@@ -4,6 +4,20 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'epu-discord'))
 import tempfile,asyncio,types,json,shutil
 import epu_core as core,shared_bridge as bridge,event_sync
+check('timezone picker finds familiar names and cities',
+      event_sync.time_zone_choices('eastern')[0].value=='America/New_York'
+      and any(choice.value=='America/Indiana/Indianapolis' for choice in event_sync.time_zone_choices('indianapolis')))
+for month, offset in [('01','-05:00'),('07','-04:00')]:
+    wall=f'2026-{month}-15 19:00'
+    check('Eastern date selects the offset in effect for '+wall,
+          event_sync.event_start(wall,'America/New_York')==event_sync.event_start(wall+' '+offset))
+for wall, expected in [('2026-03-08 02:30','skipped'),('2026-11-01 01:30','twice')]:
+    try:
+        event_sync.event_start(wall,'America/New_York')
+    except ValueError as error:
+        check('picker detects '+expected+' local time',expected in str(error))
+    else:
+        check('picker detects '+expected+' local time',False)
 A=Client('Chris Baker');B=Client('Tyler Baker');P=Client('Pip Baker')
 clients.update({c.name:c for c in (A,B,P)});tick(120)
 now=int(A.ev('__now'));event_sync.time.time=lambda:now
@@ -89,7 +103,8 @@ create(organiser='Chris Baker')
 check('Discord users cannot create events as someone else',not state.data['inbox'])
 create(start='2027-01-15 08:00 -05:80')
 check('invalid UTC offsets are rejected',not state.data['inbox'] and 'Enter a start' in response.messages[-1])
-create(activity='fishing', meet_at='Stormwind', details='Bring a fishing pole', minutes=45, players=8)
+create(start=start.rsplit(' ',1)[0], time_zone='America/New_York', activity='fishing', meet_at='Stormwind',
+       details='Bring a fishing pole', minutes=45, players=8)
 create()
 check('retry of the same command queues one event',len(state.data['inbox'])==1)
 creation=state.data['inbox'][0]
