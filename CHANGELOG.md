@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.20.3
+
+- Ignore restricted WoW chat values before reading them, fixing the system-message error in `Comm.lua`. Readable throttle warnings and guild sync messages still work.
+
 ## 0.20.2
 
 - Create + WoW calendar saves an activity and prepares its linked calendar draft in one flow. Review the draft and press WoW's Create button to publish.

@@ -152,9 +152,9 @@ end
 local function ConfirmMessage(message)
   -- Protected/secret strings are never inspected. Unsupported clients simply
   -- retain "awaiting confirmation" until a roster join is observed.
-  if type(message)~='string' or (issecretvalue and issecretvalue(message)) or not ns.CanInviteGuild() then return end
+  if not ns.IsReadableString(message) or not ns.CanInviteGuild() then return end
   local template=ERR_GUILD_INVITE_S
-  if type(template)~='string' or (issecretvalue and issecretvalue(template)) then return end
+  if not ns.IsReadableString(template) then return end
   local before,after=template:match('^(.-)%%s(.-)$'); if not before then return end
   local function Escape(s)return (s:gsub('([%(%)%.%%%+%-%*%?%[%]%^%$])','%%%1')) end
   local name=message:match('^'..Escape(before)..'(.-)'..Escape(after)..'$')
