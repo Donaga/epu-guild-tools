@@ -113,7 +113,9 @@ function ns.OpenWoWCalendar()
 end
 function ns.PrepareWoWCalendar(id)
   local g=ns.CasualStore(); local r=g and g.guildEvents[id]
-  if not r or r.who~=ns.me or r.status~="scheduled" or r.starts<=ns.Now() then return false end
+  if not r then return false end
+  if r.who~=ns.me then ns.Print("Only the organising character ("..r.who..") can prepare this linked calendar copy."); return false end
+  if r.status~="scheduled" or r.starts<=ns.Now() then ns.Print("Only scheduled events that have not started can be prepared."); return false end
   if InCombatLockdown and InCombatLockdown() then ns.Print("Prepare the calendar after combat."); return false end
   if API("IsEventOpen")==true or (CalendarCreateEventFrame and CalendarCreateEventFrame:IsShown()) then
     ns.Print("Close the current WoW event or draft first. It has been left untouched."); return false
@@ -125,7 +127,9 @@ function ns.PrepareWoWCalendar(id)
   y,m,d,h,min=tonumber(y),tonumber(m),tonumber(d),tonumber(h),tonumber(min)
   local required={"SetAbsMonth","GetMonthInfo","GetNumDayEvents","GetDayEvent","EventSetTitle","EventSetDescription","EventSetDate","EventSetTime","EventSetType","CreateGuildSignUpEvent"}
   for _,name in ipairs(required) do if not C_Calendar or type(C_Calendar[name])~="function" then ns.Print("Calendar publishing is unavailable; use the copyable details."); return false end end
-  if not CalendarDayContextMenu_CreateGuildEvent or not CalendarFrame_Update or not CalendarCreateEvent_UpdateEventTime or not CalendarCreateEvent_UpdateEventType then return false end
+  if not CalendarDayContextMenu_CreateGuildEvent or not CalendarFrame_Update or not CalendarCreateEvent_UpdateEventTime or not CalendarCreateEvent_UpdateEventType then
+    ns.Print("This client's calendar form cannot be prepared by EPU. The organiser can create a guild signup event manually using Copy title and Copy details."); return false
+  end
   local ok=pcall(function()
     C_Calendar.SetAbsMonth(m,y); CalendarFrame_Update()
     -- Refuse same-title duplicates on the selected date.

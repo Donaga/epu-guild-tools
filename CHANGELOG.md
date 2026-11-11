@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.2
+
+- Create + WoW calendar saves an activity and prepares its linked calendar draft in one flow. Review the draft and press WoW's Create button to publish.
+- Calendar details explain that opening the calendar does not publish an activity and show which organising character must prepare the copy.
+- Unsupported calendar forms and events that cannot be prepared now explain why.
+
 ## 0.20.1
 
 - A movable Events bubble shows how many guild events are upcoming. Click to open Events, hover to see the next event, or right-click to open notification settings.

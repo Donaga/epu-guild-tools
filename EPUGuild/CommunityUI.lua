@@ -395,12 +395,20 @@ function ns.FillCommunityDetails(kind,key,det)
         self:SetOn(announceGuild)
       end,tip='Post the title and start time once when you create the event.'}})
     end
-    det:Buttons({{cur and "Save event" or "Create event",function()
+    local function SaveEvent(calendar)
       local start=ns.ParseEventLocal(when:GetText())
       if not start then return ns.Print("Enter a valid local date and time as YYYY-MM-DD HH:MM.") end
       local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText()),announceGuild=announceGuild},cur and key)
-      if id then s.lastEventType=activityType;Open("event",id) end
-    end,accent=true}})
+      if id then
+        s.lastEventType=activityType; Open(calendar and "eventcalendar" or "event",id)
+        if calendar then ns.PrepareWoWCalendar(id) end
+      end
+    end
+    det:Buttons({{cur and "Save event" or "Create event",function() SaveEvent(false) end,accent=true}})
+    if not cur then
+      det:Buttons({{"Create + WoW calendar",function() SaveEvent(true) end}})
+      det:Text("Create event saves to EPU only. Create + WoW calendar also prepares a calendar draft; review it and press WoW's Create button to publish.",C.muted)
+    end
   elseif kind=="event" then
     local r=g.guildEvents[key]; if not r then UI:CloseDetails(); return true end
     local localTime,server=ns.EventTimes(r.starts)
@@ -438,7 +446,16 @@ function ns.FillCommunityDetails(kind,key,det)
   elseif kind=="eventcalendar" then
     local r=g.guildEvents[key]; if not r then UI:CloseDetails(); return true end
     det:Reset(nil,nil,"WoW calendar",r.title)
-    det:Text("Optional: publish a guild signup event so members without EPU can see it. Review and press Create in WoW's calendar. Keep the marker to connect its signups.")
+    det:Text("EPU events are not automatically published to WoW's calendar. Organiser: "..r.who..".",C.gold)
+    if ns.OpenCalendarMatches(key) then
+      det:Text("Linked WoW event is open. Refresh its attendees below.")
+    elseif r.status~="scheduled" or r.starts<=ns.Now() then
+      det:Text("Draft preparation is available only for scheduled events that have not started.")
+    elseif r.who~=ns.me then
+      det:Text("Ask "..r.who.." to open this activity on that character, choose Prepare WoW draft, then press Create in WoW's calendar. Only the organising character can prepare the linked copy.")
+    else
+      det:Text("1. Choose Prepare WoW draft.\n2. Review it and press WoW's Create button.\n3. Keep the EPU marker in the description. Opening the calendar alone does not publish this activity.")
+    end
     det:Text("Open the linked event and refresh attendees here. WoW status takes priority over EPU after refresh; roles/notes remain in EPU. Only your own response can be sent to both. Calendar approval, locks and permissions still apply.",C.muted)
     det:Text("Edits and cancellations are separate: update both calendars. An EPU title/time change stops matching until the WoW copy is corrected. No background calendar scanning or automatic publishing.",C.gold)
     det:Buttons({{"Open WoW calendar",function() ns.OpenWoWCalendar() end},{"Refresh open event",function()
