@@ -26,7 +26,7 @@ from discord.ext import tasks
 
 import epu_core as core
 import shared_bridge as bridge
-from event_sync import EventSync, KINDS as EVENT_KINDS
+from event_sync import EventSync, KINDS as EVENT_KINDS, time_zone_choices
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("epu")
@@ -682,7 +682,8 @@ async def import_invite_message(message: discord.Message, edit: bool = False) ->
 @tree.command(name='guildevent', description='Schedule a guild activity in EPU from #events', guild=GUILD)
 @app_commands.describe(
     title='Event name',
-    start='Date and time with UTC offset, e.g. 2026-11-20 19:00 -05:00',
+    start='Local date and time, e.g. 2026-11-20 19:00',
+    time_zone='Choose a time zone or search by city, such as Eastern or London',
     details='What guildmates should know',
     meet_at='Zone or meeting spot',
     activity='Kind of guild activity',
@@ -695,6 +696,7 @@ async def guildevent_cmd(
     interaction: discord.Interaction,
     title: app_commands.Range[str, 1, 80],
     start: app_commands.Range[str, 1, 32],
+    time_zone: app_commands.Range[str, 1, 100] = '',
     details: app_commands.Range[str, 0, 500] = '',
     meet_at: app_commands.Range[str, 0, 80] = '',
     activity: str = 'other',
@@ -702,7 +704,12 @@ async def guildevent_cmd(
     players: app_commands.Range[int, 2, 40] = 5,
     organiser: app_commands.Range[str, 1, 80] = '',
 ):
-    await events.create(interaction, title, start, details, meet_at, activity, minutes, players, organiser)
+    await events.create(interaction, title, start, details, meet_at, activity, minutes, players, organiser, time_zone)
+
+
+@guildevent_cmd.autocomplete('time_zone')
+async def guildevent_time_zone(_interaction: discord.Interaction, current: str):
+    return time_zone_choices(current)
 
 
 @tree.command(name='guildinvite',description='Ask to join the WoW guild using your character’s first and last name',guild=GUILD)
