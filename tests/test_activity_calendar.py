@@ -134,6 +134,20 @@ A.ex("__ns.UI:OpenDetails('eventform','new')")
 # screenshot sequence rather than only exercising a fresh font string.
 A.ex("__ginfo='A friendly guild. Everyone is welcome.';__motd='Welcome!';__ns.UI.details.pools.text[2]:SetHeight(44);__ns.UI:OpenDetails('motd','motd')")
 check('news heading clears stale fixed text height',A.ev('__ns.UI.details.pools.text[2]._h')==14)
+A.ex('''__chat = {}; local send = SendChatMessage
+SendChatMessage = function(text,channel) __chat[#__chat+1] = {text,channel}; return send(text,channel) end
+__ns.UI:OpenDetails('eventform','new'); __ns.UI.details.pools.box[1]:SetText('Fishing night')
+__click('Announce in guild chat: Off'); __click('Group options'); __click('Create event'); __announced=__ns.UI.details.key
+''')
+check('opted-in event sends one guild announcement with a route to Events',tick_until(lambda:A.ev('#__chat')==1,20) and A.ev('__chat[1][2]')=='GUILD' and 'Fishing night' in A.ev('__chat[1][1]') and '/epu calendar' in A.ev('__chat[1][1]'))
+A.ex("__ns.UI:OpenDetails('eventform',__announced); __ns.UI.details.pools.box[1]:SetText('Updated fishing night'); __click('Save event')")
+tick(4)
+check('editing an event does not post another announcement',A.ev('#__chat')==1)
+check('online guildmates get a bubble for synced upcoming events',B.ev('EPUGuildEventBubble:IsShown()'))
+B.ex("local ui=__ns.UI; ui.state.activities.eventType='fishing'; ui.state.activities.mine=true; ui.search:SetText('hidden'); EPUGuildEventBubble:Click()")
+check('bubble opens Events and clears filters that could hide upcoming events',B.ev("__ns.UI.view=='activities' and __ns.UI.state.activities.kind=='events' and not __ns.UI.state.activities.mine and not __ns.UI.state.activities.eventType and __ns.UI.search:GetText()==''"))
+B.ex("for _,e in pairs(__ns.CasualStore().guildEvents) do e.starts=__now-60 end; __ns.RefreshEventBubble()")
+check('bubble disappears when all events have started',not B.ev('EPUGuildEventBubble:IsShown()'))
 check('new activity UI raises no runtime errors',A.ev('__errors') in (None,0))
 print('Typed activities and native calendar:',check.failed,'failed')
 sys.exit(bool(check.failed))

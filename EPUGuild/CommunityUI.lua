@@ -295,6 +295,7 @@ function ns.FillCommunityDetails(kind,key,det)
     if not presets[activityType] then activityType="other" end
     local preset=presets[activityType]
     local expanded=draft and draft.expanded or false
+    local announceGuild=draft and draft.announceGuild or false
     local dungeon=cur and cur.dungeon
     if draft then dungeon=draft.dungeon end
     local defaultZone=(GetZoneText and GetZoneText()) or ''
@@ -362,7 +363,7 @@ function ns.FillCommunityDetails(kind,key,det)
     if dungeon then UpdateLabels() end
     det:Buttons({{expanded and 'Hide group options' or 'Group options',function()
       local values={} for i=1,8 do values[i]=det.pools.box[i]:GetText() end
-      det.eventFormDraft={values=values,kind=activityType,dungeon=dungeon,expanded=not expanded};UI:FillDetails()
+      det.eventFormDraft={values=values,kind=activityType,dungeon=dungeon,expanded=not expanded,announceGuild=announceGuild};UI:FillDetails()
     end}})
     local function Soon(minutes) when:SetText(date('%Y-%m-%d %H:%M',ns.Now()+minutes*60));det.casualDraft=true end
     det:Buttons({{'In 15 min',function() Soon(15) end},{'In 1 hour',function() Soon(60) end},{'Next 7pm',function()
@@ -386,10 +387,18 @@ function ns.FillCommunityDetails(kind,key,det)
     end
     when.onChange=Preview; Preview()
     det:Text("Plan up to 28 days ahead. Start times are stored as one shared instant. Server-time display uses today's realm offset, which can change with daylight saving time.",C.muted)
+    if not cur then
+      local function ChatLabel() return announceGuild and 'Announce in guild chat: On' or 'Announce in guild chat: Off' end
+      det:Buttons({{ChatLabel(),function(self)
+        announceGuild=not announceGuild
+        self:SetLabel(ChatLabel())
+        self:SetOn(announceGuild)
+      end,tip='Post the title and start time once when you create the event.'}})
+    end
     det:Buttons({{cur and "Save event" or "Create event",function()
       local start=ns.ParseEventLocal(when:GetText())
       if not start then return ns.Print("Enter a valid local date and time as YYYY-MM-DD HH:MM.") end
-      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText())},cur and key)
+      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText()),announceGuild=announceGuild},cur and key)
       if id then s.lastEventType=activityType;Open("event",id) end
     end,accent=true}})
   elseif kind=="event" then
@@ -500,6 +509,11 @@ function ns.FillCommunityDetails(kind,key,det)
     end
     det:Buttons(specs)
     if key=="all" then
+      det:Buttons({{s.eventBubble==false and 'Show Events bubble' or 'Hide Events bubble',function(self)
+        s.eventBubble=s.eventBubble==false
+        self:SetLabel(s.eventBubble and 'Hide Events bubble' or 'Show Events bubble')
+        ns.RefreshEventBubble()
+      end}})
       local first=det:Field("Quiet start",s.quietStart or "",80); local last=det:Field("Quiet end",s.quietEnd or "",80)
       local lead=det:Field("Remind min",tostring(s.reminderMinutes or 15),60,true)
       det:Text("Quiet hours use local HH:MM and can span midnight. Leave both blank to disable. Quiet hours collect messages in Catch-up without pop-ups or sound.",C.muted)
