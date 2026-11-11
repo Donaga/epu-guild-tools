@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.1
+
+- Guild invite requests open a prepared /ginvite command in WoW chat. Review the name and press Enter to send the invitation.
+
 ## 0.21.0
 
 - Use /guildevent in Discord #events to schedule a guild activity as your verified character. After the bridge imports it, open Guild activities to sign up or prepare its WoW calendar draft.

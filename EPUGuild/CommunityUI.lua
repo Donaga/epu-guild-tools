@@ -552,11 +552,13 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Text(presence..' · '..source,C.gold)
     det:Text('Add to Friends to receive login updates. Unknown means the game has not provided a current result. Online sightings expire after two minutes; another member’s report is advisory.',C.muted)
     det:Text('Confirm the character name before inviting. A request is not proof of character ownership. The game decides whether the name is valid and the player can join.',C.muted)
-    det:Field('Copy invite','/ginvite '..r.who,160)
+    local command=det:Field('Copy invite','/ginvite '..r.who,174)
+    command:SetCursorPosition(0)
     local outcome=ns.GuildInviteOutcome(key)
     if outcome then det:Text((outcome.phase=='joined' and 'Joined the guild' or 'Invite sent')..' · reported by '..outcome.by..' at '..date('%m-%d %H:%M',outcome.t),C.gold)
     else det:Text('No game-confirmed invitation recorded yet.',C.muted) end
-    if ns.ActiveGuildInvite(r) then det:Buttons({{outcome and 'Invite again' or 'Invite',function() ns.InviteRequestedCharacter(key) end,accent=true},{'Add to Friends',function() ns.TrackGuildInvite(key) end}})
+    if ns.ActiveGuildInvite(r) then
+      det:Buttons({{'Open invite in chat',function() ns.PrepareGuildInvite(key) end,accent=true,tip='Review the /ginvite command in chat, then press Enter to send.'},{'Add to Friends',function() ns.TrackGuildInvite(key) end}})
     else det:Text(ns.Member(r.who) and 'This character is already in the guild.' or 'This request was withdrawn or expired.',C.gold) end
     det:Buttons({{'Dismiss for me',function()
       s.inviteDismissed=s.inviteDismissed or {}; s.inviteDismissed[key]=r.who; UI:CloseDetails(); UI:Refresh()

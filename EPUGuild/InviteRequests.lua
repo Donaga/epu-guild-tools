@@ -189,15 +189,22 @@ function ns.ImportGuildInvite(e)
   if not g.inviteRequests[e.source] or g.inviteRequests[e.source].revision~=r.revision then return false end
   ns.Send('D',b); return true
 end
-function ns.InviteRequestedCharacter(id)
+function ns.PrepareGuildInvite(id)
   local g=ns.CasualStore(); local r=g and g.inviteRequests[id]
   if not ns.CanInviteGuild() or not ns.ActiveGuildInvite(r) then return false end
-  if InCombatLockdown and InCombatLockdown() then ns.Print('Send the invite after combat.'); return false end
-  local invite=(C_GuildInfo and C_GuildInfo.Invite) or GuildInvite
-  if type(invite)~='function' then ns.Print('Use the copyable /ginvite command.'); return false end
-  local ok=pcall(invite,r.who)
-  ns.Print(ok and 'Invite attempted. Check the game response; the request stays open until they join.' or 'The game blocked the invite. Use the copyable /ginvite command.')
-  return ok
+  local active=ChatFrameUtil and ChatFrameUtil.GetActiveWindow or ChatEdit_GetActiveWindow
+  local editBox=active and active()
+  if editBox then
+    local draft=editBox:GetText()
+    if not ns.IsReadableString(draft) or draft~="" then
+      ns.Print("Finish your current chat draft first, or copy the invite command.")
+      return false
+    end
+  end
+  local openChat=ChatFrameUtil and ChatFrameUtil.OpenChat or ChatFrame_OpenChat
+  if type(openChat)=="function" and pcall(openChat,"/ginvite "..r.who) then return true end
+  ns.Print("Copy the /ginvite command, paste it in WoW chat, then press Enter.")
+  return false
 end
 ns.On('GUILD_ROSTER_UPDATE',function() ns.NotifyGuildInvites() end)
 ns.On('PLAYER_LOGIN',function() C_Timer.After(20,ns.NotifyGuildInvites) end)
