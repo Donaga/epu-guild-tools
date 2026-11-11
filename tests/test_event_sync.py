@@ -70,5 +70,58 @@ check('late cloud data does not overwrite a newer game response',A.ev("__ns.Casu
 merged.g['guildEvents'][event]['status']='cancelled';asyncio.run(sync.refresh(merged))
 check('cancellation updates the same card and disables signup controls',len(channel.sent)==1 and all(c.disabled for c in channel.message.edits[-1]['view'].children))
 gd=merged;asyncio.run(sync.handle(interaction));check('cancelled event rejects new signups',not state.data['inbox'])
+
+# Discord creation through the real shared-folder path.
+interaction.id=123456
+start=event_sync.datetime.fromtimestamp(now+7200, event_sync.datetime.fromisoformat('2000-01-01T00:00:00-05:00').tzinfo)
+start=start.strftime('%Y-%m-%d %H:%M -05:00')
+def create(**kwargs):
+    asyncio.run(sync.create(interaction,'Discord fishing night',kwargs.pop('start',start),**kwargs))
+interaction.channel_id=99
+create()
+check('event creation is limited to #events',not state.data['inbox'] and '#events' in response.messages[-1])
+interaction.channel_id=2
+interaction.user.id=43
+create()
+check('event creation requires a verified guild member',not state.data['inbox'] and 'verify' in response.messages[-1])
+interaction.user.id=42
+create(organiser='Chris Baker')
+check('Discord users cannot create events as someone else',not state.data['inbox'])
+create(start='2027-01-15 08:00 -05:80')
+check('invalid UTC offsets are rejected',not state.data['inbox'] and 'Enter a start' in response.messages[-1])
+create(activity='fishing', meet_at='Stormwind', details='Bring a fishing pole', minutes=45, players=8)
+create()
+check('retry of the same command queues one event',len(state.data['inbox'])==1)
+creation=state.data['inbox'][0]
+key=event_sync.event_id(creation)
+check('start offset converts to the correct instant',abs(creation['starts']-(now+7200))<60)
+for c in (A,B,P):
+    c.rt.globals()['creation']=c.rt.table_from(creation)
+    c.rt.globals()['createdEvent']=key
+check('an ordinary member cannot import delegated creation',not P.ev('__ns.ImportEventCreate(creation)'))
+bridge.publish(cfg,state)
+check('helpers with older addons are not sent creation entries',bridge.verify(folder/'to-game.json','helper',cfg['guild_key'],'feed',secret)['payload']['entries']==[])
+(addon/'EPUGuild.toc').write_text('InviteRequests.lua\nEventBridge.lua\nEventCreateBridge.lua\n')
+bridge.helper_cycle(hc,local);bridge.publish(cfg,state);bridge.helper_cycle(hc,local)
+B.ex((addon/'Inbox.lua').read_text());B.ex('__ns.ProcessInbox()')
+check('updated helper imports an event owned by the verified organiser',B.ev('__ns.CasualStore().guildEvents[createdEvent].who')=='Pip Baker')
+check('delegated creation reaches the organiser',tick_until(lambda:P.ev('(__ns.CasualStore().guildEvents[createdEvent] or {}).title')=='Discord fishing night',60))
+P.ex("""__ns.UI:Show(); __ns.UI:SetView('activities'); __ns.UI:OpenDetails('eventcalendar',createdEvent)
+function __canPrepare() for _, b in ipairs(__ns.UI.details.pools.btn) do
+  if b:IsShown() and b.text:GetText()=='Prepare WoW draft' then return true end
+end end""")
+check('organiser can prepare a WoW calendar draft for a Discord event',P.ev('__canPrepare()'))
+check('helper cannot publish the organiser’s native draft',not B.ev('__ns.PrepareWoWCalendar(createdEvent)'))
+P.ex("__ns.SaveGuildEvent({title='Edited in WoW',starts=creation.starts,minutes=45,slots=8,kind='fishing'},createdEvent)")
+check('only the organiser’s edit takes effect on the event',tick_until(lambda:B.ev('__ns.CasualStore().guildEvents[createdEvent].title')=='Edited in WoW',60))
+check('a repeated import leaves the newer organiser edit in place',B.ev("__ns.ImportEventCreate(creation) and __ns.CasualStore().guildEvents[createdEvent].title=='Edited in WoW'"))
+B.ex("__forged={}; for k,v in pairs(__ns.CasualStore().guildEvents[createdEvent]) do __forged[k]=v end; __forged.title='Forged'; __forged.t=__now+10")
+A.rt.globals()['forged']=A.rt.table_from(dict(B.ev('__forged').items()))
+check('helper cannot use delegated creation to edit an existing event',not A.ev("__ns.MergeCommunity('Tyler Baker',{guildEvents={[createdEvent]=forged}},false)"))
+B.ex('__dumpSV("'+str(target).replace('\\','/')+'")');bridge.helper_cycle(hc,local)
+merged,_=bridge.merge_public(gd,cfg);bridge.reconcile_helper_acks(cfg,state)
+check('helper receipt clears the queued creation once the event is saved',not state.data['inbox'] and merged.g['guildEvents'][key]['who']=='Pip Baker')
+asyncio.run(sync.refresh(merged));asyncio.run(sync.refresh(merged))
+check('imported event gets a single Discord signup card',len(channel.sent)==2 and channel.sent[-1]['embed'].title=='Edited in WoW')
 check('no addon runtime errors',sum(c.ev('__errors') or 0 for c in (A,B,P))==0)
 print('Event sync:',check.failed,'failed');sys.exit(bool(check.failed))

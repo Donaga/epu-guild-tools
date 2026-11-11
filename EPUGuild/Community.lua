@@ -142,9 +142,11 @@ function ns.MergeCommunity(sender,b,trusted)
     if type(b[f])=="table" then
       local size=Count(g[f])
       for id,r in pairs(b[f]) do
+        local cur=g[f][id]
         if type(id)=="string" and d.valid(id,r) and (trusted or r.who==sender
+          or (f=="guildEvents" and not cur and ns.ValidBridgeEventCreate and ns.ValidBridgeEventCreate(sender,id,r))
           or (f=='eventResponses' and ns.ValidBridgeEventResponse and ns.ValidBridgeEventResponse(sender,r))) then
-          local cur=g[f][id]; local allowed=true
+          local allowed=true
           if cur and f=="guildEvents" then
             allowed=r.who==cur.who and r.created==cur.created and (cur.status~="cancelled" or r.status=="cancelled")
           end

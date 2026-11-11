@@ -6,6 +6,14 @@ The board's **Type**, **Mine** and **Calendar** controls combine with search. Th
 
 Open an activity to volunteer as Going or Tentative, choose a role and leave a note. Helper, Crafter and Mentor are available as well as Tank, Healer and DPS. Signups express interest; the organiser confirms the group. EPU does not automatically invite players or enforce the planned player count. Followed activities and signups use the existing reminder settings.
 
+## Schedule from Discord
+
+In **#events**, use `/guildevent`. Enter a title and a start time with a UTC offset, such as `2026-11-20 19:00 -05:00` or `2026-11-21 00:00 UTC`. Discord shows the saved start in each viewer's local time. You can also select an activity type and enter the meeting place, details, duration, and planned group size.
+
+An officer must verify your in-game character with `/link` and `/approve_link` first. The first verified character still in the guild is the default organiser. Use **organiser** to choose a different verified guild character by full name.
+
+The command queues the activity. A companion user or approved helper with the updated software logs in or runs `/reload` to import it. It appears in **Guild activities** and syncs to guildmates. After a bridge user saves the game data by reloading or logging out and the bot receives it, the bot posts the signup card in **#events**. Open the activity on the organising character to publish a WoW calendar copy.
+
 ## Optional WoW calendar copy
 
 EPU events are not automatically published to WoW's calendar. **Create event** saves the EPU activity only. **Create + WoW calendar** also prepares a native guild signup draft when supported. Review it and press WoW's **Create** button to publish it for members without EPU. Opening the calendar alone does not publish an activity.

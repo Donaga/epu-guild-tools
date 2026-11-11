@@ -5,7 +5,8 @@ from pathlib import Path
 import epu_core as core
 
 MAX_BYTES=8*1024*1024
-KINDS={'guild_invite','request','event_response'}
+EVENT_MODULES={'event_response':'EventBridge.lua','event_create':'EventCreateBridge.lua'}
+KINDS={'guild_invite','request'} | set(EVENT_MODULES)
 FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
 WIRE={'requests':'req','donations':'don','crafters':'craft'}
 def safe(value,depth=0):
@@ -124,6 +125,10 @@ def reconcile_helper_acks(cfg,state):
             elif e.get('kind')=='event_response':
                 r=(g.get('eventResponses') or {}).get(e.get('event','')+'\x1e'+e.get('who','')) or {}
                 if r.get('sourceID')==e['id'] or r.get('t',0)>e.get('t',0):remove.add(e['id'])
+            elif e.get('kind')=='event_create':
+                key=e['who']+'\x1f'+e['id']
+                r=(g.get('guildEvents') or {}).get(key) or {}
+                if r.get('who')==e['who'] and r.get('created')==e['t']:remove.add(e['id'])
     if remove:
         state.data['inbox']=[e for e in state.data['inbox'] if e['id'] not in remove];state.save()
 def publish(cfg,state):
@@ -134,7 +139,7 @@ def publish(cfg,state):
         if not folders:continue
         enabled=entry.get('enabled',True)
         capabilities=(uploads.get(helper,{}).get('payload') or {}).get('capabilities') or []
-        kinds={'guild_invite','request'} | ({'event_response'} if 'event_response' in capabilities else set())
+        kinds={'guild_invite','request'} | (set(EVENT_MODULES) & set(capabilities))
         entries=[dict(e,guild=cfg['guild_key']) for e in state.data['inbox'] if e.get('kind') in kinds] if enabled else []
         payload={'enabled':enabled,'characters':entry.get('characters',[]),'entries':entries,'received_sequence':received.get(helper,0)}
         digest=hashlib.sha256(canonical(payload)).hexdigest()
@@ -158,15 +163,16 @@ def helper_cycle(config,local):
     if any(not isinstance(e,dict) or e.get('kind') not in KINDS or not isinstance(e.get('id'),str) for e in entries):raise ValueError('Unsupported helper action')
     addon=Path(config['wow_path'])/'Interface'/'AddOns'/'EPUGuild'
     toc=addon/'EPUGuild.toc'
-    if not toc.exists() or 'InviteRequests.lua' not in toc.read_text(encoding='utf-8').splitlines():raise ValueError('Update EPU Guild Tools before starting the helper')
+    modules=toc.read_text(encoding='utf-8').splitlines() if toc.exists() else []
+    if 'InviteRequests.lua' not in modules:raise ValueError('Update EPU Guild Tools before starting the helper')
+    capabilities=[kind for kind,module in EVENT_MODULES.items() if module in modules]
     target=Path(core.inbox_path(config['wow_path'])); existing=[]
     if target.exists():
         parsed=core.parse_saved_variables(target.read_text(encoding='utf-8')).get('EPUGuildInbox') or []
         existing=list(parsed.values()) if isinstance(parsed,dict) else parsed
     owned=set(local.get('owned_ids') or [])
     other=[e for e in existing if isinstance(e,dict) and e.get('id') not in owned]
-    event_supported='EventBridge.lua' in toc.read_text(encoding='utf-8').splitlines()
-    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries if e.get('kind')!='event_response' or event_supported] if payload.get('enabled') else []
+    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries if e['kind'] not in EVENT_MODULES or e['kind'] in capabilities] if payload.get('enabled') else []
     core.write_inbox(str(target),other+stage)
     local['owned_ids']=[e['id'] for e in stage];local['feed_sequence']=feed['sequence']
     if not payload.get('enabled'):return 'Helper access disabled by the organiser.'
@@ -179,7 +185,6 @@ def helper_cycle(config,local):
             character=gd.db.get('syncHelperCharacter')
             if character not in allowed or not guild_matches(gd.key,guild) or gd.db.get('syncHelperGuild')!=gd.key:continue
             signature=hashlib.sha256(Path(path).read_bytes()).hexdigest()
-            capabilities=['event_response'] if 'EventBridge.lua' in toc.read_text(encoding='utf-8').splitlines() else []
             if signature!=local.get('uploaded') or capabilities!=local.get('capabilities') or time.time()-local.get('uploaded_at',0)>300:
                 snap=public_snapshot(gd,character)
                 acked=[e['id'] for e in entries if e['id'] in gd.inbox_done]
