@@ -33,6 +33,7 @@ function ns.InstallCasualViews(views,env)
     end)
     bar.casualAvailability=bar:Add(E.Btn(bar,"My availability",90,22),"right",function() Open("helperform",ns.me) end)
     bar.casualMine=mine; bar.casualNear=near; bar.casualChoose=choose
+    bar.levelFilterClick=near:GetScript("OnClick")
   end,rows=function(g,q)
     ns.CasualStore(); local st=State(); local rows={}
     local bar=views.activities.bar
@@ -40,6 +41,9 @@ function ns.InstallCasualViews(views,env)
       for _,v in ipairs(categories) do if v.value==st.kind then bar.casualChoose:SetLabel(v.label) end end
       bar.casualMine:SetOn(st.mine); bar.casualNear:SetOn(st.near)
       bar.casualMine:SetShown(st.kind~="kits"); bar.casualNear:SetShown(st.kind~="kits")
+      bar.casualNear:SetLabel("My level")
+      bar.casualNear:SetScript("OnClick",bar.levelFilterClick)
+      bar.casualNear.tip=nil
     end
     if ns.CommunityRows then local extra=ns.CommunityRows(g,q,st,bar); if extra then return extra end end
     if st.kind=="kits" then
@@ -81,7 +85,7 @@ function ns.InstallCasualViews(views,env)
     if kind=="helpers" then return "Helpers opt in for 15–240 minutes and appear only while online. No automatic renewal or guild-chat announcements." end
     return "Voluntary interest, with no automatic invites. Levels are suggestions; posts close automatically at their expiry time."
   end}
-  if ns.InstallCommunityViews then ns.InstallCommunityViews(views,env,categories) end
+  if ns.InstallCommunityViews then ns.InstallCommunityViews(views,env) end
 end
 local function RoleButtons(det,roles,changed,multiple)
   local specs={}

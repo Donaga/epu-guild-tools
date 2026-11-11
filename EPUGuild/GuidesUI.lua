@@ -19,25 +19,10 @@ function ns.ShowGuideLink(id)
 end
 ns.On("PLAYER_LEVEL_UP",function() if copy then copy:Hide() end end)
 ns.On("SKILL_LINES_CHANGED",function() if copy and not ns.PersonalGuide(copy.guideID) then copy:Hide() end end)
-local function ConfigureBar(bar,active)
-  if not bar then return end
-  if not bar.guideScripts then bar.guideScripts={mine=bar.casualMine:GetScript("OnClick"),near=bar.casualNear:GetScript("OnClick")} end
-  local state=ns.GuideState()
-  if active then
-    bar.casualMine:Show(); bar.casualNear:Hide()
-    bar.casualMine:SetLabel("Saved"); bar.casualNew:SetLabel("Settings")
-    bar.casualMine:SetOn(state.savedOnly==true)
-    bar.casualMine:SetScript("OnClick",function() state.savedOnly=not state.savedOnly; UI:Refresh() end)
-  else
-    bar.casualMine:SetLabel("Mine"); bar.casualNear:SetLabel("My level")
-    bar.casualMine:SetScript("OnClick",bar.guideScripts.mine); bar.casualNear:SetScript("OnClick",bar.guideScripts.near)
-  end
-  if bar.casualAvailability then bar.casualAvailability:SetShown(not active) end
-end
 local install=ns.InstallCommunityViews
-ns.InstallCommunityViews=function(views,env,categories)
-  install(views,env,categories); E=env; UI=env.UI; C=env.C
-  categories[#categories+1]={label="Your guides",value="guides"}
+ns.InstallCommunityViews=function(views,env)
+  install(views,env)
+  E=env; UI=env.UI; C=E.C
 end
 local action=ns.CommunityNewAction
 ns.CommunityNewAction=function(kind)
@@ -48,7 +33,6 @@ local form=ns.CommunityFormKind
 ns.CommunityFormKind=function(kind) return kind=="guideoptions" or form(kind) end
 local rows=ns.CommunityRows
 ns.CommunityRows=function(g,q,state,bar)
-  ConfigureBar(bar,state.kind=="guides")
   if state.kind~="guides" then return rows(g,q,state,bar) end
   local s=ns.GuideState(); local list,p=ns.GuideChoices(s.savedOnly)
   local out={{key="guide:profile",title=p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",

@@ -60,7 +60,7 @@ A.ex("C_QuestLog=nil; GetNumQuestLogEntries=function() return 1 end; GetQuestLog
 check('legacy quest APIs still provide IDs and completion',A.ev('__ns.CurrentQuests()[2001].done') is True)
 A.ex('GetNumQuestLogEntries=nil; GetQuestLogTitle=nil')
 check('missing quest APIs produce a helpful unavailable state',A.ev('select(2,__ns.CurrentQuests())') is not None)
-B.ex("__ns.UI:Show(); __ns.UI:SetView('activities'); __ns.UI.state.activities.kind='quests'; __ns.UI:Refresh(); __ns.UI:OpenDetails('questmatch',1001)")
+B.ex("SlashCmdList.EPUGUILD('quests'); __ns.UI:OpenDetails('questmatch',1001)")
 check('quest match detail renders without errors',(B.ev('__errors') or 0)==0 and B.ev('__ns.UI.details.title:GetText()')=='Quest 1')
 B.ex("__ns.UI:OpenDetails('questsettings','settings')")
 check('quest sharing settings render without errors',(B.ev('__errors') or 0)==0)

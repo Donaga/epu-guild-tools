@@ -48,7 +48,7 @@ Subsequent player choices are preserved. Members need the update and `/reload`;
 this cannot reset installations that have not updated. Use `/epu sharelocation off`
 or the map controls to stop sharing. Location history is not saved.
 
-Use `/epu guides` for **Your guides**: Forever class, leveling, talent and profession
+Open **Member tools → Your guides** or type `/epu guides` for Forever class, leveling, talent and profession
 sources filtered to this character's class, level and learned profession skills.
 Choose a talent focus in Settings if the game cannot identify one. The home screen
 shows one task per topic, such as **Level my Paladin** or **Level Blacksmithing**.

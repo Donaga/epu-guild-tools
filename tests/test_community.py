@@ -84,8 +84,9 @@ check('cancelled event rejects signups',P.ev("__ns.RespondGuildEvent(event,'goin
 
 for c in [A,B]:
     c.ex("__ns.UI:Show(); __ns.UI:SetView('activities')")
-    for board in ['events','quests','catchup','notifications']:
-        c.ex(f"__ns.UI.state.activities.kind='{board}'; __ns.UI:Refresh()")
+    for command in ['quests','catchup','notifications']:
+        c.ex(f"SlashCmdList.EPUGUILD('{command}')")
+    c.ex("SlashCmdList.EPUGUILD('calendar')")
     for kind,key in [('eventform','new'),('event',event),('questsettings','settings'),('noticeform','all'),('noticeform','requests'),('catchupreview','review')]:
         c.rt.globals()['screenKey']=key;c.ex(f"__ns.UI:OpenDetails('{kind}',screenKey)")
     c.ex("__ns.UI:OpenDetails('eventform','new'); __ns.UI.details.pools.box[1]:SetText('Draft event title'); __ns.UI:Refresh()")
@@ -118,8 +119,14 @@ check('queued popup respects a later off setting',not N.ev('EPUGuildToast:IsShow
 N.ex("""local s=__ns.CommunityState(); s.mode='digest'; for i=1,550 do __ns.RoutePersonalNotice('Test','bounded',nil,{category='requests',kind='request',key='bound'..i,revision=1}) end
 __inboxN=0; __seenN=0; for _ in pairs(s.inbox) do __inboxN=__inboxN+1 end; for _ in pairs(s.seen) do __seenN=__seenN+1 end""")
 check('personal inbox and dedup history stay bounded',N.ev('__inboxN')==100 and N.ev('__seenN')==500)
-N.ex("__ns.UI:Show(); __ns.UI:SetView('activities'); __ns.UI.state.activities.kind='notifications'; __ns.UI:Refresh()")
-check('notifications board fits the existing toolbar',N.ev('__ns.UI.bars.activities.leftX+__ns.UI.bars.activities.rightX<=480'))
+N.ex("__ns.UI:Show(); __ns.UI.nav.membertools:Click()")
+check('member tools shows all four destinations',N.ev('__ns.UI.rows[1].data.key=="guides" and __ns.UI.rows[2].data.key=="quests" and __ns.UI.rows[3].data.key=="catchup" and __ns.UI.rows[4].data.key=="notifications"'))
+for i, tool in enumerate(['guides','quests','catchup','notifications'],1):
+    N.ex(f"local row=__ns.UI.rows[{i}]; row:GetScript('OnClick')(row)")
+    check(f'member tools row opens {tool}',N.ev(f"__ns.UI.view=='membertools' and __ns.UI.state.membertools.kind=='{tool}'"))
+    N.ex("__ns.UI.bars.membertools.allTools:Click()")
+N.ex("SlashCmdList.EPUGUILD('notifications')")
+check('notifications command opens the same member tools page',N.ev('__ns.UI.view=="membertools" and __ns.UI.state.membertools.kind=="notifications"'))
 N.ex("""local s=__ns.CommunityState(); s.mode='instant'; s.quietStart=nil; s.quietEnd=nil
 __testEvent=__ns.SaveGuildEvent({title='Reminder navigation',starts=math.floor(__now+3600),minutes=60,slots=5})
 __ns.Notify('Event starting soon','Navigation',nil,{category='reminders',kind='event',key=__testEvent,revision='nav'})

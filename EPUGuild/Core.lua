@@ -428,8 +428,12 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
-  elseif cmd == "guides" or cmd == "calendar" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" or cmd=='invites' then
-    ns.UI.state.activities.kind=({invites='invites',guides="guides",calendar="events",quests="quests",catchup="catchup",notifications="notifications"})[cmd]
+  elseif cmd == "invites" then
+    ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("invites")
+  elseif cmd == "guides" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then
+    ns.OpenMemberTools(cmd)
+  elseif cmd == "calendar" then
+    ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
   elseif cmd == "activities" then
     ns.UI:Show(); ns.UI:SetView("activities")

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.20.4
+
+- Member tools puts Your guides, Quest matching, Catch-up, and Notifications together in a visible sidebar page.
+- Guild invites now has its own sidebar entry below Roster for characters who can invite guild members. The empty list explains when there are no active requests.
+
 ## 0.20.3
 
 - Ignore restricted WoW chat values before reading them, fixing the system-message error in `Comm.lua`. Readable throttle warnings and guild sync messages still work.
