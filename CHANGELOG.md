@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.4
+
+- The Events bubble uses the EPU guild crest and shows the number of upcoming events.
+
 ## 0.21.3
 
 - The /guildevent time zone picker accepts familiar zone names and city searches. The companion uses the offset in effect on the event date.
