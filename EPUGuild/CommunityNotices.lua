@@ -63,10 +63,10 @@ end
 function ns.OpenPersonalNotice(c)
   if not c or not c.kind or not c.key or not ns.UI then return false end
   if c.kind=='guildinvite' and not ns.CanInviteGuild() then return false end
-  local view=({event="activities",activity="activities",guildinvite="activities",project="projects",request="requests",news="news"})[c.kind]
+  local view=({event="activities",activity="activities",guildinvite="invites",project="projects",request="requests",news="news"})[c.kind]
   if not view then return false end
   ns.UI:Show()
-  if c.kind=="guildinvite" then ns.UI.state.activities.kind='invites'
+  if c.kind=="guildinvite" then ns.UI.search:SetText("")
   elseif c.kind=="event" then ns.UI.state.activities.kind="events"
   elseif c.kind=="activity" then local r=ns.CasualStore().activityPosts[c.key]; ns.UI.state.activities.kind=r and r.kind or "help" end
   ns.UI:SetView(view); ns.UI:OpenDetails(c.kind,c.key); return true

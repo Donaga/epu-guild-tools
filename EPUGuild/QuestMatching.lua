@@ -6,7 +6,7 @@ local guild,lastHeartbeat
 local logReady=false
 ns.sharedQuests=remote
 local function Changed()
-  if ns.UI and ns.UI:IsShown() and ns.UI.view=="activities" and ns.UI.state.activities.kind=="quests" then
+  if ns.UI and ns.UI:IsShown() and ns.UI.view=="membertools" and ns.UI.state.membertools.kind=="quests" then
     ns.Debounce("questView",0.5,function() if ns.UI:IsShown() then ns.UI:Refresh() end end)
   end
 end

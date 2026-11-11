@@ -1,7 +1,13 @@
 local ADDON,ns=...
 local E,UI,C
 local DAY=86400
-local labels={events="Activities",invites="Guild invites",quests="Quest matching",catchup="Catch-up",notifications="Notifications"}
+local memberTools={
+  {key="guides", title="Your guides", hint="Find leveling, talent, and profession guides for your character."},
+  {key="quests", title="Quest matching", hint="Find guildmates working on the same quests."},
+  {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications."},
+  {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours."},
+}
+local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={
   {label='Classic · Early', entries={
     {'Ragefire Chasm','Orgrimmar'}, {'The Deadmines','Westfall'}, {'Wailing Caverns','The Barrens'},
@@ -36,9 +42,95 @@ end
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
-function ns.InstallCommunityViews(views,env,categories)
+local function InviteRows(g,q)
+  local out={}
+  if not ns.CanInviteGuild() then
+    out[1]={key='invitepermission',title='Guild invite permission required',sub='The game must report that this character can invite members.'}; return out
+  end
+  local s=ns.CommunityState()
+  if not s then return out end
+  local seen={}
+  for id,r in pairs(g.inviteRequests or {}) do
+    if ns.ActiveGuildInvite(r) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) and not seen[r.who:lower()] and E.Match(q,r.who,r.requester) then
+      seen[r.who:lower()]=true
+      local outcome=ns.GuildInviteOutcome(id)
+      local _,presence=ns.GuildInvitePresence(r.who)
+      out[#out+1]={key='invite:'..id,title=r.who,sub='Requested by '..r.requester..' on Discord · '..date('%m-%d %H:%M',r.posted),right=presence..' · '..(outcome and 'Invite sent' or 'Needs invite'),onClick=function() Open('guildinvite',id) end}
+    end
+  end
+  table.sort(out,function(a,b) return a.title<b.title end)
+  return out
+end
+
+function ns.OpenMemberTools(kind)
+  UI:Show()
+  UI:CloseDetails()
+  UI.search:SetText("")
+  UI.state.membertools.kind=kind
+  UI:SetView("membertools")
+end
+
+function ns.InstallCommunityViews(views,env)
   E=env; UI=E.UI; C=E.C
-  for _,key in ipairs({"invites","quests","catchup","notifications"}) do categories[#categories+1]={label=labels[key],value=key} end
+  UI.state.membertools={kind="all"}
+  views.membertools={
+    label="Member tools",
+    icon="Interface\\Icons\\INV_Misc_Book_09",
+    onSelect=function() ns.OpenMemberTools("all") end,
+    tools=function(bar)
+      bar.allTools=bar:Add(E.Btn(bar,"All tools",80,22),"left",function() ns.OpenMemberTools("all") end)
+      bar.toolTitle=bar:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+      bar.toolTitle:SetPoint("LEFT",bar.allTools,"RIGHT",10,0)
+      bar.toolAction=bar:Add(E.Btn(bar,"Settings",80,22),"right",function()
+        ns.CommunityNewAction(UI.state.membertools.kind)
+      end)
+      bar.saved=bar:Add(E.Btn(bar,"Saved",50,22),"right",function()
+        local state=ns.GuideState()
+        state.savedOnly=not state.savedOnly
+        UI:Refresh()
+      end)
+    end,
+    rows=function(g,q)
+      local state=UI.state.membertools
+      local bar=views.membertools.bar
+      local isHome=state.kind=="all"
+      bar.allTools:SetShown(not isHome)
+      bar.toolTitle:SetShown(not isHome)
+      bar.toolAction:SetShown(not isHome)
+      bar.saved:SetShown(state.kind=="guides")
+      if isHome then
+        local rows={}
+        for _,tool in ipairs(memberTools) do
+          if E.Match(q,tool.title,tool.hint) then
+            local key=tool.key
+            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=function() ns.OpenMemberTools(key) end}
+          end
+        end
+        return rows
+      end
+      for _,tool in ipairs(memberTools) do
+        if tool.key==state.kind then bar.toolTitle:SetText(tool.title); break end
+      end
+      bar.toolAction:SetLabel(toolActions[state.kind])
+      if state.kind=="guides" then bar.saved:SetOn(ns.GuideState().savedOnly==true) end
+      return ns.CommunityRows(g,q,state)
+    end,
+    empty="Nothing to show here yet.",
+    footer=function() return ns.CommunityFooter(UI.state.membertools.kind) or "" end,
+  }
+  views.invites={
+    label="Guild invites",
+    icon="Interface\\Icons\\INV_Letter_15",
+    visible=ns.CanInviteGuild,
+    tools=function(bar)
+      bar:Add(E.Btn(bar,"How it works",80,22),"right",function() Open("invitehelp","help") end)
+    end,
+    rows=InviteRows,
+    empty="No active guild invite requests.",
+    footer=function()
+      return "New Discord requests appear after a sync companion user logs in or reloads WoW and guild sync completes."
+    end,
+  }
 end
 local picker
 local function PickDate(day)
@@ -158,8 +250,7 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" end
 function ns.CommunityNewAction(kind)
-  if kind=='invites' then Open('invitehelp','help')
-  elseif kind=="events" then Open("eventform","new")
+  if kind=="events" then Open("eventform","new")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
   elseif kind=="notifications" then Open("noticeform","all")
@@ -176,13 +267,13 @@ local function ItemLabel(token)
 end
 function ns.CommunityRows(g,q,st,bar)
   if bar and bar.casualAvailability then
-    bar.casualAvailability:SetShown(st.kind~='invites')
+    bar.casualAvailability:Show()
     bar.casualAvailability:SetLabel(st.kind=="events" and "Calendar" or "My availability")
     bar.casualAvailability:SetScript("OnClick",st.kind=="events" and function()
       ns.ShowActivityDatePicker(st.eventDate,function(day) st.eventDate=day; UI:Refresh() end)
     end or function() Open("helperform",ns.me) end)
   end
-  if not labels[st.kind] then
+  if st.kind~="events" and not toolActions[st.kind] then
     if bar then bar.casualNew:SetLabel("New / edit") end
     return
   end
@@ -201,7 +292,7 @@ function ns.CommunityRows(g,q,st,bar)
       end)
       bar.casualAvailability:SetOn(st.eventDate~=nil)
     else bar.casualAvailability:SetOn(false) end
-    bar.casualNew:SetLabel(st.kind=='invites' and 'How it works' or (st.kind=="events" and "New event" or (st.kind=="catchup" and "Review" or (st.kind=="quests" and "Sharing" or "Settings"))))
+    bar.casualNew:SetLabel(st.kind=="events" and "New event" or (st.kind=="catchup" and "Review" or (st.kind=="quests" and "Sharing" or "Settings")))
   end
   if st.kind=="events" then
     for id,r in pairs(g.guildEvents) do
@@ -216,20 +307,6 @@ function ns.CommunityRows(g,q,st,bar)
       end
     end
     table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
-  elseif st.kind=='invites' then
-    if not ns.CanInviteGuild() then
-      out[1]={key='invitepermission',title='Guild invite permission required',sub='The game must report that this character can invite members.'}; return out
-    end
-    local seen={}
-    for id,r in pairs(g.inviteRequests or {}) do
-      if ns.ActiveGuildInvite(r) and (not s.inviteDismissed or s.inviteDismissed[id]~=r.who) and not seen[r.who:lower()] and E.Match(q,r.who,r.requester) then
-        seen[r.who:lower()]=true
-        local outcome=ns.GuildInviteOutcome(id)
-        local _,presence=ns.GuildInvitePresence(r.who)
-        out[#out+1]={key='invite:'..id,title=r.who,sub='Requested by '..r.requester..' on Discord · '..date('%m-%d %H:%M',r.posted),right=presence..' · '..(outcome and 'Invite sent' or 'Needs invite'),onClick=function() Open('guildinvite',id) end}
-      end
-    end
-    table.sort(out,function(a,b) return a.title<b.title end)
   elseif st.kind=="quests" then
     out[1]={key="questsettings",title="Quest sharing: "..(s.shareQuests and "on" or "off"),sub="Only explicitly selected quests are shared; up to eight. Click to change sharing.",onClick=function() Open("questsettings","settings") end}
     local quests,reason=ns.CurrentQuests(); local rows={}
@@ -263,8 +340,7 @@ function ns.CommunityRows(g,q,st,bar)
   return out
 end
 function ns.CommunityFooter(kind)
-  if kind=='invites' then return 'Discord requests arrive after the companion officer logs in or /reloads, then sync. Invitations are manual; requests expire after 7 days.'
-  elseif kind=="events" then return (State().eventDate and ("Date: "..State().eventDate.." · Calendar > All dates to clear. ") or "Calendar selects a date; numbers show activities. ").."Local dates; open an activity for server time and signups."
+  if kind=="events" then return (State().eventDate and ("Date: "..State().eventDate.." · Calendar > All dates to clear. ") or "Calendar selects a date; numbers show activities. ").."Local dates; open an activity for server time and signups."
   elseif kind=="quests" then return "Exact quest IDs match; phases and quest-chain eligibility can differ. Shared progress expires after three minutes."
   elseif kind=="catchup" then return "Latest relevant updates from data synced so far; active projects and upcoming events remain visible after review."
   elseif kind=="notifications" then return "Personal settings stay on this character. Quiet hours use your local clock; digests are read in Catch-up." end

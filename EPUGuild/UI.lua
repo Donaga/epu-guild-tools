@@ -871,7 +871,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "crafters", "recipes", "activities", "projects", "onboarding", "sync", "officer" }
+local ORDER = { "news", "needs", "shopping", "bank", "requests", "donations", "roster", "invites", "crafters", "recipes", "activities", "membertools", "projects", "onboarding", "sync", "officer" }
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 local function AddDropdownArrow(b)
@@ -2823,7 +2823,9 @@ do
     b.badge.text:SetJustifyH("CENTER")
     b:SetScript("OnEnter", function(self) if UI.view ~= self.key then self.bg:Show() end end)
     b:SetScript("OnLeave", function(self) if UI.view ~= self.key then self.bg:Hide() end end)
-    b:SetScript("OnClick", function(self) UI:SetView(self.key) end)
+    b:SetScript("OnClick", function(self)
+      if v.onSelect then v.onSelect() else UI:SetView(self.key) end
+    end)
     b.key = key
     b.baseY = y
     UI.nav[key] = b
@@ -2878,6 +2880,7 @@ function UI:SetView(key)
   if self.view ~= key then
     if det:IsShown() then det:Hide(); det.kind, det.key = nil, nil; self.selected = nil end
     self.requestTo = nil
+    if key == "invites" then self.search:SetText("") end
   end
   self.view = key
   for k, b in pairs(self.nav) do
@@ -2907,16 +2910,22 @@ function UI:Refresh()
   local g = ns.G()
   local officer = ns.IsTrusted(ns.me)
 
-  -- sidebar: officer page visibility, badges
+  -- Sidebar permissions and badges.
   local y = -8
   local nVisible = 0
-  for _, key in ipairs(ORDER) do if not Views[key].officer or officer then nVisible = nVisible + 1 end end
-  local step = math.max(22, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
+  local visibility = {}
+  for _, key in ipairs(ORDER) do
+    local v = Views[key]
+    visibility[key] = (not v.officer or officer) and (not v.visible or v.visible())
+    if visibility[key] then nVisible = nVisible + 1 end
+  end
+  local step = math.max(20, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
-    local visible = not v.officer or officer
+    local visible = visibility[key]
     b:SetShown(visible)
     if visible then
+      b:SetHeight(step - 2)
       b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, y); y = y - step
       local n, bg, fg = 0, C.goldBg, C.gold
       if g and v.count then

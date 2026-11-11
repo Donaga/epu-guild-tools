@@ -196,7 +196,7 @@ function ns.SaveGuideProgress(id,read,note)
   return true
 end
 local function Refresh()
-  if ns.UI and ns.UI:IsShown() and ns.UI.view=="activities" and ns.UI.state.activities.kind=="guides" then ns.Debounce("guideView",0.3,function()
+  if ns.UI and ns.UI:IsShown() and ns.UI.view=="membertools" and ns.UI.state.membertools.kind=="guides" then ns.Debounce("guideView",0.3,function()
     local det=ns.UI.details
     if det and det.kind=="guide" and not ns.PersonalGuide(det.key) then ns.UI:CloseDetails() end
     if det and (det.kind=="guidechoice" or det.kind=="guidesources") and not ns.GuideChoice(det.key) then ns.UI:CloseDetails() end
