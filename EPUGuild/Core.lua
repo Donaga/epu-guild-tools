@@ -74,6 +74,11 @@ function ns.Now()
   return (GetServerTime and GetServerTime()) or time()
 end
 
+-- Check before comparing, measuring, or parsing game-provided strings.
+function ns.IsReadableString(value)
+  return not (issecretvalue and issecretvalue(value)) and type(value) == "string"
+end
+
 -- Version stamps must always increase, even for two edits in the same second.
 function ns.NextVersion(prev)
   local now = ns.Now()
@@ -91,7 +96,7 @@ end
 -- names can be "secret" values, so every read goes through these helpers.
 ---------------------------------------------------------------------------
 local function Plain(s)
-  return type(s) == "string" and s ~= "" and not (issecretvalue and issecretvalue(s))
+  return ns.IsReadableString(s) and s ~= ""
 end
 
 function ns.RegionalNames()

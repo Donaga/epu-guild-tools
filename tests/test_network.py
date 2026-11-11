@@ -38,6 +38,11 @@ A.ex('__refuse=false; __advance(11)')
 check('retained packet succeeds after server recovers', A.ev('__ns.QueueLength()')==0 and A.ev('#__wire')==3)
 check('retry sends the original packet', A.ev('__wire[1].message==__wire[3].message') is True)
 A.ex('''__advance(1); __wire={}; __ns.Send('Z',{warning=true})
+issecretvalue=function(v) return v==ERR_CHAT_THROTTLED end
+__fire('CHAT_MSG_SYSTEM',ERR_CHAT_THROTTLED)''')
+check('restricted system text never triggers cooldown even when it looks like a throttle warning',
+      A.ev('__ns.NetworkStatus().warnings')==0 and A.ev('__ns.NetworkStatus().pause')==0)
+A.ex('''issecretvalue=nil
 __fire('CHAT_MSG_SYSTEM',ERR_CHAT_THROTTLED)
 __ns.Send('Z',{later=true})''')
 check('server warning shortly after EPU traffic pauses its queue', A.ev('__ns.NetworkStatus().warnings')==1 and A.ev('__ns.NetworkStatus().pause')>0)
@@ -50,6 +55,17 @@ A.ex('__advance(5); __fire("CHAT_MSG_SYSTEM",ERR_CHAT_THROTTLED)')
 check('warning with no recent EPU send is not attributed to EPU', A.ev('__ns.NetworkStatus().warnings')==1 and A.ev('__ns.NetworkStatus().pause')==0)
 A.ex('__fire("CHAT_MSG_SYSTEM","Some unrelated system message")')
 check('unrelated system messages are ignored', A.ev('__ns.NetworkStatus().warnings')==1)
+A.ex('''__received=0
+__ns.comm.Z=function() __received=__received+1 end
+local prefix, packet, channel, sender=__ns.PREFIX,'SZ'..__ns.Serialize({}), 'GUILD', 'Tyler Baker'
+for _,secret in ipairs({prefix, packet, channel, sender}) do
+  issecretvalue=function(v) return v==secret end
+  __fire('CHAT_MSG_ADDON',prefix,packet,channel,sender)
+end
+issecretvalue=nil''')
+check('restricted addon message fields are ignored', A.ev('__received')==0)
+A.ex("__fire('CHAT_MSG_ADDON',__ns.PREFIX,'SZ'..__ns.Serialize({}),'GUILD','Tyler Baker')")
+check('readable guild packets still dispatch', A.ev('__received')==1)
 A.ex('__refuse=true; __wire={}; __ns.Send("Z",{persistent=true}); __advance(180)')
 check('persistent throttling uses bounded exponential backoff', A.ev('#__wire')<=7 and A.ev('__ns.NetworkStatus().pause')<=60)
 check('persistent throttle still retains the message', A.ev('__ns.QueueLength()')==1)

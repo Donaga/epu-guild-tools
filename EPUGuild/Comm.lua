@@ -114,7 +114,8 @@ function ns.PrintNetworkStatus()
     .." recent-send throttle warning(s), "..s.pause.."s cooldown. Counts are for EPU this session; a shared warning cannot identify its source.")
 end
 ns.On("CHAT_MSG_SYSTEM",function(msg)
-  if ERR_CHAT_THROTTLED and msg==ERR_CHAT_THROTTLED and lastAttempt and GetTime()-lastAttempt<=2 then
+  if lastAttempt and GetTime()-lastAttempt<=2 and ns.IsReadableString(msg)
+    and ns.IsReadableString(ERR_CHAT_THROTTLED) and msg==ERR_CHAT_THROTTLED then
     net.warnings=net.warnings+1
     Pause()
   end
@@ -246,7 +247,8 @@ C_Timer.After(30, Expire)
 function ns.PartialCount() local n=0; for _ in pairs(partial) do n=n+1 end; return n end
 
 function ns.HandleAddonMessage(prefix, msg, channel, sender)
-  if prefix ~= ns.PREFIX or type(msg) ~= "string" or #msg > 255 then return end
+  if not ns.IsReadableString(prefix) or prefix ~= ns.PREFIX
+    or not ns.IsReadableString(msg) or #msg > 255 or not ns.IsReadableString(channel) then return end
   if channel ~= "GUILD" and channel ~= "WHISPER" and channel ~= "OFFICER" then return end
   sender = ns.Short(sender)
   if not sender or sender == ns.me then return end
