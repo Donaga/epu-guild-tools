@@ -289,6 +289,16 @@ def status_embed(gd: core.GuildData, reload_count: int | None = None) -> discord
     e.add_field(name="Needs", value=_clip(need_lines) if need_lines else "No targets set.", inline=False)
     shop_lines = [f"{r['name']}: {r['buy']}" for r in st["shopping"][:15]]
     e.add_field(name="Shopping list", value=_clip(shop_lines) if shop_lines else "Nothing to buy.", inline=False)
+    focus_lines = []
+    for f in gd.guild_focus():
+        players = f"{f['players']} player" + ("" if f["players"] == 1 else "s")
+        if f["goal"]:
+            focus_lines.append(f"**{f['prof']}**: goal {f['goal']}, {f['at_goal']} of {players} there")
+        else:
+            focus_lines.append(f"**{f['prof']}**: {players}")
+    if focus_lines:
+        e.add_field(name="Guild focus", inline=False, value=_clip(focus_lines + [
+            "Professions the officers want more of. Pick one up or level it, and open it in game so EPU shares your recipes."]))
     items = gd.bank_items()
     if items:
         groups: dict = {}

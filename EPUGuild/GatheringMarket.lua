@@ -128,7 +128,7 @@ function ns.GuildFocus()
     if r.on then
       local best = {}
       for who, c in pairs(g and g.crafters or {}) do
-        local skill = tonumber(c.profs and c.profs[prof])
+        local skill = ns.InGuild(who) and tonumber(c.profs and c.profs[prof])
         if skill then
           local main = ns.MainOf and ns.MainOf(who) or who
           if not best[main] or skill > best[main] then best[main] = skill end
@@ -272,7 +272,8 @@ function ns.GatheringMarketRows(source, skill, profession)
   if not catalog then return rows end
   for _, entry in ipairs(catalog.items) do
     local item, required = entry[1], entry[2]
-    if not catalog.thresholds or skill == nil or (required and required <= skill) then
+    -- Herbs whose requirement isn't known yet stay listed, marked unconfirmed.
+    if not catalog.thresholds or skill == nil or required == nil or required <= skill then
       local price, info = Market(source, item)
       local score
       if price and source == "tsm" and info.rate then score = price * info.rate end
@@ -281,6 +282,7 @@ function ns.GatheringMarketRows(source, skill, profession)
         item = item, name = ns.ItemName(item, true), skill = required, price = price, gatherProfession = profession,
         volume = info.volume, rate = info.rate, market = info.market, updated = info.updated, snapshot = info.snapshot,
         basis = info.basis, listed = info.listed, ageDays = info.ageDays, supplyDays = SupplyDays(info), score = score,
+        unconfirmed = catalog.thresholds and required == nil or nil,
       }
       row.tag = Verdict(row)
       rows[#rows + 1] = row
@@ -457,7 +459,7 @@ local function GuildGatherers(row)
   local g, prof, list = ns.G(), ns.GUIDE_PROFESSIONS[row.gatherProfession], {}
   for who, c in pairs(g and g.crafters or {}) do
     local skill = tonumber(c.profs and c.profs[prof])
-    if skill and who ~= ns.me and (not row.skill or skill >= row.skill) then
+    if skill and who ~= ns.me and ns.InGuild(who) and (not row.skill or skill >= row.skill) then
       list[#list + 1] = {who = who, skill = skill, online = IsOnline(who)}
     end
   end
@@ -710,6 +712,7 @@ local function Tooltip(button)
     GameTooltip:AddLine(row.profession .. " " .. row.skill .. " · makes " .. row.quantity)
     GameTooltip:AddLine("Reagents: " .. Gold(row.cost) .. " · output: " .. Gold(row.revenue))
     GameTooltip:AddLine("Profit per craft after 5% AH cut: " .. Gold(row.profit))
+    GameTooltip:AddLine("The listing deposit comes back when it sells; an unsold listing loses it.", .7, .7, .7, true)
     GameTooltip:AddLine("Return on ingredient cost: " .. ProfitPercent(row.roi))
     if row.guild then GameTooltip:AddLine("Crafters: " .. CrafterNames(row, 6), 1, 1, 1, true) end
     if SKILL_CHANCE[row.diff] then
@@ -718,7 +721,9 @@ local function Tooltip(button)
   else
     local profession = ns.GUIDE_PROFESSIONS[row.gatherProfession]
     GameTooltip:AddLine(row.skill and (profession .. " required: " .. row.skill)
-      or gatherCatalogs[row.gatherProfession].hint or "Gathering requirements unverified")
+      or gatherCatalogs[row.gatherProfession].hint
+      or (row.unconfirmed and "Skill requirement not confirmed yet for this new Forever material")
+      or "Gathering requirements unverified")
     local mates = GuildGatherers(row)
     if #mates > 0 then
       local names = {}
@@ -967,15 +972,18 @@ local function Refresh()
     or buySort and "Sale at the current lowest listing, after the 5% AH cut. Ingredients at the higher of lowest listing and median, or the vendor price."
     or "Sale at the current lowest listing, after the 5% AH cut. Ingredients at the lowest listing or the vendor price.")
   frame.credit:SetShown(activeSource.key == "ledger")
-  local focusLine = craftMode and not frame.selected and FocusLine(player)
+  local focusLine = not frame.selected and FocusLine(player)
   frame.focusText:SetText(focusLine or "")
   frame.focusText:SetShown(focusLine ~= nil and focusLine ~= false)
+  frame.focusText:ClearAllPoints()
+  frame.focusText:SetPoint("BOTTOMLEFT", 12, craftMode and 22 or 44)
+  frame.focusText:SetPoint("RIGHT", -12, 0)
   frame.scroll:ClearAllPoints()
   frame.scroll:SetPoint("TOPLEFT", (craftMode or frame.selected) and 12 or width - sidebar - 10, -107 - offset)
   if frame.selected then
     frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", sidebar - 4, 8)
   else
-    frame.scroll:SetPoint("BOTTOMRIGHT", -26, 42)
+    frame.scroll:SetPoint("BOTTOMRIGHT", -26, (focusLine and not craftMode) and 60 or 42)
   end
   local listWidth = craftMode and not frame.selected and width - 38 or sidebar - 16
   frame.list:SetSize(listWidth, math.max(28, #rows * 30))
@@ -1078,7 +1086,8 @@ RenderDetail = function()
     local count = routable and #spots or 0
     local profession = ns.GUIDE_PROFESSIONS[row.gatherProfession]
     local requirement = row.skill and ("Requires " .. profession .. " " .. row.skill)
-      or gatherCatalogs[row.gatherProfession].hint or "Gathering requirement unverified"
+      or gatherCatalogs[row.gatherProfession].hint
+      or (row.unconfirmed and "Skill requirement not confirmed yet") or "Gathering requirement unverified"
     local location = routable and string.format("%d recorded spots in %s", count, zone)
       or "See Profession guides for gathering locations."
     local mates = #GuildGatherers(row)

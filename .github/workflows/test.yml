@@ -18,64 +18,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install lupa -r epu-discord/requirements.txt
-      - name: Personalized guides and reviewed catalog
-        run: python tools/build_guide_catalog.py --check && python tests/test_guides.py
-      - name: Bank stock history and waiting requests
-        run: python tests/test_bank_catalog.py
-      - name: Bank equipment visibility and stock filters
-        run: python tests/test_bank_filters.py
-      - name: Addon sync simulation
-        run: python tests/test_sync.py
-      - name: Guild bank + Discord round trip
-        run: python tests/test_discord.py
-      - name: Discord round trip with alternate message timing
-        env:
-          EPU_TEST_SEED: "1"
-        run: python tests/test_discord.py
-      - name: Full item list
-        run: python tests/test_itemdb.py
-      - name: Window, details, mail helper, officer page
-        run: python tests/test_ui.py
-      - name: Roster, milestones, review, officer log, announcements
-        run: python tests/test_guild.py
-      - name: Auto-sync tests
-        run: python tests/test_autosync.py
-      - name: Bank alt tests
-        run: python tests/test_bankalt.py
-      - name: Reliability, verified identities, projects and onboarding
-        run: python tests/test_reliability.py
-      - name: Login pacing and server throttle recovery
-        run: python tests/test_network.py
-      - name: Request search and filter counts
-        run: python tests/test_request_filters.py
-      - name: Reagent bag donations
-        run: python tests/test_donation_bags.py
-      - name: Calendar catch-up and personal notifications
-        run: python tests/test_community.py
-      - name: Gathering and crafting market pilot
-        run: python tests/test_gathering_market.py
-      - name: Guild focus and guild-wide market
-        run: python tests/test_guild_market.py
-      - name: Typed activities and native calendar signups
-        run: python tests/test_activity_calendar.py
-      - name: Explicit Discord guild invite requests
-        run: python tests/test_invites.py
-      - name: Invite presence and online alerts
-        run: python tests/test_invite_presence.py
-      - name: Discord events and delegated signups
-        run: python tests/test_event_sync.py
-      - name: Two-way shared-folder helper
-        run: python tests/test_shared_bridge.py
-      - name: Opt-in quest matching
-        run: python tests/test_quest_matching.py
-      - name: Casual guild activities and starter kits
-        run: python tests/test_casual.py
-      - name: Combined bank request mail
-        run: python tests/test_member_mail.py
-      - name: Opt-in guild location sharing and map pins
-        run: python tests/test_guild_map.py
-      - name: Exact request mail and attachment safeguards
-        run: python tests/test_exact_mail.py
+      - name: Reviewed guide catalog
+        run: python tools/build_guide_catalog.py --check
+      - name: Every test suite
+        run: python tests/run_all.py
+
   helper:
     runs-on: windows-latest
     steps:

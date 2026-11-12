@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.22.1
+
+- Gathering spots you record are shared with the guild, so one guildmate's recording helps everyone's routes. Type `/epu sharespots off` to keep yours private.
+- Members who have left the guild no longer appear as crafters or gatherers, or count toward profession coverage and guild focus goals.
+- The Needs list shows who can craft each need. A need's details list the crafters and an Ask a crafter button.
+- The guild focus also shows on Gather, and the Discord companion's pinned status post lists it with progress toward each goal.
+- Forever's new herbs stay in the Gather list while My skill is on, marked as having an unconfirmed skill requirement.
+- Craft tooltips explain that the listing deposit comes back when an item sells.
+
 ## 0.22.0
 
 - Market has its own tab in the guild window with three views: Craft, Buy & Craft, and Gather. It reads prices from AHledger, TSM, or Auctionator and shows which one is in use and how old its prices are.

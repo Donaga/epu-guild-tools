@@ -163,6 +163,20 @@ bot = importlib.import_module("bot")
 emb = bot.status_embed(gd)
 check("status embed builds", emb.title == "Guild Bank Status" and [f.name for f in emb.fields][:2] == ["Needs", "Shopping list"] and "Gold" in [f.name for f in emb.fields])
 check("status channel falls back to request channel", bot.cfg["status_channel_id"] == "2")
+gf = core.GuildData({"guilds": {"G": {
+    "members": {1: "Tyler Baker", 2: "Pip Baker", 3: "Chris Stone"},
+    "alts": {"acct": {"main": "Tyler Baker", "chars": {1: "Tyler Baker", 2: "Pip Baker"}}},
+    "crafters": {"Tyler Baker": {"profs": {"Alchemy": 200}}, "Pip Baker": {"profs": {"Alchemy": 230}},
+                 "Chris Stone": {"profs": {"Alchemy": 100, "Herbalism": 50}}, "Gone Person": {"profs": {"Alchemy": 300}}},
+    "guildFocus": {"Alchemy": {"on": True, "goal": 225, "t": 1}, "Herbalism": {"on": True, "goal": 0, "t": 1},
+                   "Mining": {"on": False, "goal": 0, "t": 2}}}}}, "G")
+check("companion reads the guild focus, counting alts once and skipping people who left (%s)" % gf.guild_focus(),
+      gf.guild_focus() == [{"prof": "Alchemy", "goal": 225, "players": 2, "at_goal": 1},
+                           {"prof": "Herbalism", "goal": 0, "players": 1, "at_goal": 0}])
+focus_field = [f for f in bot.status_embed(gf).fields if f.name == "Guild focus"]
+check("the pinned status post shows the guild focus",
+      focus_field and "**Alchemy**: goal 225, 1 of 2 players there" in focus_field[0].value and "**Herbalism**: 1 player" in focus_field[0].value)
+check("no focus field when officers have set none", "Guild focus" not in [f.name for f in emb.fields])
 print("   ", emb.fields[0].value, "|", emb.fields[2].value)
 
 # The reminder must change even when the WoW save file has not changed.

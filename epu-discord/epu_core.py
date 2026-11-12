@@ -397,6 +397,37 @@ class GuildData:
         return sorted(({"id": i, "name": self.item_name(i), "count": c, "category": self.category(i)} for i, c in totals.items()),
                       key=lambda r: r["name"])
 
+    def guild_focus(self) -> list[dict]:
+        """Professions officers marked as a guild focus, with progress.
+
+        Players are counted once across their alts, at their best skill, and only
+        while they are on the roster the addon last saw.
+        """
+        members = set(self.members)
+        main_of = {}
+        for a in (self.g.get("alts") or {}).values():
+            if isinstance(a, dict) and isinstance(a.get("main"), str):
+                chars = a.get("chars") or {}
+                for c in (chars.values() if isinstance(chars, dict) else chars):
+                    main_of[c] = a["main"]
+        out = []
+        for prof, r in (self.g.get("guildFocus") or {}).items():
+            if not isinstance(r, dict) or r.get("on") is not True:
+                continue
+            goal = int(r.get("goal") or 0)
+            best: dict = {}
+            for who, c in (self.g.get("crafters") or {}).items():
+                if members and who not in members:
+                    continue
+                skill = ((c or {}).get("profs") or {}).get(prof)
+                if isinstance(skill, (int, float)):
+                    main = main_of.get(who, who)
+                    best[main] = max(best.get(main, 0), int(skill))
+            out.append({"prof": prof, "goal": goal, "players": len(best),
+                        "at_goal": sum(1 for v in best.values() if goal and v >= goal)})
+        out.sort(key=lambda f: f["prof"])
+        return out
+
     def is_designated(self, who: str, prof: str) -> bool:
         des = ((self.g.get("policy") or {}).get("designated") or {}).get(prof) or {}
         names = des.values() if isinstance(des, dict) else des
