@@ -24,7 +24,7 @@ end)()
 check('skill filter excludes herbs beyond the current rank', A.ev("""
 (function()
   for _,r in ipairs(__ns.GatheringMarketRows('ledger',70)) do
-    if not r.skill or r.skill>70 then return false end
+    if (r.skill and r.skill>70) or (not r.skill and not r.unconfirmed) then return false end
   end
   return true
 end)()

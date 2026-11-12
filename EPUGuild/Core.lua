@@ -370,6 +370,7 @@ local HELP = {
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
+  "|cffffd100/epu sharespots on|off|r - share the gathering spots you record with the guild (on by default)",
   "|cffffd100/epu activities|r - scheduled activities, signups, quick help and starter kits",
   "|cffffd100/epu map|r - guild map settings; /epu sharelocation on|off changes sharing",
   "|cffffd100/epu minimap|r - show or hide the minimap button",
@@ -434,6 +435,9 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.ShowGatheringMarket()
   elseif cmd == "route" then
     ns.GatheringRouteCommand(args)
+  elseif cmd == "sharespots" then
+    if args ~= "on" and args ~= "off" then return ns.Print("Usage: /epu sharespots on|off") end
+    ns.SetSpotSharing(args == "on")
   elseif cmd == "invites" then
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("invites")
   elseif cmd == "guides" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then

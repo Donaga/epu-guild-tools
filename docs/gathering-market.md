@@ -21,7 +21,7 @@ Profit is what you would make **now**: the sale price is the current lowest list
 - Hover a row to see which price was used.
 - **Craft** prices ingredients at their lowest listing. **Buy & Craft** budgets each ingredient at the higher of its lowest listing and the median, because you rarely get the whole quantity at the lowest price. The footer names the basis for the open tab.
 - Ingredients a vendor sells (thread, flux, vials, dyes, spices and similar) use the vendor price when it is cheaper or when the market has no price. The shopping list marks them **(vendor)**. Reputation discounts are not applied.
-- Deposits are not included. A listing that expires unsold costs its deposit.
+- Deposits are not included: the deposit comes back when an item sells, and only an unsold listing loses it. Slow and Thin margin tags flag where that risk matters.
 
 Rows carry one short tag when it applies:
 
@@ -45,13 +45,13 @@ Select a recipe and enter a batch size to see which ingredients you lack, what y
 
 **Scope: Guild** (on Craft and Buy & Craft) lists every tradable item your guildmates can craft, priced the same way, with who can make it. Online crafters are green and guild crafters are starred. The profession menu switches to the guild's professions. Select a recipe to see its ingredients and crafters, then **Ask a crafter** to open it in Recipes and send a craft request. **Scope: Mine** returns to your own professions.
 
-The guild view only includes recipes whose crafters have EPU 0.22.0 or later and have opened that profession since updating, because older versions don't share which recipes have a fixed output. The header counts recipes still waiting for that. Skill-ups are personal, so that sort is only on your own scope.
+Members who have left the guild are never listed as crafters. The guild view only includes recipes whose crafters have EPU 0.22.0 or later and have opened that profession since updating, because older versions don't share which recipes have a fixed output. The header counts recipes still waiting for that. Skill-ups are personal, so that sort is only on your own scope.
 
 ## Guild focus
 
 Officers mark the professions the guild wants more of in **Officer → Profession coverage**: **Set as focus** on a profession, with or without a skill goal of 75, 150, 225 or 300. The coverage page then shows each focus with how many players have it and how many have reached the goal, counting alts once at their best skill.
 
-Every member sees the guild focus at the bottom of Craft, with their own skill in any focus profession they have. A member with a free primary profession slot is told so when a focus profession could fill it. The Craft and Gather profession menus mark focus professions.
+Every member sees the guild focus at the bottom of Craft and Gather, with their own skill in any focus profession they have. A member with a free primary profession slot is told so when a focus profession could fill it. The Craft and Gather profession menus mark focus professions.
 
 ## Buy & Craft
 
@@ -61,7 +61,7 @@ Both crafting views show **profit %** as profit after the faction AH cut divided
 
 ## Gather
 
-**Gather** starts on a learned gathering profession and lets you compare herbs, mining materials, skins, and fish. **My skill** uses known requirements for Mining and Herbalism. Skinning and Fishing requirements depend on the creature or water. Herbs whose requirement is not yet known stay out of the list while **My skill** is on. The highest three priced materials in the current results are marked **Top price**.
+**Gather** starts on a learned gathering profession and lets you compare herbs, mining materials, skins, and fish. **My skill** uses known requirements for Mining and Herbalism. Skinning and Fishing requirements depend on the creature or water. Forever's new herbs, whose skill requirement isn't published yet, stay in the list while **My skill** is on and are marked as unconfirmed. The highest three priced materials in the current results are marked **Top price**.
 
 With AHledger the list sorts by estimated market gold per day and hollow chart points mean sell-through is unavailable. With TSM it sorts by price times sell-through. With Auctionator it sorts by price and nothing is plotted.
 
@@ -73,7 +73,7 @@ Click a gathering material to save your observed **Units/hour** for the current 
 
 Herbalism and Mining have routes. When your current zone has recorded spots, Gather opens with **This zone: On** so the list shows what you can pick up where you stand; turn it off to see every material. Click a material to preview its spots and **Start route**, or use the overview button or `/epu route` (herbs) and `/epu route ore` (mining) for a pass through every recorded spot in the zone. Drag the EPU arrow to move it, choose **Next spot** or `/epu route next` to skip, and **Stop** or `/epu route stop` to end. The arrow points toward the nearest unvisited spot and advances when you arrive. A pass ends after the last spot or when you leave the zone. Use WoW's **Find Herbs** or **Find Minerals** to check for live nodes.
 
-**Record spot** saves your current position for the selected material, whatever your skill. EPU also reads GatherMate2's recorded nodes when it is installed.
+**Record spot** saves your current position for the selected material, whatever your skill. Recorded spots are shared with the guild: guildmates' routes and previews include them after the next sync, up to 400 spots per member. Type `/epu sharespots off` to stop sharing yours (guildmates' copies are cleared at their next sync) and `/epu sharespots on` to share again. EPU also reads GatherMate2's recorded nodes when it is installed.
 
 The bundled spots come from what players have reported so far, so coverage is uneven: Durotar, the Barrens, Tirisfal Glades and Silverpine Forest are well covered, while Elwynn Forest, Westfall, Teldrassil, Dun Morogh and Loch Modan have only a handful each. Points show where players approached a node, so the exact plant or vein may be a short distance away.
 

@@ -242,7 +242,7 @@ end
 function ns.PruneCasual()
   local g=ns.CasualStore(); if not g then return end
   for _,f in ipairs(ns.CASUAL_FIELDS) do
-    if f~="kitTemplates" and f~='syncHelpers' and f~='guildFocus' then   -- standing settings never expire
+    if f~="kitTemplates" and f~='syncHelpers' and f~='guildFocus' and f~='gatherSpots' then   -- standing records never expire
       for id,r in pairs(g[f]) do if not Fresh(r) then g[f][id]=nil end end
     end
   end

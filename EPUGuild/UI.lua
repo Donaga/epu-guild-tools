@@ -911,8 +911,16 @@ Views.needs = {
         local color = n.frac < 0.5 and C.red or (n.frac < 1 and C.gold or C.green)
         local carry = ns.ItemCount(n.id)
         local id = n.id
+        local makers = ns.CraftersOf("item:" .. id)
+        local made = ""
+        if #makers > 0 then
+          local first = makers[1]
+          made = "Craftable by " .. (Online(first.who) and ("|cff4ade80" .. first.who .. "|r") or first.who)
+            .. (#makers > 1 and (" +" .. (#makers - 1)) or "")
+        end
         out[#out + 1] = {
           key = "need:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)),
+          sub = made ~= "" and made or nil,
           title = name .. "  |cff7e8590" .. ((n.kind == "goal") and "goal" or "restock") .. "|r"
             .. (carry > 0 and ("  |cff4ade80you carry " .. carry .. "|r") or ""),
           titleColor = QColor(Quality(id)),
@@ -1339,7 +1347,7 @@ Views.crafters = {
     end
     local list = {}
     for who, c in pairs(g.crafters) do
-      for prof, skill in pairs(c.profs or {}) do
+      for prof, skill in pairs(ns.InGuild(who) and c.profs or {}) do
         local f, pf = UI.state.crafters.filter, UI.state.crafters.prof
         local des = ns.IsDesignated(who, prof)
         if (f == "all" or (f == "online" and Online(who)) or (f == "designated" and des))
@@ -1373,7 +1381,7 @@ Views.crafters = {
   end,
   footer = function(g)
     local n = 0
-    for _ in pairs(g.crafters) do n = n + 1 end
+    for who in pairs(g.crafters) do if ns.InGuild(who) then n = n + 1 end end
     return n .. " members reporting. Green dot = online now. " .. STAR .. " = guild crafter (officers set these in a crafter's details)."
   end,
   empty = "No profession data yet. It fills in as members with the addon log in.",
@@ -2678,6 +2686,18 @@ function UI:FillDetails()
     det:Reset(ns.ItemIcon(key), Quality(key), ns.ItemName(key, true), (nkind == "goal" and "One-time goal" or "Restock") .. "  ·  target " .. target)
     det:Text("In bank: " .. ns.BankCount(key) .. "   You carry: " .. ns.ItemCount(key))
     det:Text("Mail donations to " .. ns.BankAltNames(), C.muted)
+    local makers = ns.CraftersOf("item:" .. key)
+    if #makers > 0 then
+      local names = {}
+      for i = 1, math.min(6, #makers) do
+        local c = makers[i]
+        names[#names + 1] = (ns.IsDesignated(c.who, c.prof) and (STAR .. " ") or "")
+          .. (Online(c.who) and ("|cff4ade80" .. c.who .. "|r") or c.who)
+      end
+      det:Text("Guildmates who can craft this: " .. table.concat(names, ", ") .. (#makers > 6 and (" +" .. (#makers - 6)) or ""))
+      det:Buttons({ { "Ask a crafter", function() UI:OpenDetails("recipe", "item:" .. key) end,
+        tip = "Opens the recipe so you can send a craft request." } })
+    end
     det:Gap()
     if officer then
       local t = det:Field("Target", tostring(target), 60, true)

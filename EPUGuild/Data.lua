@@ -79,6 +79,15 @@ end
 ---------------------------------------------------------------------------
 ns.roster = {}
 
+-- Is this character still in the guild? Before the roster has loaded we can't
+-- tell, so everyone counts. Shared records from people who left stay stored
+-- (they age out after 90 days) but are no longer shown or counted.
+function ns.InGuild(who)
+  if next(ns.roster) == nil then return true end
+  return ns.roster[ns.Short(who)] ~= nil
+end
+local rosterSignature
+
 function ns.RequestRoster()
   if C_GuildInfo and C_GuildInfo.GuildRoster then
     C_GuildInfo.GuildRoster()
@@ -112,6 +121,9 @@ ns.On("GUILD_ROSTER_UPDATE", function()
   -- Saved so the Discord companion can match /link names to real characters.
   local g = ns.G()
   if g then g.members = names end
+  table.sort(names)
+  local signature = table.concat(names, "\031")
+  if signature ~= rosterSignature then rosterSignature = signature; ns.recipeIndex = nil end
   if ns.TrackRoster then pcall(ns.TrackRoster, ns.roster) end
   if ns.WatchOfficers then pcall(ns.WatchOfficers, ns.roster) end
   if ns.ReplayHeld then ns.ReplayHeld() end
@@ -985,7 +997,7 @@ function ns.RecipeIndex()
   local g = ns.G()
   local byKey, list = {}, {}
   for who, rec in pairs((g and g.recipes) or {}) do
-    for prof, p in pairs(rec.profs or {}) do
+    for prof, p in pairs(ns.InGuild(who) and rec.profs or {}) do
       local function add(key, item, name)
         local e = byKey[key]
         if not e then
@@ -1101,7 +1113,7 @@ function ns.Coverage()
   local counted = {}
   for who, c in pairs(g.crafters) do
     local main = ns.MainOf(who)
-    for p, skill in pairs(c.profs or {}) do
+    for p, skill in pairs(ns.InGuild(who) and c.profs or {}) do
       local r = row(p)
       local k = p .. "\0" .. main
       if not counted[k] then counted[k] = true; r.count = r.count + 1 end   -- players, not characters

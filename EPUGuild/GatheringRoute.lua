@@ -11,6 +11,117 @@ function ns.GatheringRouteProfession(id)
   return TYPES[id] ~= nil
 end
 
+---------------------------------------------------------------------------
+-- Guild-shared spots: each member's recorded spots, synced like other guild
+-- records so one person's recording helps everyone. A member can only publish
+-- their own; turning sharing off publishes an empty record.
+---------------------------------------------------------------------------
+ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS + 1] = "gatherSpots"
+local SHARE_MAX, SHARE_MAPS, SHARE_MEMBERS = 400, 100, 1000
+
+local function SpotStore()
+  local g = ns.CasualStore and ns.CasualStore()
+  return g and g.gatherSpots
+end
+
+local function Sharing()
+  return not (ns.cdb and ns.cdb.shareSpots == false)
+end
+
+-- {[map] = {[item] = {x, y, x, y, ...}}}, at most SHARE_MAX points.
+local function Packed(catalog)
+  local out, total, maps = {}, 0, {}
+  for map in pairs(catalog or {}) do maps[#maps + 1] = map end
+  table.sort(maps)
+  for _, map in ipairs(maps) do
+    local items = {}
+    for item in pairs(catalog[map]) do items[#items + 1] = item end
+    table.sort(items)
+    for _, item in ipairs(items) do
+      for _, point in ipairs(catalog[map][item]) do
+        if total >= SHARE_MAX then return out end
+        out[map] = out[map] or {}
+        out[map][item] = out[map][item] or {}
+        local list = out[map][item]
+        list[#list + 1] = math.floor(point[1] * 10000 + .5) / 10000
+        list[#list + 1] = math.floor(point[2] * 10000 + .5) / 10000
+        total = total + 1
+      end
+    end
+  end
+  return out
+end
+
+-- Returns a clean copy, or nil if anything is out of shape.
+local function CleanSpots(s)
+  if type(s) ~= "table" then return end
+  local out, total, maps = {}, 0, 0
+  for map, items in pairs(s) do
+    maps = maps + 1
+    if maps > SHARE_MAPS or not ns.PositiveInt(map, 100000) or type(items) ~= "table" then return end
+    out[map] = {}
+    for item, list in pairs(items) do
+      if not ns.PositiveInt(item, 10000000) or type(list) ~= "table" or #list % 2 ~= 0 then return end
+      local copy = {}
+      for i = 1, #list do
+        local v = list[i]
+        if type(v) ~= "number" or v ~= v or v < 0 or v > 1 then return end
+        copy[i] = v
+      end
+      total = total + #list / 2
+      if total > SHARE_MAX then return end
+      out[map][item] = copy
+    end
+  end
+  return out
+end
+
+function ns.MergeGatherSpots(sender, b, trusted)
+  if type(b) ~= "table" or type(b.gatherSpots) ~= "table" then return false end
+  local store = SpotStore()
+  if not store then return false end
+  local size, changed = 0, false
+  for _ in pairs(store) do size = size + 1 end
+  for who, r in pairs(b.gatherSpots) do
+    if type(who) == "string" and #who <= 80 and type(r) == "table" and r.who == who
+      and (trusted or who == ns.Short(sender)) and ns.StampOK(r.t) and r.t <= ns.Now() + 300 then
+      local spots = CleanSpots(r.s)
+      local cur = store[who]
+      if spots and (cur or size < SHARE_MEMBERS) and ns.Newer(r, cur, "t") then
+        store[who] = {who = who, t = r.t, s = spots}
+        if not cur then size = size + 1 end
+        changed = true
+      end
+    end
+  end
+  if changed then ns.Changed() end
+  return changed
+end
+
+function ns.PublishGatherSpots()
+  local store = SpotStore()
+  if not store or not ns.me then return end
+  local spots = Sharing() and Packed(ns.cdb and ns.cdb.herbSpots) or {}
+  local cur = store[ns.me]
+  if not cur and next(spots) == nil then return end   -- nothing recorded, nothing to say
+  if cur and ns.Fingerprint(cur.s) == ns.Fingerprint(spots) then return end
+  local r = {who = ns.me, t = ns.NextVersion(cur and cur.t), s = spots}
+  store[ns.me] = r
+  ns.Send("D", {gatherSpots = {[ns.me] = r}})
+end
+
+function ns.SetSpotSharing(on)
+  if not ns.cdb then return end
+  ns.cdb.shareSpots = on and true or false
+  ns.PublishGatherSpots()
+  ns.Print(on and "Your recorded gathering spots are shared with the guild."
+    or "Your recorded gathering spots are no longer shared. Guildmates' copies are cleared at their next sync.")
+end
+
+ns.On("PLAYER_LOGIN", function()
+  C_Timer.After(30, function() if ns.PublishGatherSpots then ns.PublishGatherSpots() end end)
+end)
+
 local function Coordinate(value)
   return not (issecretvalue and issecretvalue(value)) and type(value) == "number" and value >= 0 and value <= 1
 end
@@ -47,6 +158,14 @@ local function Points(map, item, profession)
   end
   AddCatalog(ns[kind.catalog])
   AddCatalog(ns.cdb and ns.cdb.herbSpots)   -- the member's own recorded spots, herbs and ores alike
+  for who, r in pairs(SpotStore() or {}) do
+    local shared = who ~= ns.me and ns.InGuild(who) and type(r.s) == "table" and r.s[map]
+    for id, list in pairs(shared or {}) do
+      if (item and id == item) or (not item and ns.GatherItemProfession(id) == profession) then
+        for i = 1, #list - 1, 2 do Add(list[i], list[i + 1]) end
+      end
+    end
+  end
   -- GatherMate2 is optional and its API is not ours: a failure there must never break a route.
   local gather = GatherMate2
   if gather and gather.GetNodesForZone and gather.DecodeLoc and (not item or kind.matchNames) then
@@ -83,7 +202,9 @@ function ns.RecordGatheringSpot(item)
   end
   if #spots >= 1000 then return ns.Print("This material already has 1,000 recorded spots in this zone.") end
   spots[#spots + 1] = {x, y}
-  ns.Print("Recorded " .. ns.ItemName(item, true) .. " at your current location.")
+  ns.Print("Recorded " .. ns.ItemName(item, true) .. " at your current location."
+    .. (Sharing() and " Guildmates will see it too." or ""))
+  ns.Debounce("gatherSpots", 5, ns.PublishGatherSpots)
 end
 
 local function Offset(current, point, x, y)
