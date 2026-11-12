@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.2
+
+- Fixes 1 to 2 second freezes. When someone logged in behind on guild data, the officer (or a member passing data on) could freeze for over a second while preparing the reply; it now takes a fraction of a second.
+- Sync checks run a few milliseconds per frame instead of all at once, so the 15-minute officer check-in no longer causes a hitch.
+- Comparing guild data is faster and gives exactly the same result, so players on 0.22.1 and 0.22.2 still sync normally.
+
 ## 0.22.1
 
 - Gathering spots you record are shared with the guild, so one guildmate's recording helps everyone's routes. Type `/epu sharespots off` to keep yours private.

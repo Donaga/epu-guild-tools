@@ -9,26 +9,71 @@ function ns.StampOK(n)
 end
 
 -- Canonical ordering makes concurrent, equal-stamp edits converge regardless of arrival order.
-function ns.Canonical(v)
-  if type(v) == "string" then return "s" .. #v .. ":" .. v end
-  if type(v) ~= "table" then return type(v) .. ":" .. tostring(v) .. ";" end
-  local keys, out = {}, {}
-  for k in pairs(v) do keys[#keys + 1] = k end
-  table.sort(keys, function(a,b) return type(a) .. tostring(a) < type(b) .. tostring(b) end)
-  for _, k in ipairs(keys) do
-    local key,value=ns.Canonical(k),ns.Canonical(v[k])
-    out[#out + 1] = #key .. ":" .. key .. #value .. ":" .. value
+---------------------------------------------------------------------------
+-- Sliced work: long sync jobs run a few milliseconds per frame so they never
+-- freeze the game. ns.SliceCheck() is a no-op outside ns.RunSliced. Only call
+-- it from plain Lua code (no pcall or sort comparator between it and the
+-- job), because Lua 5.1 cannot yield across those.
+---------------------------------------------------------------------------
+local function clock() return debugprofilestop and debugprofilestop() or GetTime() * 1000 end
+local BUDGET = 6                   -- ms of sync work per frame
+local slicing, sliceStart = nil, 0
+function ns.SliceCheck()
+  if slicing and coroutine.running() == slicing and clock() - sliceStart > BUDGET then
+    coroutine.yield()
+  end
+end
+function ns.RunSliced(fn)
+  local co = coroutine.create(fn)
+  local function step()
+    local outer = slicing
+    slicing, sliceStart = co, clock()
+    local ok, err = coroutine.resume(co)
+    slicing = outer
+    if not ok then return geterrorhandler()(err) end
+    if coroutine.status(co) ~= "dead" then C_Timer.After(0, step) end
+  end
+  step()
+end
+
+-- Canonical text and its fingerprint are compared between clients, so both
+-- must stay byte-for-byte identical across versions. These are faster
+-- versions of the original code with exactly the same output: sort keys are
+-- built once per key instead of on every comparison, and the hash reads
+-- eight bytes per call.
+local function Canonical(v)
+  local tv = type(v)
+  if tv == "string" then return "s" .. #v .. ":" .. v end
+  if tv ~= "table" then return tv .. ":" .. tostring(v) .. ";" end
+  local keys, order, out = {}, {}, {}
+  for k in pairs(v) do keys[#keys + 1] = k; order[k] = type(k) .. tostring(k) end
+  table.sort(keys, function(a, b) return order[a] < order[b] end)
+  for i = 1, #keys do
+    local k = keys[i]
+    if slicing and i % 64 == 0 then ns.SliceCheck() end
+    local key, value = Canonical(k), Canonical(v[k])
+    out[i] = #key .. ":" .. key .. #value .. ":" .. value
   end
   return "{" .. table.concat(out, ";") .. "}"
 end
+ns.Canonical = Canonical
 function ns.Newer(a, b, field)
   if not b then return true end
   local av, bv = tonumber(a[field]) or 0, tonumber(b[field]) or 0
   return av > bv or (av == bv and ns.Canonical(a) > ns.Canonical(b))
 end
+local byte, M = string.byte, 4294967296
 function ns.Fingerprint(v)
-  local s=ns.Canonical(v); local h=0
-  for i=1,#s do h=(h*131+s:byte(i))%4294967296 end
+  local s = Canonical(v)
+  local h, n, i = 0, #s, 1
+  while i + 7 <= n do
+    if slicing and i % 65536 == 1 then ns.SliceCheck() end
+    local a, b, c, d, e, f, g, k = byte(s, i, i + 7)
+    h = (h * 131 + a) % M; h = (h * 131 + b) % M; h = (h * 131 + c) % M; h = (h * 131 + d) % M
+    h = (h * 131 + e) % M; h = (h * 131 + f) % M; h = (h * 131 + g) % M; h = (h * 131 + k) % M
+    i = i + 8
+  end
+  for j = i, n do h = (h * 131 + byte(s, j)) % M end
   return tostring(h)
 end
 function ns.Remaining(r)
