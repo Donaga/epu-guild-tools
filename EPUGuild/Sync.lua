@@ -85,6 +85,7 @@ function ns.Delta(d)
   local function add(field, src, stamp)
     local mismatch=type(d.fields)=="table" and d.fields[field]~=ns.Fingerprint(src)
     for k, x in pairs(src) do
+      ns.SliceCheck()
       if (mismatch or stamp(x) > since) and not U(g, field, k) then
         b[field] = b[field] or {}
         b[field][k] = x
@@ -154,7 +155,6 @@ function ns.SplitDelta(b)
           if field=="needs" and not records.entries then
             src={}; for id,value in pairs(records.list) do src[id]={v=records.v,by="",value=value} end
           end
-          local batch={}
           local function bundle(map)
             if field=="needs" then
               local list={}; for id,e in pairs(map) do list[id]=e.value end
@@ -162,14 +162,21 @@ function ns.SplitDelta(b)
             end
             return {[field]=map}
           end
+          -- Measure each record once. A record's size inside its own bundle
+          -- includes the wrapper, so the sum overestimates a shared bundle and
+          -- batches always stay under the cap. (Re-serializing the growing batch
+          -- after every record took seconds on large guilds.)
+          local batch, size = {}, 0
           for id,r in pairs(src) do
-            batch[id]=r
-            if #ns.Serialize(bundle(batch))>60000 then
-              batch[id]=nil
-              if next(batch) then bounded[#bounded+1]=bundle(batch) end
-              batch={[id]=r}
-              if #ns.Serialize(bundle(batch))>240000 then ns.Print("A guild record is too large to sync; please report it to an officer."); return end
+            ns.SliceCheck()
+            local one=#ns.Serialize(bundle({[id]=r}))
+            if one>240000 then ns.Print("A guild record is too large to sync; please report it to an officer."); return end
+            if next(batch) and size+one>60000 then
+              bounded[#bounded+1]=bundle(batch)
+              batch, size = {}, 0
             end
+            batch[id]=r
+            size=size+one
           end
           if next(batch) then bounded[#bounded+1]=bundle(batch) end
         end
@@ -180,6 +187,7 @@ function ns.SplitDelta(b)
 end
 
 local function SendAnswer(to, d, relay)
+  ns.SliceCheck()
   local b = ns.Delta(d)
   if not b then return end
   if relay then b.policy = nil end         -- settings only ever come from officers
@@ -191,6 +199,7 @@ local function SendAnswer(to, d, relay)
     p.ver = ns.VERSION
     if relay then p.relay = true end
     ns.Send("D", p)
+    ns.SliceCheck()
   end
   return #parts
 end
@@ -479,8 +488,10 @@ ns.comm.H = function(sender, d)
       local dd = ns.pendingHello[sender]
       ns.pendingHello[sender] = nil
       if not dd then return end          -- another officer already answered
-      SendAnswer(sender, dd)
-      if ns.IsTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
+      ns.RunSliced(function()
+        SendAnswer(sender, dd)
+        if ns.IsTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
+      end)
     end)
   elseif g and g.syncedAt and not ns.IsTrusted(sender) and (tonumber(d.since) or 0) < g.syncedAt - 60 then
     -- We have officer-confirmed data they lack. Give officers first go.
@@ -488,7 +499,7 @@ ns.comm.H = function(sender, d)
     C_Timer.After(9 + math.random() * 9, function()
       local dd = ns.pendingRelay[sender]
       ns.pendingRelay[sender] = nil
-      if dd then SendAnswer(sender, dd, true) end
+      if dd then ns.RunSliced(function() SendAnswer(sender, dd, true) end) end
     end)
   end
 end
@@ -640,10 +651,12 @@ ns.comm.C = function(sender, c)
   if Hold("C", sender, c) then return end
   if not ns.IsTrusted(sender) then return end
   S.lastCheckIn = GetTime()
-  if ns.Behind(c) then
-    ns.LogSync("behind", sender, sender .. "'s check-in showed newer data; asking for it")
-    ns.MaybeHello(true, 3 + math.random() * 27)    -- spread out so a guild full of members doesn't ask at once
-  end
+  ns.RunSliced(function()
+    if ns.Behind(c) then
+      ns.LogSync("behind", sender, sender .. "'s check-in showed newer data; asking for it")
+      ns.MaybeHello(true, 3 + math.random() * 27)  -- spread out so a guild full of members doesn't ask at once
+    end
+  end)
 end
 
 local CHECKIN = 15 * 60
@@ -653,8 +666,10 @@ local function CheckInLoop()
       if ns.IsTrusted(ns.me) then
         if not S.lastCheckIn or GetTime() - S.lastCheckIn > 10 * 60 then
           S.lastCheckIn = GetTime()
-          local d = ns.CheckInDigest()
-          if d then ns.Send("C", d); ns.LogSync("checkin", nil, "Sent the 15-minute check-in") end
+          ns.RunSliced(function()
+            local d = ns.CheckInDigest()
+            if d then ns.Send("C", d); ns.LogSync("checkin", nil, "Sent the 15-minute check-in") end
+          end)
         end
       end
       -- still unconfirmed? ask again (and refresh the roster to spot officers)
