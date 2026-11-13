@@ -214,6 +214,17 @@ local function SnapInbox()
   for i = 1, ((GetInboxNumItems and GetInboxNumItems()) or 0) do inbox[i] = ReadMail(i) end
 end
 ns.SnapInbox = SnapInbox
+-- Items waiting in this character's mailbox, as last read: [itemID] = count.
+function ns.InboxItems()
+  local out = {}
+  for _, m in pairs(inbox) do
+    for _, a in pairs(m.items or {}) do
+      local id, n = a[1], tonumber(a[2]) or 1
+      if id then out[id] = (out[id] or 0) + n end
+    end
+  end
+  return out
+end
 ns.On("MAIL_SHOW", SnapInbox)
 ns.On("MAIL_INBOX_UPDATE", SnapInbox)
 

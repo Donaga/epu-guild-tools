@@ -265,6 +265,20 @@ The addon notices every character you log in with, since its saved data is share
 ## Discord
 The **EPU Discord companion** (a separate download) posts requests to a Discord channel and lets members `/request` and officers Approve or Reject from Discord. Because addons can't reach the internet, changes pass through files when an officer types /reload or logs in or out. See the companion's README.
 
+### Linking your characters (0.23+)
+1. In Discord, use `/link`. The bot replies privately with a code like `ABCD-EF23`.
+2. In game, type `/epu link ABCD-EF23` on any character.
+
+Every character on that WoW account links itself the next time it logs in, and characters in your confirmed EPU alt group (see Mains and alts) come along, even on another WoW account. The link shows up in Discord after an officer's next save. Linked members get a class role for each character and a rank role (Veteran, Member or Initiate) from their main; officer ranks are set by hand. `/main` in Discord picks a different main for Discord only. `/epu link` shows your status; `/epu link off` stops new characters linking. The game only shares a scrambled form of the code, so guildmates can't use it to see which characters are yours.
+
+## Sort the bank (0.23+)
+On the **Bank** page, click **Sort** to see the bank (and the current character's mailbox) the way an officer would hand it out:
+- **Recipes to hand out:** for each pattern, the guildmate with the highest skill in that profession who can learn it and doesn't know it yet. Designated crafters and online members win ties. People who haven't opened that profession with EPU are only suggested after everyone confirmed, marked "hasn't shared recipes". If nobody can learn it yet, it names whoever is closest. The required skill is read from the recipe's tooltip.
+- **Materials guildmates can use:** who can get orange or yellow skill-ups from each stack, and the most profitable guild craft it goes into.
+- **Sell:** everything else, by total value at the current AH low (less the 5% cut) or the vendor price. Stock kept for needs targets and open requests is left out. Recipes the whole guild already knows land here too.
+
+Click an item for the full list and up to three **Mail to** buttons. Open a mailbox on the character carrying the item first; the item goes into a mail for you to check and send. Click **Back** to return to the normal list.
+
 ## Known limits
 - Needs at least one officer (or the bank alt) online to sync someone who was offline.
 - Guild bank contents are only published when an **officer** opens the guild bank. Members' views stay local, so nobody can fake the counts.

@@ -850,7 +850,7 @@ end
 UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
-  bank = { cat = nil, stock = 'all', quality = nil },
+  bank = { cat = nil, stock = 'all', quality = nil, mode = nil },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "all", role = nil, review = nil },
@@ -968,7 +968,7 @@ Views.shopping = {
 Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
   tools = function(bar)
-    UI.bankCatChip = DropChip(bar, 140, "Show one kind of item", function()
+    UI.bankCatChip = DropChip(bar, 116, "Show one kind of item", function()
       local counts = {}
       for id in pairs(ns.BankCatalog()) do local c=ns.ItemCategory(id); counts[c]=(counts[c] or 0)+1 end
       local items = { { label = "All categories", value = false } }
@@ -977,17 +977,21 @@ Views.bank = {
       end
       return items
     end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil end)
-    UI.bankStockChip=DropChip(bar,132,'Filter by recorded stock and open requests',function()
+    UI.bankStockChip=DropChip(bar,118,'Filter by recorded stock and open requests',function()
       return {{label='All stock',value='all'},{label='In stock',value='stocked'},{label='Available now',value='available'},{label='Awaiting restock',value='restock'}}
     end,function() return UI.state.bank.stock end,function(v) UI.state.bank.stock=v end)
-    UI.bankQualityChip=DropChip(bar,110,'Filter by item quality',function()
+    UI.bankQualityChip=DropChip(bar,96,'Filter by item quality',function()
       return {{label='Any quality',value=false},{label='Poor',value=0},{label='Common',value=1},{label='Uncommon',value=2},{label='Rare',value=3},{label='Epic+',value=4}}
     end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil end)
+    UI.bankSort=bar:Add(Btn(bar,'Sort',56,22),'right',function()
+      local st=UI.state.bank; st.mode=(st.mode~='sort') and 'sort' or nil; UI.bankPlan=nil; UI:CloseDetails()
+    end,'Sort the bank: who should get each recipe, materials that help guildmates skill up, and what to sell')
     UI.bankReset=bar:Add(Btn(bar,'Reset',52,22),'right',function()
       local st=UI.state.bank; st.cat=nil; st.stock='all'; st.quality=nil; UI.search:SetText(''); UI:Refresh()
     end,'Clear bank filters and search')
   end,
   rows = function(g, q)
+    if UI.state.bank.mode == 'sort' then return UI.BankSortRows(q) end
     local totals, holders = {}, {}
     for id in pairs(ns.BankCatalog()) do totals[id]=0 end
     for alt, s in pairs(g.bank) do
@@ -1046,6 +1050,11 @@ Views.bank = {
     return out
   end,
   footer = function(g)
+    if UI.state.bank.mode == 'sort' then
+      local src = UI.bankPlan and UI.bankPlan.source
+      return (src and ("Prices: " .. (({ledger="AHledger",tsm="TSM",auctionator="Auctionator"})[src] or src) .. ", less the 5% AH cut. ")
+        or "No price addon loaded; values use vendor prices. ") .. "Click an item for details and Mail buttons."
+    end
     local parts = {}
     for alt, s in pairs(g.bank) do
       if not s.retired then parts[#parts + 1] = alt .. " " .. Money(s.money) .. " (" .. Ago(s.bankTime or s.v) .. ")" end
@@ -1055,6 +1064,66 @@ Views.bank = {
   end,
   empty = "No items match. Use Reset to clear bank filters and search. Sold-out equipment stays hidden.",
 }
+
+-- Sort the bank ------------------------------------------------------------
+local function Holders(r)
+  local parts = {}
+  for who, n in pairs(r.holders or {}) do parts[#parts + 1] = tostring(who) .. (n > 1 and (" " .. n) or "") end
+  table.sort(parts)
+  return table.concat(parts, ", ")
+end
+local function First(name) return (name or "?"):match("^(%S+)") or name end
+function UI.BankSortPlan()
+  if not UI.bankPlan or GetTime() - (UI.bankPlanAt or 0) > 30 then
+    local ok, plan = pcall(ns.BankSortPlan)
+    UI.bankPlan, UI.bankPlanAt = ok and plan or { recipes = {}, mats = {}, sell = {} }, GetTime()
+    if not ok and not UI.bankSortErr then UI.bankSortErr = true; ns.Print("Sort the bank failed: " .. tostring(plan)) end
+  end
+  return UI.bankPlan
+end
+function UI.BankSortRows(q)
+  local plan, out = UI.BankSortPlan(), {}
+  local function row(r, sub, right)
+    return { key = "sort:" .. r.item, item = r.item, icon = ns.ItemIcon(r.item), qcolor = QColor(r.quality or 1), titleColor = QColor(r.quality or 1),
+      title = r.name or ns.ItemName(r.item, true), sub = sub, right = right, onClick = function() UI:OpenDetails("banksort", r.item) end }
+  end
+  local function section(title, list, hint, build)
+    local shown = {}
+    for _, r in ipairs(list) do if Match(q, r.name, Holders(r)) then shown[#shown + 1] = build(r) end end
+    if #shown == 0 then return end
+    out[#out + 1] = { key = "cat:" .. title, title = "|cfff2c14e" .. title .. "|r", sub = hint, right = tostring(#shown) }
+    for _, x in ipairs(shown) do out[#out + 1] = x end
+  end
+  section("Recipes to hand out", plan.recipes, "Best guildmate for each pattern in the bank or mail", function(r)
+    local who = r.give
+    local sub = (r.best and "|cff4ade80Give to " or r.maybe and "|cfff2c14eMaybe " or "|cff9aa1abClosest: ") .. First(who.who) .. "|r"
+      .. " (" .. tostring(r.prof) .. " " .. who.skill .. ", " .. r.why .. ")" .. (r.need and ("  ·  needs " .. r.need) or "")
+    return row(r, sub, r.count > 1 and tostring(r.count) or nil)
+  end)
+  section("Materials guildmates can use", plan.mats, "Skill-ups first, then profitable crafts", function(r)
+    local parts = {}
+    if #r.users > 0 then
+      local names, seen = {}, {}
+      for _, u in ipairs(r.users) do if not seen[u.who] and #names < 3 then seen[u.who] = true; names[#names + 1] = First(u.who) end end
+      parts[#parts + 1] = "Skill-ups: " .. table.concat(names, ", ") .. (#r.users > #names and " +" or "")
+    end
+    if r.use then parts[#parts + 1] = "Craft " .. tostring(r.use.name) .. ": +" .. Money(r.use.profit) end
+    if r.unit > 0 then parts[#parts + 1] = "sells " .. Money(r.unit) end
+    return row(r, table.concat(parts, "  ·  "), tostring(r.count))
+  end)
+  section("Sell", plan.sell, "Nobody needs these; stock kept for needs and requests is left out", function(r)
+    local sub = (r.reason and (r.reason .. "  ·  ") or "") .. r.surplus .. " × " .. Money(r.unit)
+      .. ((r.ah and r.unit > (r.vendor or 0)) and " on the AH" or " to a vendor")
+    return row(r, sub, Money(r.value))
+  end)
+  return out
+end
+local function FindPlanRow(id)
+  local plan = UI.BankSortPlan()
+  for _, list in ipairs({ plan.recipes, plan.mats, plan.sell }) do
+    for _, r in ipairs(list) do if r.item == id then return r end end
+  end
+end
 
 -- Requests --------------------------------------------------------------------
 local function RequestMatchesFilter(r, f)
@@ -2734,6 +2803,46 @@ function UI:FillDetails()
       UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
     end } }) end
 
+  elseif kind == "banksort" then
+    local r = FindPlanRow(key)
+    if not r then return UI:CloseDetails() end
+    det:Reset(ns.ItemIcon(key), r.quality or 1, r.name or ns.ItemName(key, true), "Held by " .. Holders(r))
+    local specs = {}
+    local function mail(who, n)
+      if #specs < 3 and who ~= ns.me then
+        specs[#specs + 1] = { "Mail to " .. First(who), function() ns.MailBankItem(who, key, n) end, accent = #specs == 0,
+          tip = "Open a mailbox on the character holding it. The item goes into a mail for you to check and send." }
+      end
+    end
+    if r.candidates then
+      det:Text((r.prof or "?") .. (r.need and (" " .. r.need .. " required") or ", required skill unknown"), C.muted)
+      if r.reason then det:Text(r.reason .. ". Worth " .. Money(r.unit) .. " each.") end
+      for i, c in ipairs(r.candidates) do
+        if i > 8 then det:Text("…and " .. (#r.candidates - 8) .. " more", C.muted); break end
+        local status = c.knows and "|cff9aa1abknows it|r" or not c.scanned and "|cfff2c14ehasn't shared recipes|r"
+          or c.canLearn and "|cff4ade80can learn it|r" or "|cffff6b6bskill too low|r"
+        det:Text((c.designated and STAR or "") .. c.who .. "  " .. c.skill .. "  ·  " .. status .. (c.online and "  ·  |cff4ade80online|r" or ""))
+        if not c.knows and c.canLearn then mail(c.who, 1) end
+      end
+      if #specs == 0 and r.closest then mail(r.closest.who, 1) end
+    end
+    if r.users then
+      if #r.users > 0 then det:Text("|cfff2c14eSkill-ups|r (orange first)") end
+      for i, u in ipairs(r.users) do
+        if i > 8 then det:Text("…and " .. (#r.users - 8) .. " more", C.muted); break end
+        det:Text(u.who .. "  ·  " .. u.prof .. ": " .. tostring(u.name) .. "  " .. (u.color == "o" and "|cffff8040orange|r" or "|cffffff00yellow|r"))
+        mail(u.who)
+      end
+      if r.use then
+        det:Text("|cfff2c14eMost profitable craft|r: " .. tostring(r.use.name) .. ", +" .. Money(r.use.profit) .. " each")
+        for _, c in ipairs(r.use.crafters or {}) do mail(c.who) end
+      end
+    end
+    det:Text("Sells for " .. (r.ah and (Money(r.ah) .. " on the AH (" .. Money(math.floor(r.ah * 0.95)) .. " after the cut)") or "nothing listed on the AH")
+      .. (r.vendor and r.vendor > 0 and (", " .. Money(r.vendor) .. " to a vendor") or "") .. ".", C.muted)
+    if r.surplus and r.surplus < r.count then det:Text((r.count - r.surplus) .. " kept for needs and open requests.", C.muted) end
+    det:Gap()
+    if #specs > 0 then det:Buttons(specs) end
   elseif kind == "item" then
     local holders = {}
     for alt, s in pairs(g.bank) do
@@ -3057,6 +3166,10 @@ function UI:Refresh()
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
     if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
     if v == Views.bank then
+      local sorting = self.state.bank.mode == 'sort'
+      self.bankSort:SetLabel(sorting and 'Back' or 'Sort'); self.bankSort:SetOn(sorting)
+      self.bankCatChip:SetShown(not sorting); self.bankStockChip:SetShown(not sorting); self.bankQualityChip:SetShown(not sorting)
+      self.bankReset:SetShown(not sorting)
       self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
       self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
       self.bankStockChip:SetLabel(({all='All stock',stocked='In stock',available='Available now',restock='Awaiting restock'})[self.state.bank.stock] or 'All stock')

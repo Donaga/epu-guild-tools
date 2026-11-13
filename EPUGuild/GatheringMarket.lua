@@ -560,6 +560,37 @@ end
 local frame, activeSource, craftMode, skillOnly, routeOrder, zoneOnly, buySort, professionFilter, gatherFilter, craftSort
 local guildScope, guildProfession
 local points, listRows, detailRows = {}, {}, {}
+
+-- For the bank sorter. The price source picked in Market, else the first
+-- installed one; nil when no price addon is loaded.
+function ns.MarketSourceKey()
+  if activeSource and Available(activeSource.key) then return activeSource.key end
+  for _, source in ipairs(sources) do if Available(source.key) then return source.key end end
+end
+-- Sale price of one item right now (current low, capped at the median) and
+-- where it came from. The faction cut is not taken off.
+function ns.ItemMarketValue(item)
+  local key = ns.MarketSourceKey()
+  if not key then return end
+  local price, info = Market(key, item)
+  return price, info, key
+end
+ns.FACTION_PAYOUT = FACTION_PAYOUT
+-- [reagent itemID] = the most profitable guild craft that uses it.
+function ns.ProfitableUses()
+  local key = ns.MarketSourceKey()
+  local best = {}
+  if not key then return best end
+  for _, row in ipairs((ns.GuildCraftingRows(key))) do
+    if row.profit and row.profit > 0 and row.recipe then
+      for i = 1, #row.recipe.reagents, 2 do
+        local id = row.recipe.reagents[i]
+        if not best[id] or row.profit > best[id].profit then best[id] = row end
+      end
+    end
+  end
+  return best
+end
 local Select
 local RenderDetail
 
