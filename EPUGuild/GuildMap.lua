@@ -36,6 +36,66 @@ end
 local function Pins()
   return LibStub and LibStub("HereBeDragons-Pins-2.0",true)
 end
+
+---------------------------------------------------------------------------
+-- Layers. Forever runs several copies ("layers") of each zone. The client
+-- has no API for it, but every NPC's GUID carries the copy's zone UID
+-- (Creature-0-server-instance-zoneUID-npc-spawn). We read it from NPCs you
+-- target, mouse over or see nameplates for, and share it alongside the
+-- location (same opt-in). IDs only compare within one zone, and a reading
+-- goes stale after a few minutes.
+---------------------------------------------------------------------------
+local FRESH=300
+local layer
+local function ZoneOf(map)
+  -- Caves and city sub-maps share their zone's layer: climb to the zone.
+  for _=1,6 do
+    local info=MapInfo(map)
+    if not info then return end
+    if not info.mapType or info.mapType<=3 or not info.parentMapID or info.parentMapID==0 then return map end
+    map=info.parentMapID
+  end
+  return map
+end
+local function ParseLayer(guid)
+  if type(guid)~="string" or (issecretvalue and issecretvalue(guid)) then return end
+  local kind,_,_,_,zoneUID=strsplit("-",guid)
+  if kind~="Creature" and kind~="Vehicle" then return end
+  zoneUID=tonumber(zoneUID)
+  if Number(zoneUID,1,4294967295) and zoneUID%1==0 then return zoneUID end
+end
+local function SeeUnit(unit)
+  if (IsInInstance and IsInInstance()) or not C_Map or not C_Map.GetBestMapForUnit then return end
+  local ok,guid=pcall(UnitGUID,unit)
+  local id=ok and ParseLayer(guid)
+  if not id then return end
+  local okm,map=pcall(C_Map.GetBestMapForUnit,"player")
+  local zone=okm and ZoneOf(map)
+  if not zone then return end
+  local changed=not layer or layer.id~=id or layer.zone~=zone
+  layer={zone=zone,id=id,at=GetTime()}
+  -- Tell guildmates within ~10 s instead of waiting for the next heartbeat.
+  if changed and lastSent then lastSent=math.min(lastSent,GetTime()-INTERVAL+10) end
+end
+ns.SeeLayerUnit=SeeUnit
+-- Your current layer, if you've seen an NPC in this zone recently.
+function ns.MyLayer()
+  if not layer or GetTime()-layer.at>FRESH or (IsInInstance and IsInInstance()) then return end
+  local ok,map=pcall(C_Map.GetBestMapForUnit,"player")
+  if not ok or ZoneOf(map)~=layer.zone then return end
+  return layer
+end
+-- "same", "other", or nil when unknown (not sharing, other zone, stale).
+function ns.LayerOf(name)
+  local me,p=ns.MyLayer(),locations[name]
+  if not me or not p or not p.l or not p.lat or GetTime()-p.lat>FRESH then return end
+  if ZoneOf(p.map)~=me.zone then return end
+  return p.l==me.id and "same" or "other"
+end
+ns.On("PLAYER_TARGET_CHANGED",function() SeeUnit("target") end)
+ns.On("UPDATE_MOUSEOVER_UNIT",function() SeeUnit("mouseover") end)
+ns.On("NAME_PLATE_UNIT_ADDED",function(unit) SeeUnit(unit) end)
+ns.On("ZONE_CHANGED_NEW_AREA",function() layer=nil end)
 local function Remove(name)
   local pair=markers[name]
   if not pair then return end
@@ -64,6 +124,8 @@ local function Tooltip(self)
   GameTooltip:AddLine("Level "..tostring(r.level or "?").." "..(r.class or ""),1,1,1)
   GameTooltip:AddLine((info and info.name or "Unknown zone")..string.format(" (%.1f, %.1f)",p.x*100,p.y*100),1,1,1)
   GameTooltip:AddLine("Updated "..math.floor(GetTime()-p.at).."s ago",0.7,0.7,0.7)
+  local where=ns.LayerOf(name)
+  if where then GameTooltip:AddLine(where=="same" and "Same layer as you" or "On another layer",where=="same" and 0.3 or 1,where=="same" and 0.87 or 0.7,where=="same" and 0.5 or 0.28) end
   GameTooltip:AddLine("Click to whisper",1,0.82,0)
   GameTooltip:AddLine("Players may be in another layer or phase.",0.7,0.7,0.7)
   GameTooltip:Show()
@@ -132,8 +194,9 @@ ns.comm.L=function(sender,data,channel)
   if data.off==true then locations[sender]=nil; Remove(sender); return end
   if not MapInfo(data.map) or not Number(data.x,0,1) or not Number(data.y,0,1) then return end
   local prev=locations[sender]
-  if prev and GetTime()-prev.at<5 then return end
-  locations[sender]={map=data.map,x=data.x,y=data.y,at=GetTime()}
+  if prev and GetTime()-prev.at<5 and prev.l==data.l then return end
+  local l=Number(data.l,1,4294967295) and data.l%1==0 and data.l or nil
+  locations[sender]={map=data.map,x=data.x,y=data.y,at=GetTime(),l=l,lat=l and GetTime() or nil}
   ns.RefreshGuildMap()
 end
 local function Position()
@@ -172,7 +235,9 @@ function ns.UpdateGuildLocation()
     if last then Withdraw(); lastSent=now end
     return
   end
-  if last and last.map==p.map and math.abs(last.x-p.x)<0.001 and math.abs(last.y-p.y)<0.001 and now-(lastSent or 0)<HEARTBEAT then return end
+  local mine=ns.MyLayer()
+  if mine and ZoneOf(p.map)==mine.zone then p.l=mine.id end
+  if last and last.map==p.map and last.l==p.l and math.abs(last.x-p.x)<0.001 and math.abs(last.y-p.y)<0.001 and now-(lastSent or 0)<HEARTBEAT then return end
   local net=ns.NetworkStatus()
   if net.queued>0 or net.pause>0 then return end
   local key=guild
@@ -188,7 +253,9 @@ function ns.RefreshGuildMapSettings()
   panel.icons:SetChecked(Setting('guildClassIcons')~=false)
   local n=0
   for _ in pairs(locations) do n=n+1 end
-  panel.status:SetText(n.." guildmate(s) sharing recently. "..(Pins() and "" or "Map library unavailable. ").."Markers expire after two minutes; layers and phases may differ.")
+  local mine=ns.MyLayer()
+  panel.status:SetText(n.." guildmate(s) sharing recently. "..(Pins() and "" or "Map library unavailable. ").."Markers expire after two minutes. "
+    ..(mine and "Your layer was detected "..math.floor(GetTime()-mine.at).."s ago; the Roster shows who shares it." or "Target or mouse over any NPC to detect your layer."))
 end
 function ns.ShowGuildMapSettings()
   if not panel then
@@ -219,7 +286,7 @@ function ns.ShowGuildMapSettings()
     panel.buttonSettings:SetScript("OnClick",function() ns.ShowMinimapButtonSettings() end)
     local hint=panel:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
     hint:SetPoint("BOTTOMLEFT",20,18); hint:SetWidth(340)
-    hint:SetText("Both players need EPU 0.11+. No location history is saved. Click a marker to whisper.")
+    hint:SetText("Both players need EPU 0.11+ (0.22.3+ for layers). No location history is saved. Click a marker to whisper.")
   end
   ns.RefreshGuildMapSettings(); panel:Show()
 end

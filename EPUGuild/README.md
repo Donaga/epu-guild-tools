@@ -197,8 +197,8 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 - Turn any of these off with `/epu tooltips`, `/epu markers`, `/epu donate`, `/epu notices` (officers: `/epu officernotices`). `/epu welcome` shows the welcome tips again.
 
 **Roster and News**
-- **Roster** lists every member with level, class, zone (when online) or when they were last seen. Filters: *Online*, *Near my level* (online and within 3 levels, for finding leveling partners) and a role dropdown. Click someone to whisper or invite them.
-- **My profile** (on the Roster page): tick Tank, Healer and/or DPS and add a short "looking for" note, like "LF Deadmines". Alts without their own profile show their main's.
+- **Roster** lists every member with level, class, zone (when online) or when they were last seen. Filters: *Online*, *Near level* (online and within 3 levels, for finding leveling partners), *My layer* and a role dropdown. Guildmates in your zone are tagged *same layer* or *other layer* (see Layers below). Click someone to whisper or invite them, or, when they're on another layer, to ask them for an invite so you can join it.
+- **Profile** (on the Roster page): tick Tank, Healer and/or DPS and add a short "looking for" note, like "LF Deadmines". Alts without their own profile show their main's.
 - **News** shows officer announcements, then guild milestones: every 10 levels, first mount, profession ranks (75/150/225/300), big donations (5g+, or 20+ of something the bank needs) and new members. Guildmates online get a pop-up; turn them off with `/epu milestones`. `/epu milestonechat` also announces your own in guild chat.
 - **Announcements** pop up for everyone the next time they log in, until they click Got it. Officers post them from News, or from Discord with `/announce`.
 
@@ -290,6 +290,20 @@ Showing world map markers and nearby minimap markers can be toggled separately.
 Click a marker to whisper; hover for name, level, class, zone, coordinates and update age.
 
 Both players need EPU 0.11 or newer, and the member being shown must have sharing on.
+
+### Layers (0.22.3+)
+
+Forever runs several copies (layers) of each zone, and the game has no setting that shows
+which one you're on. EPU works it out from NPCs: whenever you target or mouse over an NPC,
+or one's nameplate appears, its ID reveals your layer copy. That reading is shared with
+your location (same opt-out) and stays valid for five minutes.
+
+For guildmates in the same zone, the Roster shows **same layer** (green) or
+**other layer** (amber), the *My layer* filter lists only those you can see in the world,
+and map marker tooltips say the same. Both of you need 0.22.3+ and a recent NPC reading;
+otherwise no tag is shown. To join someone's layer, open their details and use
+**Ask to join their layer**: it whispers them for a group invite. Once grouped, accept
+the game's prompt to move to their layer. Layers only compare within one zone.
 Use **Use class icons** to choose circular class icons or class-colored round dots.
 Updates are approximate, at most once per 30 seconds while moving, with a 60-second
 heartbeat while stationary. Busy sync traffic takes priority. Markers expire after

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.3
+
+- The Roster shows which guildmates in your zone are on your layer: **same layer** in green or **other layer** in amber. EPU reads your layer from NPCs you target, mouse over or see nameplates for, and shares it with your map location (same opt-out).
+- A My layer filter lists only the guildmates you can actually meet in the world.
+- A guildmate's details show an Ask to join their layer button when they're on another layer. It whispers them for a group invite; accept the game's prompt once grouped to move over.
+- Map marker tooltips also say whether that guildmate is on your layer. Both players need 0.22.3 for layer tags; older versions keep working and simply show none.
+
 ## 0.22.2
 
 - Fixes 1 to 2 second freezes. When someone logged in behind on guild data, the officer (or a member passing data on) could freeze for over a second while preparing the reply; it now takes a fraction of a second.

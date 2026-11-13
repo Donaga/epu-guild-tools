@@ -1554,18 +1554,19 @@ end
 
 Views.roster = {
   label = "Roster", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", stateKey = "roster",
-  chips = { { "all", "All" }, { "online", "Online" }, { "near", "Near my level" } },
+  chips = { { "all", "All" }, { "online", "Online" }, { "near", "Near level", "Online and within 3 levels of you" },
+    { "layer", "My layer", "Online guildmates on your layer of this zone. Target or mouse over any NPC to detect yours." } },
   tools = function(bar)
-    UI.roleChip = DropChip(bar, 84, "Show one role", function()
+    UI.roleChip = DropChip(bar, 64, "Show one role", function()
       local items = { { label = "Any role", value = false } }
       for _, r in ipairs({ "t", "h", "d" }) do items[#items + 1] = { label = ns.ROLES[r], value = r } end
       return items
     end, function() return UI.state.roster.role or false end, function(v) UI.state.roster.role = v or nil end)
-    UI.reviewChip = DropChip(bar, 84, "Officers: members worth a look", function()
+    UI.reviewChip = DropChip(bar, 68, "Officers: members worth a look", function()
       return { { label = "Everyone", value = false }, { label = "Inactive " .. ns.INACTIVE_DAYS .. "+ days", value = "inactive" },
         { label = "Ready for promotion", value = "promote" }, { label = "Has an officer note", value = "note" } }
     end, function() return UI.state.roster.review or false end, function(v) UI.state.roster.review = v or nil end)
-    bar:Add(Btn(bar, "My profile", 80, 22), "right", function() UI:OpenDetails("profile", ns.me) end,
+    bar:Add(Btn(bar, "Profile", 60, 22), "right", function() UI:OpenDetails("profile", ns.me) end,
       "Your role and what you're looking for, shown to the guild")
   end,
   rows = function(g, q)
@@ -1576,6 +1577,7 @@ Views.roster = {
       local roles = prof and prof.roles or ""
       local ok = (st.filter == "all") or (st.filter == "online" and r.online)
         or (st.filter == "near" and r.online and name ~= ns.me and math.abs((r.level or 0) - myLevel) <= 3)
+        or (st.filter == "layer" and r.online and name ~= ns.me and ns.LayerOf and ns.LayerOf(name) == "same")
       if ok and st.role then ok = roles:find(st.role, 1, true) ~= nil end
       local rv = (officer and st.review) and ns.Review(name) or nil
       if ok and rv then
@@ -1586,6 +1588,9 @@ Views.roster = {
         local parts = { "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or "") }
         if r.online then
           if r.zone and r.zone ~= "" then parts[#parts + 1] = r.zone end
+          local where = name ~= ns.me and ns.LayerOf and ns.LayerOf(name)
+          if where == "same" then parts[#parts + 1] = "|cff4ade80same layer|r"
+          elseif where == "other" then parts[#parts + 1] = "|cffffb347other layer|r" end
         else
           parts[#parts + 1] = r.away and (r.away < 1 and "seen today" or ("seen " .. math.floor(r.away) .. "d ago")) or "offline"
         end
@@ -1614,7 +1619,7 @@ Views.roster = {
   footer = function()
     local n, on = 0, 0
     for _, r in pairs(ns.roster) do n = n + 1; if r.online then on = on + 1 end end
-    return n .. " members, " .. on .. " online. Set your role and what you're looking for under My profile."
+    return n .. " members, " .. on .. " online. Set your role and what you're looking for under Profile."
   end,
   empty = "Nobody matches. Try another filter.",
 }
@@ -1715,7 +1720,7 @@ local function NewBar(view)
     local b = bar:Add(probe, "left", function()
       UI.state[stateKey].filter = key
       UI:Refresh()
-    end)
+    end, ch[3])
     b.key, b.label = key, ch[2]
     bar.chips[#bar.chips + 1] = b
   end
@@ -2385,8 +2390,16 @@ function UI:FillDetails()
     det:Reset(nil, nil, ns.WhoLabel(key), "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or "")
       .. "  ·  " .. tostring(r.rankName or ""))
     SetColor(det.title, ClassColor(r.classFile))
+    local where = key ~= ns.me and r.online and ns.LayerOf and ns.LayerOf(key)
     if r.online then
       det:Text("|cff4ade80Online|r" .. ((r.zone and r.zone ~= "") and ("  ·  " .. r.zone) or ""))
+      if where == "same" then
+        det:Text("|cff4ade80Same layer as you|r")
+      elseif where == "other" then
+        det:Text("|cffffb347On another layer of " .. (r.zone or "this zone") .. "|r")
+      elseif key ~= ns.me and ns.guildLocations and ns.guildLocations[key] and ns.guildLocations[key].l and not ns.MyLayer() then
+        det:Text("Target or mouse over any NPC to compare layers with them.", C.muted)
+      end
     else
       det:Text("Offline" .. (r.away and ("  ·  last seen " .. (r.away < 1 and "today" or (math.floor(r.away) .. " days ago"))) or ""), C.muted)
     end
@@ -2404,6 +2417,14 @@ function UI:FillDetails()
     end
     det:Gap()
     local specs = { { "Whisper", function() if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. key .. " ") end end, accent = true } }
+    if where == "other" then
+      specs[#specs + 1] = { "Ask to join their layer", function()
+        if ChatFrame_OpenChat then
+          ChatFrame_OpenChat("/w " .. key .. " Could you invite me to a group so I can join your layer in "
+            .. (r.zone or "this zone") .. "? I'll accept the world refresh and leave the group after.")
+        end
+      end, tip = "Opens a whisper asking for a group invite. Once you're grouped, accept the game's world refresh prompt to move to their layer." }
+    end
     if key ~= ns.me then
       specs[#specs + 1] = { "Invite to group", function()
         local inv = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit
@@ -3045,7 +3066,7 @@ function UI:Refresh()
     end
     if v == Views.roster then
       local st = self.state.roster
-      self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Any role")
+      self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Role")
       self.roleChip:SetOn(st.role ~= nil)
       local labels = { inactive = "Inactive", promote = "Promote?", note = "Has note" }
       self.reviewChip:SetLabel(st.review and labels[st.review] or "Review")
