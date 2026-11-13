@@ -1,5 +1,13 @@
 # EPU Discord companion
 
+## Linking and class/rank roles (0.23)
+
+- **Linking by code.** `/link` gives each member a private code. They type `/epu link CODE` in game on any character. Every character on that WoW account links itself when it logs in with EPU 0.23+, and confirmed EPU alts (`/epu main` groups) come along. No officer step. The game only sends a scrambled form of code + character name, so guildmates can't tell from addon data which characters share an account. `/link character:` still asks an officer to approve by hand (`/approve_link`) for anyone who can't use the addon.
+- **Roles.** Linked members get a **class role** for each linked character's class and a **rank role** from their main's guild rank, but only for the ranks in `rank_roles` (default Veteran, Member, Initiate). Officer and GM ranks, and your `officer_role`, are never touched. The bot creates and manages only its own roles. If a role with the same name already exists, it leaves that role alone and says so in the officer log; rename it or take the rank out of `rank_roles`. Roles update after each officer save. If a refresh would take roles from more than 5 people (or 20% of linked members) at once, nothing is removed until an officer runs `/roles confirm`.
+  - Setup: give the bot **Manage Roles**, then in Server Settings → Roles drag the bot's role **above** the class and rank roles. Turn roles off with `"discord_roles": false` or `"class_roles": false`, or `"rank_roles": []`.
+- **Officer log.** Set `officer_log_channel_id` to an officers-only channel for joins, leaves, returns, promotions and demotions, level milestones (`level_milestones`, default 60), new links and link conflicts. A save that suddenly loses over a third of the roster is ignored as a bad read.
+- **Commands.** `/whois character` (who plays it, and their other characters), `/chars [member]`, `/main` (pick your main for the rank role; otherwise the in-game `/epu main` is used), `/roles` (officers: status, refresh now, confirm held removals), `/link_suggestions` (officers: link everyone whose Discord name matches an unlinked guild character with one button; needs **Server Members Intent** in the Developer Portal and `"members_intent": true`).
+
 ## Shared-folder volunteers and guild invitations (0.18)
 
 See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge.
@@ -41,7 +49,7 @@ It must run on an **officer's** PC. Members' addons ignore the inbox file, so no
 2. Open **Bot** → **Reset Token** → copy the token. Keep it secret; it's the bot's password.
 3. Open **OAuth2 → URL Generator**:
    - Scopes: `bot` and `applications.commands`
-   - Bot permissions: View Channels, Send Messages, Embed Links, Read Message History, Manage Messages (only used to pin the status post)
+   - Bot permissions: View Channels, Send Messages, Embed Links, Read Message History, Manage Messages (only used to pin the status post), Manage Roles (class and rank roles)
    - Open the generated URL and add the bot to your server.
 
 This needs its own bot. Don't reuse your One Ring bot's token, because two programs can't log in as the same bot.

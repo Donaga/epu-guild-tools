@@ -103,7 +103,7 @@ ns.On("GUILD_ROSTER_UPDATE", function()
   -- offline" box says, so we leave that setting alone (changing it from an
   -- addon can taint the guild window).
   wipe(ns.roster)
-  local names = {}
+  local names, info = {}, {}
   for i = 1, n do
     local name, rankName, rankIndex, level, class, zone, _, _, online, _, classFile = GetGuildRosterInfo(i)
     name = ns.Short(name)
@@ -116,11 +116,13 @@ ns.On("GUILD_ROSTER_UPDATE", function()
       ns.roster[name] = { rank = rankIndex, rankName = rankName, level = level, online = online,
         class = class, classFile = classFile, zone = zone, away = away }
       names[#names + 1] = name
+      info[name] = { c = classFile, cn = class, r = rankName, ri = rankIndex, l = level }
     end
   end
-  -- Saved so the Discord companion can match /link names to real characters.
+  -- Saved so the Discord companion can match /link names to real characters
+  -- and give class and rank roles. Never synced: every client sees the roster.
   local g = ns.G()
-  if g then g.members = names end
+  if g then g.members = names; g.memberInfo = info; g.memberInfoAt = ns.Now() end
   table.sort(names)
   local signature = table.concat(names, "\031")
   if signature ~= rosterSignature then rosterSignature = signature; ns.recipeIndex = nil end

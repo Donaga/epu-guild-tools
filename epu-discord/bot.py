@@ -26,6 +26,7 @@ from discord.ext import tasks
 
 import epu_core as core
 import shared_bridge as bridge
+import links_roles as lr
 from event_sync import EventSync, KINDS as EVENT_KINDS, time_zone_choices
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -71,6 +72,12 @@ def load_config() -> dict:
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
     cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
+    cfg.setdefault("discord_roles", True)         # give linked members class and rank roles (needs Manage Roles)
+    cfg.setdefault("class_roles", True)
+    cfg.setdefault("rank_roles", ["Veteran", "Member", "Initiate"])   # only these ranks; officer ranks stay manual
+    cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
+    cfg.setdefault("level_milestones", [60])
+    cfg.setdefault("members_intent", False)       # needed only for /link_suggestions (turn it on in the Developer Portal)
     cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
@@ -83,6 +90,8 @@ state = core.State(os.path.join(HERE, "state.json"))
 intents = discord.Intents.default()
 if cfg["import_channel_id"] or cfg["invite_requests_channel_id"]:
     intents.message_content = True   # needed to read the announcements channel (turn it on in the Developer Portal)
+if cfg["members_intent"]:
+    intents.members = True           # lets /link_suggestions read the server's member list
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 GUILD = discord.Object(id=int(cfg["server_id"]))
@@ -370,9 +379,9 @@ def help_embed() -> discord.Embed:
                     "Everything here also works in game with the **EPU Guild Tools** addon (`/epu`).",
         color=discord.Color.blurple())
     e.add_field(name="1. Link your character (once)", inline=False, value=(
-        "`/link character:` and pick your name from the list. Use your full name, e.g. *Donlock Gaeilge*.\n"
-        "An officer verifies each character with `/approve_link`. Your first approved link is your **main**. "
-        "Use `/link` for each alt; `/unlink` removes one."))
+        "`/link` gives you a code. In game, type `/epu link CODE` on any character. Every character on that WoW account, "
+        "plus your confirmed EPU alts, links itself, and you get class and rank roles. `/chars` lists yours, `/main` picks "
+        "your main, `/unlink` removes one. Can't use the addon? `/link character:` asks an officer instead."))
     e.add_field(name="2. Ask for something", inline=False, value=(
         "`/request item:` choose an item the bank currently holds or has stocked before, then "
         "set `qty:`. The picker shows stock and available quantities. Sold-out supplies can wait for restock; weapons and armor must be in stock. Add a `note:` for the officers, "
@@ -397,7 +406,8 @@ def help_embed() -> discord.Embed:
     e.add_field(name="Guild news", inline=False, value=(
         "Level-ups every 10 levels, first mounts, profession ranks, big donations and new members are posted here "
         "automatically. In game, the addon's **Roster** page shows who's online, their level and role, and who's "
-        "near your level. Set your role and what you're looking for under **My profile**."))
+        "near your level or on your layer. Set your role and what you're looking for under **Profile**. "
+        "`/whois` shows who plays a character."))
     e.add_field(name=f"Officers ({officer} role)", inline=False, value=(
         "`/announce` posts a guild announcement here and as a pop-up in game. Posts in the announcements channel "
         "are copied into the game too, and the in-game message of the day is mirrored here.\n"
@@ -592,6 +602,10 @@ async def refresh(gd: core.GuildData):
         await post_news(nid, e)
     if changes.get("motd"):
         await post_motd(changes["motd"])
+    try:
+        await sync_links_roles(gd)
+    except Exception as e:
+        explain(e, "update linked characters and roles", cfg.get("officer_log_channel_id") or cfg["channel_id"])
     if cfg["post_donations"] and changes["new_donations"]:
         ch = channel()
         for d in changes["new_donations"][:10]:
@@ -967,6 +981,136 @@ async def on_interaction(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------------------------
+# Linked characters, class/rank roles and the officer log
+# ---------------------------------------------------------------------------
+async def officer_log(lines: list[str]):
+    if not lines:
+        return
+    for line in lines:
+        log.info("Officer log: %s", line)
+    cid = cfg.get("officer_log_channel_id")
+    ch = client.get_channel(int(cid)) if cid else None
+    if ch is None:
+        return
+    chunk = ""
+    for line in lines[:60]:
+        if len(chunk) + len(line) + 1 > 1900:
+            await ch.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+            chunk = ""
+        chunk += line + "\n"
+    if chunk:
+        await ch.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+
+
+def onboarding_done(name: str, note: str):
+    state.data["inbox"].append({"id": "link-" + uuid.uuid4().hex, "kind": "checklist", "who": name,
+                                "step": "discord", "done": True, "note": note, "t": int(time.time())})
+
+
+async def sync_links_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    lines = []
+    linked = lr.process_links(gd, state)
+    for e in linked:
+        if e["kind"] == "linked":
+            onboarding_done(e["who"], "Discord linked with " + ("their code" if e["how"] == "code" else "a confirmed alt"))
+    if any(e["kind"] == "linked" for e in linked):
+        state.save(); flush_inbox()
+    lines += [lr.event_line(e) for e in linked]
+    # roster changes since the last save we read
+    cur = lr.member_info(gd)
+    stamp = gd.g.get("memberInfoAt")
+    if cur and stamp != state.data.get("roster_seen_at"):
+        events, ok = lr.roster_events(state.data.get("roster_seen"), cur, cfg["level_milestones"],
+                                      state.data.setdefault("roster_left", {}))
+        if ok:
+            state.data["roster_seen"], state.data["roster_seen_at"] = cur, stamp
+            lines += [lr.event_line(e) for e in events[:40]]
+            if len(events) > 40:
+                lines.append(f"…and {len(events) - 40} more roster changes.")
+        state.save()
+    result = await sync_roles(gd, confirm) if cfg["discord_roles"] and cur else {}
+    lines += result.get("lines", [])
+    await officer_log(lines)
+    return result
+
+
+async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    guild = client.get_guild(int(cfg["server_id"]))
+    if guild is None:
+        return {}
+    desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"])
+    managed = state.data.setdefault("managed_roles", {})
+    holders = state.data.setdefault("role_holders", {})
+    sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()), sorted(holders.items())])
+    if sig == state.data.get("roles_sig") and not confirm:
+        return {}
+    out_lines, warned = [], set(state.data.setdefault("role_name_warned", []))
+    roles = {}
+    for key in sorted(set().union(*desired.values()) if desired else set()):
+        role = guild.get_role(int(managed[key])) if key in managed else None
+        if role is None:
+            name = lr.role_name(key, gd)
+            if discord.utils.get(guild.roles, name=name) is not None:
+                if key not in warned:      # never take over a role a person made
+                    out_lines.append(f"⚠️ A role named **{name}** already exists and wasn't made by the bot, so I left it alone "
+                                     "and gave no one that role. Rename it, or remove the rank from `rank_roles`.")
+                    warned.add(key)
+                continue
+            role = await guild.create_role(name=name, mentionable=False, reason="EPU class/rank role")
+            managed[key] = str(role.id)
+        roles[key] = role
+    state.data["role_name_warned"] = sorted(warned)
+    by_id = {str(r.id): k for k, r in roles.items()}
+    for key, rid in managed.items():
+        if rid not in by_id and guild.get_role(int(rid)) is not None:
+            by_id[rid] = key
+    current, people = {}, {}
+    for uid in set(desired) | set(holders):
+        try:
+            m = guild.get_member(int(uid)) or await guild.fetch_member(int(uid))
+        except discord.NotFound:
+            holders.pop(uid, None)
+            continue
+        people[uid] = m
+        current[uid] = {by_id[str(r.id)] for r in m.roles if str(r.id) in by_id}
+    desired = {u: {k for k in ks if k in roles} for u, ks in desired.items() if u in people}
+    adds, removes = lr.plan_changes(desired, current)
+    held = bool(removes) and not confirm and lr.needs_confirmation(removes, len(desired))
+    if held:
+        if state.data.get("roles_held") != len(removes):
+            out_lines.append(lr.event_line({"kind": "roles_held", "n": len(removes)}))
+        state.data["roles_held"] = len(removes)
+        removes = {}
+    else:
+        state.data.pop("roles_held", None)
+    for uid, keys in adds.items():
+        await people[uid].add_roles(*[roles[k] for k in keys], reason="EPU linked characters")
+    for uid, keys in removes.items():
+        objs = [guild.get_role(int(managed[k])) for k in keys if k in managed]
+        objs = [r for r in objs if r is not None]
+        if objs:
+            await people[uid].remove_roles(*objs, reason="EPU linked characters")
+    for uid in people:
+        have = (current.get(uid, set()) | adds.get(uid, set())) - removes.get(uid, set())
+        if have:
+            holders[uid] = sorted(have)
+        else:
+            holders.pop(uid, None)
+    if not held:
+        state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"]).items()),
+                                                   sorted(managed.items()), sorted(holders.items())])
+    state.save()
+    return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())), "held": held}
+
+
+def describe_char(gd: core.GuildData | None, name: str) -> str:
+    v = lr.member_info(gd).get(name) if gd else None
+    if not v:
+        return f"{name} (not in the guild roster)"
+    return f"{name}: level {v.get('l', '?')} {v.get('cn') or v.get('c') or ''}, {v.get('r', '?')}".replace("  ", " ")
+
+
+# ---------------------------------------------------------------------------
 # Slash commands
 # ---------------------------------------------------------------------------
 async def member_autocomplete(interaction: discord.Interaction, current: str):
@@ -990,26 +1134,32 @@ async def unlink_cmd(interaction: discord.Interaction, character: str):
     await interaction.response.send_message(f"Unlinked {character}. Your characters now: {left}.", ephemeral=True)
 
 
-@tree.command(name="link", description="Link a WoW character (main or alt) to your Discord account", guild=GUILD)
-@app_commands.describe(character="Your character's full name, e.g. Drie Stonefist. Your first link is your main.")
+@tree.command(name="link", description="Link your WoW characters to your Discord account", guild=GUILD)
+@app_commands.describe(character="Optional: can't use the addon? Name a character and an officer approves it instead.")
 @app_commands.autocomplete(character=member_autocomplete)
-async def link_cmd(interaction: discord.Interaction, character: str):
-    gd = read_latest()
-    name, candidates = gd.resolve_member(character) if gd else (None, [])
-    if name is None and candidates:
-        await interaction.response.send_message(
-            "More than one guild member has that first name: " + ", ".join(candidates) + ". Use your full name.", ephemeral=True)
-        return
-    if name is None:
-        await interaction.response.send_message("No matching guild member. An officer must first save a current roster.", ephemeral=True)
-        return
-    try:
-        state.request_link(interaction.user.id, name)
-    except ValueError as e:
-        await interaction.response.send_message(str(e), ephemeral=True)
-        return
-    await interaction.response.send_message(
-        f"Link pending for **{name}**. Ask an officer to verify your character and use `/approve_link user: character:`. Each character is approved separately.", ephemeral=True)
+async def link_cmd(interaction: discord.Interaction, character: str | None = None):
+    code = lr.show_code(lr.code_for(state, interaction.user.id))
+    msg = (f"Your link code: **{code}**\n"
+           f"In game, on any of your characters, type `/epu link {code}`. Every character on that WoW account then links "
+           "itself when it logs in, and your confirmed EPU alts come along too. It shows up here after an officer's next "
+           "save (usually within a day). Needs EPU 0.23 or newer. Keep the code to yourself.")
+    if character:
+        gd = read_latest()
+        name, candidates = gd.resolve_member(character) if gd else (None, [])
+        if name is None and candidates:
+            await interaction.response.send_message(
+                "More than one guild member has that first name: " + ", ".join(candidates) + ". Use your full name.", ephemeral=True)
+            return
+        if name is None:
+            await interaction.response.send_message("No matching guild member. An officer must first save a current roster.", ephemeral=True)
+            return
+        try:
+            state.request_link(interaction.user.id, name)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+        msg += f"\n\nAlso asked an officer to approve **{name}** by hand (`/approve_link`), in case you can't use the code."
+    await interaction.response.send_message(msg, ephemeral=True)
 
 
 @tree.command(name="approve_link", description="Officers: verify and approve a pending character link", guild=GUILD)
@@ -1195,6 +1345,130 @@ def check_channel(cid) -> None:
         log.info("Posting in #%s: permissions OK", ch.name)
 
 
+@tree.command(name="whois", description="Who in Discord plays a WoW character, and their other characters", guild=GUILD)
+@app_commands.autocomplete(character=member_autocomplete)
+async def whois_cmd(interaction: discord.Interaction, character: str):
+    gd = read_latest()
+    name, _ = gd.resolve_member(character) if gd else (None, [])
+    name = name or character
+    uid = lr.owner_of(state, name)
+    if not uid:
+        main = gd.main_of(name) if gd else name
+        extra = f" Their main is **{main}**." if main != name else ""
+        await interaction.response.send_message(f"**{name}** isn't linked to a Discord account yet.{extra}", ephemeral=True)
+        return
+    chars = state.characters_for(int(uid))
+    lines = [describe_char(gd, c) for c in chars]
+    await interaction.response.send_message(f"**{name}** is <@{uid}>. Their characters:\n" + "\n".join("• " + l for l in lines),
+                                            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
+@tree.command(name="chars", description="List the WoW characters linked to a Discord member (you by default)", guild=GUILD)
+async def chars_cmd(interaction: discord.Interaction, member: discord.Member | None = None):
+    who = member or interaction.user
+    chars = state.characters_for(who.id)
+    if not chars:
+        hint = " Use `/link` to get a code." if who == interaction.user else ""
+        await interaction.response.send_message(f"No linked characters for {who.mention}.{hint}", ephemeral=True,
+                                                allowed_mentions=discord.AllowedMentions.none())
+        return
+    gd = read_latest()
+    main = lr.main_for(gd, state, who.id) if gd else chars[0]
+    chars = [main] + [c for c in chars if c != main] if main in chars else chars
+    lines = [("⭐ " if c == main else "• ") + describe_char(gd, c) for c in chars]
+    await interaction.response.send_message(f"{who.mention}'s characters (⭐ main):\n" + "\n".join(lines), ephemeral=True,
+                                            allowed_mentions=discord.AllowedMentions.none())
+
+
+@tree.command(name="main", description="Choose which of your linked characters is your main (sets your rank role)", guild=GUILD)
+@app_commands.autocomplete(character=my_chars_autocomplete)
+async def main_cmd(interaction: discord.Interaction, character: str):
+    chars = state.characters_for(interaction.user.id)
+    if character not in chars:
+        await interaction.response.send_message("That isn't one of your linked characters. See `/chars`.", ephemeral=True)
+        return
+    state.data.setdefault("mains", {})[str(interaction.user.id)] = character
+    state.save()
+    await interaction.response.send_message(f"**{character}** is now your main in Discord (this overrides `/epu main` here). "
+                                            "Roles update at the next refresh.", ephemeral=True)
+    state.data.pop("roles_sig", None)
+
+
+@tree.command(name="roles", description="Officers: class/rank role status, refresh now, or confirm a held removal", guild=GUILD)
+@app_commands.choices(action=[app_commands.Choice(name="Status", value="status"), app_commands.Choice(name="Refresh now", value="sync"),
+                              app_commands.Choice(name="Confirm held removals", value="confirm")])
+async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choice[str]):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message("Only officers can manage roles.", ephemeral=True)
+        return
+    gd = read_latest()
+    if action.value == "status" or gd is None:
+        linked = sum(1 for c in state.data["links"].values() if c)
+        held = state.data.get("roles_held")
+        managed = ", ".join(f"<@&{r}>" for r in state.data.get("managed_roles", {}).values()) or "none yet"
+        await interaction.response.send_message(
+            f"Linked members: **{linked}**. Roles I manage: {managed}.\nRank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
+            f"class roles: {'on' if cfg['class_roles'] else 'off'}." + (f"\n⏸️ Holding back removals for **{held}** people; use Confirm if that's right." if held else ""),
+            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        return
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    state.data.pop("roles_sig", None)
+    try:
+        result = await sync_links_roles(gd, confirm=action.value == "confirm")
+    except discord.Forbidden:
+        await interaction.followup.send("Discord refused. Give the bot **Manage Roles** and drag its role above the class and rank roles "
+                                        "(Server Settings > Roles).", ephemeral=True)
+        return
+    await interaction.followup.send(f"Done: {result.get('added', 0)} role(s) given, {result.get('removed', 0)} removed."
+                                    + (" Removals are still held; use Confirm." if result.get("held") else ""), ephemeral=True)
+
+
+class SuggestView(discord.ui.View):
+    def __init__(self, pairs):
+        super().__init__(timeout=900)
+        self.pairs = pairs
+
+    @discord.ui.button(label="Link all of these", style=discord.ButtonStyle.success)
+    async def link_all(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_officer(interaction.user):
+            await interaction.response.send_message("Only officers can approve links.", ephemeral=True)
+            return
+        out = []
+        for uid, name in self.pairs:
+            if lr.owner_of(state, name) is None:
+                lr._link(state, uid, name, "nickname", out)
+                onboarding_done(name, "Discord linked by nickname match, approved by an officer")
+        state.save(); flush_inbox()
+        button.disabled = True
+        await interaction.response.edit_message(content=f"Linked {len(out)} member(s). Their alts and roles follow at the next refresh.", view=self)
+        await officer_log([lr.event_line(e) for e in out])
+        state.data.pop("roles_sig", None)
+
+
+@tree.command(name="link_suggestions", description="Officers: link unlinked members whose Discord name matches a guild character", guild=GUILD)
+async def link_suggestions_cmd(interaction: discord.Interaction):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message("Only officers can approve links.", ephemeral=True)
+        return
+    if not cfg["members_intent"]:
+        await interaction.response.send_message(
+            "This needs the server member list. In the Discord Developer Portal > your bot > Bot, turn on **Server Members Intent**, "
+            "then set `\"members_intent\": true` in config.json and restart the bot.", ephemeral=True)
+        return
+    gd = read_latest()
+    guild = interaction.guild
+    people = [(str(m.id), m.display_name) for m in guild.members if not m.bot] if guild else []
+    pairs = lr.nickname_matches(gd, state, people) if gd else []
+    if not pairs:
+        await interaction.response.send_message("No unlinked members have a Discord name matching a guild character.", ephemeral=True)
+        return
+    shown = pairs[:40]
+    text = "\n".join(f"• <@{u}> → **{n}**" for u, n in shown)
+    more = f"\n…and {len(pairs) - 40} more after these." if len(pairs) > 40 else ""
+    await interaction.response.send_message(f"Check these, then link them all at once:\n{text}{more}", view=SuggestView(shown),
+                                            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+
 @client.event
 async def on_ready():
     await tree.sync(guild=GUILD)
@@ -1221,6 +1495,9 @@ if __name__ == "__main__":
     try:
         client.run(cfg["token"], log_handler=None)
     except discord.errors.PrivilegedIntentsRequired:
+        if cfg["members_intent"]:
+            sys.exit("members_intent is on, but the bot's Server Members Intent is off. Developer Portal > your application > Bot > "
+                     "Privileged Gateway Intents > turn on SERVER MEMBERS INTENT > Save. Or set members_intent to false.")
         sys.exit("To read announcement/invite-request messages the bot needs the Message Content Intent.\n"
                  "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
                  "Or leave import_channel_id and invite_requests_channel_id blank to disable message imports.")

@@ -5,7 +5,7 @@ local DEFAULTS = {
   addon={title="Install EPU Guild Tools",text="Open /epu and check that guild data has synced."},
   identity={title="Confirm your main and alts",text="Log onto each character with the addon; use /epu main to choose your main."},
   professions={title="Share your professions",text="Open your profession windows to share recipes with the guild."},
-  discord={title="Link Discord",text="Use /link in Discord and ask an officer to approve it.",officer=true},
+  discord={title="Link Discord",text="Use /link in Discord, then type /epu link CODE in game.",officer=true},
   starterkit={title="Receive your starter kit",text="Ask an officer about starter bags or profession supplies. Delivery is tracked in Projects.",officer=true},
   mentor={title="Meet your mentor",text="An officer can assign a mentor and record starter supplies here.",officer=true},
 }

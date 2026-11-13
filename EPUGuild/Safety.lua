@@ -267,6 +267,7 @@ ns.Merge = function(sender, b, catchingUp)
   if ns.MergeCommunity and ns.MergeCommunity(sender,b,trusted) then result=true end
   if ns.MergeGuildFocus and ns.MergeGuildFocus(sender,b,trusted) then result=true end
   if ns.MergeGatherSpots and ns.MergeGatherSpots(sender,b,trusted) then result=true end
+  if ns.MergeDiscordClaims and ns.MergeDiscordClaims(sender,b,trusted) then result=true end
   return result or changed
 end
 

@@ -366,6 +366,7 @@ local HELP = {
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
+  "|cffffd100/epu link <code>|r - link your characters to Discord with the code from /link there; /epu link off stops",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
@@ -435,6 +436,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.ShowGatheringMarket()
   elseif cmd == "route" then
     ns.GatheringRouteCommand(args)
+  elseif cmd == "link" then
+    ns.DiscordLinkCommand(args)
   elseif cmd == "sharespots" then
     if args ~= "on" and args ~= "off" then return ns.Print("Usage: /epu sharespots on|off") end
     ns.SetSpotSharing(args == "on")
