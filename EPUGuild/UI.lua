@@ -1096,7 +1096,7 @@ function UI.BankSortRows(q)
   end
   section("Recipes to hand out", plan.recipes, "Best guildmate for each pattern in the bank or mail", function(r)
     local who = r.give
-    local sub = (r.best and "|cff4ade80Give to " or r.maybe and "|cfff2c14eMaybe " or "|cff9aa1abClosest: ") .. First(who.who) .. "|r"
+    local sub = (r.best and "|cff4ade80Give to " or r.maybe and "|cfff2c14eMaybe " or r.unverified and "|cfff2c14eCheck with " or "|cff9aa1abClosest: ") .. First(who.who) .. "|r"
       .. " (" .. tostring(r.prof) .. " " .. who.skill .. ", " .. r.why .. ")" .. (r.need and ("  ·  needs " .. r.need) or "")
     return row(r, sub, r.count > 1 and tostring(r.count) or nil)
   end)
@@ -2825,7 +2825,7 @@ function UI:FillDetails()
       if r.reason then det:Text(r.reason .. ". Worth " .. Money(r.unit) .. " each.") end
       for i, c in ipairs(r.candidates) do
         if i > 8 then det:Text("…and " .. (#r.candidates - 8) .. " more", C.muted); break end
-        local status = c.knows and "|cff9aa1abknows it|r" or not c.scanned and "|cfff2c14ehasn't shared recipes|r"
+        local status = c.knows and "|cff9aa1abknows it|r" or not r.need and "|cfff2c14erequired skill unknown|r" or not c.scanned and "|cfff2c14ehasn't shared recipes|r"
           or c.canLearn and "|cff4ade80can learn it|r" or "|cffff6b6bskill too low|r"
         det:Text((c.designated and STAR or "") .. c.who .. "  " .. c.skill .. "  ·  " .. status .. (c.online and "  ·  |cff4ade80online|r" or ""))
         if not c.knows and c.canLearn then mail(c.who, 1) end

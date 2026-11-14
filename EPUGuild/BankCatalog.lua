@@ -148,12 +148,19 @@ local function Candidates(prof, entry, need)
       local scanned = rec and rec.profs and rec.profs[prof] ~= nil
       out[#out + 1] = {
         who = who, skill = skill, knows = knows[who] == true, scanned = scanned or knows[who] == true,
-        canLearn = not need or skill >= need, designated = ns.IsDesignated(who, prof),
+        canLearn = need ~= nil and skill >= need, designated = ns.IsDesignated(who, prof),
         online = ns.roster[who] ~= nil and ns.roster[who].online == true,
       }
     end
   end
+  local function priority(c)
+    if c.knows then return 4 end
+    if c.canLearn and c.scanned then return 0 end
+    if c.canLearn then return 1 end
+    return need and 2 or 3
+  end
   table.sort(out, function(a, b)
+    if priority(a) ~= priority(b) then return priority(a) < priority(b) end
     if a.skill ~= b.skill then return a.skill > b.skill end
     if a.designated ~= b.designated then return a.designated end
     if a.online ~= b.online then return a.online end
@@ -235,17 +242,19 @@ function ns.BankSortPlan()
       prof = prof or subType
       local entry = ns.RecipeByName(name:match("^[^:]+:%s*(.+)$") or name)
       local list = Candidates(prof, entry, need)
-      local best, maybe, closest, everyone = nil, nil, nil, #list > 0
+      local best, maybe, closest, unknown, everyone = nil, nil, nil, nil, #list > 0
       for _, c in ipairs(list) do
         if not c.knows then everyone = false end
         if c.canLearn and not c.knows and c.scanned and not best then best = c end
         if c.canLearn and not c.scanned and not maybe then maybe = c end
-        if not c.canLearn and not c.knows and not closest then closest = c end
+        if need and not c.canLearn and not c.knows and not closest then closest = c end
+        if not need and not c.knows and not unknown then unknown = c end
       end
       local r = setmetatable({prof = prof, need = need, candidates = list, best = best, maybe = maybe, closest = closest}, {__index = base})
-      if best or maybe or closest then
-        r.give = best or maybe or closest
-        r.why = best and "doesn't know it" or maybe and "hasn't shared recipes yet" or ("needs " .. need .. ", has " .. closest.skill)
+      if best or maybe or closest or unknown then
+        r.give = best or maybe or closest or unknown
+        r.unverified = unknown ~= nil and not best and not maybe and not closest
+        r.why = best and "doesn't know it" or maybe and "hasn't shared recipes yet" or closest and ("needs " .. need .. ", has " .. closest.skill) or "required skill unknown; verify before sending"
         plan.recipes[#plan.recipes + 1] = r
         placed = true
       elseif everyone then

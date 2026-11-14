@@ -42,6 +42,9 @@ A.ex("""__keep=__ns.G().recipes["Chris Stone"]; __ns.G().recipes["Chris Stone"]=
 check("someone who hasn't shared recipes ranks after a confirmed candidate",
       A.ev('__find("recipes",30010).give.who') == 'Pip Baker'
       and A.ev('(function() for _,c in ipairs(__find("recipes",30010).candidates) do if c.who=="Chris Stone" then return not c.scanned end end end)()'))
+A.ex("__ns.UI:Show(); __ns.UI.bankPlan=nil; __ns.UI:OpenDetails('banksort',30010)")
+check("details put a confirmed learner ahead of an unscanned higher-skill guildmate",
+      A.ev("(function() for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() then return b.text:GetText() end end end)()") == "Mail to Pip")
 A.ex("""__ns.G().recipes["Chris Stone"]=__keep; __ns.recipeIndex=nil""")
 A.ex("__ns.UI:Show(); __ns.UI:SetView('bank'); __ns.UI.state.bank.mode='sort'; __ns.UI.bankPlan=nil; __ns.UI:Refresh()")
 rows = A.ev('''(function() local t={}
@@ -102,6 +105,40 @@ A.ex("__mailSlots={}; SendMailNameEditBox:SetText(''); __ns.MailBankItem('Pip Ba
 check('a later mail cannot spend the protected remainder',A.ev('__mailAmount()')==0)
 check('mail preparation does not fulfill the reserved request',
       A.ev('__ns.G().requests.reserved.status')=='approved')
+
+
+# Missing requirement metadata is uncertainty, not permission to learn.
+A.ex("""
+__ITEMS[30016]='Pattern: Unverified Robe'; __cls[30016]={9,'Tailoring'}
+__ns.G().bank['Epu Bank'].items[30016]=1
+__oldTooltip=C_TooltipInfo.GetItemByID
+C_TooltipInfo.GetItemByID=function(id)
+  if id==30016 then return {lines={{leftText='Pattern: Unverified Robe'}}} end
+  return __oldTooltip(id)
+end
+__ns.recipeIndex=nil; __plan=__ns.BankSortPlan()
+""")
+check('unknown required skill produces an unverified recommendation',
+      A.ev('__find("recipes",30016).unverified') and A.ev('__find("recipes",30016).best') is None)
+check('unknown requirement never marks a candidate as able to learn',
+      A.ev('(function() for _,c in ipairs(__find("recipes",30016).candidates) do if c.canLearn then return false end end return true end)()'))
+check('unverified recipe is retained rather than treated as an unwanted sell item',
+      A.ev('__find("sell",30016)') is None)
+A.ex("__ns.UI.bankPlan=nil; __ns.UI:OpenDetails('banksort',30016)")
+check('unverified recipe details offer no automatic mail recommendation',
+      A.ev('(function() for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() and b.text:GetText():find("Mail to",1,true) then return false end end return true end)()'))
+check('unverified recipe row asks for a check rather than claiming learnability',
+      A.ev('(function() for _,r in ipairs(__ns.UI.BankSortRows("")) do if r.item==30016 then return r.sub:find("Check with",1,true)~=nil and r.sub:find("required skill unknown",1,true)~=nil end end return false end)()'))
+A.ex("""
+C_TooltipInfo.GetItemByID=function(id)
+  if id==30016 then return {lines={{leftText='Requires Tailoring (80)'}}} end
+  return __oldTooltip(id)
+end
+__plan=__ns.BankSortPlan()
+""")
+check('newly available requirement metadata restores a verified recommendation',
+      A.ev('__find("recipes",30016).best.who')=='Chris Stone' and not A.ev('__find("recipes",30016).unverified'))
+check('recipe recommendation changes produce no runtime errors',(A.ev('__errors') or 0)==0)
 
 print('Bank sort tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)
