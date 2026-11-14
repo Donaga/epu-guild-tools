@@ -1063,12 +1063,27 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None)
     managed = state.data.setdefault("managed_roles", {})
     holders = state.data.setdefault("role_holders", {})
-    sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()), sorted(holders.items())])
+    def role_safety():
+        # Revalidate cached IDs too: a server admin may have changed permissions,
+        # the officer role or role hierarchy since the last successful sync.
+        return {key: adopt_problem(guild, role)
+                for key, rid in managed.items()
+                if (role := guild.get_role(int(rid))) is not None}
+
+    safety = role_safety()
+    blocked = {key for key, problem in safety.items() if problem}
+    sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()),
+                           sorted(holders.items()), sorted(safety.items())])
     if sig == state.data.get("roles_sig") and not confirm:
         return {}
     out_lines, warned = [], set(state.data.setdefault("role_name_warned", []))
+    for key in sorted(blocked):
+        out_lines.append(f"⚠️ Left managed role **{guild.get_role(int(managed[key])).name}** alone because {safety[key]}. "
+                         "No members were added to or removed from this role.")
     roles = {}
     for key in sorted(set().union(*desired.values()) if desired else set()):
+        if key in blocked:
+            continue
         role = guild.get_role(int(managed[key])) if key in managed else None
         if role is None:
             name = lr.role_name(key, gd)
@@ -1109,6 +1124,9 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         current[uid] = {by_id[str(r.id)] for r in m.roles if str(r.id) in by_id}
     desired = {u: {k for k in ks if k in roles} for u, ks in desired.items() if u in people}
     adds, removes = lr.plan_changes(desired, current)
+    # Keep unsafe roles and their holder bookkeeping untouched, even when a
+    # key is no longer desired. Confirmation never bypasses this safety gate.
+    removes = {uid: keys - blocked for uid, keys in removes.items() if keys - blocked}
     # Someone with no linked characters keeps roles that were yours to begin with.
     adopted = set(state.data.get("adopted_roles", []))
     for uid in list(removes):
@@ -1139,7 +1157,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
             holders.pop(uid, None)
     if not held:
         state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
-                                                   sorted(managed.items()), sorted(holders.items())])
+                                                   sorted(managed.items()), sorted(holders.items()), sorted(role_safety().items())])
     state.save()
     return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())), "held": held}
 
