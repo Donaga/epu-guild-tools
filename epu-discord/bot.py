@@ -1142,20 +1142,34 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         removes = {}
     else:
         state.data.pop("roles_held", None)
-    for uid, keys in adds.items():
-        await people[uid].add_roles(*[roles[k] for k in keys], reason="EPU linked characters")
-    for uid, keys in removes.items():
-        objs = [guild.get_role(int(managed[k])) for k in keys if k in managed]
-        objs = [r for r in objs if r is not None]
-        if objs:
-            await people[uid].remove_roles(*objs, reason="EPU linked characters")
+    skipped_unsafe = False
+    for changes, method in ((adds, "add_roles"), (removes, "remove_roles")):
+        for uid, keys in changes.items():
+            applied = set()
+            for key in sorted(keys):
+                # Member fetches and previous Discord writes yield to gateway
+                # updates. Resolve the ID again immediately before EACH write.
+                role = guild.get_role(int(managed[key])) if key in managed else None
+                problem = adopt_problem(guild, role) if role is not None else "it no longer exists"
+                if problem:
+                    skipped_unsafe = True
+                    if key not in blocked:
+                        out_lines.append(f"⚠️ Stopped changing role **{getattr(role, 'name', key)}** because {problem}.")
+                        blocked.add(key)
+                    continue
+                await getattr(people[uid], method)(role, reason="EPU linked characters")
+                applied.add(key)
+            changes[uid] = applied
     for uid in people:
         have = (current.get(uid, set()) | adds.get(uid, set())) - removes.get(uid, set())
         if have and state.characters_for(int(uid)):
             holders[uid] = sorted(have)
         else:
             holders.pop(uid, None)
-    if not held:
+    if held or skipped_unsafe or role_safety() != safety:
+        # Never cache a safety state that was not used for this sync's plan.
+        state.data.pop("roles_sig", None)
+    else:
         state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
                                                    sorted(managed.items()), sorted(holders.items()), sorted(role_safety().items())])
     state.save()
