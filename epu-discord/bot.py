@@ -1009,7 +1009,18 @@ def onboarding_done(name: str, note: str):
                                 "step": "discord", "done": True, "note": note, "t": int(time.time())})
 
 
+def rejected_roster() -> dict:
+    return {"lines": ["⚠️ Role sync paused: this snapshot lost over a third of the accepted guild roster. "
+                      "Read a complete roster before retrying; confirmation cannot override this safety check."],
+            "added": 0, "removed": 0, "held": True, "roster_held": True}
+
+
 async def sync_links_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    cur = lr.member_info(gd)
+    if not lr.roster_trusted(state.data.get("roster_seen"), cur):
+        result = rejected_roster()
+        await officer_log(result["lines"])
+        return result
     lines = []
     linked = lr.process_links(gd, state)
     for e in linked:
@@ -1057,9 +1068,14 @@ def adopt_problem(guild, role) -> str | None:
 
 
 async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    if not lr.roster_trusted(state.data.get("roster_seen"), lr.member_info(gd)):
+        return rejected_roster()
     guild = client.get_guild(int(cfg["server_id"]))
     if guild is None:
         return {}
+    migration_problem = lr.migrate_member_role(state, cfg["member_role"] or None)
+    if migration_problem:
+        return {"lines": ["⚠️ Role sync paused: " + migration_problem], "added": 0, "removed": 0, "held": True, "migration_held": True}
     desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None)
     managed = state.data.setdefault("managed_roles", {})
     holders = state.data.setdefault("role_holders", {})
@@ -1491,6 +1507,10 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
     except discord.Forbidden:
         await interaction.followup.send("Discord refused. Give the bot **Manage Roles** and drag its role above the class and rank roles "
                                         "(Server Settings > Roles).", ephemeral=True)
+        return
+    if result.get("roster_held") or result.get("migration_held"):
+        await interaction.followup.send("\n".join(result["lines"]), ephemeral=True,
+                                        allowed_mentions=discord.AllowedMentions.none())
         return
     await interaction.followup.send(f"Done: {result.get('added', 0)} role(s) given, {result.get('removed', 0)} removed."
                                     + (" Removals are still held; use Confirm." if result.get("held") else ""), ephemeral=True)

@@ -267,5 +267,112 @@ for phase in ("fetch", "add", "remove"):
           all(("member:Member" in saved.data["role_holders"].get(str(uid), []))
               == (role in member.roles) for uid, member in server.members_by.items()))
 
+
+# Upgrade legacy rank:Member bookkeeping without replacing/removing its role.
+for already_new in (False, True):
+    bot.cfg.update(member_role="Member", rank_roles=["Veteran", "Initiate"], class_roles=False,
+                   officer_role="Officer", adopt_existing_roles="none")
+    server = Guild()
+    role = server.get_role(2)
+    member = server.members_by[970] = Member(970)
+    member.roles = [role]
+    saved = core.State(os.path.join(WOW, "migration-" + str(already_new) + ".json"))
+    saved.link(970, "Tyler Baker")
+    saved.data.update(managed_roles={"rank:Member": "2"}, role_holders={"970": ["rank:Member"]},
+                      adopted_roles=["rank:Member"], role_name_warned=["rank:Member"], roles_sig="old")
+    if already_new:
+        saved.data["managed_roles"]["member:Member"] = "2"
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    result = asyncio.run(bot.sync_roles(gd))
+    check("migration preserves Discord role and performs no role writes " + str(already_new),
+          result["added"] == result["removed"] == 0 and member.roles == [role]
+          and saved.data["managed_roles"] == {"member:Member": "2"})
+    check("migration updates holders, adoption and warnings " + str(already_new),
+          saved.data["role_holders"]["970"] == ["member:Member"]
+          and saved.data["adopted_roles"] == saved.data["role_name_warned"] == ["member:Member"])
+    before = json.dumps(saved.data, sort_keys=True)
+    check("migration is idempotent " + str(already_new),
+          lr.migrate_member_role(saved, "Member") is None and json.dumps(saved.data, sort_keys=True) == before)
+    saved.data["links"]["970"] = []
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check("migrated adopted role survives unlink " + str(already_new), member.roles == [role])
+
+saved.data["managed_roles"] = {"rank:Member": "2", "member:Member": "3"}
+before = json.dumps(saved.data, sort_keys=True)
+result = asyncio.run(bot.sync_roles(gd, confirm=True))
+check("conflicting role IDs fail closed without altering state",
+      result["held"] and result["added"] == result["removed"] == 0
+      and json.dumps(saved.data, sort_keys=True) == before and member.roles == [role])
+
+# A rejected partial roster must not reach role/link sync, even for a small group,
+# an unchanged timestamp, an explicit confirmation, or a direct sync_roles call.
+bot.cfg.update(member_role="Member", rank_roles=[], class_roles=False, discord_roles=True)
+server = Guild()
+role = server.get_role(2)
+saved = core.State(os.path.join(WOW, "roster-gate.json"))
+full_info = {"Tyler Baker": {"r": "Member"}, "Chris Stone": {"r": "Member"}}
+gd.g["memberInfo"] = full_info
+gd.g["memberInfoAt"] = 10
+gd.g["discordClaims"] = {}
+gd.g["alts"] = {}
+saved.data.update(roster_seen=full_info.copy(), roster_seen_at=10,
+                  managed_roles={"member:Member": "2"}, role_holders={})
+for uid, char in ((980, "Tyler Baker"), (981, "Chris Stone")):
+    saved.link(uid, char)
+    server.members_by[uid] = Member(uid)
+    server.members_by[uid].roles = [role]
+    saved.data["role_holders"][str(uid)] = ["member:Member"]
+bot.state = saved
+bot.client.get_guild = lambda i: server
+logged = []
+async def capture_log(lines): logged.extend(lines)
+bot.officer_log = capture_log
+original_links = lr.process_links
+def unexpected_links(*args):
+    raise AssertionError("Rejected roster reached link processing")
+lr.process_links = unexpected_links
+for stamp in (10, 11):
+    for remaining in ({}, {"Tyler Baker": full_info["Tyler Baker"]}):
+        gd.g["memberInfo"], gd.g["memberInfoAt"] = remaining, stamp
+        before = json.dumps(saved.data, sort_keys=True)
+        for sync in (bot.sync_links_roles, bot.sync_roles):
+            result = asyncio.run(sync(gd, confirm=True))
+            check("rejected roster blocks " + sync.__name__ + " stamp=" + str(stamp) + " size=" + str(len(remaining)),
+                  result.get("roster_held") and result["added"] == result["removed"] == 0
+                  and json.dumps(saved.data, sort_keys=True) == before
+                  and all(m.roles == [role] for m in server.members_by.values()))
+lr.process_links = original_links
+gd.g["memberInfo"], gd.g["memberInfoAt"] = full_info, 12
+server.members_by[981].roles = []
+result = asyncio.run(bot.sync_links_roles(gd))
+check("complete roster resumes role sync",
+      not result.get("roster_held") and role in server.members_by[981].roles
+      and saved.data["roster_seen_at"] == 12)
+
+
+# /roles must explain non-confirmable holds instead of directing users to Confirm.
+from types import SimpleNamespace
+original_sync_links = bot.sync_links_roles
+original_read_latest, original_is_officer = bot.read_latest, bot.is_officer
+bot.read_latest = lambda: gd
+bot.is_officer = lambda user: True
+for flag, reason in (("roster_held", "Read a complete roster before retrying"),
+                     ("migration_held", "Resolve their managed role IDs before syncing")):
+    messages = []
+    async def defer(**kw): pass
+    async def send(content, **kw): messages.append((content, kw))
+    async def blocked_sync(*args, **kw):
+        return {"lines": [reason], "added": 0, "removed": 0, "held": True, flag: True}
+    bot.sync_links_roles = blocked_sync
+    interaction = SimpleNamespace(user=object(), response=SimpleNamespace(defer=defer),
+                                  followup=SimpleNamespace(send=send))
+    asyncio.run(bot.roles_cmd.callback(interaction, SimpleNamespace(value="confirm")))
+    check("/roles surfaces non-confirmable " + flag + " reason",
+          len(messages) == 1 and reason in messages[0][0] and "use Confirm" not in messages[0][0]
+          and messages[0][1]["ephemeral"])
+bot.sync_links_roles = original_sync_links
+bot.read_latest, bot.is_officer = original_read_latest, original_is_officer
+
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
