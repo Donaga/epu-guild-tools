@@ -395,6 +395,11 @@ for case in ("administrator", "hierarchy", "officer", "adoption mode"):
     result = asyncio.run(bot.sync_roles(gd))
     check(case + ": initially unsafe candidate not adopted",
           role not in server.members_by[990].roles and "member:Member" not in saved.data["managed_roles"])
+    # Simulate an unresolved candidate signature persisted by the prior code.
+    want = lr.desired_roles(gd, saved, [], False, "Member")
+    saved.data["roles_sig"] = json.dumps([sorted((u, sorted(k)) for u, k in want.items()),
+                                         sorted(saved.data["managed_roles"].items()),
+                                         sorted(saved.data["role_holders"].items()), []])
     role.permissions, role.position = Perms(), 1
     bot.cfg.update(officer_role="Officer", adopt_existing_roles="rank")
     result = asyncio.run(bot.sync_roles(gd))
