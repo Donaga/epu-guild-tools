@@ -74,7 +74,9 @@ def load_config() -> dict:
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
     cfg.setdefault("discord_roles", True)         # give linked members class and rank roles (needs Manage Roles)
     cfg.setdefault("class_roles", True)
-    cfg.setdefault("rank_roles", ["Veteran", "Member", "Initiate"])   # only these ranks; officer ranks stay manual
+    cfg.setdefault("member_role", "Member")       # every linked guild member gets this, whatever their rank ("" turns it off)
+    cfg.setdefault("rank_roles", ["Veteran", "Initiate"])   # extra roles for these ranks only; officer ranks stay manual
+    cfg.setdefault("adopt_existing_roles", "rank")  # use your own same-named roles: "rank", "all" (class too) or "none"
     cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
     cfg.setdefault("level_milestones", [60])
     cfg.setdefault("members_intent", False)       # needed only for /link_suggestions (turn it on in the Developer Portal)
@@ -1007,7 +1009,18 @@ def onboarding_done(name: str, note: str):
                                 "step": "discord", "done": True, "note": note, "t": int(time.time())})
 
 
+def rejected_roster() -> dict:
+    return {"lines": ["⚠️ Role sync paused: this snapshot lost over a third of the accepted guild roster. "
+                      "Read a complete roster before retrying; confirmation cannot override this safety check."],
+            "added": 0, "removed": 0, "held": True, "roster_held": True}
+
+
 async def sync_links_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    cur = lr.member_info(gd)
+    if not lr.roster_trusted(state.data.get("roster_seen"), cur):
+        result = rejected_roster()
+        await officer_log(result["lines"])
+        return result
     lines = []
     linked = lr.process_links(gd, state)
     for e in linked:
@@ -1034,25 +1047,78 @@ async def sync_links_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     return result
 
 
+DANGEROUS_PERMS = ("administrator", "manage_guild", "manage_roles", "manage_channels", "manage_webhooks",
+                   "kick_members", "ban_members", "moderate_members", "manage_messages", "mention_everyone")
+
+
+def adopt_problem(guild, role) -> str | None:
+    """Why an existing role must not be taken over, or None if it's safe."""
+    if role.name.lower() == str(cfg["officer_role"]).lower():
+        return "it's your officer role"
+    perms = getattr(role, "permissions", None)
+    if perms is not None and any(getattr(perms, p, False) for p in DANGEROUS_PERMS):
+        return "it has moderator permissions"
+    if getattr(role, "managed", False):
+        return "it belongs to another bot or integration"
+    me = getattr(guild, "me", None)
+    top = getattr(me, "top_role", None)
+    if top is not None and getattr(role, "position", 0) >= getattr(top, "position", 0):
+        return "it's above the bot's role (drag the bot's role higher in Server Settings > Roles)"
+    return None
+
+
 async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
+    if not lr.roster_trusted(state.data.get("roster_seen"), lr.member_info(gd)):
+        return rejected_roster()
     guild = client.get_guild(int(cfg["server_id"]))
     if guild is None:
         return {}
-    desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"])
+    migration_problem = lr.migrate_member_role(state, cfg["member_role"] or None)
+    if migration_problem:
+        return {"lines": ["⚠️ Role sync paused: " + migration_problem], "added": 0, "removed": 0, "held": True, "migration_held": True}
+    desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None)
     managed = state.data.setdefault("managed_roles", {})
     holders = state.data.setdefault("role_holders", {})
-    sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()), sorted(holders.items())])
-    if sig == state.data.get("roles_sig") and not confirm:
+    def role_safety():
+        # Revalidate cached IDs too: a server admin may have changed permissions,
+        # the officer role or role hierarchy since the last successful sync.
+        return {key: adopt_problem(guild, role)
+                for key, rid in managed.items()
+                if (role := guild.get_role(int(rid))) is not None}
+
+    requested_keys = set().union(*desired.values()) if desired else set()
+    safety = role_safety()
+    blocked = {key for key, problem in safety.items() if problem}
+    sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()),
+                           sorted(holders.items()), sorted(safety.items())])
+    if sig == state.data.get("roles_sig") and not confirm and requested_keys <= safety.keys():
         return {}
     out_lines, warned = [], set(state.data.setdefault("role_name_warned", []))
+    for key in sorted(blocked):
+        out_lines.append(f"⚠️ Left managed role **{guild.get_role(int(managed[key])).name}** alone because {safety[key]}. "
+                         "No members were added to or removed from this role.")
     roles = {}
-    for key in sorted(set().union(*desired.values()) if desired else set()):
+    for key in sorted(requested_keys):
+        if key in blocked:
+            continue
         role = guild.get_role(int(managed[key])) if key in managed else None
         if role is None:
             name = lr.role_name(key, gd)
-            if discord.utils.get(guild.roles, name=name) is not None:
-                if key not in warned:      # never take over a role a person made
-                    out_lines.append(f"⚠️ A role named **{name}** already exists and wasn't made by the bot, so I left it alone "
+            existing = discord.utils.get(guild.roles, name=name)
+            if existing is not None:
+                mode = str(cfg["adopt_existing_roles"]).lower()
+                wanted = mode == "all" or (mode == "rank" and key.split(":", 1)[0] in ("rank", "member"))
+                problem = adopt_problem(guild, existing) if wanted else None
+                if wanted and not problem:
+                    managed[key] = str(existing.id)
+                    state.data["adopted_roles"] = sorted(set(state.data.get("adopted_roles", [])) | {key})
+                    roles[key] = existing
+                    out_lines.append(f"\U0001F91D Using your existing **{name}** role. Linked members get or lose it as their rank changes; "
+                                     "people who haven't linked keep whatever they have.")
+                    continue
+                if key not in warned:
+                    why = f" because {problem}" if problem else ""
+                    out_lines.append(f"⚠️ A role named **{name}** already exists and wasn't made by the bot, so I left it alone{why} "
                                      "and gave no one that role. Rename it, or remove the rank from `rank_roles`.")
                     warned.add(key)
                 continue
@@ -1075,6 +1141,16 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         current[uid] = {by_id[str(r.id)] for r in m.roles if str(r.id) in by_id}
     desired = {u: {k for k in ks if k in roles} for u, ks in desired.items() if u in people}
     adds, removes = lr.plan_changes(desired, current)
+    # Keep unsafe roles and their holder bookkeeping untouched, even when a
+    # key is no longer desired. Confirmation never bypasses this safety gate.
+    removes = {uid: keys - blocked for uid, keys in removes.items() if keys - blocked}
+    # Someone with no linked characters keeps roles that were yours to begin with.
+    adopted = set(state.data.get("adopted_roles", []))
+    for uid in list(removes):
+        if not state.characters_for(int(uid)):
+            removes[uid] = {k for k in removes[uid] if k not in adopted}
+            if not removes[uid]:
+                removes.pop(uid)
     held = bool(removes) and not confirm and lr.needs_confirmation(removes, len(desired))
     if held:
         if state.data.get("roles_held") != len(removes):
@@ -1083,22 +1159,39 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         removes = {}
     else:
         state.data.pop("roles_held", None)
-    for uid, keys in adds.items():
-        await people[uid].add_roles(*[roles[k] for k in keys], reason="EPU linked characters")
-    for uid, keys in removes.items():
-        objs = [guild.get_role(int(managed[k])) for k in keys if k in managed]
-        objs = [r for r in objs if r is not None]
-        if objs:
-            await people[uid].remove_roles(*objs, reason="EPU linked characters")
+    skipped_unsafe = False
+    for changes, method in ((adds, "add_roles"), (removes, "remove_roles")):
+        for uid, keys in changes.items():
+            applied = set()
+            for key in sorted(keys):
+                # Member fetches and previous Discord writes yield to gateway
+                # updates. Resolve the ID again immediately before EACH write.
+                role = guild.get_role(int(managed[key])) if key in managed else None
+                problem = adopt_problem(guild, role) if role is not None else "it no longer exists"
+                if problem:
+                    skipped_unsafe = True
+                    if key not in blocked:
+                        out_lines.append(f"⚠️ Stopped changing role **{getattr(role, 'name', key)}** because {problem}.")
+                        blocked.add(key)
+                    continue
+                await getattr(people[uid], method)(role, reason="EPU linked characters")
+                applied.add(key)
+            changes[uid] = applied
     for uid in people:
         have = (current.get(uid, set()) | adds.get(uid, set())) - removes.get(uid, set())
-        if have:
+        if have and state.characters_for(int(uid)):
             holders[uid] = sorted(have)
         else:
             holders.pop(uid, None)
-    if not held:
-        state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"]).items()),
-                                                   sorted(managed.items()), sorted(holders.items())])
+    unresolved = requested_keys - roles.keys() - blocked
+    if held or skipped_unsafe or unresolved or role_safety() != safety:
+        # Never cache a safety state that was not used for this sync's plan.
+        # Unmanaged same-name candidates can also change permissions/hierarchy;
+        # retry them on the next sync instead of caching them out indefinitely.
+        state.data.pop("roles_sig", None)
+    else:
+        state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
+                                                   sorted(managed.items()), sorted(holders.items()), sorted(role_safety().items())])
     state.save()
     return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())), "held": held}
 
@@ -1407,7 +1500,7 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
         held = state.data.get("roles_held")
         managed = ", ".join(f"<@&{r}>" for r in state.data.get("managed_roles", {}).values()) or "none yet"
         await interaction.response.send_message(
-            f"Linked members: **{linked}**. Roles I manage: {managed}.\nRank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
+            f"Linked members: **{linked}**. Roles I manage: {managed}.\nEveryone linked: {cfg['member_role'] or 'off'}; rank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
             f"class roles: {'on' if cfg['class_roles'] else 'off'}." + (f"\n⏸️ Holding back removals for **{held}** people; use Confirm if that's right." if held else ""),
             ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         return
@@ -1418,6 +1511,10 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
     except discord.Forbidden:
         await interaction.followup.send("Discord refused. Give the bot **Manage Roles** and drag its role above the class and rank roles "
                                         "(Server Settings > Roles).", ephemeral=True)
+        return
+    if result.get("roster_held") or result.get("migration_held"):
+        await interaction.followup.send("\n".join(result["lines"]), ephemeral=True,
+                                        allowed_mentions=discord.AllowedMentions.none())
         return
     await interaction.followup.send(f"Done: {result.get('added', 0)} role(s) given, {result.get('removed', 0)} removed."
                                     + (" Removals are still held; use Confirm." if result.get("held") else ""), ephemeral=True)

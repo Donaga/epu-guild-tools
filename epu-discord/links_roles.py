@@ -112,10 +112,11 @@ def member_info(gd) -> dict:
     return {k: v for k, v in info.items() if isinstance(k, str) and isinstance(v, dict)}
 
 
-def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True) -> dict[str, set[str]]:
-    """{discord user id: {"class:MAGE", "rank:Member", ...}} for every linked user.
-    Rank roles come from the user's main (first linked character still in the
-    guild), and only for ranks listed in rank_roles."""
+def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True, member_role: str | None = None) -> dict[str, set[str]]:
+    """{discord user id: {"member:Member", "class:MAGE", "rank:Initiate", ...}} for every linked user.
+    member_role goes to everyone linked who is still in the guild, whatever
+    their rank. Rank roles come from the user's main, and only for ranks listed
+    in rank_roles (a rank named like member_role adds nothing extra)."""
     info = member_info(gd)
     allowed = {r.lower(): r for r in rank_roles}
     out: dict[str, set[str]] = {}
@@ -127,13 +128,44 @@ def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True) ->
             for c in here:
                 if info[c].get("c"):
                     want.add("class:" + str(info[c]["c"]))
+        if here and member_role:
+            want.add("member:" + member_role)
         if here:
             main = main_for(gd, state, uid)
             rank = (info.get(main) or info[here[0]]).get("r")  # main may have left; fall back
-            if isinstance(rank, str) and rank.lower() in allowed:
+            if isinstance(rank, str) and rank.lower() in allowed and rank.lower() != str(member_role or "").lower():
                 want.add("rank:" + allowed[rank.lower()])
         out[str(uid)] = want
     return out
+
+
+def migrate_member_role(state, member_role: str | None) -> str | None:
+    """Move the pre-0.23.1 rank key without changing the Discord role ID.
+
+    Conflicting IDs require an explicit configuration decision; do not remove
+    either role or choose one based on dictionary iteration order.
+    """
+    if not member_role:
+        return None
+    managed = state.data.setdefault("managed_roles", {})
+    new_key = "member:" + member_role
+    old_keys = {key for key in managed
+                if key.startswith("rank:") and key.split(":", 1)[1].lower() == member_role.lower()}
+    if not old_keys:
+        return None
+    ids = {str(managed[key]) for key in old_keys | ({new_key} if new_key in managed else set())}
+    if len(ids) != 1:
+        return "The old rank role and the member role refer to different Discord roles. Resolve their managed role IDs before syncing."
+    managed[new_key] = ids.pop()
+    for key in old_keys:
+        managed.pop(key)
+    for uid, keys in state.data.setdefault("role_holders", {}).items():
+        state.data["role_holders"][uid] = sorted({new_key if key in old_keys else key for key in keys})
+    for field in ("adopted_roles", "role_name_warned"):
+        if field in state.data:
+            state.data[field] = sorted({new_key if key in old_keys else key for key in state.data[field]})
+    state.data.pop("roles_sig", None)
+    return None
 
 
 def main_for(gd, state, uid) -> str | None:
@@ -185,13 +217,18 @@ def needs_confirmation(removes: dict, linked_users: int, limit: int = 5, share: 
 # ---------------------------------------------------------------------------
 # Officer log: roster changes between two saves
 # ---------------------------------------------------------------------------
+def roster_trusted(prev: dict | None, cur: dict) -> bool:
+    """Reject snapshots losing over a third of the last accepted roster."""
+    return not prev or len(cur) >= len(prev) * 2 / 3
+
+
 def roster_events(prev: dict | None, cur: dict, milestones=(60,), left: dict | None = None) -> tuple[list[dict], bool]:
     """Compare memberInfo snapshots. Returns (events, trusted). A snapshot that
     loses over a third of the roster at once is treated as a bad read: no
     events, and the caller keeps the old baseline."""
     if not prev:
         return [], True
-    if len(cur) < len(prev) * 2 / 3:
+    if not roster_trusted(prev, cur):
         return [], False
     left = left if left is not None else {}
     out = []

@@ -76,6 +76,14 @@ info["Pip Baker"]["r"] = "Initiate"
 want = lr.desired_roles(gd, st, ["Veteran", "Member", "Initiate"])
 check("a /main picked in Discord sets the rank role", "rank:Initiate" in want["500"] and "rank:Member" not in want["500"])
 st.data["mains"].pop("500")
+want = lr.desired_roles(gd, st, ["Veteran", "Initiate"], member_role="Member")
+check("every linked guild member gets the member role, officers included",
+      "member:Member" in want["500"] and "member:Member" in want["700"] and not any(k.startswith("rank:") for k in want["700"]))
+check("a Member-rank main gets no duplicate rank role", not any(k.startswith("rank:") for k in want["500"]))
+info["Pip Baker"]["r"] = "Initiate"; st.data["mains"]["500"] = "Pip Baker"
+want = lr.desired_roles(gd, st, ["Veteran", "Initiate"], member_role="Member")
+check("an Initiate gets both Member and Initiate", {"member:Member", "rank:Initiate"} <= want["500"])
+st.data["mains"].pop("500"); info["Pip Baker"]["r"] = "Member"
 check("role names use the class's display name", lr.role_name("class:PRIEST", gd) == "Priest" and lr.role_name("rank:Member") == "Member")
 adds, removes = lr.plan_changes({"1": {"a", "b"}, "2": set()}, {"1": {"b", "c"}, "2": {"a"}})
 check("plan adds and removes only the difference", adds == {"1": {"a"}} and removes == {"1": {"c"}, "2": {"a"}})
@@ -125,7 +133,8 @@ for f in ("bot.py", "epu_core.py", "shared_bridge.py"):
     shutil.copy(os.path.join(os.path.dirname(core.__file__), f), cfgdir)
 sys.path.insert(0, cfgdir)
 bot = importlib.import_module("bot")
-check("rank roles default to Veteran, Member and Initiate", bot.cfg["rank_roles"] == ["Veteran", "Member", "Initiate"])
+check("everyone linked gets Member; Veteran and Initiate are extra rank roles",
+      bot.cfg["member_role"] == "Member" and bot.cfg["rank_roles"] == ["Veteran", "Initiate"])
 G = Guild()
 for i in (500, 600, 700): G.members_by[i] = Member(i)
 bot.client.get_guild = lambda i: G
@@ -133,15 +142,269 @@ bot.state = st
 res = asyncio.run(bot.sync_roles(gd))
 names = lambda m: sorted(r.name for r in m.roles)
 check("linked members get class roles", "Mage" in names(G.members_by[500]) and "Priest" in names(G.members_by[500]))
-check("an existing role a person made is never taken over",
-      "Member" not in [r.name for r in G.members_by[500].roles if r.id >= 100] and any("already exists" in l for l in res["lines"]))
-check("the officer gets no rank role", all(not r.name.startswith("Officer") or r.id == 1 for r in G.members_by[700].roles)
+check("your existing rank role is used instead of a duplicate",
+      G.get_role(2) in G.members_by[500].roles and len([r for r in G.roles if r.name == "Member"]) == 1
+      and any("existing **Member**" in l for l in res["lines"]))
+check("the officer gets Member but never the Officer role", G.get_role(2) in G.members_by[700].roles
       and G.get_role(1) not in G.members_by[700].roles)
 G.members_by[700].roles.append(G.get_role(1))
 st.data["links"]["500"] = []
 st.data.pop("roles_sig", None)
 asyncio.run(bot.sync_roles(gd))
-check("unlinking takes only the bot's roles away", G.members_by[500].roles == [] and G.get_role(1) in G.members_by[700].roles)
+check("unlinking takes the bot's own roles away but leaves your adopted role",
+      [r.name for r in G.members_by[500].roles] == ["Member"] and G.get_role(1) in G.members_by[700].roles)
+
+class Perms:
+    def __init__(self, **kw): self.__dict__.update(kw)
+G2 = Guild()
+G2.roles.append(Role(3, "Veteran")); G2.roles[-1].permissions = Perms(kick_members=True)
+G2.roles[0].name = "Initiate"   # officer-looking roles: here a plain role named like a rank
+G2.me = type("Me", (), {"top_role": type("Top", (), {"position": 5})()})()
+for r in G2.roles: r.position = 1
+G2.get_role(2).position = 9    # above the bot
+st2 = core.State(os.path.join(WOW, "state2.json"))
+st2.link(800, "Tyler Baker"); st2.link(801, "Pip Baker")
+info["Pip Baker"]["r"] = "Veteran"
+gd.g["memberInfo"] = info
+gd.g["altVerified"] = {}
+bot.state = st2
+bot.client.get_guild = lambda i: G2
+for i in (800, 801): G2.members_by[i] = Member(i)
+res = asyncio.run(bot.sync_roles(gd))
+check("a role with moderator permissions is never taken over",
+      G2.get_role(3) not in G2.members_by[801].roles and any("moderator permissions" in l for l in res["lines"]))
+check("a role above the bot is never taken over",
+      G2.get_role(2) not in G2.members_by[800].roles and any("above the bot" in l for l in res["lines"]))
+bot.cfg["adopt_existing_roles"] = "none"
+G3 = Guild(); G3.members_by[900] = Member(900)
+st3 = core.State(os.path.join(WOW, "state3.json")); st3.link(900, "Tyler Baker")
+bot.state = st3; bot.client.get_guild = lambda i: G3
+res = asyncio.run(bot.sync_roles(gd))
+check("adopting can be turned off", G3.get_role(2) not in G3.members_by[900].roles and any("already exists" in l for l in res["lines"]))
+
+
+# Cached role IDs must not bypass the adoption safety gate on later syncs.
+for case in ("administrator", "officer config", "officer rename", "hierarchy", "integration"):
+    bot.cfg.update(adopt_existing_roles="rank", officer_role="Officer", member_role="Member")
+    server = Guild()
+    server.me = type("Me", (), {"top_role": type("Top", (), {"position": 5})()})()
+    role = server.get_role(2)
+    role.position, role.permissions, role.managed = 1, Perms(), False
+    server.members_by[950] = Member(950)
+    saved = core.State(os.path.join(WOW, "safety-" + case + ".json"))
+    saved.link(950, "Tyler Baker")
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    asyncio.run(bot.sync_roles(gd))
+    check(case + ": safe role initially adopted", role in server.members_by[950].roles)
+    if case == "administrator": role.permissions.administrator = True
+    elif case == "officer config": bot.cfg["officer_role"] = "Member"
+    elif case == "officer rename": role.name = "Officer"
+    elif case == "hierarchy": server.me.top_role.position = 1
+    else: role.managed = True
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": safety change invalidates unchanged-roster cache",
+          bool(result.get("lines")) and role in server.members_by[950].roles)
+    server.members_by[951] = Member(951)
+    saved.link(951, "Chris Stone")
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check(case + ": confirmation cannot assign unsafe cached role",
+          role not in server.members_by[951].roles)
+    bot.cfg["member_role"] = ""
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check(case + ": unsafe role no longer desired is not removed",
+          role in server.members_by[950].roles
+          and "member:Member" in saved.data["role_holders"]["950"])
+    role.name, role.position, role.permissions, role.managed = "Member", 1, Perms(), False
+    server.me.top_role.position = 5
+    bot.cfg.update(officer_role="Officer", member_role="Member")
+    asyncio.run(bot.sync_roles(gd))
+    check(case + ": sync resumes once role is safe",
+          role in server.members_by[951].roles)
+
+
+# Permissions can change while member fetches or earlier writes are awaited.
+for phase in ("fetch", "add", "remove"):
+    bot.cfg.update(adopt_existing_roles="rank", officer_role="Officer", member_role="Member", class_roles=False)
+    server = Guild()
+    role = server.get_role(2)
+    role.permissions = Perms()
+    saved = core.State(os.path.join(WOW, "race-" + phase + ".json"))
+    saved.data["managed_roles"] = {"member:Member": "2"}
+    for uid, char in ((960, "Tyler Baker"), (961, "Chris Stone")):
+        saved.link(uid, char)
+        server.members_by[uid] = Member(uid)
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    if phase == "fetch":
+        server.get_member = lambda i: None
+        async def fetch_and_elevate(i):
+            role.permissions.administrator = True
+            return server.members_by[i]
+        server.fetch_member = fetch_and_elevate
+    else:
+        method = "add_roles" if phase == "add" else "remove_roles"
+        async def mutate_and_elevate(self, *rs, reason=None):
+            await getattr(Member, method)(self, *rs, reason=reason)
+            role.permissions.administrator = True
+        import types
+        for member in server.members_by.values():
+            setattr(member, method, types.MethodType(mutate_and_elevate, member))
+        if phase == "remove":
+            for uid, member in server.members_by.items():
+                member.roles = [role]
+                saved.data.setdefault("role_holders", {})[str(uid)] = ["member:Member"]
+            bot.cfg["member_role"] = ""
+    result = asyncio.run(bot.sync_roles(gd, confirm=True))
+    present = sum(role in member.roles for member in server.members_by.values())
+    check(phase + ": an awaited permission change blocks subsequent unsafe writes",
+          present == (0 if phase == "fetch" else 1))
+    check(phase + ": counts reflect only executed writes",
+          result["added"] == (1 if phase == "add" else 0)
+          and result["removed"] == (1 if phase == "remove" else 0))
+    check(phase + ": unsafe skipped writes are not cached", "roles_sig" not in saved.data)
+    check(phase + ": holder bookkeeping reflects actual writes",
+          all(("member:Member" in saved.data["role_holders"].get(str(uid), []))
+              == (role in member.roles) for uid, member in server.members_by.items()))
+
+
+# Upgrade legacy rank:Member bookkeeping without replacing/removing its role.
+for already_new in (False, True):
+    bot.cfg.update(member_role="Member", rank_roles=["Veteran", "Initiate"], class_roles=False,
+                   officer_role="Officer", adopt_existing_roles="none")
+    server = Guild()
+    role = server.get_role(2)
+    member = server.members_by[970] = Member(970)
+    member.roles = [role]
+    saved = core.State(os.path.join(WOW, "migration-" + str(already_new) + ".json"))
+    saved.link(970, "Tyler Baker")
+    saved.data.update(managed_roles={"rank:Member": "2"}, role_holders={"970": ["rank:Member"]},
+                      adopted_roles=["rank:Member"], role_name_warned=["rank:Member"], roles_sig="old")
+    if already_new:
+        saved.data["managed_roles"]["member:Member"] = "2"
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    result = asyncio.run(bot.sync_roles(gd))
+    check("migration preserves Discord role and performs no role writes " + str(already_new),
+          result["added"] == result["removed"] == 0 and member.roles == [role]
+          and saved.data["managed_roles"] == {"member:Member": "2"})
+    check("migration updates holders, adoption and warnings " + str(already_new),
+          saved.data["role_holders"]["970"] == ["member:Member"]
+          and saved.data["adopted_roles"] == saved.data["role_name_warned"] == ["member:Member"])
+    before = json.dumps(saved.data, sort_keys=True)
+    check("migration is idempotent " + str(already_new),
+          lr.migrate_member_role(saved, "Member") is None and json.dumps(saved.data, sort_keys=True) == before)
+    saved.data["links"]["970"] = []
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check("migrated adopted role survives unlink " + str(already_new), member.roles == [role])
+
+saved.data["managed_roles"] = {"rank:Member": "2", "member:Member": "3"}
+before = json.dumps(saved.data, sort_keys=True)
+result = asyncio.run(bot.sync_roles(gd, confirm=True))
+check("conflicting role IDs fail closed without altering state",
+      result["held"] and result["added"] == result["removed"] == 0
+      and json.dumps(saved.data, sort_keys=True) == before and member.roles == [role])
+
+# A rejected partial roster must not reach role/link sync, even for a small group,
+# an unchanged timestamp, an explicit confirmation, or a direct sync_roles call.
+bot.cfg.update(member_role="Member", rank_roles=[], class_roles=False, discord_roles=True)
+server = Guild()
+role = server.get_role(2)
+saved = core.State(os.path.join(WOW, "roster-gate.json"))
+full_info = {"Tyler Baker": {"r": "Member"}, "Chris Stone": {"r": "Member"}}
+gd.g["memberInfo"] = full_info
+gd.g["memberInfoAt"] = 10
+gd.g["discordClaims"] = {}
+gd.g["alts"] = {}
+saved.data.update(roster_seen=full_info.copy(), roster_seen_at=10,
+                  managed_roles={"member:Member": "2"}, role_holders={})
+for uid, char in ((980, "Tyler Baker"), (981, "Chris Stone")):
+    saved.link(uid, char)
+    server.members_by[uid] = Member(uid)
+    server.members_by[uid].roles = [role]
+    saved.data["role_holders"][str(uid)] = ["member:Member"]
+bot.state = saved
+bot.client.get_guild = lambda i: server
+logged = []
+async def capture_log(lines): logged.extend(lines)
+bot.officer_log = capture_log
+original_links = lr.process_links
+def unexpected_links(*args):
+    raise AssertionError("Rejected roster reached link processing")
+lr.process_links = unexpected_links
+for stamp in (10, 11):
+    for remaining in ({}, {"Tyler Baker": full_info["Tyler Baker"]}):
+        gd.g["memberInfo"], gd.g["memberInfoAt"] = remaining, stamp
+        before = json.dumps(saved.data, sort_keys=True)
+        for sync in (bot.sync_links_roles, bot.sync_roles):
+            result = asyncio.run(sync(gd, confirm=True))
+            check("rejected roster blocks " + sync.__name__ + " stamp=" + str(stamp) + " size=" + str(len(remaining)),
+                  result.get("roster_held") and result["added"] == result["removed"] == 0
+                  and json.dumps(saved.data, sort_keys=True) == before
+                  and all(m.roles == [role] for m in server.members_by.values()))
+lr.process_links = original_links
+gd.g["memberInfo"], gd.g["memberInfoAt"] = full_info, 12
+server.members_by[981].roles = []
+result = asyncio.run(bot.sync_links_roles(gd))
+check("complete roster resumes role sync",
+      not result.get("roster_held") and role in server.members_by[981].roles
+      and saved.data["roster_seen_at"] == 12)
+
+
+# /roles must explain non-confirmable holds instead of directing users to Confirm.
+from types import SimpleNamespace
+original_sync_links = bot.sync_links_roles
+original_read_latest, original_is_officer = bot.read_latest, bot.is_officer
+bot.read_latest = lambda: gd
+bot.is_officer = lambda user: True
+for flag, reason in (("roster_held", "Read a complete roster before retrying"),
+                     ("migration_held", "Resolve their managed role IDs before syncing")):
+    messages = []
+    async def defer(**kw): pass
+    async def send(content, **kw): messages.append((content, kw))
+    async def blocked_sync(*args, **kw):
+        return {"lines": [reason], "added": 0, "removed": 0, "held": True, flag: True}
+    bot.sync_links_roles = blocked_sync
+    interaction = SimpleNamespace(user=object(), response=SimpleNamespace(defer=defer),
+                                  followup=SimpleNamespace(send=send))
+    asyncio.run(bot.roles_cmd.callback(interaction, SimpleNamespace(value="confirm")))
+    check("/roles surfaces non-confirmable " + flag + " reason",
+          len(messages) == 1 and reason in messages[0][0] and "use Confirm" not in messages[0][0]
+          and messages[0][1]["ephemeral"])
+bot.sync_links_roles = original_sync_links
+bot.read_latest, bot.is_officer = original_read_latest, original_is_officer
+
+
+# Unmanaged same-name roles must recover automatically after a safety fix.
+for case in ("administrator", "hierarchy", "officer", "adoption mode"):
+    bot.cfg.update(member_role="Member", officer_role="Officer", class_roles=False,
+                   rank_roles=[], adopt_existing_roles="rank")
+    server = Guild()
+    server.me = SimpleNamespace(top_role=SimpleNamespace(position=5))
+    role = server.get_role(2)
+    role.permissions, role.position = Perms(), 1
+    if case == "administrator": role.permissions.administrator = True
+    elif case == "hierarchy": role.position = 6
+    elif case == "officer": bot.cfg["officer_role"] = "Member"
+    else: bot.cfg["adopt_existing_roles"] = "none"
+    saved = core.State(os.path.join(WOW, "candidate-" + case + ".json"))
+    saved.link(990, "Tyler Baker")
+    server.members_by[990] = Member(990)
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": initially unsafe candidate not adopted",
+          role not in server.members_by[990].roles and "member:Member" not in saved.data["managed_roles"])
+    # Simulate an unresolved candidate signature persisted by the prior code.
+    want = lr.desired_roles(gd, saved, [], False, "Member")
+    saved.data["roles_sig"] = json.dumps([sorted((u, sorted(k)) for u, k in want.items()),
+                                         sorted(saved.data["managed_roles"].items()),
+                                         sorted(saved.data["role_holders"].items()), []])
+    role.permissions, role.position = Perms(), 1
+    bot.cfg.update(officer_role="Officer", adopt_existing_roles="rank")
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": repaired candidate adopted without confirmation or roster changes",
+          role in server.members_by[990].roles and result.get("added") == 1)
 
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
