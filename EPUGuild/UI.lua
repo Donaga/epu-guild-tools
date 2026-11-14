@@ -2808,9 +2808,15 @@ function UI:FillDetails()
     if not r then return UI:CloseDetails() end
     det:Reset(ns.ItemIcon(key), r.quality or 1, r.name or ns.ItemName(key, true), "Held by " .. Holders(r))
     local specs = {}
+    local quantity
+    if r.users then
+      quantity = det:Field("Quantity", "1", 70, true)
+      det:Text("Available from your bags: " .. ns.BankSortMailLimit(key) ..
+        ". Needs and open requests stay on this character.", C.muted)
+    end
     local function mail(who, n)
       if #specs < 3 and who ~= ns.me then
-        specs[#specs + 1] = { "Mail to " .. First(who), function() ns.MailBankItem(who, key, n) end, accent = #specs == 0,
+        specs[#specs + 1] = { "Mail to " .. First(who), function() ns.MailBankItem(who, key, n or (quantity and tonumber(quantity:GetText()))) end, accent = #specs == 0,
           tip = "Open a mailbox on the character holding it. The item goes into a mail for you to check and send." }
       end
     end
