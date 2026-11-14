@@ -1097,7 +1097,8 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         out_lines.append(f"⚠️ Left managed role **{guild.get_role(int(managed[key])).name}** alone because {safety[key]}. "
                          "No members were added to or removed from this role.")
     roles = {}
-    for key in sorted(set().union(*desired.values()) if desired else set()):
+    requested_keys = set().union(*desired.values()) if desired else set()
+    for key in sorted(requested_keys):
         if key in blocked:
             continue
         role = guild.get_role(int(managed[key])) if key in managed else None
@@ -1182,8 +1183,11 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
             holders[uid] = sorted(have)
         else:
             holders.pop(uid, None)
-    if held or skipped_unsafe or role_safety() != safety:
+    unresolved = requested_keys - roles.keys() - blocked
+    if held or skipped_unsafe or unresolved or role_safety() != safety:
         # Never cache a safety state that was not used for this sync's plan.
+        # Unmanaged same-name candidates can also change permissions/hierarchy;
+        # retry them on the next sync instead of caching them out indefinitely.
         state.data.pop("roles_sig", None)
     else:
         state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
