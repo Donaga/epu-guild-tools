@@ -75,6 +75,7 @@ def load_config() -> dict:
     cfg.setdefault("discord_roles", True)         # give linked members class and rank roles (needs Manage Roles)
     cfg.setdefault("class_roles", True)
     cfg.setdefault("rank_roles", ["Veteran", "Member", "Initiate"])   # only these ranks; officer ranks stay manual
+    cfg.setdefault("adopt_existing_roles", "rank")  # use your own same-named roles: "rank", "all" (class too) or "none"
     cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
     cfg.setdefault("level_milestones", [60])
     cfg.setdefault("members_intent", False)       # needed only for /link_suggestions (turn it on in the Developer Portal)
@@ -1034,6 +1035,26 @@ async def sync_links_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     return result
 
 
+DANGEROUS_PERMS = ("administrator", "manage_guild", "manage_roles", "manage_channels", "manage_webhooks",
+                   "kick_members", "ban_members", "moderate_members", "manage_messages", "mention_everyone")
+
+
+def adopt_problem(guild, role) -> str | None:
+    """Why an existing role must not be taken over, or None if it's safe."""
+    if role.name.lower() == str(cfg["officer_role"]).lower():
+        return "it's your officer role"
+    perms = getattr(role, "permissions", None)
+    if perms is not None and any(getattr(perms, p, False) for p in DANGEROUS_PERMS):
+        return "it has moderator permissions"
+    if getattr(role, "managed", False):
+        return "it belongs to another bot or integration"
+    me = getattr(guild, "me", None)
+    top = getattr(me, "top_role", None)
+    if top is not None and getattr(role, "position", 0) >= getattr(top, "position", 0):
+        return "it's above the bot's role (drag the bot's role higher in Server Settings > Roles)"
+    return None
+
+
 async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     guild = client.get_guild(int(cfg["server_id"]))
     if guild is None:
@@ -1050,9 +1071,21 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         role = guild.get_role(int(managed[key])) if key in managed else None
         if role is None:
             name = lr.role_name(key, gd)
-            if discord.utils.get(guild.roles, name=name) is not None:
-                if key not in warned:      # never take over a role a person made
-                    out_lines.append(f"⚠️ A role named **{name}** already exists and wasn't made by the bot, so I left it alone "
+            existing = discord.utils.get(guild.roles, name=name)
+            if existing is not None:
+                mode = str(cfg["adopt_existing_roles"]).lower()
+                wanted = mode == "all" or (mode == "rank" and key.startswith("rank:"))
+                problem = adopt_problem(guild, existing) if wanted else None
+                if wanted and not problem:
+                    managed[key] = str(existing.id)
+                    state.data["adopted_roles"] = sorted(set(state.data.get("adopted_roles", [])) | {key})
+                    roles[key] = existing
+                    out_lines.append(f"\U0001F91D Using your existing **{name}** role. Linked members get or lose it as their rank changes; "
+                                     "people who haven't linked keep whatever they have.")
+                    continue
+                if key not in warned:
+                    why = f" because {problem}" if problem else ""
+                    out_lines.append(f"⚠️ A role named **{name}** already exists and wasn't made by the bot, so I left it alone{why} "
                                      "and gave no one that role. Rename it, or remove the rank from `rank_roles`.")
                     warned.add(key)
                 continue
@@ -1075,6 +1108,13 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         current[uid] = {by_id[str(r.id)] for r in m.roles if str(r.id) in by_id}
     desired = {u: {k for k in ks if k in roles} for u, ks in desired.items() if u in people}
     adds, removes = lr.plan_changes(desired, current)
+    # Someone with no linked characters keeps roles that were yours to begin with.
+    adopted = set(state.data.get("adopted_roles", []))
+    for uid in list(removes):
+        if not state.characters_for(int(uid)):
+            removes[uid] = {k for k in removes[uid] if k not in adopted}
+            if not removes[uid]:
+                removes.pop(uid)
     held = bool(removes) and not confirm and lr.needs_confirmation(removes, len(desired))
     if held:
         if state.data.get("roles_held") != len(removes):
@@ -1092,7 +1132,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
             await people[uid].remove_roles(*objs, reason="EPU linked characters")
     for uid in people:
         have = (current.get(uid, set()) | adds.get(uid, set())) - removes.get(uid, set())
-        if have:
+        if have and state.characters_for(int(uid)):
             holders[uid] = sorted(have)
         else:
             holders.pop(uid, None)

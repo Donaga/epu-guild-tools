@@ -27,6 +27,7 @@
   "discord_roles": true,
   "class_roles": true,
   "rank_roles": ["Veteran", "Member", "Initiate"],
+  "adopt_existing_roles": "rank",
   "officer_log_channel_id": "",
   "level_milestones": [60],
   "members_intent": false

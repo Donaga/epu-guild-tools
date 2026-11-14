@@ -133,15 +133,45 @@ bot.state = st
 res = asyncio.run(bot.sync_roles(gd))
 names = lambda m: sorted(r.name for r in m.roles)
 check("linked members get class roles", "Mage" in names(G.members_by[500]) and "Priest" in names(G.members_by[500]))
-check("an existing role a person made is never taken over",
-      "Member" not in [r.name for r in G.members_by[500].roles if r.id >= 100] and any("already exists" in l for l in res["lines"]))
+check("your existing rank role is used instead of a duplicate",
+      G.get_role(2) in G.members_by[500].roles and len([r for r in G.roles if r.name == "Member"]) == 1
+      and any("existing **Member**" in l for l in res["lines"]))
 check("the officer gets no rank role", all(not r.name.startswith("Officer") or r.id == 1 for r in G.members_by[700].roles)
       and G.get_role(1) not in G.members_by[700].roles)
 G.members_by[700].roles.append(G.get_role(1))
 st.data["links"]["500"] = []
 st.data.pop("roles_sig", None)
 asyncio.run(bot.sync_roles(gd))
-check("unlinking takes only the bot's roles away", G.members_by[500].roles == [] and G.get_role(1) in G.members_by[700].roles)
+check("unlinking takes the bot's own roles away but leaves your adopted role",
+      [r.name for r in G.members_by[500].roles] == ["Member"] and G.get_role(1) in G.members_by[700].roles)
+
+class Perms:
+    def __init__(self, **kw): self.__dict__.update(kw)
+G2 = Guild()
+G2.roles.append(Role(3, "Veteran")); G2.roles[-1].permissions = Perms(kick_members=True)
+G2.roles[0].name = "Initiate"   # officer-looking roles: here a plain role named like a rank
+G2.me = type("Me", (), {"top_role": type("Top", (), {"position": 5})()})()
+for r in G2.roles: r.position = 1
+G2.get_role(2).position = 9    # above the bot
+st2 = core.State(os.path.join(WOW, "state2.json"))
+st2.link(800, "Tyler Baker"); st2.link(801, "Pip Baker")
+info["Pip Baker"]["r"] = "Veteran"
+gd.g["memberInfo"] = info
+gd.g["altVerified"] = {}
+bot.state = st2
+bot.client.get_guild = lambda i: G2
+for i in (800, 801): G2.members_by[i] = Member(i)
+res = asyncio.run(bot.sync_roles(gd))
+check("a role with moderator permissions is never taken over",
+      G2.get_role(3) not in G2.members_by[801].roles and any("moderator permissions" in l for l in res["lines"]))
+check("a role above the bot is never taken over",
+      G2.get_role(2) not in G2.members_by[800].roles and any("above the bot" in l for l in res["lines"]))
+bot.cfg["adopt_existing_roles"] = "none"
+G3 = Guild(); G3.members_by[900] = Member(900)
+st3 = core.State(os.path.join(WOW, "state3.json")); st3.link(900, "Tyler Baker")
+bot.state = st3; bot.client.get_guild = lambda i: G3
+res = asyncio.run(bot.sync_roles(gd))
+check("adopting can be turned off", G3.get_role(2) not in G3.members_by[900].roles and any("already exists" in l for l in res["lines"]))
 
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
