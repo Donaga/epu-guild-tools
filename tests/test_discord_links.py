@@ -350,5 +350,29 @@ check("complete roster resumes role sync",
       not result.get("roster_held") and role in server.members_by[981].roles
       and saved.data["roster_seen_at"] == 12)
 
+
+# /roles must explain non-confirmable holds instead of directing users to Confirm.
+from types import SimpleNamespace
+original_sync_links = bot.sync_links_roles
+original_read_latest, original_is_officer = bot.read_latest, bot.is_officer
+bot.read_latest = lambda: gd
+bot.is_officer = lambda user: True
+for flag, reason in (("roster_held", "Read a complete roster before retrying"),
+                     ("migration_held", "Resolve their managed role IDs before syncing")):
+    messages = []
+    async def defer(**kw): pass
+    async def send(content, **kw): messages.append((content, kw))
+    async def blocked_sync(*args, **kw):
+        return {"lines": [reason], "added": 0, "removed": 0, "held": True, flag: True}
+    bot.sync_links_roles = blocked_sync
+    interaction = SimpleNamespace(user=object(), response=SimpleNamespace(defer=defer),
+                                  followup=SimpleNamespace(send=send))
+    asyncio.run(bot.roles_cmd.callback(interaction, SimpleNamespace(value="confirm")))
+    check("/roles surfaces non-confirmable " + flag + " reason",
+          len(messages) == 1 and reason in messages[0][0] and "use Confirm" not in messages[0][0]
+          and messages[0][1]["ephemeral"])
+bot.sync_links_roles = original_sync_links
+bot.read_latest, bot.is_officer = original_read_latest, original_is_officer
+
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
