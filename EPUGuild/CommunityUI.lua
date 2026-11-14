@@ -651,9 +651,9 @@ function ns.FillCommunityDetails(kind,key,det)
     end
     det:Buttons(specs)
     if key=="all" then
-      det:Buttons({{s.eventBubble==false and 'Show Events bubble' or 'Hide Events bubble',function(self)
+      det:Buttons({{s.eventBubble==false and 'Show Events and actions bubble' or 'Hide Events and actions bubble',function(self)
         s.eventBubble=s.eventBubble==false
-        self:SetLabel(s.eventBubble and 'Hide Events bubble' or 'Show Events bubble')
+        self:SetLabel(s.eventBubble and 'Hide Events and actions bubble' or 'Show Events and actions bubble')
         ns.RefreshEventBubble()
       end}})
       local first=det:Field("Quiet start",s.quietStart or "",80); local last=det:Field("Quiet end",s.quietEnd or "",80)

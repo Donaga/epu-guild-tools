@@ -184,5 +184,31 @@ check('a new signup must be confirmed again',B.ev("""(function()
   local g=__ns.CasualStore()
   return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Waitlist'
 end)()"""))
+A.ex("""local g=__ns.G()
+g.guildEvents={}; g.eventResponses={}
+g.requests={
+  bank={who='Tyler Baker',item=2589,qty=2,status='approved',t=__ns.Now()},
+  review={who='Tyler Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+  craft={who='Tyler Baker',crafter='Chris Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+  other={who='Chris Baker',crafter='Pip Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+}
+__ns.RefreshEventBubble()
+""")
+check('floating button stays visible for work even with no events',A.ev('EPUGuildEventBubble:IsShown()'))
+check('action counts include officer bank work and only my craft requests',A.ev("""(function()
+  local a=__ns.GetBubbleActions(__ns.G(),__ns.CommunityState())
+  return #a.fulfill==1 and #a.review==1 and #a.respond==1 and a.respond[1]=='craft'
+end)()"""))
+A.ex('EPUGuildEventBubble:Click()')
+check('floating button opens the attention list when work exists',A.ev("__ns.UI.details.kind=='bubbleactions'"))
+A.ex("__click('Open bank fulfillment')")
+check('fulfillment shortcut opens existing officer tool',A.ev("__ns.UI.details.kind=='fulfillment'"))
+B.ex("""__ns.G().guildEvents={}; __ns.G().eventResponses={}
+__ns.G().requests={review={who='Tyler Baker',item=2589,qty=1,status='pending',t=__ns.Now()}}
+__ns.RefreshEventBubble()
+""")
+check('ordinary members do not see bank review work',not B.ev('EPUGuildEventBubble:IsShown()'))
+A.ex('__ns.G().requests={}; __ns.Changed()'); tick(1)
+check('badge hides after the last action is gone',not A.ev('EPUGuildEventBubble:IsShown()'))
 print('Typed activities and native calendar:',check.failed,'failed')
 sys.exit(bool(check.failed))

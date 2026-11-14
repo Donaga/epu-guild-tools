@@ -2337,6 +2337,8 @@ function UI:FillDetails()
 
   if ns.FillCasualDetails and ns.FillCasualDetails(kind,key,det) then
     -- Activity forms and details are supplied by CasualUI.
+  elseif kind=="bubbleactions" then
+    ns.FillBubbleActions(det)
   elseif kind=="fulfillment" and officer then
     det:Reset(nil,nil,"Bank fulfillment","Stock estimates use the latest bank snapshots")
     local queue = ns.BankFulfillmentQueue()

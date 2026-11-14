@@ -2,6 +2,8 @@
 
 ## 0.23.1
 
+- The floating Events button keeps the upcoming event count and adds an orange badge for work your character can act on. Click for requests, craft work, event signups, invites and Discord imports, with shortcuts to their details.
+
 - Discord `/chars` shows your verified links, legacy links and expected roles, with a button to get a link code. `/roles` explains skipped checks and scans that found everyone up to date. New class roles use WoW class colors.
 - Officers can use `/sync_health` to check the last WoW save, roster and bank snapshot times, and updates waiting for a reload.
 - **Officer → Bank fulfillment** groups approved requests by recipient and previews quantities that fit in the next mail.
