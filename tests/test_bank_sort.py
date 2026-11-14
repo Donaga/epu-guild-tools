@@ -61,5 +61,47 @@ check('Back returns to the normal bank list', A.ev('__ns.UI.bankCatChip:IsShown(
 fits = A.ev('(function() __ns.UI:SetView("bank") local b=__ns.UI.bars.bank return b.leftX+b.rightX end)()')
 check('the bank toolbar still fits the smallest window (%s)' % fits, fits <= 480)
 
+
+# Material hand-outs require an explicit quantity and protect current reserves.
+A.ex("""
+__bags[0]={{2589,40}}; MailFrame._shown=true
+GetItemCount=function(id) local n=0 for _,bag in pairs(__bags) do for _,slot in pairs(bag) do if slot[1]==id then n=n+slot[2] end end end return n end
+local g=__ns.G()
+g.needs.list[2589]=10
+g.requests.reserved={who='Tyler Baker',item=2589,qty=5,status='approved',t=__now,u=__now}
+__ns.UI.bankPlan=nil
+__ns.UI:OpenDetails('banksort',2589)
+function __mailAmount() local n=0 for _,s in pairs(__mailSlots) do n=n+s[2] end return n end
+function __clickMaterialMail()
+  for _,b in ipairs(__ns.UI.details.pools.btn) do
+    if b:IsShown() and b.text:GetText():find('Mail to',1,true) then b:GetScript('OnClick')(b); return end
+  end
+end
+""")
+check('material details default to a deliberate single-item quantity',
+      A.ev('__ns.UI.details.pools.box[1]:GetText()')=='1')
+check('bank mail limit preserves needs and open requests',A.ev('__ns.BankSortMailLimit(2589)')==25)
+A.ex("__ns.UI.details.pools.box[1]:SetText('3'); __clickMaterialMail()")
+check('material button attaches the entered quantity, not all carried stock',
+      A.ev('__mailAmount()')==3 and A.ev('GetItemCount(2589)')==37)
+A.ex("__clickMaterialMail()")
+check('repeated material preparation preserves the existing draft',A.ev('__mailAmount()')==3)
+A.ex("__mailSlots={}; SendMailNameEditBox:SetText(''); SendMailSubjectEditBox:SetText(''); __ns.UI.details.pools.box[1]:SetText('100'); __clickMaterialMail()")
+check('over-limit quantity leaves an empty draft untouched',
+      A.ev('__mailAmount()')==0 and A.ev('SendMailNameEditBox:GetText()')=='')
+for value in ('nil','0','-1','1.5','0/0'):
+    A.ex("__ns.MailBankItem('Pip Baker',2589,"+value+")")
+    check('invalid or omitted quantity cannot attach all stock: '+value,A.ev('__mailAmount()')==0)
+A.ex("__ns.G().requests.reserved.qty=30; __ns.G().bank['Epu Bank'].items[2589]=999; __ns.UI.details.pools.box[1]:SetText('1'); __clickMaterialMail()")
+check('stale detail controls recheck new reservations and ignore stale remote quantities',
+      A.ev('__mailAmount()')==0 and A.ev('GetItemCount(2589)')==37)
+A.ex("__ns.G().requests.reserved.qty=5; __ns.MailBankItem('Pip Baker',2589,22)")
+check('explicit surplus can be mailed without taking reserved stock',
+      A.ev('__mailAmount()')==22 and A.ev('GetItemCount(2589)')==15)
+A.ex("__mailSlots={}; SendMailNameEditBox:SetText(''); __ns.MailBankItem('Pip Baker',2589,1)")
+check('a later mail cannot spend the protected remainder',A.ev('__mailAmount()')==0)
+check('mail preparation does not fulfill the reserved request',
+      A.ev('__ns.G().requests.reserved.status')=='approved')
+
 print('Bank sort tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)
