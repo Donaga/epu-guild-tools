@@ -16,6 +16,13 @@ function __attached(id) local n=0 for _,v in pairs(__mailSlots) do if not id or 
     return c
 A=setup()
 check('plan includes only approved bank requests for exact recipient',A.ev("#__ns.MemberMailPlan('Tyler Baker')")==3)
+check('fulfillment preview respects the attachment limit without modifying bags',
+      A.ev("""(function()
+        local old=ATTACHMENTS_MAX_SEND; ATTACHMENTS_MAX_SEND=1
+        local preview=__ns.MemberMailPreview(__ns.MemberMailPlan('Tyler Baker'))
+        ATTACHMENTS_MAX_SEND=old
+        return preview[1].ready==5 and preview[2].ready==0 and __bags[0][1][2]==20 and __attached()==0
+      end)()"""))
 A.ex("__ns.MailMemberRequests('Tyler Baker')")
 check('one draft contains both different requested items',A.ev('__attached(2589)')==5 and A.ev('__attached(4306)')==4)
 check('same-item requests share one attachment when stack allows',A.ev('#__mailSlots')==2)
@@ -52,5 +59,9 @@ J=setup();J.ex("MailFrame._shown=false; __ns.MailMemberRequests('Tyler Baker')")
 check('combined mail requires the mailbox',J.ev('__attached()')==0)
 K=setup();K.ex("__ns.UI:Show(); __ns.UI:OpenDetails('membermail','Tyler Baker')")
 check('combined draft preview renders without errors',(K.ev('__errors') or 0)==0 and K.ev('__ns.UI.details.title:GetText()')=='Fill mail for member')
+K.ex("__ns.UI:OpenDetails('fulfillment','all')")
+check('officer fulfillment groups approved work and lists pending review',
+      K.ev("#__ns.BankFulfillmentQueue().ready==2 and #__ns.BankFulfillmentQueue().review==1")
+      and K.ev('__ns.UI.details.title:GetText()')=='Bank fulfillment')
 print('Combined member mail tests:',check.failed,'failed')
 sys.exit(1 if check.failed else 0)

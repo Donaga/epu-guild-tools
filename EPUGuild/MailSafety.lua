@@ -60,6 +60,22 @@ local function ReadSlot(bag,slot)
   end
 end
 
+function ns.PreviewMailItem(item, qty, slots)
+  local attached = 0
+  for _, bag in ipairs(ns.BagList()) do
+    for slot = 1, ((C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots)(bag) or 0) do
+      if attached >= qty or slots == 0 then return attached, slots end
+      local id, count, locked, bound = ReadSlot(bag, slot)
+      if id == item and not locked and not bound then
+        if not CountOK(count) then return attached, slots end
+        attached = attached + math.min(count, qty - attached)
+        slots = slots - 1
+      end
+    end
+  end
+  return attached, slots
+end
+
 function ns.AttachExactMailItem(item,qty,index)
   if not ns.PositiveInt(qty) then return 0,index end
   if not GetSendMailItem or not GetSendMailItemLink then

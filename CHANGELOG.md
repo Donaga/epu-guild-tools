@@ -2,6 +2,13 @@
 
 ## 0.23.1
 
+- Discord `/chars` shows your verified links, legacy links and expected roles, with a button to get a link code. `/roles` explains skipped checks and scans that found everyone up to date. New class roles use WoW class colors.
+- Officers can use `/sync_health` to check the last WoW save, roster and bank snapshot times, and updates waiting for a reload.
+- **Officer → Bank fulfillment** groups approved requests by recipient and previews quantities that fit in the next mail.
+- Event organizers can copy an event to up to three more weeks and set dungeon role slots. Going signups wait for organizer confirmation when role slots are set. Discord shows confirmed players and the waitlist.
+- Market craft details show the estimated up-front cost, a gold cap, and the deposit that could be lost if the batch goes unsold. Enter the deposit estimate from the auction house.
+- Role sync checks roster completeness before linking or assigning roles and deduplicates legacy Member-role mappings. Bank mail requires a quantity and protects reserved stock. Recipe sorting puts verified recipients first and labels unverified skill requirements.
+
 - Everyone linked gets the Member role in Discord, whatever their guild rank. Veteran and Initiate are extra roles on top for those ranks. Change it with `member_role` and `rank_roles`.
 - The Discord bot uses your server's existing Member, Veteran and Initiate roles instead of skipping them. It never takes over your officer role, a role with moderator permissions, another bot's role, or a role above its own. Only linked members' roles change; everyone else keeps what they have. Set `"adopt_existing_roles": "none"` to turn this off, or `"all"` to adopt existing class roles too.
 

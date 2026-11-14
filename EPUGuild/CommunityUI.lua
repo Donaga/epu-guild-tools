@@ -438,6 +438,14 @@ function ns.FillCommunityDetails(kind,key,det)
     slots=det:Field("Players",values[6] or tostring(cur and cur.slots or preset[3]),60,true)
     low=det:Field("Min level",values[7] or tostring(cur and cur.minLevel or 1),60,true)
     high=det:Field("Max level",values[8] or tostring(cur and cur.maxLevel or 60),60,true)
+    local roleSlots={}
+    if expanded then
+      for i,role in ipairs({"t","h","d"}) do
+        local count=cur and cur.places and cur.places[role]
+        roleSlots[i]=det:Field(ns.EVENT_ROLES[role].." slots",values[i+8] or (count and tostring(count) or ""),60,true)
+      end
+      det:Text("For a dungeon waitlist, fill all three role counts. They must add up to Players.",C.muted)
+    end
     if not expanded then
       for i=5,8 do det.pools.box[i]:Hide();det.pools.label[i]:Hide() end
       det.y=before
@@ -445,7 +453,9 @@ function ns.FillCommunityDetails(kind,key,det)
     summary=det:Text(duration:GetText().." minutes · "..slots:GetText().." players · levels "..low:GetText().."–"..high:GetText(),C.muted)
     if dungeon then UpdateLabels() end
     det:Buttons({{expanded and 'Hide group options' or 'Group options',function()
+      local previous=values
       local values={} for i=1,8 do values[i]=det.pools.box[i]:GetText() end
+      for i=1,3 do values[i+8]=roleSlots[i] and roleSlots[i]:GetText() or previous[i+8] end
       det.eventFormDraft={values=values,kind=activityType,dungeon=dungeon,expanded=not expanded,announceGuild=announceGuild};UI:FillDetails()
     end}})
     local function Soon(minutes) when:SetText(date('%Y-%m-%d %H:%M',ns.Now()+minutes*60));det.casualDraft=true end
@@ -481,7 +491,20 @@ function ns.FillCommunityDetails(kind,key,det)
     local function SaveEvent(calendar)
       local start=ns.ParseEventLocal(when:GetText())
       if not start then return ns.Print("Enter a valid local date and time as YYYY-MM-DD HH:MM.") end
-      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText()),announceGuild=announceGuild},cur and key)
+      local places
+      if activityType=="dungeon" then
+        local counts={}
+        for i=1,3 do counts[i]=roleSlots[i] and roleSlots[i]:GetText() or values[i+8] or "" end
+        if counts[1]~="" or counts[2]~="" or counts[3]~="" then
+          places={t=tonumber(counts[1]),h=tonumber(counts[2]),d=tonumber(counts[3])}
+          if not places.t or not places.h or not places.d or places.t+places.h+places.d~=tonumber(slots:GetText()) then
+            return ns.Print("Tank, Healer and DPS slots must add up to Players.")
+          end
+        elseif expanded or values[9]~=nil then
+          places=false
+        end
+      end
+      local id=ns.SaveGuildEvent({title=title:GetText(),zone=zone:GetText(),note=note:GetText(),starts=start,minutes=tonumber(duration:GetText()),slots=tonumber(slots:GetText()),kind=activityType,dungeon=dungeon,minLevel=tonumber(low:GetText()),maxLevel=tonumber(high:GetText()),announceGuild=announceGuild,places=places},cur and key)
       if id then
         s.lastEventType=activityType; Open(calendar and "eventcalendar" or "event",id)
         if calendar then ns.PrepareWoWCalendar(id) end
@@ -502,12 +525,23 @@ function ns.FillCommunityDetails(kind,key,det)
     local n=ns.EventCounts(key)
     det:Text(n.going.." going / "..r.slots.." planned · "..n.tentative.." tentative")
     det:Text(n.t.." tank · "..n.h.." healer · "..n.d.." DPS\n"..n.g.." helper · "..n.c.." crafter · "..n.m.." mentor",C.muted)
+    if r.places then
+      det:Text("Group slots · "..r.places.t.." tank · "..r.places.h.." healer · "..r.places.d.." DPS",C.gold)
+    end
     local snapshot=ns.CalendarSignupSnapshot(key)
     det:Text(snapshot and ("WoW signups refreshed "..math.floor(GetTime()-snapshot.at).."s ago. Calendar status takes priority; each member is counted once.") or "Showing EPU signups. Open the linked WoW event to refresh calendar attendees; snapshots expire after 3 minutes.",C.muted)
     for _,reply in ipairs(ns.EventResponses(key)) do
       local name=reply.who
-      det:Text(name.." · "..reply.state.." · "..ns.EVENT_ROLES[reply.role].." · "..(reply.source or "EPU")..(reply.note~="" and ("\n"..reply.note) or ""))
-      det:Buttons({{"Whisper",function() Whisper(name) end}})
+      local signup=g.eventResponses[key.."\030"..name]
+      local place=reply.state=="going" and signup and ns.EventPlaceStatus(r,signup)
+      det:Text(name.." · "..(place or reply.state).." · "..ns.EVENT_ROLES[reply.role].." · "..(reply.source or "EPU")..(reply.note~="" and ("\n"..reply.note) or ""))
+      local buttons={{"Whisper",function() Whisper(name) end}}
+      if place and r.who==ns.me and r.status=="scheduled" and r.ends>ns.Now() then
+        buttons[#buttons+1]={place=="Confirmed" and "Release place" or "Confirm place",function()
+          if ns.ConfirmEventPlace(key,name,place~="Confirmed") then UI:FillDetails() end
+        end}
+      end
+      det:Buttons(buttons)
     end
     det:Text("Signups show interest; the organiser confirms the group. No automatic invitations or attendance penalties.",C.muted)
     if r.status=="scheduled" and r.ends>ns.Now() then
@@ -524,6 +558,12 @@ function ns.FillCommunityDetails(kind,key,det)
       end
       det:Buttons({{"WoW calendar",function() Open("eventcalendar",key) end}})
       if r.who==ns.me and r.starts>ns.Now() then det:Buttons({{"Edit event",function() Open("eventform",key) end}}) end
+      if r.who==ns.me then
+        det:Buttons({{"Repeat weekly",function(self)
+          E.OpenMenu(self,{{label="1 more week",value=1},{label="2 more weeks",value=2},{label="3 more weeks",value=3}},
+            nil,function(weeks) ns.RepeatGuildEventWeekly(key,weeks); UI:FillDetails() end)
+        end}})
+      end
       if r.who==ns.me or ns.IsTrusted(ns.me) then det:Buttons({{"Cancel event",function() ns.CancelGuildEvent(key); UI:FillDetails() end}}) end
     end
   elseif kind=="eventcalendar" then

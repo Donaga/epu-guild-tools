@@ -32,6 +32,21 @@ local function Int(n,lo,hi) return type(n)=="number" and n==n and n>=lo and n<=h
 local function Text(s,n,required) return type(s)=="string" and #s<=n and (not required or s:find("%S")) end
 local function Clean(s,n) return tostring(s or ""):gsub("[%z\001-\031]",""):sub(1,n):match("^%s*(.-)%s*$") end
 local function Revision(r) return type(r)=="table" and ns.StampOK(r.t) and r.t<=ns.Now()+300 and r.t>=ns.Now()-30*DAY end
+local function ValidPlaces(r)
+  if r.places==nil then return r.confirmed==nil end
+  if r.kind~="dungeon" or type(r.places)~="table" or type(r.confirmed)~="table" then return false end
+  local p=r.places
+  if not Int(p.t,0,40) or not Int(p.h,0,40) or not Int(p.d,0,40) or p.t+p.h+p.d~=r.slots then return false end
+  local used={t=0,h=0,d=0}
+  for who,place in pairs(r.confirmed) do
+    if not Text(who,80,true) or type(place)~="table" or not ns.StampOK(place.at) then return false end
+    local role=place.role
+    if type(role)~="string" or used[role]==nil then return false end
+    used[role]=used[role]+1
+    if used[role]>p[role] then return false end
+  end
+  return true
+end
 local function ValidEvent(id,r)
   return Revision(r) and Text(r.who,80,true) and Text(r.by,80,true)
     and #id<=180 and id:sub(1,#r.who+1)==r.who.."\031" and Text(r.title,80,true) and Text(r.note,500) and Text(r.zone,80)
@@ -42,6 +57,7 @@ local function ValidEvent(id,r)
     and (r.dungeon==nil or (r.kind=="dungeon" and Text(r.dungeon,80,true)))
     and (r.minLevel==nil or Int(r.minLevel,1,100))
     and (r.maxLevel==nil or Int(r.maxLevel,r.minLevel or 1,100))
+    and ValidPlaces(r)
 end
 local function ValidResponse(id,r)
   return Revision(r) and Text(r.event,180,true) and Text(r.who,80,true) and ns.Member(r.who)
@@ -78,6 +94,18 @@ function ns.SaveGuildEvent(opts,id)
     starts=starts,ends=starts+minutes*60,slots=tonumber(opts.slots) or 5,status="scheduled",created=cur and cur.created or ns.Now(),t=cur and cur.t or ns.Now(),
     kind=opts.kind or (cur and cur.kind) or "other",minLevel=tonumber(opts.minLevel) or (cur and cur.minLevel) or 1,maxLevel=tonumber(opts.maxLevel) or (cur and cur.maxLevel) or 60}
   if r.kind == 'dungeon' then r.dungeon = opts.dungeon end
+  if r.kind=="dungeon" and opts.places~=false and (opts.places or cur and cur.places) then
+    r.places=opts.places or cur.places
+    r.confirmed={}
+    if cur then
+      for who,place in pairs(cur.confirmed or {}) do
+        local reply=g.eventResponses[id.."\030"..who]
+        if ns.Member(who) and reply and reply.state=="going" and place.at==reply.t and place.role==reply.role then
+          r.confirmed[who]=place
+        end
+      end
+    end
+  end
   if not ValidEvent(id,r) then return ns.Print("Choose an activity type, title, 2–40 players and a suggested level range from 1 to 100 (minimum no higher than maximum).") end
   g.guildEvents[id]=r; Publish("guildEvents",id,r)
   if not cur and opts.announceGuild then
@@ -91,6 +119,67 @@ function ns.SaveGuildEvent(opts,id)
   ns.FollowUpdates("event",id,true)
   if not cur then ns.RespondGuildEvent(id,"going",r.kind=="dungeon" and (((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d") or "g","") end
   return id
+end
+function ns.RepeatGuildEventWeekly(id, occurrences)
+  local g=ns.CasualStore(); local event=g and g.guildEvents[id]
+  if not event or event.who~=ns.me or event.status~="scheduled" then return ns.Print("Only the organiser can repeat a scheduled event.") end
+  if not Int(occurrences,1,3) then return ns.Print("Choose one to three additional weeks.") end
+  local starts, upcoming={},0
+  for _,r in pairs(g.guildEvents) do
+    if r.who==ns.me and r.status=="scheduled" and r.ends>ns.Now() then upcoming=upcoming+1 end
+  end
+  local original=date("*t",event.starts)
+  for week=1,occurrences do
+    local nextDate=date("*t",event.starts)
+    nextDate.day=nextDate.day+7*week; nextDate.isdst=nil
+    local start=time(nextDate)
+    local localDate=start and date("*t",start)
+    if not Int(start,ns.Now()+60,ns.Now()+28*DAY) or localDate.hour~=original.hour or localDate.min~=original.min then
+      return ns.Print("Choose dates within 28 days at a valid local time.")
+    end
+    local duplicate=false
+    for _,r in pairs(g.guildEvents) do
+      if r.who==ns.me and r.status=="scheduled" and r.title==event.title and r.starts==start then duplicate=true; break end
+    end
+    if not duplicate then starts[#starts+1]=start end
+  end
+  if upcoming+#starts>10 or Count(g.guildEvents)+#starts>500 then return ns.Print("Close an existing event first; you can have ten upcoming events.") end
+  for _,start in ipairs(starts) do
+    ns.SaveGuildEvent({title=event.title,zone=event.zone,note=event.note,starts=start,minutes=(event.ends-event.starts)/60,
+      slots=event.slots,kind=event.kind,dungeon=event.dungeon,minLevel=event.minLevel,maxLevel=event.maxLevel,
+      places=event.places and {t=event.places.t,h=event.places.h,d=event.places.d}})
+  end
+  ns.Print(#starts.." weekly event(s) created.")
+  return #starts
+end
+
+function ns.EventPlaceStatus(event,reply)
+  if event.places and reply.state=="going" then
+    local place=event.confirmed and event.confirmed[reply.who]
+    return place and place.role==reply.role and place.at==reply.t and "Confirmed" or "Waitlist"
+  end
+end
+
+function ns.ConfirmEventPlace(id,who,confirm)
+  local g=ns.CasualStore(); local event=g and g.guildEvents[id]
+  if not event or event.who~=ns.me or event.status~="scheduled" or event.ends<=ns.Now() or not event.places then return end
+  local confirmed={}
+  for name,place in pairs(event.confirmed or {}) do
+    local reply=g.eventResponses[id.."\030"..name]
+    if ns.Member(name) and reply and ns.EventPlaceStatus(event,reply)=="Confirmed" then confirmed[name]=place end
+  end
+  if confirm then
+    local reply=g.eventResponses[id.."\030"..who]
+    if not reply or not ns.Member(who) or reply.state~="going" or event.places[reply.role]==nil then return end
+    confirmed[who]={role=reply.role,at=reply.t}
+  else
+    confirmed[who]=nil
+  end
+  local before=event.confirmed
+  event.confirmed=confirmed
+  if not ValidPlaces(event) then event.confirmed=before; return ns.Print("That role has no open slots. Release a place or adjust the group first.") end
+  Publish("guildEvents",id,event)
+  return true
 end
 function ns.CancelGuildEvent(id)
   local g=ns.CasualStore(); local r=g and g.guildEvents[id]
@@ -136,7 +225,7 @@ end
 function ns.MergeCommunity(sender,b,trusted)
   local g=ns.CasualStore(); if not g then return false end
   local changed=false
-  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel","dungeon"}},
+  local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel","dungeon","places","confirmed"}},
     eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t","via","bridgeBy","sourceID","sourceRevision"}}}
   for f,d in pairs(definitions) do
     if type(b[f])=="table" then

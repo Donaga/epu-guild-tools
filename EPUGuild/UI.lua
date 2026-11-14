@@ -2231,6 +2231,7 @@ do
       end, "Hides filled, rejected and cancelled requests from the default views, for everyone." },
     { "Profession coverage", function() UI:OpenDetails("coverage", "all") end, "Which professions the guild has, who's best, the gaps, and the guild focus." },
     { "Officer log", function() UI:OpenDetails("log", "all") end, "Who approved, rejected, voided or changed what, and when." },
+    { "Bank fulfillment", function() UI:OpenDetails("fulfillment", "all") end, "Approved bank requests grouped by recipient and what can be mailed now." },
   }
   local x = 14
   for _, t in ipairs(tools) do
@@ -2336,10 +2337,33 @@ function UI:FillDetails()
 
   if ns.FillCasualDetails and ns.FillCasualDetails(kind,key,det) then
     -- Activity forms and details are supplied by CasualUI.
+  elseif kind=="fulfillment" and officer then
+    det:Reset(nil,nil,"Bank fulfillment","Stock estimates use the latest bank snapshots")
+    local queue = ns.BankFulfillmentQueue()
+    for _, section in ipairs({{"Ready to fill",queue.ready},{"Pull from bank",queue.pull},{"Waiting for stock",queue.restock}}) do
+      det:Text(section[1].." ("..#section[2]..")",C.gold)
+      for _, group in ipairs(section[2]) do
+        local who = group.who
+        det:Text(who.." · "..#group.rows.." approved"
+          ..(group.short>0 and (" · "..group.short.." short in recorded stock") or ""))
+        det:Buttons({{"Preview mail",function() UI:OpenDetails("membermail",who) end}})
+      end
+    end
+    det:Text("Needs review ("..#queue.review..")",C.gold)
+    for _, id in ipairs(queue.review) do
+      local request = g.requests[id]
+      det:Text(ns.RequestName(request,true).." · "..(request.to or request.who).." · "..request.status)
+      det:Buttons({{"Open request",function() UI:OpenDetails("request",id) end}})
+    end
   elseif kind=="membermail" then
     det:Reset(nil,nil,"Fill mail for member",key)
     local rows=ns.MemberMailPlan(key)
-    for _,row in ipairs(rows) do det:Text(ns.RequestName(row.r,true).." x"..ns.Remaining(row.r)) end
+    local shortage={}
+    for _,row in ipairs(rows) do shortage[row.r.item]=(shortage[row.r.item] or 0)+ns.RequestRestock(row.id) end
+    for _,line in ipairs(ns.MemberMailPreview(rows)) do
+      det:Text(ns.ItemName(line.item,true).." · "..line.ready.." of "..line.remaining.." in next mail"
+        ..((shortage[line.item] or 0)>0 and (" · "..shortage[line.item].." short in recorded stock") or ""))
+    end
     det:Text("Combines approved bank requests for this exact recipient. Uses items in your bags, up to the game's attachment limit. Missing quantities stay open. Sending is manual.",C.muted)
     if officer then det:Buttons({{"Fill mail",function() ns.MailMemberRequests(key) end,accent=true}}) end
   elseif kind=="newproject" then

@@ -544,17 +544,39 @@ function ns.CraftingMaterialPlan(source, row, crafts, professions)
     for item, missing in pairs(direct) do Require(item, missing, path) end
   end
   local function Total(items)
-    local cost = 0
+    local cost, stale, missing = 0, false, false
     for item, quantity in pairs(items) do
       if quantity > 0 then
-        local price = Market(source, item, row.buySort and "budget" or true)
-        if not price then return end
-        cost = cost + quantity * price
+        local price, info = Market(source, item, row.buySort and "budget" or true)
+        if price then
+          cost = cost + quantity * price
+          if not info.vendor and (info.snapshot or (info.ageDays or 0) >= 1
+            or type(info.updated) == "number" and ns.Now()-info.updated > STALE_SECONDS) then stale = true end
+        else
+          missing = true
+        end
       end
     end
-    return cost
+    return not missing and cost or nil, stale
   end
-  return {direct = direct, base = base, steps = steps, buyCost = Total(direct), baseCost = Total(base)}
+  local buyCost, buyStale = Total(direct)
+  local baseCost, baseStale = Total(base)
+  return {direct=direct, base=base, steps=steps, buyCost=buyCost, baseCost=baseCost, buyStale=buyStale, baseStale=baseStale}
+end
+
+function ns.MarketBatchBudget(row, crafts, plan, cap, deposit)
+  local spend, stale = plan.buyCost, plan.buyStale
+  if not row.buySort and not row.guild and plan.baseCost and (not spend or plan.baseCost < spend) then
+    spend, stale = plan.baseCost, plan.baseStale
+  end
+  local upFront = spend and spend + (deposit or 0)
+  return {
+    upFront = upFront,
+    profit = row.profit and row.profit * crafts,
+    depositAtRisk = deposit,
+    stale = stale,
+    overBudget = cap and upFront and upFront > cap,
+  }
 end
 
 local frame, activeSource, craftMode, skillOnly, routeOrder, zoneOnly, buySort, professionFilter, gatherFilter, craftSort
@@ -1103,6 +1125,10 @@ RenderDetail = function()
   frame.detailTitle:SetText(row.name)
   frame.crafts:SetShown(craftMode)
   frame.craftsLabel:SetShown(craftMode)
+  frame.cap:SetShown(craftMode)
+  frame.capLabel:SetShown(craftMode)
+  frame.deposit:SetShown(craftMode)
+  frame.depositLabel:SetShown(craftMode)
   frame.detailScroll:SetShown(craftMode)
   local routable = ns.GatheringRouteProfession(row.gatherProfession)
   frame.startTarget:SetShown(routable)
@@ -1154,21 +1180,32 @@ RenderDetail = function()
   end
   local crafts = math.min(999, math.max(1, math.floor(tonumber(frame.crafts:GetText()) or 1)))
   local plan = ns.CraftingMaterialPlan(activeSource.key, row, crafts, frame.professions)
+  local cap = tonumber(frame.cap:GetText())
+  local deposit = tonumber(frame.deposit:GetText())
+  local budget = ns.MarketBatchBudget(row, crafts, plan, cap and cap*10000, deposit and deposit*100)
+  local _, stale = SourceStatus({row})
+  stale = stale or budget.stale
+  local upFront = "Up front: "..(budget.upFront and Gold(budget.upFront) or "missing prices")
+    ..(budget.overBudget and " · over cap" or "")
+    ..(budget.depositAtRisk and (" · up to "..Gold(budget.depositAtRisk).." lost if unsold") or " · before deposit")
+  if stale then upFront=upFront.."\nRefresh stale prices before buying." end
   local _, _, map = ns.GatheringRoutePreview()
   local yields = ns.cdb.herbYield and ns.cdb.herbYield[map]
   local sale = row.price and (Gold(row.price) .. " each, " .. (basisText[row.basis] or "listed price")) or "no price"
   frame.askCrafter:SetShown(row.guild == true)
   if row.guild then
     frame.detailText:SetText(string.format("Makes %d · sale %s\nProfit after AH cut %s (%s)\nBuy the ingredients %s\nCrafters: %s",
-      crafts * row.quantity, sale, Gold(row.profit and row.profit * crafts), ProfitPercent(row.roi), Gold(plan.buyCost), CrafterNames(row, 4)))
+      crafts * row.quantity, sale, Gold(budget.profit), ProfitPercent(row.roi), Gold(plan.buyCost), CrafterNames(row, 4)))
   elseif buySort then
     frame.detailText:SetText(string.format("Makes %d · %s sold/day%s\nSale %s\nProfit after AH cut %s (%s)\nBuy missing ingredients %s",
       crafts * row.quantity, Sales(row.volume), row.listed and (" · " .. Sales(row.listed) .. " listed") or "", sale,
-      Gold(row.profit * crafts), ProfitPercent(row.roi), Gold(plan.buyCost)))
+      Gold(budget.profit), ProfitPercent(row.roi), Gold(plan.buyCost)))
   else
     frame.detailText:SetText(string.format("Makes %d · sale %s\nProfit after AH cut %s (%s)\nBuy missing ingredients %s\nBuy base materials and craft the rest %s",
-      crafts * row.quantity, sale, Gold(row.profit and row.profit * crafts), ProfitPercent(row.roi), Gold(plan.buyCost), Gold(plan.baseCost)))
+      crafts * row.quantity, sale, Gold(budget.profit), ProfitPercent(row.roi), Gold(plan.buyCost), Gold(plan.baseCost)))
   end
+  frame.detailText:SetText(frame.detailText:GetText().."\n"..upFront)
+  frame.detailScroll:SetPoint("TOPLEFT", 0, stale and -176 or -159)
   local entries = {}
   local function Add(title, values, showPrice, linkGathering)
     entries[#entries + 1] = {label = title}
@@ -1375,6 +1412,21 @@ local function Create(parent, footer)
   frame.crafts:SetMaxLetters(3)
   frame.crafts:SetScript("OnTextChanged", function() if frame.selected and craftMode then RenderDetail() end end)
   frame.crafts:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+  local function BudgetInput(label,x,width)
+    local caption=Label(frame.detail,label)
+    caption:SetPoint("TOPLEFT",x,-33)
+    local input=CreateFrame("EditBox",nil,frame.detail,"InputBoxTemplate")
+    input:SetSize(48,24)
+    input:SetPoint("LEFT",caption,"RIGHT",6,0)
+    input:SetAutoFocus(false)
+    input:SetNumeric(true)
+    input:SetMaxLetters(width)
+    input:SetScript("OnTextChanged",function() if frame.selected and craftMode then RenderDetail() end end)
+    input:SetScript("OnEnterPressed",function(self) self:ClearFocus() end)
+    return input,caption
+  end
+  frame.cap,frame.capLabel=BudgetInput("Cap (g)",125,6)
+  frame.deposit,frame.depositLabel=BudgetInput("Batch deposit (s)",232,6)
   frame.detailText = Label(frame.detail, "")
   frame.detailText:SetPoint("TOPLEFT", 0, -62)
   frame.detailText:SetJustifyH("LEFT")

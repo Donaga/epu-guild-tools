@@ -163,5 +163,26 @@ check('bubble opens Events and clears filters that could hide upcoming events',B
 B.ex("for _,e in pairs(__ns.CasualStore().guildEvents) do e.starts=__now-60 end; __ns.RefreshEventBubble()")
 check('bubble disappears when all events have started',not B.ev('EPUGuildEventBubble:IsShown()'))
 check('new activity UI raises no runtime errors',A.ev('__errors') in (None,0))
+A.ex("""dungeon=__ns.SaveGuildEvent({title='Weekly run',kind='dungeon',starts=__ns.Now()+3600,minutes=60,slots=5,places={t=1,h=1,d=3}})""")
+check('weekly repeat creates separate events and a second click skips duplicates',
+      A.ev('__ns.RepeatGuildEventWeekly(dungeon,2)')==2 and A.ev('__ns.RepeatGuildEventWeekly(dungeon,2)')==0)
+B.rt.globals()['dungeon']=A.ev('dungeon')
+check('group slot limits sync to guildmates',
+      tick_until(lambda:B.ev('(__ns.CasualStore().guildEvents[dungeon] or {}).places ~= nil'),60))
+B.ex("__ns.RespondGuildEvent(dungeon,'going','h','')")
+check('a going signup joins the waitlist',tick_until(lambda:A.ev("""(function()
+  local g=__ns.CasualStore(); local r=g.eventResponses[dungeon.."\\030Tyler Baker"]
+  return r and __ns.EventPlaceStatus(g.guildEvents[dungeon],r)=='Waitlist'
+end)()"""),60))
+check('the organiser can confirm a role spot', A.ev("__ns.ConfirmEventPlace(dungeon,'Tyler Baker',true)"))
+check('confirmation syncs back to the signup',tick_until(lambda:B.ev("""(function()
+  local g=__ns.CasualStore()
+  return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Confirmed'
+end)()"""),60))
+B.ex("__ns.RespondGuildEvent(dungeon,'declined','h',''); __ns.RespondGuildEvent(dungeon,'going','h','')")
+check('a new signup must be confirmed again',B.ev("""(function()
+  local g=__ns.CasualStore()
+  return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Waitlist'
+end)()"""))
 print('Typed activities and native calendar:',check.failed,'failed')
 sys.exit(bool(check.failed))

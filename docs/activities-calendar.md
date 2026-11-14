@@ -14,6 +14,12 @@ An officer must verify your in-game character with `/link` and `/approve_link` f
 
 The command queues the activity. A companion user or approved helper with the updated software logs in or runs `/reload` to import it. It appears in **Guild activities** and syncs to guildmates. After a bridge user saves the game data by reloading or logging out and the bot receives it, the bot posts the signup card in **#events**. Open the activity on the organising character to publish a WoW calendar copy.
 
+## Repeat an event or manage dungeon places
+
+The organiser can choose **Repeat weekly** on an event to create up to three further dates within the 28-day planning window. Each date keeps the same local start time and has its own signups. Edit or cancel each date from its details.
+
+For dungeons, open **Group options** and set Tank, Healer and DPS slots that add up to Players. **Going** adds the player to the waitlist. The organiser can **Confirm place** or **Release place** on that signup. Changing a signup requires a new confirmation. Confirmed places and the waitlist appear on Discord after the next bridge save. In-game event reminders still use each player's personal settings.
+
 ## Optional WoW calendar copy
 
 EPU events are not automatically published to WoW's calendar. **Create event** saves the EPU activity only. **Create + WoW calendar** also prepares a native guild signup draft when supported. Review it and press WoW's **Create** button to publish it for members without EPU. Opening the calendar alone does not publish an activity.

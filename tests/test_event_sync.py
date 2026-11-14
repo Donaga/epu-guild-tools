@@ -45,6 +45,10 @@ sync=event_sync.EventSync(cfg,state,types.SimpleNamespace(get_channel=lambda id:
 asyncio.run(sync.refresh(gd));asyncio.run(sync.refresh(gd))
 check('event posts once and retains signup buttons',len(channel.sent)==1 and len(channel.sent[0]['view'].children)==4)
 check('card contains event time and current signup names','<t:' in channel.sent[0]['embed'].fields[0].value and 'Chris Baker' in str(channel.sent[0]['embed'].to_dict()))
+record=dict(gd.g['guildEvents'][event], places={'t': 1, 'h': 1, 'd': 3})
+waitlist=event_sync.card(gd,state,event,record)
+check('Discord card shows unconfirmed going signups on the waitlist',
+      any(f.name=='Waitlist (1)' and 'Chris Baker' in f.value for f in waitlist.fields))
 class Response:
     def __init__(self):self.messages=[]
     async def send_message(self,text,**kw):self.messages.append(text)

@@ -464,4 +464,11 @@ __ns.Print=say
 """)
 check('a failed profession scan is reported once instead of silently', D.ev("__errors==1 and __said:find('could not read',1,true)~=nil"))
 
+check('market batch cap includes the deposit and cheaper material plan',
+      D.ev("""(function()
+        local budget=__ns.MarketBatchBudget({profit=50},4,{buyCost=300,baseCost=150},199,50)
+        return budget.upFront==200 and budget.overBudget and budget.profit==200 and budget.depositAtRisk==50
+      end)()"""))
+check('market budget keeps missing costs unknown',
+      D.ev("__ns.MarketBatchBudget({guild=true},{},{baseCost=0},100,50).upFront==nil"))
 sys.exit(bool(check.failed))

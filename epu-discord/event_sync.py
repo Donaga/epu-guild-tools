@@ -125,8 +125,22 @@ def card(gd,state,event,r):
         value=f"<t:{int(r['starts'])}:F> (<t:{int(r['starts'])}:R>)\n{int((r['ends']-r['starts'])/60)} minutes · {r.get('slots',5)} planned players",inline=False)
     embed.add_field(name='Meet / levels',value=f"{r.get('zone') or 'Ask the organiser'} · levels {r.get('minLevel',1)}–{r.get('maxLevel',60)}\nOrganiser: {r.get('who','?')}",inline=False)
     rows=responses(gd,event)
-    for state_name,label in [('going','Going'),('tentative','Maybe'),('declined','Can’t make it')]:
-        members=[f"{r['who']} · {ROLES.get(r.get('role'),'Helper')}" for r in rows if r.get('state')==state_name]
+    places=r.get('places')
+    if not isinstance(places,dict) or any(type(places.get(k)) is not int or not 0<=places[k]<=40 for k in ('t','h','d')):
+        places=None
+    confirmed=r.get('confirmed')
+    confirmed=confirmed if isinstance(confirmed,dict) else {}
+    def signup_status(reply):
+        if places and reply.get('state')=='going':
+            place=confirmed.get(reply['who'])
+            return 'confirmed' if isinstance(place,dict) and place.get('role')==reply.get('role') and place.get('at')==reply.get('t') else 'waitlist'
+        return reply.get('state')
+    groups=[('going','Going'),('tentative','Maybe'),('declined','Can’t make it')]
+    if places:
+        embed.add_field(name='Group slots',value=' · '.join(f"{places[k]} {ROLES[k]}" for k in ('t','h','d')),inline=False)
+        groups=[('confirmed','Confirmed'),('waitlist','Waitlist'),*groups[1:]]
+    for state_name,label in groups:
+        members=[f"{reply['who']} · {ROLES.get(reply.get('role'),'Helper')}" for reply in rows if signup_status(reply)==state_name]
         # Discord's field limit: retain the total and a clearly labelled preview.
         text='\n'.join(members) or 'None yet'
         if len(text)>1000:text=text[:950]+'\n…more signups in EPU'
