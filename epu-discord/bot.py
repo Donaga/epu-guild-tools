@@ -1086,18 +1086,18 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
                 for key, rid in managed.items()
                 if (role := guild.get_role(int(rid))) is not None}
 
+    requested_keys = set().union(*desired.values()) if desired else set()
     safety = role_safety()
     blocked = {key for key, problem in safety.items() if problem}
     sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()),
                            sorted(holders.items()), sorted(safety.items())])
-    if sig == state.data.get("roles_sig") and not confirm:
+    if sig == state.data.get("roles_sig") and not confirm and requested_keys <= safety.keys():
         return {}
     out_lines, warned = [], set(state.data.setdefault("role_name_warned", []))
     for key in sorted(blocked):
         out_lines.append(f"⚠️ Left managed role **{guild.get_role(int(managed[key])).name}** alone because {safety[key]}. "
                          "No members were added to or removed from this role.")
     roles = {}
-    requested_keys = set().union(*desired.values()) if desired else set()
     for key in sorted(requested_keys):
         if key in blocked:
             continue
