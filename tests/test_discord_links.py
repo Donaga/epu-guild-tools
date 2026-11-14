@@ -182,5 +182,45 @@ bot.state = st3; bot.client.get_guild = lambda i: G3
 res = asyncio.run(bot.sync_roles(gd))
 check("adopting can be turned off", G3.get_role(2) not in G3.members_by[900].roles and any("already exists" in l for l in res["lines"]))
 
+
+# Cached role IDs must not bypass the adoption safety gate on later syncs.
+for case in ("administrator", "officer config", "officer rename", "hierarchy", "integration"):
+    bot.cfg.update(adopt_existing_roles="rank", officer_role="Officer", member_role="Member")
+    server = Guild()
+    server.me = type("Me", (), {"top_role": type("Top", (), {"position": 5})()})()
+    role = server.get_role(2)
+    role.position, role.permissions, role.managed = 1, Perms(), False
+    server.members_by[950] = Member(950)
+    saved = core.State(os.path.join(WOW, "safety-" + case + ".json"))
+    saved.link(950, "Tyler Baker")
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    asyncio.run(bot.sync_roles(gd))
+    check(case + ": safe role initially adopted", role in server.members_by[950].roles)
+    if case == "administrator": role.permissions.administrator = True
+    elif case == "officer config": bot.cfg["officer_role"] = "Member"
+    elif case == "officer rename": role.name = "Officer"
+    elif case == "hierarchy": server.me.top_role.position = 1
+    else: role.managed = True
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": safety change invalidates unchanged-roster cache",
+          bool(result.get("lines")) and role in server.members_by[950].roles)
+    server.members_by[951] = Member(951)
+    saved.link(951, "Chris Stone")
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check(case + ": confirmation cannot assign unsafe cached role",
+          role not in server.members_by[951].roles)
+    bot.cfg["member_role"] = ""
+    asyncio.run(bot.sync_roles(gd, confirm=True))
+    check(case + ": unsafe role no longer desired is not removed",
+          role in server.members_by[950].roles
+          and "member:Member" in saved.data["role_holders"]["950"])
+    role.name, role.position, role.permissions, role.managed = "Member", 1, Perms(), False
+    server.me.top_role.position = 5
+    bot.cfg.update(officer_role="Officer", member_role="Member")
+    asyncio.run(bot.sync_roles(gd))
+    check(case + ": sync resumes once role is safe",
+          role in server.members_by[951].roles)
+
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
