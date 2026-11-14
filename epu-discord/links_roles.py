@@ -112,10 +112,11 @@ def member_info(gd) -> dict:
     return {k: v for k, v in info.items() if isinstance(k, str) and isinstance(v, dict)}
 
 
-def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True) -> dict[str, set[str]]:
-    """{discord user id: {"class:MAGE", "rank:Member", ...}} for every linked user.
-    Rank roles come from the user's main (first linked character still in the
-    guild), and only for ranks listed in rank_roles."""
+def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True, member_role: str | None = None) -> dict[str, set[str]]:
+    """{discord user id: {"member:Member", "class:MAGE", "rank:Initiate", ...}} for every linked user.
+    member_role goes to everyone linked who is still in the guild, whatever
+    their rank. Rank roles come from the user's main, and only for ranks listed
+    in rank_roles (a rank named like member_role adds nothing extra)."""
     info = member_info(gd)
     allowed = {r.lower(): r for r in rank_roles}
     out: dict[str, set[str]] = {}
@@ -127,10 +128,12 @@ def desired_roles(gd, state, rank_roles: list[str], class_roles: bool = True) ->
             for c in here:
                 if info[c].get("c"):
                     want.add("class:" + str(info[c]["c"]))
+        if here and member_role:
+            want.add("member:" + member_role)
         if here:
             main = main_for(gd, state, uid)
             rank = (info.get(main) or info[here[0]]).get("r")  # main may have left; fall back
-            if isinstance(rank, str) and rank.lower() in allowed:
+            if isinstance(rank, str) and rank.lower() in allowed and rank.lower() != str(member_role or "").lower():
                 want.add("rank:" + allowed[rank.lower()])
         out[str(uid)] = want
     return out

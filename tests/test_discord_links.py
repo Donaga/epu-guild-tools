@@ -76,6 +76,14 @@ info["Pip Baker"]["r"] = "Initiate"
 want = lr.desired_roles(gd, st, ["Veteran", "Member", "Initiate"])
 check("a /main picked in Discord sets the rank role", "rank:Initiate" in want["500"] and "rank:Member" not in want["500"])
 st.data["mains"].pop("500")
+want = lr.desired_roles(gd, st, ["Veteran", "Initiate"], member_role="Member")
+check("every linked guild member gets the member role, officers included",
+      "member:Member" in want["500"] and "member:Member" in want["700"] and not any(k.startswith("rank:") for k in want["700"]))
+check("a Member-rank main gets no duplicate rank role", not any(k.startswith("rank:") for k in want["500"]))
+info["Pip Baker"]["r"] = "Initiate"; st.data["mains"]["500"] = "Pip Baker"
+want = lr.desired_roles(gd, st, ["Veteran", "Initiate"], member_role="Member")
+check("an Initiate gets both Member and Initiate", {"member:Member", "rank:Initiate"} <= want["500"])
+st.data["mains"].pop("500"); info["Pip Baker"]["r"] = "Member"
 check("role names use the class's display name", lr.role_name("class:PRIEST", gd) == "Priest" and lr.role_name("rank:Member") == "Member")
 adds, removes = lr.plan_changes({"1": {"a", "b"}, "2": set()}, {"1": {"b", "c"}, "2": {"a"}})
 check("plan adds and removes only the difference", adds == {"1": {"a"}} and removes == {"1": {"c"}, "2": {"a"}})
@@ -125,7 +133,8 @@ for f in ("bot.py", "epu_core.py", "shared_bridge.py"):
     shutil.copy(os.path.join(os.path.dirname(core.__file__), f), cfgdir)
 sys.path.insert(0, cfgdir)
 bot = importlib.import_module("bot")
-check("rank roles default to Veteran, Member and Initiate", bot.cfg["rank_roles"] == ["Veteran", "Member", "Initiate"])
+check("everyone linked gets Member; Veteran and Initiate are extra rank roles",
+      bot.cfg["member_role"] == "Member" and bot.cfg["rank_roles"] == ["Veteran", "Initiate"])
 G = Guild()
 for i in (500, 600, 700): G.members_by[i] = Member(i)
 bot.client.get_guild = lambda i: G
@@ -136,7 +145,7 @@ check("linked members get class roles", "Mage" in names(G.members_by[500]) and "
 check("your existing rank role is used instead of a duplicate",
       G.get_role(2) in G.members_by[500].roles and len([r for r in G.roles if r.name == "Member"]) == 1
       and any("existing **Member**" in l for l in res["lines"]))
-check("the officer gets no rank role", all(not r.name.startswith("Officer") or r.id == 1 for r in G.members_by[700].roles)
+check("the officer gets Member but never the Officer role", G.get_role(2) in G.members_by[700].roles
       and G.get_role(1) not in G.members_by[700].roles)
 G.members_by[700].roles.append(G.get_role(1))
 st.data["links"]["500"] = []

@@ -269,7 +269,7 @@ The **EPU Discord companion** (a separate download) posts requests to a Discord 
 1. In Discord, use `/link`. The bot replies privately with a code like `ABCD-EF23`.
 2. In game, type `/epu link ABCD-EF23` on any character.
 
-Every character on that WoW account links itself the next time it logs in, and characters in your confirmed EPU alt group (see Mains and alts) come along, even on another WoW account. The link shows up in Discord after an officer's next save. Linked members get a class role for each character and a rank role (Veteran, Member or Initiate) from their main; officer ranks are set by hand. `/main` in Discord picks a different main for Discord only. `/epu link` shows your status; `/epu link off` stops new characters linking. The game only shares a scrambled form of the code, so guildmates can't use it to see which characters are yours.
+Every character on that WoW account links itself the next time it logs in, and characters in your confirmed EPU alt group (see Mains and alts) come along, even on another WoW account. The link shows up in Discord after an officer's next save. Linked members get the Member role, a class role for each character, and a Veteran or Initiate role when their main has that rank; officer roles are set by hand. `/main` in Discord picks a different main for Discord only. `/epu link` shows your status; `/epu link off` stops new characters linking. The game only shares a scrambled form of the code, so guildmates can't use it to see which characters are yours.
 
 ## Sort the bank (0.23+)
 On the **Bank** page, click **Sort** to see the bank (and the current character's mailbox) the way an officer would hand it out:

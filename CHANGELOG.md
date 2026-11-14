@@ -2,7 +2,8 @@
 
 ## 0.23.1
 
-- The Discord bot uses your server's existing Veteran, Member and Initiate roles instead of skipping them. It never takes over your officer role, a role with moderator permissions, another bot's role, or a role above its own. Only linked members' roles change; everyone else keeps what they have. Set `"adopt_existing_roles": "none"` to turn this off, or `"all"` to adopt existing class roles too.
+- Everyone linked gets the Member role in Discord, whatever their guild rank. Veteran and Initiate are extra roles on top for those ranks. Change it with `member_role` and `rank_roles`.
+- The Discord bot uses your server's existing Member, Veteran and Initiate roles instead of skipping them. It never takes over your officer role, a role with moderator permissions, another bot's role, or a role above its own. Only linked members' roles change; everyone else keeps what they have. Set `"adopt_existing_roles": "none"` to turn this off, or `"all"` to adopt existing class roles too.
 
 ## 0.23.0
 

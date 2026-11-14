@@ -74,7 +74,8 @@ def load_config() -> dict:
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
     cfg.setdefault("discord_roles", True)         # give linked members class and rank roles (needs Manage Roles)
     cfg.setdefault("class_roles", True)
-    cfg.setdefault("rank_roles", ["Veteran", "Member", "Initiate"])   # only these ranks; officer ranks stay manual
+    cfg.setdefault("member_role", "Member")       # every linked guild member gets this, whatever their rank ("" turns it off)
+    cfg.setdefault("rank_roles", ["Veteran", "Initiate"])   # extra roles for these ranks only; officer ranks stay manual
     cfg.setdefault("adopt_existing_roles", "rank")  # use your own same-named roles: "rank", "all" (class too) or "none"
     cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
     cfg.setdefault("level_milestones", [60])
@@ -1059,7 +1060,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     guild = client.get_guild(int(cfg["server_id"]))
     if guild is None:
         return {}
-    desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"])
+    desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None)
     managed = state.data.setdefault("managed_roles", {})
     holders = state.data.setdefault("role_holders", {})
     sig = core.json.dumps([sorted((u, sorted(k)) for u, k in desired.items()), sorted(managed.items()), sorted(holders.items())])
@@ -1074,7 +1075,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
             existing = discord.utils.get(guild.roles, name=name)
             if existing is not None:
                 mode = str(cfg["adopt_existing_roles"]).lower()
-                wanted = mode == "all" or (mode == "rank" and key.startswith("rank:"))
+                wanted = mode == "all" or (mode == "rank" and key.split(":", 1)[0] in ("rank", "member"))
                 problem = adopt_problem(guild, existing) if wanted else None
                 if wanted and not problem:
                     managed[key] = str(existing.id)
@@ -1137,7 +1138,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         else:
             holders.pop(uid, None)
     if not held:
-        state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"]).items()),
+        state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
                                                    sorted(managed.items()), sorted(holders.items())])
     state.save()
     return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())), "held": held}
@@ -1447,7 +1448,7 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
         held = state.data.get("roles_held")
         managed = ", ".join(f"<@&{r}>" for r in state.data.get("managed_roles", {}).values()) or "none yet"
         await interaction.response.send_message(
-            f"Linked members: **{linked}**. Roles I manage: {managed}.\nRank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
+            f"Linked members: **{linked}**. Roles I manage: {managed}.\nEveryone linked: {cfg['member_role'] or 'off'}; rank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
             f"class roles: {'on' if cfg['class_roles'] else 'off'}." + (f"\n⏸️ Holding back removals for **{held}** people; use Confirm if that's right." if held else ""),
             ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         return
