@@ -374,5 +374,32 @@ for flag, reason in (("roster_held", "Read a complete roster before retrying"),
 bot.sync_links_roles = original_sync_links
 bot.read_latest, bot.is_officer = original_read_latest, original_is_officer
 
+
+# Unmanaged same-name roles must recover automatically after a safety fix.
+for case in ("administrator", "hierarchy", "officer", "adoption mode"):
+    bot.cfg.update(member_role="Member", officer_role="Officer", class_roles=False,
+                   rank_roles=[], adopt_existing_roles="rank")
+    server = Guild()
+    server.me = SimpleNamespace(top_role=SimpleNamespace(position=5))
+    role = server.get_role(2)
+    role.permissions, role.position = Perms(), 1
+    if case == "administrator": role.permissions.administrator = True
+    elif case == "hierarchy": role.position = 6
+    elif case == "officer": bot.cfg["officer_role"] = "Member"
+    else: bot.cfg["adopt_existing_roles"] = "none"
+    saved = core.State(os.path.join(WOW, "candidate-" + case + ".json"))
+    saved.link(990, "Tyler Baker")
+    server.members_by[990] = Member(990)
+    bot.state = saved
+    bot.client.get_guild = lambda i: server
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": initially unsafe candidate not adopted",
+          role not in server.members_by[990].roles and "member:Member" not in saved.data["managed_roles"])
+    role.permissions, role.position = Perms(), 1
+    bot.cfg.update(officer_role="Officer", adopt_existing_roles="rank")
+    result = asyncio.run(bot.sync_roles(gd))
+    check(case + ": repaired candidate adopted without confirmation or roster changes",
+          role in server.members_by[990].roles and result.get("added") == 1)
+
 print("Discord link tests:", check.failed, "failed")
 sys.exit(1 if check.failed else 0)
