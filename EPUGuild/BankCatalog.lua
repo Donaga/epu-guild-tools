@@ -281,18 +281,33 @@ function ns.BankSortPlan()
   return plan
 end
 
+-- Reserve on the sending character, not against possibly stale remote stock.
+-- This is deliberately conservative when several characters hold the item.
+function ns.BankSortMailLimit(item)
+  local g = ns.G()
+  if not g then return 0 end
+  local have = ns.ItemCount(item)
+  local _, asked = ns.BankRequestStock(item)
+  return math.max(0, have - Keep(g, item) - (asked or 0))
+end
+
 -- Put a bank item into a mail to a guildmate, ready to check and send.
 function ns.MailBankItem(target, item, qty)
+  if not ns.PositiveInt(qty) then return ns.Print("Choose a positive whole-number quantity before preparing bank mail.") end
   target = ns.Member(target) or target
   local have = (C_Item and C_Item.GetItemCount and C_Item.GetItemCount(item)) or (GetItemCount and GetItemCount(item)) or 0
   if have <= 0 then return ns.Print("This character isn't carrying " .. ns.ItemName(item, true) .. ". Log in on whoever holds it and take it out of the bank first.") end
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail again.") end
   if not ns.MailIsEmpty() then return end
+  local available = ns.BankSortMailLimit(item)
+  if qty > available then
+    return ns.Print("Only " .. available .. " available from your bags after keeping needs and open requests. Choose a smaller quantity; use the request's mail helper to fulfill a reserved request.")
+  end
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(target) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("From the guild bank: " .. ns.ItemName(item, true)) end
   if ClearCursor then ClearCursor() end
-  local n = ns.AttachExactMailItem(item, math.min(have, qty or have), 1)
+  local n = ns.AttachExactMailItem(item, qty, 1)
   if n == 0 then return ns.Print("Couldn't attach it. Check it's unlocked and not soulbound.") end
   ns.Print("Attached " .. n .. "x " .. ns.ItemName(item, true) .. " for " .. Short(target) .. ". Check the mail, then click Send.")
   return n
