@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.23.0
+
+- **Link Discord with a code.** `/link` in Discord gives a private code; type `/epu link CODE` in game once. Every character on that WoW account links itself, and confirmed EPU alts come along, with no officer step. Officers can still approve by hand, and `/link_suggestions` links everyone whose Discord name matches a guild character with one button.
+- **Class and rank roles in Discord.** Linked members get a role for each of their characters' classes and a rank role from their main. Only Veteran, Member and Initiate are automated by default; officer ranks stay manual. The bot only manages roles it created, and holds back large removals until an officer runs `/roles confirm`.
+- **Officer log.** An officers-only Discord channel can list joins, leaves, returns, promotions and demotions, level 60s, new links and link conflicts.
+- **New Discord commands:** `/whois`, `/chars`, `/main` and `/roles`.
+- **Sort the bank.** Bank → Sort lists who should get each recipe in the bank or mailbox (highest skill who doesn't know it), which materials give guildmates skill-ups or profitable crafts, and what to sell, by value. Each item has Mail to buttons.
+- Bank toolbar dropdowns are a little narrower to make room for Sort.
+
 ## 0.22.3
 
 - The Roster shows which guildmates in your zone are on your layer: **same layer** in green or **other layer** in amber. EPU reads your layer from NPCs you target, mouse over or see nameplates for, and shares it with your map location (same opt-out).

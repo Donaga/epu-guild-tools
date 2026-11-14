@@ -7,7 +7,7 @@ import epu_core as core
 MAX_BYTES=8*1024*1024
 EVENT_MODULES={'event_response':'EventBridge.lua','event_create':'EventCreateBridge.lua'}
 KINDS={'guild_invite','request'} | set(EVENT_MODULES)
-FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
+FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','memberInfo','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
 WIRE={'requests':'req','donations':'don','crafters':'craft'}
 def safe(value,depth=0):
     if depth>24: raise ValueError('Bridge data is too deeply nested')
@@ -91,7 +91,9 @@ def merge_public(base,cfg):
         if type(saved) in (int,float) and saved<=time.time()+300 and saved>max(float(db.get('syncHelperExported') or 0),float(g.get('bridgeRosterAt') or 0)):
             members=(s.get('game') or {}).get('members')
             if isinstance(members,(dict,list)) and members:g['members']=members;g['bridgeRosterAt']=saved
-        for field in FIELDS-{'members'}:
+            info=(s.get('game') or {}).get('memberInfo')
+            if isinstance(info,dict) and info:g['memberInfo']=info;g['memberInfoAt']=saved
+        for field in FIELDS-{'members','memberInfo'}:
             src=(s.get('game') or {}).get(field) or {}
             if not isinstance(src,dict):continue
             if field=='needs':

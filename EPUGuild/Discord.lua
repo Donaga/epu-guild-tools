@@ -189,3 +189,94 @@ ns.On("PLAYER_ENTERING_WORLD", function(isLogin, isReload)
   if isLogin == false and isReload == false then return end
   C_Timer.After(15, function() pcall(ns.ProcessInbox) end)
 end)
+
+---------------------------------------------------------------------------
+-- Linking characters to Discord with a code.
+-- /link in Discord gives a code; /epu link CODE stores it for this WoW
+-- account. Every character on the account then publishes a claim that the
+-- companion checks against the codes it handed out. The claim carries only
+-- a hash of code + character name, so guildmates can't use it to tell which
+-- characters share an account, and only its own character (or an officer
+-- relaying it) can publish one.
+---------------------------------------------------------------------------
+local CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+function ns.NormalizeLinkCode(s)
+  s = tostring(s or ""):upper():gsub("[%s%-]", "")
+  if #s ~= 8 or s:find("[^" .. CODE_CHARS .. "]") then return nil end
+  return s
+end
+-- Two 32-bit rolling hashes; the companion computes the same (shared_bridge.claim_hash).
+function ns.LinkClaimHash(code, who)
+  local s, M = code .. "\0" .. who, 4294967296
+  local a, b = 0, 0
+  for i = 1, #s do
+    local c = s:byte(i)
+    a = (a * 131 + c) % M
+    b = (b * 257 + c) % M
+  end
+  return tostring(a) .. "-" .. tostring(b)
+end
+local function ClaimStore()
+  local g = ns.CasualStore and ns.CasualStore()
+  return g and g.discordClaims
+end
+local function ValidClaim(r, who)
+  if type(r) ~= "table" or r.who ~= who or not ns.StampOK(r.t) or r.t > ns.Now() + 300 then return false end
+  if r.off == true then return r.h == nil end
+  return type(r.h) == "string" and #r.h <= 24 and r.h:match("^%d+%-%d+$") ~= nil
+end
+function ns.MergeDiscordClaims(sender, b, trusted)
+  if type(b) ~= "table" or type(b.discordClaims) ~= "table" then return false end
+  local store = ClaimStore()
+  if not store then return false end
+  local size, changed = 0, false
+  for _ in pairs(store) do size = size + 1 end
+  for who, r in pairs(b.discordClaims) do
+    if type(who) == "string" and #who <= 80 and (trusted or who == ns.Short(sender)) and ValidClaim(r, who) then
+      local cur = store[who]
+      if (cur or size < 2000) and ns.Newer(r, cur, "t") then
+        store[who] = { who = who, t = r.t, h = r.h, off = r.off }
+        if not cur then size = size + 1 end
+        changed = true
+      end
+    end
+  end
+  if changed then ns.Changed() end
+  return changed
+end
+function ns.PublishDiscordClaim()
+  local store = ClaimStore()
+  if not store or not ns.me or not ns.db then return end
+  local code = ns.NormalizeLinkCode(ns.db.discordCode)
+  local cur = store[ns.me]
+  local h = code and ns.LinkClaimHash(code, ns.me)
+  if not h and (not cur or cur.off) then return end           -- never linked, nothing to withdraw
+  if cur and cur.h == h and not cur.off == not not h then return end
+  local r = { who = ns.me, t = ns.NextVersion(cur and cur.t), h = h, off = (not h) or nil }
+  store[ns.me] = r
+  ns.Send("D", { discordClaims = { [ns.me] = r } })
+  ns.Changed()
+end
+function ns.DiscordLinkCommand(args)
+  args = tostring(args or ""):match("^%s*(.-)%s*$")
+  if args == "" then
+    local linked = ns.db and ns.db.discordCode
+    ns.Print(linked and ("Discord link is on for this WoW account. Each character links when it logs in; the bot finishes linking at an officer's next save. /epu link off stops.")
+      or "Not linked. In Discord, use /link to get a code, then type /epu link CODE here.")
+    return
+  end
+  if args:lower() == "off" then
+    if ns.db then ns.db.discordCode = nil end
+    ns.PublishDiscordClaim()
+    return ns.Print("Discord linking is off for new characters on this account. Already linked characters stay linked until you /unlink them in Discord.")
+  end
+  local code = ns.NormalizeLinkCode(args)
+  if not code then return ns.Print("That isn't a link code. In Discord, use /link; the code looks like ABCD-EF23.") end
+  if not ns.db then return end
+  ns.db.discordCode = code
+  ns.PublishDiscordClaim()
+  ns.Print("Linking " .. tostring(ns.me) .. " to Discord. Your other characters on this WoW account link when they log in. The bot sees it at an officer's next save (usually within a day).")
+end
+ns.On("PLAYER_LOGIN", function()
+  C_Timer.After(40, function() if ns.PublishDiscordClaim then pcall(ns.PublishDiscordClaim) end end)
+end)

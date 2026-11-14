@@ -1,7 +1,7 @@
 -- Short-lived guild activities, voluntary helpers and reusable starter kits.
 local ADDON, ns = ...
 local DAY, MAX_DURATION = 86400, 4*3600
-ns.CASUAL_FIELDS={"activityPosts","activityReplies","helpers","kitTemplates"}
+ns.CASUAL_FIELDS={"activityPosts","activityReplies","helpers","kitTemplates","discordClaims"}   -- discordClaims: Discord.lua
 ns.HELPER_ROLES={t="Tank",h="Healer",d="DPS",c="Crafter",m="Mentor"}
 local function Text(s,n,required)
   return type(s)=="string" and #s<=n and (not required or s:find("%S")~=nil)
@@ -242,7 +242,7 @@ end
 function ns.PruneCasual()
   local g=ns.CasualStore(); if not g then return end
   for _,f in ipairs(ns.CASUAL_FIELDS) do
-    if f~="kitTemplates" and f~='syncHelpers' and f~='guildFocus' and f~='gatherSpots' then   -- standing records never expire
+    if f~="kitTemplates" and f~='syncHelpers' and f~='guildFocus' and f~='gatherSpots' and f~='discordClaims' then   -- standing records never expire
       for id,r in pairs(g[f]) do if not Fresh(r) then g[f][id]=nil end end
     end
   end

@@ -12,6 +12,8 @@ Guild bank, crafting and guild management for **E Pluribus Unum** on WoW: Foreve
 - Craft requests sent straight to a crafter; tooltips show who in the guild can make an item
 
 **Guild**
+- Sort the bank: who should get each recipe, materials for guildmates' skill-ups, and a sell list by value
+- Link Discord with a code; class and rank roles for linked members
 - Roster with level, zone, roles, "near my level" and "my layer" filters, and same/other layer tags for guildmates in your zone
 - News: announcements (also from Discord) and milestones like level-ups and first mounts
 - Officer tools: member review, private officer notes, an officer log

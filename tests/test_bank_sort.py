@@ -1,0 +1,65 @@
+"""Sort the bank: recipe hand-outs, skill-up materials, sell list and Mail to."""
+from simcore import *
+
+A = Client('Chris Baker')
+tick(10)
+A.ex('''
+__ITEMS[30010]="Pattern: Red Linen Robe"; __ITEMS[30011]="Red Linen Robe"
+__ITEMS[30012]="Pattern: Mooncloth Robe"; __ITEMS[30013]="Mooncloth Robe"
+__ITEMS[30014]="Pattern: Linen Belt"; __ITEMS[30015]="Linen Belt"
+__cls={[30010]={9,"Tailoring"},[30012]={9,"Tailoring"},[30014]={9,"Tailoring"}}
+ITEM_MIN_SKILL="Requires %s (%d)"
+local need={[30010]=80,[30012]=250,[30014]=1}
+C_TooltipInfo={GetItemByID=function(id) return {lines={{leftText=__ITEMS[id]},{leftText="Requires Level 20"},{leftText="Requires Tailoring ("..need[id]..")"}}} end}
+local g=__ns.G()
+g.crafters["Tyler Baker"]={t=__now,profs={Tailoring=120}}
+g.crafters["Pip Baker"]={t=__now,profs={Tailoring=90}}
+g.crafters["Chris Stone"]={t=__now,profs={Tailoring=150}}
+g.recipes["Tyler Baker"]={t=__now,profs={Tailoring={rank=120,items={30011,30015}}}}
+g.recipes["Pip Baker"]={t=__now,profs={Tailoring={rank=90,items={2996,30015},diff={["item:2996"]="o"}}}}
+g.recipes["Chris Stone"]={t=__now,profs={Tailoring={rank=150,items={30015}}}}
+g.mats["item:2996"]={t=__now,by="Pip Baker",r={2589,2}}
+g.needs.list[4306]=10; g.needs.list[14047]=2
+g.bank["Epu Bank"]={v=__now,money=0,items={[30010]=1,[30012]=1,[30014]=2,[2589]=40,[14047]=5,[4306]=5}}
+__ns.recipeIndex=nil
+__plan=__ns.BankSortPlan()
+function __find(list,id) for _,r in ipairs(__plan[list]) do if r.item==id then return r end end end
+''')
+check('the required skill is read from the recipe tooltip', A.ev('__ns.RecipeRequirement(30010)') == ('Tailoring', 80))
+check('a recipe goes to the highest-skill guildmate who lacks it',
+      A.ev('__find("recipes",30010).give.who') == 'Chris Stone' and A.ev('__find("recipes",30010).best~=nil'))
+check('someone who already knows it is never suggested',
+      A.ev('(function() for _,c in ipairs(__find("recipes",30010).candidates) do if c.who=="Tyler Baker" then return c.knows end end end)()'))
+check('when nobody can learn it yet, the closest guildmate is named',
+      A.ev('__find("recipes",30012).give.who') == 'Chris Stone' and 'needs 250' in A.ev('__find("recipes",30012).why'))
+check('a recipe the whole guild knows goes to the sell list',
+      A.ev('__find("sell",30014)~=nil') and 'already knows it' in A.ev('__find("sell",30014).reason'))
+check('materials show who can skill up with them', A.ev('__find("mats",2589).users[1].who') == 'Pip Baker'
+      and A.ev('__find("mats",2589).users[1].color') == 'o')
+check('only surplus over the needs target is sold', A.ev('__find("sell",14047).surplus') == 3 and A.ev('__find("sell",4306)') is None)
+
+A.ex("""__keep=__ns.G().recipes["Chris Stone"]; __ns.G().recipes["Chris Stone"]=nil; __ns.recipeIndex=nil; __plan=__ns.BankSortPlan()""")
+check("someone who hasn't shared recipes ranks after a confirmed candidate",
+      A.ev('__find("recipes",30010).give.who') == 'Pip Baker'
+      and A.ev('(function() for _,c in ipairs(__find("recipes",30010).candidates) do if c.who=="Chris Stone" then return not c.scanned end end end)()'))
+A.ex("""__ns.G().recipes["Chris Stone"]=__keep; __ns.recipeIndex=nil""")
+A.ex("__ns.UI:Show(); __ns.UI:SetView('bank'); __ns.UI.state.bank.mode='sort'; __ns.UI.bankPlan=nil; __ns.UI:Refresh()")
+rows = A.ev('''(function() local t={}
+  for _,row in ipairs(__ns.UI.rows) do if row:IsShown() and row.data then t[#t+1]=(row.data.title or "").."|"..(row.data.sub or "") end end
+  return table.concat(t,"\\n") end)()''')
+check('the sort view has the three sections', all(s in rows for s in ('Recipes to hand out', 'Materials guildmates can use', 'Sell')))
+check('recipe rows say who to give them to', 'Give to Chris' in rows)
+A.ex("__ns.UI:OpenDetails('banksort',30010)")
+labels = A.ev('''(function() local t={}
+  for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() then t[#t+1]=b.text:GetText() end end
+  return table.concat(t,"|") end)()''')
+check('details offer Mail to the best guildmate first', labels.startswith('Mail to Chris') and 'Mail to Pip' in labels)
+A.ex("__log={}; __ns.MailBankItem('Pip Baker',30010,1)")
+check('mailing without a mailbox open explains what to do', any('Open a mailbox' in str(m) for m in A.ev('__log').values()))
+A.ex("__ns.UI.state.bank.mode=nil; __ns.UI:Refresh()")
+check('Back returns to the normal bank list', A.ev('__ns.UI.bankCatChip:IsShown()'))
+fits = A.ev('(function() __ns.UI:SetView("bank") local b=__ns.UI.bars.bank return b.leftX+b.rightX end)()')
+check('the bank toolbar still fits the smallest window (%s)' % fits, fits <= 480)
+
+print('Bank sort tests:', check.failed, 'failed')
+sys.exit(1 if check.failed else 0)

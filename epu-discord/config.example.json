@@ -23,5 +23,11 @@
   "github_repo": "Donaga/epu-guild-tools",
   "announce_releases": true,
   "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest",
-  "curseforge_url": "https://www.curseforge.com/wow/addons/epu-guild-tools"
+  "curseforge_url": "https://www.curseforge.com/wow/addons/epu-guild-tools",
+  "discord_roles": true,
+  "class_roles": true,
+  "rank_roles": ["Veteran", "Member", "Initiate"],
+  "officer_log_channel_id": "",
+  "level_milestones": [60],
+  "members_intent": false
 }
