@@ -38,8 +38,54 @@ check("officer sees officer nav", A.ev('__ns.UI.nav.officer:IsShown()') == True)
 
 A.ex('__ns.UI:SetView("bank")')
 A.ex('__ns.UI.search:SetText("silk")')
-check("search filters the bank list (category header + the item)", A.ev('#(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r end end return t end)()') == 2)
-check("bank grouped by category", A.ev('__ns.UI.rows[1].data.key') == "cat:Cloth" and A.ev('__ns.UI.rows[2].data.item') == 4306)
+check("search filters the bank list (column and category headers plus the item)", A.ev('#(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r end end return t end)()') == 3)
+check("bank grouped by category", A.ev('__ns.UI.rows[2].data.key') == "cat:Cloth" and A.ev('__ns.UI.rows[3].data.item') == 4306)
+check("bank shows separate recorded and available stock columns",
+      A.ev('__ns.UI.rows[1].data.stock')=="In bank" and A.ev('__ns.UI.rows[1].data.right')=="Available")
+check("Bank groups inventory, needs and requests while other tabs are hidden",
+      A.ev('__ns.UI.nav.bank:IsShown() and __ns.UI.nav.requests:IsShown() and not __ns.UI.nav.recipes:IsShown()'))
+check("the stock view has a titled page",A.ev('__ns.UI.pageTitle:GetText()')=="Guild bank")
+A.ex('__ns.UI:SetSize(1000, 540); __ns.UI:Layout(); __ns.UI:Refresh()')
+check("wide Bank puts icons in a second navigation column",
+      A.ev('__ns.UI.wideNav and __ns.UI.nav.requests.icon:IsShown()'))
+A.ex('__ns.UI:SetSize(700, 470); __ns.UI:Layout(); __ns.UI:Refresh()')
+check("compact Bank keeps icons in horizontal tabs",
+      A.ev('not __ns.UI.wideNav and __ns.UI.nav.requests.icon:IsShown() and __ns.UI.nav.requests:IsShown()'))
+A.ex('__ns.UI:SetView("projects")')
+check("Projects loads a WoW texture path", A.ev('__ns.UI.nav.projects.icon:GetTexture()') ==
+      r"Interface\Icons\Trade_BlackSmithing")
+A.ex('__ns.UI.nav.membertools:Click()')
+check("Member tools shortcuts have icons",
+      A.ev('__ns.UI.rows[1].icon:IsShown() and __ns.UI.rows[5].icon:IsShown()'))
+A.ex('__ns.UI:SetView("settings")')
+check("Settings shortcuts have icons",
+      A.ev('__ns.UI.rows[1].icon:IsShown() and __ns.UI.rows[3].icon:IsShown()'))
+A.ex('__ns.UI.search:SetText(""); __ns.UI:SetView("home")')
+check("Home starts with personal requests or the attention card",
+      A.ev('__ns.UI.rows[1].data.title=="My requests" or __ns.UI.rows[1].data.featured'))
+check("Home shortcuts render their destination icons", A.ev("""(function()
+  local count=0
+  for _, row in ipairs(__ns.UI.rows) do
+    if row:IsShown() then
+      if not row.data.icon or not row.icon:IsShown() then return false end
+      count=count+1
+    end
+  end
+  return count>=5
+end)()"""))
+A.ex('__ns.UI:SetView("bank"); __ns.UI.search:SetText("silk")')
+A.ex("""__ns.UI:OpenDetails('item',4306); __ns.UI:OpenDetails('professionmail',4306)
+__ns.UI.details.close:Click()""")
+check("Back returns to the preceding details without losing the bank view",
+      A.ev('__ns.UI.view=="bank" and __ns.UI.details.kind=="item" and __ns.UI.details.key==4306'))
+check("item details show stock and the fixed request action",
+      A.ev('__ns.UI.details.stats:IsShown() and tonumber(__ns.UI.details.stats[2].value:GetText())==25'
+           ' and __ns.UI.details.actionBar:IsShown() and __ns.UI.details.actionBar.request:IsShown()'))
+A.ex('__ns.UI.details.actionBar.request:Click()')
+check("fixed request action preloads the selected item in the composer",
+      A.ev('__ns.UI.view')=="requests" and "Hitem:4306" in A.ev('__ns.UI.itemBox:GetText()'))
+A.ex('__ns.UI.itemBox:SetText(""); __ns.UI.qtyBox:ClearFocus(); __ns.UI:SetView("bank")')
+A.ex('__ns.UI:CloseDetails()')
 A.ex('__ns.UI.search:SetText(""); __ns.UI.state.bank.cat = "Herbs"; __ns.UI:Refresh()')
 check("category dropdown filter", A.ev('(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then n = n + 1 end end return n end)()') == 0)
 A.ex('__ns.UI.state.bank.cat = nil; __ns.UI.search:SetText("silk")')
@@ -281,7 +327,9 @@ A.ex('__ns.UI.search:SetText(""); __ns.UI.state.recipes.designated = true; __ns.
 check("guild crafters filter", A.ev(shown) == 2)
 A.ex('__ns.UI.state.recipes.designated = false; __ns.UI.state.recipes.prof = "Mining"; __ns.UI:Refresh()')
 check("profession filter", A.ev(shown) == 0)
-A.ex('__ns.UI.state.recipes.prof = nil; __ns.UI:Refresh(); __ns.UI.profChip:GetScript("OnClick")(__ns.UI.profChip)')
+check("recipes count includes recipes outside the selected profession",
+      A.ev('__ns.UI.filterCount:GetText()=="0 of 2 shown" and __ns.UI.clearFilters:IsShown()'))
+A.ex('__ns.UI.clearFilters:Click(); __ns.UI.profChip:GetScript("OnClick")(__ns.UI.profChip)')
 check("profession dropdown opens with All + each profession",
       A.ev('EPUGuildMenu:IsShown()') == True and A.ev('EPUGuildMenu.rows[1].text:GetText()') == "All professions"
       and A.ev('EPUGuildMenu.rows[2].text:GetText()') == "Tailoring" and A.ev('EPUGuildMenu.rows[2].right:GetText()') == "2"
@@ -416,6 +464,18 @@ GetMinimapShape=function() return 'ROUND' end
 __ns.db.settings.minimapAngle=0; __ns.db.settings.minimapGap=nil; __ns.UpdateMinimapButton()
 """)
 check('button follows a larger minimap instead of a fixed radius',A.ev('__point[4]')==140 and A.ev('__point[5]')==0)
+A.ex("""__neighbor=CreateFrame("Button",nil,Minimap)
+__neighbor.IsObjectType=function(_,kind) return kind=="Button" end
+__neighbor.GetRect=function() return 468,388,24,24 end
+Minimap.GetChildren=function() return __mb,__neighbor end
+__ns.UpdateMinimapButton()
+""")
+check('button avoids a visible minimap neighbor even at a different scale',
+      A.ev('math.abs(__point[5])>=23 and __ns.db.settings.minimapAngle==0'))
+A.ex('__neighbor:Hide(); __ns.UpdateMinimapButton()')
+check('the preferred position returns when the neighboring button is hidden',
+      A.ev('__point[4]==140 and __point[5]==0'))
+check('badge uses a compact footprint', A.ev('__mb:GetWidth()==28 and __mb:GetHeight()==28'))
 A.ex("__ns.db.settings.minimapAngle=45; __ns.UpdateMinimapButton()")
 check('round minimap button stays outside its elliptical edge',A.ev('math.abs((__point[4]/140)^2+(__point[5]/110)^2-1)<0.00001'))
 A.ex("GetMinimapShape=function() return 'SQUARE' end; __ns.UpdateMinimapButton()")
@@ -462,6 +522,98 @@ check('screen-edge placement stays on perimeter instead of clamping inside',A.ev
 check('screen-edge fallback preserves preferred saved angle',A.ev('__ns.db.settings.minimapAngle')==0)
 A.ex("__ns.ShowGuildMapSettings(); EPUGuildMapSettings.buttonSettings:Click()")
 check('map settings expose button position controls',A.ev('EPUGuildButtonSettings:IsShown()'))
+
+# Sync keeps transfer details one click away and ages out recent-request labels.
+A.ex("""local ns=__ns
+ns.newestVersion=nil; ns.RELEASE_VERSION=nil
+ns.roster["Tyler Baker"].classFile="PALADIN"
+ns.SeenSync("Tyler Baker",{t=ns.Now()-7200,asked=ns.Now()-3600,from="Chris Baker",kind="officer",
+  what="14 event signups, 49 character confirmations",ver="0.21.4"})
+ns.UI:SetView("sync"); ns.UI.search:SetText("Tyler Baker")
+""")
+check("Sync list shows a short status and neutral version without a known release",
+      A.ev("""(function()
+        local r=__ns.UI.rows[1]
+        return r.icon:IsShown() and r.data.pill=="sync_ok" and not r.data.sub:find("signups",1,true)
+          and r.data.rightColor==__ns.InterfaceColors.muted
+      end)()"""))
+check("Sync uses the reported member's class icon and keeps their online dot",
+      A.ev("""(function()
+        local r=__ns.UI.rows[1]
+        local texture,coords=__ns.ClassIcon("PALADIN")
+        local left,right,top,bottom=r.icon:GetTexCoord()
+        return r.icon:GetTexture()==texture and left==coords[1] and right==coords[2]
+          and top==coords[3] and bottom==coords[4] and r.dot:IsShown()
+      end)()"""))
+A.ex('__ns.UI.rows[1]:Click()')
+check("Sync details retain the full transfer summary",
+      A.ev("""(function()
+        local d=__ns.UI.details
+        for _, line in ipairs(d.pools.text) do
+          if line:IsShown() and line:GetText():find("14 event signups",1,true) then return d.kind=="syncmember" end
+        end
+      end)()"""))
+A.ex("""__ns.RELEASE_VERSION="0.23.0"
+__ns.SeenSync("Tyler Baker",{asked=__ns.Now()})
+__ns.UI:Refresh()
+""")
+check("Sync marks a recent request and compares versions against a published release",
+      A.ev('__ns.UI.rows[1].data.pill=="sync_wait" and __ns.UI.rows[1].data.rightColor==__ns.InterfaceColors.red'))
+A.ex("""local u=__ns.UI
+u:CloseDetails(); u.search:SetText("")
+u.bars.sync.status:Click()
+for _,r in ipairs(EPUGuildMenu.rows) do if r:IsShown() and r.value=="outdated" then r:Click(); break end end
+""")
+check("Sync status menu filters to members with older versions",
+      A.ev("""(function()
+        local ns, tyler=__ns,false
+        for _,r in ipairs(ns.UI.rows) do
+          if r:IsShown() then
+            if r.data.rightColor~=ns.InterfaceColors.red then return false end
+            if r.data.name=="Tyler Baker" then tyler=true end
+          end
+        end
+        return ns.UI.state.sync.status=="outdated" and tyler
+      end)()"""))
+A.ex("""local u=__ns.UI
+assert(u.clearFilters:IsShown() and u.filterCount:GetText():match("^%d+ of %d+ shown$"))
+u.clearFilters:Click()
+assert(u.state.sync.status=="all" and not u.clearFilters:IsShown())
+u.bars.sync.sort:Click()
+for _,r in ipairs(EPUGuildMenu.rows) do if r:IsShown() and r.value=="name" then r:Click(); break end end
+""")
+check("Sync sort menu can order members by name",
+      A.ev("""(function()
+        local ns, prev=__ns,""
+        for _,r in ipairs(ns.UI.rows) do
+          if r:IsShown() then
+            local name=r.data.name:lower()
+            if name<prev then return false end
+            prev=name
+          end
+        end
+        return ns.UI.state.sync.sort=="name" and prev~=""
+      end)()"""))
+A.ex('__ns.UI.bars.sync.chips[3]:Click()')
+check("This PC keeps the activity log without member filters",
+      A.ev('__ns.UI.state.sync.filter=="mine" and not __ns.UI.bars.sync.status:IsShown() and not __ns.UI.bars.sync.sort:IsShown()'))
+A.ex('__ns.RELEASE_VERSION=nil; __ns.UI:SetView("bank"); __ns.UI.bankCatChip:Click()')
+check("Bank category dropdown renders icons", A.ev('EPUGuildMenu.rows[1].icon:GetTexture()') ==
+      r"Interface\Icons\INV_Misc_Bag_10")
+A.ex('EPUGuildMenu:Hide(); __ns.UI.search:SetText("zz-no-search-matches-zz")')
+check("empty search offers to clear the search",
+      A.ev('__ns.UI.emptyAction:IsShown() and __ns.UI.emptyAction:GetText()=="Clear search"'))
+A.ex('__ns.UI.emptyAction:Click()')
+check("clear search brings the rows back",
+      A.ev('__ns.UI.search:GetText()=="" and __ns.UI.rows[1]:IsShown() and not __ns.UI.emptyAction:IsShown()'))
+A.ex("""local b=__ns.InterfaceButton(UIParent,"Test button")
+b:SetOn(true); __selected=b.mark:IsShown()
+b:SetEnabled(false); b:SetOn(true); b:GetScript("OnEnter")(b)
+__disabled=b.disabled and not b.mark:IsShown()
+b:SetEnabled(true); __restored=not b.disabled and b.mark:IsShown()
+""")
+check("disabled state takes precedence over hover and selection, with selection restored on enable",
+      A.ev('__selected and __disabled and __restored'))
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 sys.exit(1 if check.failed else 0)

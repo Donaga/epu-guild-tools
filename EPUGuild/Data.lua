@@ -41,6 +41,7 @@ function ns.G()
 end
 
 function ns.Changed()
+  if ns.RefreshEventBubble then ns.Debounce("eventBubble", 0.3, ns.RefreshEventBubble) end
   if ns.UI and ns.UI:IsShown() then
     ns.Debounce("ui", 0.3, function() ns.UI:Refresh() end)
   end

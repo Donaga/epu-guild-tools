@@ -12,6 +12,62 @@ function ns.MemberMailPlan(target)
   table.sort(rows,function(a,b) if a.r.t~=b.r.t then return (a.r.t or 0)<(b.r.t or 0) end return a.id<b.id end)
   return rows
 end
+local function GroupItems(rows)
+  local items, order, ids = {}, {}, {}
+  for _, row in ipairs(rows) do
+    local item = row.r.item
+    if not items[item] then order[#order+1] = item; items[item] = 0 end
+    items[item] = items[item] + ns.Remaining(row.r)
+    ids[row.id] = true
+  end
+  return items, order, ids
+end
+
+function ns.MemberMailPreview(rows)
+  local items, order = GroupItems(rows)
+  local lines, slots = {}, ATTACHMENTS_MAX_SEND or 12
+  for _, item in ipairs(order) do
+    local count
+    count, slots = ns.PreviewMailItem(item, items[item], slots)
+    lines[#lines+1] = {item=item, ready=count, remaining=items[item]}
+  end
+  return lines
+end
+
+function ns.BankFulfillmentQueue()
+  local queue = {ready={}, pull={}, restock={}, review={}}
+  local recipients = {}
+  for id, request in pairs((ns.G() or {}).requests or {}) do
+    if request.item and not request.crafter and ns.IsActiveRequest(request) then
+      if request.status == "approved" then
+        local who = request.to or request.who
+        if ns.Member(who) then recipients[who] = true else queue.review[#queue.review+1] = id end
+      else
+        queue.review[#queue.review+1] = id
+      end
+    end
+  end
+  for who in pairs(recipients) do
+    local rows = ns.MemberMailPlan(who)
+    local group = {who=who, rows=rows, preview=ns.MemberMailPreview(rows), short=0}
+    local ready = false
+    for _, entry in ipairs(group.preview) do if entry.ready > 0 then ready = true; break end end
+    local bankAvailable = false
+    for _, row in ipairs(rows) do
+      local short = ns.RequestRestock(row.id)
+      group.short = group.short + short
+      if short < ns.Remaining(row.r) then bankAvailable = true end
+    end
+    local category = ready and queue.ready or bankAvailable and queue.pull or queue.restock
+    category[#category+1] = group
+  end
+  for _, groups in ipairs({queue.ready, queue.pull, queue.restock}) do
+    table.sort(groups, function(a,b) return a.who < b.who end)
+  end
+  table.sort(queue.review)
+  return queue
+end
+
 function ns.MailMemberRequests(target)
   if not ns.IsTrusted(ns.me) then return ns.Print("Only officers and trusted bank characters can prepare bank request mail.") end
   target=ns.Member(target)
@@ -23,13 +79,9 @@ function ns.MailMemberRequests(target)
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(target) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Guild bank: "..#rows.." requests") end
+  ns.BeginBankMailReview(target)
   if ClearCursor then ClearCursor() end
-  local items,order,ids={},{},{}
-  for _,row in ipairs(rows) do
-    ids[row.id]=true
-    if not items[row.r.item] then order[#order+1]=row.r.item; items[row.r.item]=0 end
-    items[row.r.item]=items[row.r.item]+ns.Remaining(row.r)
-  end
+  local items,order,ids=GroupItems(rows)
   ns.mailRequestID=nil; ns.mailRequestIDs=ids
   local index,total,missing=1,0,0
   for _,item in ipairs(order) do

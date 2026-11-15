@@ -124,8 +124,11 @@ class Guild:
         import discord
         if i not in self.members_by: raise discord.NotFound(type("R", (), {"status": 404, "reason": "x"})(), "gone")
         return self.members_by[i]
-    async def create_role(self, name, mentionable=False, reason=None):
-        r = Role(100 + len(self.roles), name); self.roles.append(r); return r
+    async def create_role(self, name, mentionable=False, reason=None, color=None):
+        role = Role(100 + len(self.roles), name)
+        role.color = color
+        self.roles.append(role)
+        return role
 
 cfgdir = tempfile.mkdtemp()
 json.dump({"token": "x.y.z", "server_id": "1", "channel_id": "2", "wow_path": WOW}, open(os.path.join(cfgdir, "config.json"), "w"))
@@ -142,6 +145,10 @@ bot.state = st
 res = asyncio.run(bot.sync_roles(gd))
 names = lambda m: sorted(r.name for r in m.roles)
 check("linked members get class roles", "Mage" in names(G.members_by[500]) and "Priest" in names(G.members_by[500]))
+check("new class roles get WoW colors and rank roles keep their defaults",
+      next(r for r in G.roles if r.name == "Mage").color.value == 0x3FC7EB
+      and next(r for r in G.roles if r.name == "Priest").color.value == 0xFFFFFF
+      and getattr(G.get_role(2), "color", None) is None)
 check("your existing rank role is used instead of a duplicate",
       G.get_role(2) in G.members_by[500].roles and len([r for r in G.roles if r.name == "Member"]) == 1
       and any("existing **Member**" in l for l in res["lines"]))
@@ -372,6 +379,34 @@ for flag, reason in (("roster_held", "Read a complete roster before retrying"),
           len(messages) == 1 and reason in messages[0][0] and "use Confirm" not in messages[0][0]
           and messages[0][1]["ephemeral"])
 bot.sync_links_roles = original_sync_links
+messages.clear()
+saved.data["last_automatic_role_changes"] = {"at": 123, "summary": "Created Paladin. Added 1 role assignment."}
+async def current_roles(*args, **kw):
+    return {"checked": 2, "added": 0, "removed": 0}
+bot.sync_links_roles = current_roles
+asyncio.run(bot.roles_cmd.callback(interaction, SimpleNamespace(value="sync")))
+check("/roles explains a no-op after an earlier automatic update",
+      "already up to date for 2 linked members" in messages[0][0]
+      and "Created Paladin. Added 1 role assignment." in messages[0][0])
+bot.sync_links_roles = original_sync_links
+messages.clear()
+saved.data["legacy_links"] = {"982": "Pip Baker"}
+own = SimpleNamespace(id=982, mention="<@982>", roles=[])
+async def personal_check():
+    response = SimpleNamespace(send_message=send)
+    await bot.chars_cmd.callback(SimpleNamespace(user=own, response=response))
+asyncio.run(personal_check())
+check("/chars privately explains legacy verification and provides a link button",
+      "**Legacy characters awaiting verification:** Pip Baker" in messages[0][0]
+      and messages[0][1]["ephemeral"] and messages[0][1]["view"].children[0].label == "Get a link code")
+messages.clear()
+saved.data["inbox"].append({"id": "health-test", "kind": "request", "t": 1})
+gd.g.setdefault("bank", {})["Guild Bank"] = {"v": 100, "bankTime": 90}
+asyncio.run(bot.sync_health_cmd.callback(SimpleNamespace(user=own, response=SimpleNamespace(send_message=send))))
+check("/sync_health reports pending updates and bank observation separately",
+      "request × 1" in messages[0][0] and "bank opened <t:90:R>" in messages[0][0] and messages[0][1]["ephemeral"])
+saved.data["inbox"].pop()
+gd.g["bank"].pop("Guild Bank")
 bot.read_latest, bot.is_officer = original_read_latest, original_is_officer
 
 

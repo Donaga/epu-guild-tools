@@ -32,7 +32,7 @@ check('request picker retains sold-out stock with quantity label',B.ev('__ns.UI.
 B.ex("__ns.UI.itemBox:SetText('item:4306'); __ns.UI.qtyBox:SetText('3'); __ns.UI.noteBox:SetText('Keep draft'); __ns.UI.action:GetScript('OnClick')()")
 check('rejected never-stocked request preserves the draft',B.ev('__ns.UI.itemBox:GetText()')=='item:4306' and B.ev('__ns.UI.noteBox:GetText()')=='Keep draft')
 B.ex("__ns.UI:SetView('bank')")
-check('bank browser includes the sold-out historical item',B.ev("(function() for _,row in ipairs(__ns.UI.rows) do if row:IsShown() and row.data.item==2589 then return row.data.right=='Out of stock' end end return false end)()"))
+check('bank browser includes the sold-out historical item',B.ev("(function() for _,row in ipairs(__ns.UI.rows) do if row:IsShown() and row.data.item==2589 then return row.data.right=='0' and row.data.sub:find('Out of stock',1,true)~=nil end end return false end)()"))
 A.ex('__ns.SetBankAlt(false)')
 check('retirement preserves history but not stock',A.ev('__ns.CanBankRequest(2589)') and A.ev('__ns.BankCount(2589)')==0)
 B.ex("__ns.Merge('Chris Baker',{bank={['Chris Baker']={v=__now+10,items={[4306]=4},money=0}}})")

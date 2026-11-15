@@ -158,15 +158,31 @@ check("so that member isn't told they're behind", B.ev('__ns.Behind(__ns.CheckIn
 # --- Sync tab: everyone's last sync, what came across, and their version ---
 A.ex('__ns.UI:Show(); __ns.UI.state.sync.filter = "guild"; __ns.UI:SetView("sync")')
 rows = A.ev('(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r.title:GetText() .. " | " .. (r.sub:GetText() or "") end end return table.concat(t, "\\n") end)()')
-check("Sync tab lists members who synced", "Late Member" in rows and "Synced from Chris Baker" in rows)
-check("and what came across", "needs" in rows)
+check("Sync tab lists members who synced", "Late Member" in rows and "from Chris Baker" in rows)
+check("clicking a Sync member shows the transfer summary", A.ev("""(function()
+  local ns=__ns
+  local summaries={}
+  for _,report in ipairs(ns.SyncReports()) do summaries[report.name]=report.what end
+  for _,row in ipairs(ns.UI.rows) do
+    local summary=row:IsShown() and summaries[row.data.name]
+    if summary and summary~="" then
+      row:Click()
+      local details=ns.UI.details
+      for _,line in ipairs(details.pools.text) do
+        if line:IsShown() and line:GetText()==summary then return details.kind=="syncmember" end
+      end
+      return false
+    end
+  end
+  return false
+end)()"""))
 L.ex('__ns.UI:Show(); __ns.UI.state.sync.filter = "mine"; __ns.UI:SetView("sync")')
 mine = L.ev('(function() local t = {} for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then t[#t+1] = r.title:GetText() end end return table.concat(t, "\\n") end)()')
 check("This PC shows the local history", "Unconfirmed data from" in mine and "Synced from Chris Baker" in mine and "Dropped" in mine)
 B.ex('__ns.SeenSync("Pip Baker", { t = __ns.Now(), from = "Chris Baker", what = "1 needs", ver = "0.9.0" }); __ns.newestVersion = nil')
-A.ex('__ns.SeenSync("Pip Baker", { t = __ns.Now(), from = "Chris Baker", what = "1 needs", ver = "0.0.1" }); __ns.UI.state.sync.filter = "all"; __ns.UI:Refresh()')
-check("older versions are flagged", "older version" in A.ev('__ns.UI.footerText:GetText()'))
-A.ex('__ns.UI:SetView("needs")')
+A.ex('__ns.SeenSync("Pip Baker", { t = __ns.Now(), from = "Chris Baker", what = "1 needs", ver = "0.0.1" }); __ns.RELEASE_VERSION="0.1.0"; __ns.UI.state.sync.filter = "all"; __ns.UI:Refresh()')
+check("versions older than the known release are flagged", "older version" in A.ev('__ns.UI.footerText:GetText()'))
+A.ex('__ns.RELEASE_VERSION=nil; __ns.UI:SetView("needs")')
 
 
 # --- a client without the old global item functions (only C_Item) ---

@@ -81,8 +81,18 @@ for _,row in ipairs(__ns.UI.rows) do
 end
 """)
 check('Market opens inside the main window on personal crafting', A.ev('__ns.UI.view=="market" and EPUGuildGatheringMarket:IsShown() and EPUGuildGatheringMarket:GetParent():GetParent()==__ns.UI and EPUGuildGatheringMarket.context:GetText():find("learned crafting professions")~=nil'))
+check('Market mode buttons and profession guides carry distinct icons', A.ev("""(function()
+  local frame=EPUGuildGatheringMarket
+  return frame.craftTab.icon:GetTexture() ~= frame.gatherTab.icon:GetTexture()
+    and frame.professionGuides.icon:GetTexture() ~= nil
+end)()"""))
 A.ex('__ns.UI.search:SetText("does-not-exist")')
 check('main window search filters market items', A.ev('EPUGuildGatheringMarket.empty:IsShown()'))
+check('market search shows a result count with a reset shortcut',
+      A.ev('__ns.UI.filterCount:GetText():match("^0 of %d+ shown$")~=nil and __ns.UI.clearFilters:IsShown()'))
+A.ex('__ns.UI.clearFilters:Click()')
+check('market reset clears search without leaving the selected mode',
+      A.ev('__ns.UI.search:GetText()=="" and EPUGuildGatheringMarket.craftTab.on and not __ns.UI.clearFilters:IsShown()'))
 A.ex('EPUGuildGatheringMarket.professionGuides:Click()')
 check('profession shortcut hides the market and opens all learned professions', A.ev("""
 (function()
@@ -385,6 +395,25 @@ __errors=0
 EPUGuildGatheringMarket.gatherTab:Click()
 """)
 check('a failing GatherMate2 never breaks Market', (C.ev('__errors') or 0)==0 and C.ev('EPUGuildGatheringMarket.chart:IsShown()'))
+C.ex("""
+local previous=GatherMate2
+__map=1418
+GatherMate2={
+  GetNodesForZone=function(self,map,kind,ignoreFilter)
+    assert(ignoreFilter)
+    if map==1418 and kind=='Mining' then return pairs({[10]=206,[20]=207,[30]=203}) end
+    return pairs({})
+  end,
+  DecodeLoc=function(self,key) return key/100,.5 end,
+}
+local mithril=__ns.GatheringRoutePreview(3858,186)
+local stone=__ns.GatheringRoutePreview(7912,186)
+__mithril=#mithril==2 and #stone==2 and __ns.GatheringRouteCommand('start',3858,186)
+__ns.GatheringRouteCommand('stop')
+GatherMate2=previous
+__map=1429
+""")
+check('Mithril routes use normal and ooze-covered GatherMate2 deposits and exclude iron',C.ev('__mithril'))
 check('bundled spots cover Elwynn herbs and copper', C.ev("#(__ns.GatheringRoutePreview(2447,182))>0 and #(__ns.GatheringRoutePreview(2770,186))>0"))
 check('herb routes leave ore spots out', C.ev("""
 (function()
@@ -464,4 +493,11 @@ __ns.Print=say
 """)
 check('a failed profession scan is reported once instead of silently', D.ev("__errors==1 and __said:find('could not read',1,true)~=nil"))
 
+check('market batch cap includes the deposit and cheaper material plan',
+      D.ev("""(function()
+        local budget=__ns.MarketBatchBudget({profit=50},4,{buyCost=300,baseCost=150},199,50)
+        return budget.upFront==200 and budget.overBudget and budget.profit==200 and budget.depositAtRisk==50
+      end)()"""))
+check('market budget keeps missing costs unknown',
+      D.ev("__ns.MarketBatchBudget({guild=true},{},{baseCost=0},100,50).upFront==nil"))
 sys.exit(bool(check.failed))

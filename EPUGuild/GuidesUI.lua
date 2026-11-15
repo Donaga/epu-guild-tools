@@ -4,16 +4,14 @@ local function Open(kind,key) UI:OpenDetails(kind,key) end
 function ns.ShowGuideLink(id)
   local r=ns.PersonalGuide(id); if not r then return end
   if not copy then
-    copy=CreateFrame("Frame","EPUGuildGuideLink",UIParent,"BasicFrameTemplateWithInset")
-    copy:SetSize(590,140); copy:SetPoint("CENTER"); copy:SetFrameStrata("DIALOG")
-    copy.TitleText:SetText("Read the full guide")
-    copy.url=CreateFrame("EditBox",nil,copy,"InputBoxTemplate")
+    copy=ns.InterfaceWindow("EPUGuildGuideLink",UIParent,"Read the full guide",590,122)
+    copy.url=ns.InterfaceInput(copy,540,"")
     copy.url:SetSize(540,24); copy.url:SetPoint("TOPLEFT",24,-46); copy.url:SetAutoFocus(false)
     copy.url:SetScript("OnEscapePressed",function() copy:Hide() end)
-    copy.help=copy:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    copy.help=ns.InterfaceFont(copy,12,C.muted)
     copy.help:SetPoint("TOPLEFT",24,-82); copy.help:SetWidth(540)
-    copy.help:SetText("Press Ctrl+C to copy this source link, then paste it into your browser. The addon does not open websites or download guide pages in game.")
-    tinsert(UISpecialFrames,"EPUGuildGuideLink")
+    copy.help:SetWordWrap(true)
+    copy.help:SetText("Press Ctrl+C to copy the guide link, then paste it into your browser.")
   end
   copy.guideID=id; copy.url:SetText(r.url); copy:Show(); copy.url:SetFocus(); copy.url:HighlightText()
 end

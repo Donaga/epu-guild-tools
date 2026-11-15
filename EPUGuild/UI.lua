@@ -10,26 +10,35 @@ local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfo
 -- Look
 ---------------------------------------------------------------------------
 local C = {
-  bg     = { 0.082, 0.090, 0.106 },
-  panel  = { 0.106, 0.118, 0.137 },
-  panel2 = { 0.165, 0.184, 0.216 },
+  bg     = { 0.056, 0.066, 0.086 },
+  panel  = { 0.078, 0.089, 0.113 },
+  panel2 = { 0.109, 0.142, 0.196 },
   hover  = { 0.137, 0.153, 0.180 },
   line   = { 0.176, 0.192, 0.224 },
   input  = { 0.071, 0.078, 0.094 },
   text   = { 0.85, 0.86, 0.88 },
-  muted  = { 0.49, 0.52, 0.56 },
+  muted  = { 0.64, 0.69, 0.76 },
   white  = { 1, 1, 1 },
   gold   = { 0.95, 0.76, 0.31 },
   goldBg = { 0.17, 0.14, 0.07 },
+  selected = { 0.26, 0.21, 0.12 },
+  selectedHover = { 0.33, 0.27, 0.15 },
+  disabled = { 0.09, 0.10, 0.12 },
+  disabledText = { 0.49, 0.52, 0.57 },
   green  = { 0.29, 0.87, 0.50 },
   greenBg= { 0.07, 0.19, 0.11 },
   red    = { 1.00, 0.42, 0.42 },
   redBg  = { 0.23, 0.09, 0.09 },
   blue   = { 0.43, 0.66, 1.00 },
 }
+ns.InterfaceColors=C
 local PILL = {
   pending  = { "Pending",  C.goldBg,  C.gold },
-  sync_wait   = { "Waiting",     C.goldBg, C.gold },
+  sync_wait   = { "Requested",   C.goldBg, C.gold },
+  sync_ok     = { "Reported",    C.greenBg, C.green },
+  sync_none   = { "No report",   C.panel2, C.muted },
+  sync_noseen = { "No addon seen", C.panel2, C.muted },
+  sync_host   = { "Officer copy", C.panel2, C.text },
   sync_unconf = { "Unconfirmed", C.goldBg, C.gold },
   open     = { "Pending",  C.goldBg,  C.gold },
   approved = { "Approved", C.greenBg, C.green },
@@ -52,8 +61,14 @@ local function PillKey(r) return (r.crafter and "craft_" or "") .. (r.status or 
 -- Skill-up colors: orange always gives a point, yellow usually, green sometimes.
 local DIFF = { o = { "ff8040", "orange" }, y = { "ffff00", "yellow" }, g = { "40c040", "green" } }
 local function SkillMark(d) return DIFF[d] and ("|cff" .. DIFF[d][1] .. "+|r") or "" end
-local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
-local SIDEBAR_W, HEADER_H, TOOLBAR_H, COMPOSER_H, FOOTER_H, ROW_H, DETAILS_W = 140, 36, 34, 36, 24, 38, 280
+local locale=GetLocale and GetLocale()
+local MEDIA = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
+local fallbackFont = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+local localizedFont = locale=="koKR" or locale=="zhCN" or locale=="zhTW"
+local FONT = localizedFont and fallbackFont or MEDIA .. "Fonts\\Inter-Regular.ttf"
+local HEADING = localizedFont and fallbackFont or MEDIA .. "Fonts\\Inter-SemiBold.ttf"
+local SIDEBAR_W, SUBNAV_W = 88, 158
+local HEADER_H, TOOLBAR_H, COMPOSER_H, FOOTER_H, ROW_H, DETAILS_W = 36, 34, 36, 24, 40, 300
 
 local function Tex(parent, layer, c, a)
   local t = parent:CreateTexture(nil, layer or "BACKGROUND")
@@ -80,51 +95,120 @@ local function EdgeColor(f, c)
   for _, t in ipairs(f.edges or {}) do t:SetColorTexture(c[1], c[2], c[3], 1) end
 end
 
-local function Font(parent, size, c, layer)
+local function Font(parent, size, c, layer, heading)
   local fs = parent:CreateFontString(nil, layer or "OVERLAY")
-  fs:SetFont(FONT, size or 12, "")
+  if fs:SetFont(heading and HEADING or FONT, size or 12, "") == false then
+    fs:SetFont(fallbackFont, size or 12, "")
+  end
   fs:SetTextColor((c or C.text)[1], (c or C.text)[2], (c or C.text)[3])
   fs:SetJustifyH("LEFT")
   fs:SetWordWrap(false)
   return fs
 end
+ns.InterfaceFont = Font
 
 local function SetColor(fs, c) fs:SetTextColor(c[1], c[2], c[3]) end
+local function TextWidth(fs)
+  return (fs.GetUnboundedStringWidth and fs:GetUnboundedStringWidth()) or fs:GetStringWidth() or 0
+end
 
 -- style: nil (plain), "accent" (gold), "chip" (rounded-ish filter chip)
 local function Btn(parent, label, w, h, style)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(w or 80, h or 22)
   b.style = style
-  b.base = (style == "accent") and C.goldBg or C.panel
-  b.bg = Tex(b, "BACKGROUND", b.base)
+  b.bg = Tex(b, "BACKGROUND", C.panel)
   b.bg:SetAllPoints()
-  Edges(b, (style == "accent") and C.gold or C.line)
-  b.text = Font(b, 11, (style == "accent") and C.gold or C.text)
-  b.text:SetPoint("CENTER")
+  Edges(b, C.line)
+  b.mark = Tex(b, "BORDER", C.gold)
+  b.mark:SetPoint("BOTTOMLEFT",1,1); b.mark:SetPoint("BOTTOMRIGHT",-1,1); b.mark:SetHeight(2)
+  b.text = Font(b, 12, C.text)
+  b.text:SetPoint("LEFT",5,0); b.text:SetPoint("RIGHT",-5,0)
   b.text:SetJustifyH("CENTER")
   b.text:SetText(label or "")
+  local function Paint(self)
+    local off, on, accent = self.disabled, self.on == true, self.style == "accent"
+    local bg = off and C.disabled or on and (self.hovered and C.selectedHover or C.selected)
+      or accent and C.gold or self.hovered and C.hover or C.panel
+    self.bg:SetColorTexture(bg[1],bg[2],bg[3],1)
+    EdgeColor(self, not off and (on or accent) and C.gold or C.line)
+    SetColor(self.text,off and C.disabledText or on and C.gold or accent and C.bg or C.text)
+    self.mark:SetShown(on and not off)
+    if self.icon then self.icon:SetAlpha(off and 0.42 or 1) end
+    if self.arrow then self.arrow:SetAlpha(off and 0.42 or 1) end
+  end
+  if b.SetMotionScriptsWhileDisabled then b:SetMotionScriptsWhileDisabled(true) end
   b:SetScript("OnEnter", function(self)
-    self.bg:SetColorTexture(C.hover[1], C.hover[2], C.hover[3], 1)
-    if self.tip then
-      GameTooltip:SetOwner(self, "ANCHOR_TOP")
-      GameTooltip:SetText(self.tip, 1, 1, 1, 1, true)
-      GameTooltip:Show()
-    end
+    self.hovered = true
+    Paint(self)
+    local reason = self.disabled and self.disabledTip or self.tip
+    local truncated = TextWidth(self.text)>(self.text:GetWidth() or 0)+1
+    if not reason and not truncated then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+    GameTooltip:SetText(self.fullLabel or self:GetText(), 1, 1, 1, 1, true)
+    if reason then GameTooltip:AddLine(reason,C.muted[1],C.muted[2],C.muted[3],true) end
+    GameTooltip:Show()
   end)
   b:SetScript("OnLeave", function(self)
-    self.bg:SetColorTexture(self.base[1], self.base[2], self.base[3], 1)
+    self.hovered = false
+    Paint(self)
     GameTooltip_Hide()
   end)
+  b:SetScript("OnHide",function(self)
+    self.hovered = false
+    Paint(self)
+  end)
   function b:SetLabel(t) self.text:SetText(t) end
-  function b:SetOn(on)
-    self.on = on
-    self.base = on and C.panel2 or ((self.style == "accent") and C.goldBg or C.panel)
-    self.bg:SetColorTexture(self.base[1], self.base[2], self.base[3], 1)
-    EdgeColor(self, on and C.gold or ((self.style == "accent") and C.gold or C.line))
-    SetColor(self.text, on and C.white or ((self.style == "accent") and C.gold or C.text))
+  b.SetText = b.SetLabel
+  function b:GetText() return self.text:GetText() end
+  function b:SetIcon(texture)
+    if not self.icon then
+      self.icon = self:CreateTexture(nil, "ARTWORK")
+      self.icon:SetSize(14, 14)
+      self.icon:SetPoint("LEFT", 7, 0)
+      self.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+      self.text:ClearAllPoints()
+      self.text:SetPoint("LEFT", self.icon, "RIGHT", 5, 0)
+      self.text:SetPoint("RIGHT", -5, 0)
+      self.text:SetJustifyH("LEFT")
+    end
+    self.icon:SetTexture(texture)
+    Paint(self)
   end
+  function b:SetOn(on)
+    self.on = on == true
+    Paint(self)
+  end
+  b:SetScript("OnDisable", function(self)
+    self.disabled = true
+    self.hovered = false
+    Paint(self)
+  end)
+  b:SetScript("OnEnable", function(self) self.disabled=false; Paint(self) end)
+  Paint(b)
   return b
+end
+ns.InterfaceButton = Btn
+
+function ns.InterfaceWindow(name, parent, heading, width, height)
+  local frame=CreateFrame("Frame",name,parent)
+  frame:SetSize(width,height)
+  frame:SetPoint("CENTER")
+  frame:SetFrameStrata("DIALOG")
+  frame:SetClampedToScreen(true)
+  frame:EnableMouse(true)
+  Tex(frame,"BACKGROUND",C.bg):SetAllPoints()
+  Edges(frame,C.line)
+  frame.TitleText=Font(frame,16,C.white)
+  frame.TitleText:SetPoint("TOPLEFT",14,-10)
+  frame.TitleText:SetText(heading)
+  local close=Btn(frame,"×",24,22)
+  close:SetPoint("TOPRIGHT",-7,-6)
+  close:SetScript("OnClick",function() frame:Hide() end)
+  local rule=Tex(frame,"BORDER",C.line)
+  rule:SetPoint("TOPLEFT",1,-34); rule:SetPoint("TOPRIGHT",-1,-34); rule:SetHeight(1)
+  tinsert(UISpecialFrames,name)
+  return frame
 end
 
 local function IconBtn(parent, texture, tip, size)
@@ -158,7 +242,7 @@ local function Box(parent, w, placeholder, numeric)
   local e = CreateFrame("EditBox", nil, parent)
   e:SetSize(w or 120, 22)
   e:SetAutoFocus(false)
-  e:SetFont(FONT, 12, "")
+  if e:SetFont(FONT, 12, "") == false then e:SetFont(fallbackFont, 12, "") end
   e:SetTextColor(C.white[1], C.white[2], C.white[3])
   e:SetTextInsets(6, 6, 0, 0)
   if numeric then e:SetNumeric(true) end
@@ -196,6 +280,7 @@ local function Box(parent, w, placeholder, numeric)
   e:HookScript("OnMouseDown", function(self) TakeCursorItem(self) end)
   return e
 end
+ns.InterfaceInput = Box
 
 local function Money(c)
   c = math.floor(tonumber(c) or 0)
@@ -232,9 +317,18 @@ end
 local function Online(name)
   return ns.roster[name] ~= nil and ns.roster[name].online == true
 end
+local bankCategoryItems = {
+  Cloth=2589, Leather=2318, ["Metal & Stone"]=2770, Herbs=765, Cooking=2672, Enchanting=10940,
+  Elemental=7067, ["Parts & Engineering"]=4357, ["Other Trade Goods"]=2320, Consumables=118,
+  Reagents=17020, Bags=4496, ["Weapons & Armor"]=25, Recipes=2881,
+}
+local function BankCategoryIcon(category)
+  local item = bankCategoryItems[category]
+  return item and ns.ItemIcon(item) or "Interface\\Icons\\INV_Misc_Bag_10"
+end
 
 -- Dropdown menu: a flat list that opens under a button.
--- items = { { label =, value =, right = } ... }; onPick(value) runs on click.
+-- items = { { label =, value =, right =, icon = } ... }
 local Menu
 local function OpenMenu(anchor, items, current, onPick)
   if not Menu then
@@ -269,7 +363,10 @@ local function OpenMenu(anchor, items, current, onPick)
       r:SetHeight(22)
       r.hl = Tex(r, "BACKGROUND", C.hover); r.hl:SetAllPoints(); r.hl:Hide()
       r.mark = Tex(r, "ARTWORK", C.gold); r.mark:SetPoint("TOPLEFT"); r.mark:SetPoint("BOTTOMLEFT"); r.mark:SetWidth(2)
-      r.text = Font(r, 11); r.text:SetPoint("LEFT", 10, 0)
+      r.icon = r:CreateTexture(nil, "ARTWORK")
+      r.icon:SetSize(15, 15); r.icon:SetPoint("LEFT", 9, 0)
+      r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+      r.text = Font(r, 11); r.text:SetPoint("LEFT", 31, 0)
       r.right = Font(r, 11, C.muted); r.right:SetPoint("RIGHT", -8, 0); r.right:SetJustifyH("RIGHT")
       r:SetScript("OnEnter", function(self) self.hl:Show() end)
       r:SetScript("OnLeave", function(self) self.hl:Hide() end)
@@ -280,8 +377,10 @@ local function OpenMenu(anchor, items, current, onPick)
     r:SetPoint("TOPLEFT", 1, -1 - (i - 1) * 22); r:SetPoint("TOPRIGHT", -1, -1 - (i - 1) * 22)
     r.value = it.value
     local on = it.value == current
-    r.text:SetText(it.label); SetColor(r.text, on and C.white or C.text)
+    r.icon:SetTexture(it.icon or "Interface\\Icons\\INV_Misc_Note_01")
+    r.text:SetText(it.label); SetColor(r.text, on and C.gold or C.text)
     r.right:SetText(it.right or "")
+    w = math.max(w, 46 + r.text:GetStringWidth() + r.right:GetStringWidth())
     r.mark:SetShown(on)
     r:Show()
   end
@@ -312,7 +411,7 @@ elseif UI.SetMinResize then UI:SetMinResize(620, 420); UI:SetMaxResize(1400, 100
 UI:EnableMouse(true)
 UI:Hide()
 tinsert(UISpecialFrames, "EPUGuildFrame")
-UI.bg = Tex(UI, "BACKGROUND", C.bg, 0.97)
+UI.bg = Tex(UI, "BACKGROUND", C.bg)
 UI.bg:SetAllPoints()
 Edges(UI, C.line)
 
@@ -325,7 +424,7 @@ local header = CreateFrame("Frame", nil, UI)
 header:SetPoint("TOPLEFT", 1, -1)
 header:SetPoint("TOPRIGHT", -1, -1)
 header:SetHeight(HEADER_H)
-Tex(header, "BACKGROUND", C.panel):SetAllPoints()
+Tex(header, "BACKGROUND", C.panel2):SetAllPoints()
 local hline = Tex(header, "BORDER", C.line)
 hline:SetPoint("BOTTOMLEFT"); hline:SetPoint("BOTTOMRIGHT"); hline:SetHeight(1)
 header:EnableMouse(true)
@@ -337,9 +436,9 @@ local logo = header:CreateTexture(nil, "ARTWORK")
 logo:SetSize(28, 28)
 logo:SetPoint("LEFT", 8, 0)
 logo:SetTexture(ns.LOGO)
-local title = Font(header, 13, C.white)
+local title = Font(header, 16, C.white)
 title:SetPoint("LEFT", logo, "RIGHT", 8, 0)
-title:SetText("EPU Guild Bank")
+title:SetText("EPU Guild Tools")
 
 local closeBtn = IconBtn(header, "Interface\\Buttons\\UI-StopButton", "Close")
 closeBtn:SetPoint("RIGHT", -8, 0)
@@ -365,6 +464,12 @@ UI.clearSearch:SetScript("OnClick", function() UI.search:SetText(""); UI.search:
 UI.search.onChange = function()
   UI.clearSearch:SetShown((UI.search:GetText() or "")~="")
   UI:Refresh()
+end
+UI.search.onEnter = function()
+  if UI.view=="market" or UI.view=="officer" or UI.search:GetText()=="" then return end
+  for _, row in ipairs(UI.rows or {}) do
+    if row:IsShown() and row.data and row.data.onClick then row:Click(); return end
+  end
 end
 
 -- Sidebar -------------------------------------------------------------------
@@ -404,8 +509,43 @@ local content = CreateFrame("Frame", nil, UI)
 content:SetPoint("TOPLEFT", side, "TOPRIGHT", 0, 0)
 content:SetPoint("BOTTOMRIGHT", -1, 1)
 
+local sectionTabs=CreateFrame("Frame",nil,UI)
+sectionTabs:SetPoint("TOPLEFT"); sectionTabs:SetPoint("TOPRIGHT")
+sectionTabs:SetHeight(30)
+local sectionBg=Tex(sectionTabs,"BACKGROUND",C.panel)
+sectionBg:SetAllPoints()
+local sectionLine=Tex(sectionTabs,"BORDER",C.line)
+
+local page=CreateFrame("Frame",nil,content)
+page:SetPoint("TOPLEFT",sectionTabs,"BOTTOMLEFT")
+page:SetPoint("TOPRIGHT",sectionTabs,"BOTTOMRIGHT")
+page:SetHeight(48)
+local pageArt=page:CreateTexture(nil,"BACKGROUND")
+pageArt:SetAllPoints()
+pageArt:SetTexture(MEDIA .. "midnight.tga")
+UI.pageTitle=Font(page,23,C.white,nil,true)
+UI.pageTitle:SetPoint("LEFT",12,0)
+UI.pageStatus=Font(page,11,C.muted)
+UI.pageStatus:SetPoint("RIGHT",-12,0)
+UI.pageStatus:SetJustifyH("RIGHT")
+UI.clearFilters=Btn(page,"Clear filters",104,23)
+UI.clearFilters:SetPoint("RIGHT",-12,0)
+UI.clearFilters:Hide()
+UI.filterCount=Font(page,11,C.muted)
+UI.filterCount:SetPoint("RIGHT",UI.clearFilters,"LEFT",-10,0)
+UI.filterCount:Hide()
+function UI:SetFilterSummary(shown,total,clear)
+  local active=clear~=nil
+  self.clearFilters:SetShown(active)
+  self.filterCount:SetShown(active)
+  self.pageStatus:SetShown(not active)
+  if not active then return end
+  self.filterCount:SetText(shown.." of "..total.." shown")
+  self.clearFilters:SetScript("OnClick",clear)
+end
+
 local toolbar = CreateFrame("Frame", nil, content)
-toolbar:SetPoint("TOPLEFT"); toolbar:SetPoint("TOPRIGHT")
+toolbar:SetPoint("TOPLEFT",page,"BOTTOMLEFT"); toolbar:SetPoint("TOPRIGHT",page,"BOTTOMRIGHT")
 toolbar:SetHeight(TOOLBAR_H)
 local tline = Tex(toolbar, "BORDER", C.line, 0.6)
 tline:SetPoint("BOTTOMLEFT"); tline:SetPoint("BOTTOMRIGHT"); tline:SetHeight(1)
@@ -418,6 +558,14 @@ fline:SetPoint("TOPLEFT"); fline:SetPoint("TOPRIGHT"); fline:SetHeight(1)
 UI.footerText = Font(footer, 11, C.muted)
 UI.footerText:SetPoint("LEFT", 10, 0)
 UI.footerText:SetPoint("RIGHT", -22, 0)
+footer:EnableMouse(true)
+footer:SetScript("OnEnter",function(self)
+  if TextWidth(UI.footerText)<=UI.footerText:GetWidth()+1 then return end
+  GameTooltip:SetOwner(self,"ANCHOR_TOP")
+  GameTooltip:SetText(UI.footerText:GetText(),1,1,1,1,true)
+  GameTooltip:Show()
+end)
+footer:SetScript("OnLeave",GameTooltip_Hide)
 
 local composer = CreateFrame("Frame", nil, content)
 composer:SetPoint("BOTTOMLEFT", footer, "TOPLEFT")
@@ -462,6 +610,10 @@ UI.empty = Font(listArea, 12, C.muted)
 UI.empty:SetPoint("TOP", 0, -40)
 UI.empty:SetJustifyH("CENTER")
 UI.empty:SetWordWrap(true)
+UI.empty:SetNonSpaceWrap(true)
+UI.emptyAction=Btn(listArea,"",138,26)
+UI.emptyAction:SetPoint("TOP",UI.empty,"BOTTOM",0,-12)
+UI.emptyAction:Hide()
 
 -- Resize grip
 local grip = CreateFrame("Button", nil, UI)
@@ -473,7 +625,9 @@ grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
 grip:SetScript("OnMouseDown", function() UI:StartSizing("BOTTOMRIGHT") end)
 grip:SetScript("OnMouseUp", function() UI:StopMovingOrSizing(); UI:SaveLayout(); UI:Refresh() end)
 
-UI:SetScript("OnSizeChanged", function() if UI:IsShown() then ns.Debounce("uiresize", 0.05, function() UI:Refresh() end) end end)
+UI:SetScript("OnSizeChanged", function()
+  if UI:IsShown() then ns.Debounce("uiresize", 0.05, function() UI:Layout(); UI:Refresh() end) end
+end)
 
 function UI:SaveLayout()
   if not ns.db then return end
@@ -504,7 +658,13 @@ local function RowEnter(self)
   if d.item then
     GameTooltip:SetHyperlink("item:" .. d.item)
   else
-    GameTooltip:SetText(d.title or "", 1, 1, 1)
+    GameTooltip:SetText(d.title or "", 1, 1, 1, 1, true)
+  end
+  if d.sub and self.sub:IsShown() and TextWidth(self.sub)>self.sub:GetWidth()+1 then
+    GameTooltip:AddLine(d.sub,C.muted[1],C.muted[2],C.muted[3],true)
+  end
+  if d.right and self.right:IsShown() and TextWidth(self.right)>self.right:GetWidth()+1 then
+    GameTooltip:AddLine(d.right,1,1,1,true)
   end
   if d.tip then
     for i = 1, table.maxn(d.tip) do
@@ -516,7 +676,7 @@ local function RowEnter(self)
 end
 
 local function RowLeave(self)
-  if UI.selected ~= self.data or not self.data then self.hl:Hide() end
+  if not UI.selected or not self.data or UI.selected.key~=self.data.key then self.hl:Hide() end
   GameTooltip_Hide()
 end
 
@@ -529,6 +689,7 @@ local function RowClick(self)
     return
   end
   if d.onClick then
+    UI.detailHistory=nil
     UI.selected = d
     d.onClick(d)
     UI:Refresh()
@@ -540,11 +701,16 @@ local function GetRow(i)
   if r then return r end
   r = CreateFrame("Button", nil, child)
   r:SetHeight(ROW_H)
-  r.hl = Tex(r, "BACKGROUND", C.hover)
+  r.card = Tex(r, "BACKGROUND", C.panel)
+  r.card:SetAllPoints()
+  r.hl = Tex(r, "BORDER", C.hover)
   r.hl:SetAllPoints()
+  r.selectedMark = Tex(r,"BORDER",C.gold)
+  r.selectedMark:SetPoint("TOPLEFT"); r.selectedMark:SetPoint("BOTTOMLEFT")
+  r.selectedMark:SetWidth(2)
   r.hl:Hide()
-  local sep = Tex(r, "BORDER", C.line, 0.45)
-  sep:SetPoint("BOTTOMLEFT", 8, 0); sep:SetPoint("BOTTOMRIGHT", -8, 0); sep:SetHeight(1)
+  r.sep = Tex(r, "BORDER", C.line, 0.45)
+  r.sep:SetPoint("BOTTOMLEFT", 8, 0); r.sep:SetPoint("BOTTOMRIGHT", -8, 0); r.sep:SetHeight(1)
 
   r.qb = Tex(r, "BORDER", C.white)
   r.qb:SetSize(30, 30)
@@ -553,7 +719,7 @@ local function GetRow(i)
   r.icon:SetSize(28, 28)
   r.icon:SetPoint("CENTER", r.qb, "CENTER")
   r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  r.dot = Tex(r, "ARTWORK", C.green)
+  r.dot = Tex(r, "OVERLAY", C.green)
   r.dot:SetSize(8, 8)
   r.dot:SetPoint("LEFT", 21, 0)
 
@@ -584,6 +750,8 @@ local function GetRow(i)
 
   r.right = Font(r, 12, C.text)
   r.right:SetJustifyH("RIGHT")
+  r.stock = Font(r, 12, C.muted)
+  r.stock:SetJustifyH("RIGHT")
 
   r:SetScript("OnEnter", RowEnter)
   r:SetScript("OnLeave", RowLeave)
@@ -592,18 +760,35 @@ local function GetRow(i)
   return r
 end
 
-local function ShowRows(data, width)
-  local inner = width - 20
+local function ShowRows(data, width, viewIcon)
+  local home = UI.view == "home"
+  local columns = home and width >= 460 and 2 or 1
+  local gap, col, y = 10, 0, home and 12 or 0
+  local cardWidth = math.floor((width - gap * (columns + 1)) / columns)
   for i, d in ipairs(data) do
     local r = GetRow(i)
     r.data = d
-    r:SetWidth(width)
+    local height = home and 64 or ROW_H
+    local rowWidth = home and (d.featured and width - gap * 2 or cardWidth) or width
+    r:SetSize(rowWidth, height)
     r:ClearAllPoints()
-    r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+    r:SetPoint("TOPLEFT", home and gap + col * (cardWidth + gap) or 0, -y)
+    col = col + 1
+    if col == columns or d.featured or i == #data then
+      y, col = y + height + (home and gap or 0), 0
+    end
+    r.card:SetShown(home)
+    local cardColor = d.featured and C.goldBg or C.panel
+    r.card:SetColorTexture(cardColor[1], cardColor[2], cardColor[3], 1)
+    r.sep:SetShown(not home)
+    r.sub:ClearAllPoints()
+    r.sub:SetPoint("TOPLEFT", 48, home and -35 or -22)
 
     -- icon / quality border / online dot
-    if d.icon then
-      r.icon:SetTexture(d.icon); r.icon:Show()
+    local icon = d.icon or ((d.onClick or d.dot ~= nil) and viewIcon)
+    if icon then
+      r.icon:SetTexture(icon); r.icon:Show()
+      r.icon:SetTexCoord(unpack(d.iconCoords or {0.08, 0.92, 0.08, 0.92}))
       local q = d.qcolor or C.line
       r.qb:SetColorTexture(q[1], q[2], q[3], 1); r.qb:Show()
     else
@@ -611,6 +796,9 @@ local function ShowRows(data, width)
     end
     if d.dot ~= nil then
       local c = d.dot and C.green or C.panel2
+      r.dot:ClearAllPoints()
+      if icon then r.dot:SetPoint("BOTTOMRIGHT", r.qb, "BOTTOMRIGHT", 1, -1)
+      else r.dot:SetPoint("LEFT", 21, 0) end
       r.dot:SetColorTexture(c[1], c[2], c[3], 1); r.dot:Show()
     else
       r.dot:Hide()
@@ -652,24 +840,36 @@ local function ShowRows(data, width)
     r.right:ClearAllPoints()
     if d.right then
       r.right:SetText(d.right)
+      r.right:SetWidth(math.max(1,math.min(TextWidth(r.right)+1,rowWidth*0.26)))
       SetColor(r.right, d.rightColor or C.text)
       r.right:SetPoint("RIGHT", r, "RIGHT", -rightEdge - 4, d.frac and 4 or 0)
       r.right:Show()
-      rightEdge = rightEdge + (r.right:GetStringWidth() or 40) + 12
+      rightEdge = rightEdge + r.right:GetWidth() + 12
     else
       r.right:Hide()
     end
 
-    local textW = math.max(60, width - 48 - rightEdge - 6)
+    r.stock:ClearAllPoints()
+    r.stock:SetShown(d.stock ~= nil)
+    if d.stock ~= nil then
+      r.stock:SetPoint("RIGHT",r,"RIGHT",-92,0)
+      r.stock:SetText(d.stock)
+      r.right:ClearAllPoints()
+      r.right:SetPoint("RIGHT",r,"RIGHT",-14,0)
+      r.right:SetWidth(76)
+      r.stock:SetWidth(48)
+      rightEdge=140
+    end
+    local textW = math.max(60, rowWidth - 48 - rightEdge - 6)
     r.title:SetWidth(textW)
     r.title:SetText(d.title or "")
     SetColor(r.title, d.titleColor or C.text)
     r.title:ClearAllPoints()
-    if d.sub or d.frac then r.title:SetPoint("TOPLEFT", 48, -5) else r.title:SetPoint("LEFT", 48, 0) end
+    if d.sub or d.frac then r.title:SetPoint("TOPLEFT", 48, home and -15 or -5) else r.title:SetPoint("LEFT", 48, 0) end
 
     if d.frac then
       r.sub:Hide()
-      local w = math.max(40, width - 48 - rightEdge + (d.right and 0 or 0) - 6)
+      local w = math.max(40, rowWidth - 48 - rightEdge - 6)
       r.barBg:SetWidth(w); r.barBg:Show()
       local c = d.barColor or C.green
       r.bar:SetColorTexture(c[1], c[2], c[3], 1)
@@ -680,17 +880,20 @@ local function ShowRows(data, width)
       if d.sub then r.sub:SetWidth(textW); r.sub:SetText(d.sub); r.sub:Show() else r.sub:Hide() end
     end
 
-    r.hl:SetShown(UI.selected ~= nil and UI.selected.key ~= nil and UI.selected.key == d.key)
+    local selected = UI.selected ~= nil and UI.selected.key ~= nil and UI.selected.key == d.key
+    r.hl:SetShown(selected)
+    r.selectedMark:SetShown(selected)
     r:Show()
   end
   for i = #data + 1, #UI.rows do UI.rows[i]:Hide(); UI.rows[i].data = nil end
-  child:SetHeight(math.max(1, #data * ROW_H))
+  child:SetHeight(math.max(1, y))
 end
 
 ---------------------------------------------------------------------------
 -- Details panel (opens on row click)
 ---------------------------------------------------------------------------
 local det = CreateFrame("Frame", nil, content)
+det.panelWidth = DETAILS_W
 det:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", 0, 0)
 det:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT", 0, 0)
 det:SetWidth(DETAILS_W)
@@ -702,10 +905,10 @@ dline:SetPoint("TOPLEFT"); dline:SetPoint("BOTTOMLEFT"); dline:SetWidth(1)
 det:Hide()
 UI.details = det
 
-det.close = IconBtn(det, "Interface\\Buttons\\UI-StopButton", "Close details", 20)
+det.close = Btn(det, "Back", 45, 22)
 det.close:SetPoint("TOPRIGHT", -8, -8)
 det.close:SetFrameLevel(det:GetFrameLevel() + 5)
-det.close:SetScript("OnClick", function() UI:CloseDetails() end)
+det.close:SetScript("OnClick", function() UI:BackDetails() end)
 
 -- Everything below the close button scrolls, so nothing is cut off on small windows.
 det.scroll = CreateFrame("ScrollFrame", nil, det)
@@ -739,29 +942,93 @@ det.icon = det.body:CreateTexture(nil, "ARTWORK")
 det.icon:SetSize(32, 32)
 det.icon:SetPoint("TOPLEFT", 12, -10)
 det.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-det.title = Font(det.body, 13, C.white)
+det.title = Font(det.body, 15, C.white, nil, true)
 det.title:SetPoint("TOPLEFT", 52, -12)
 det.title:SetWidth(DETAILS_W - 52 - 36)
+det.title:SetWordWrap(true)
+det.title:SetNonSpaceWrap(true)
 det.subtitle = Font(det.body, 11, C.muted)
-det.subtitle:SetPoint("TOPLEFT", 52, -30)
+det.subtitle:SetPoint("TOPLEFT",det.title,"BOTTOMLEFT",0,-4)
 det.subtitle:SetWidth(DETAILS_W - 62)
+det.subtitle:SetWordWrap(true)
+det.subtitle:SetNonSpaceWrap(true)
 
-det.pools = { text = {}, box = {}, btn = {}, label = {} }
-det.used = { text = 0, box = 0, btn = 0, label = 0 }
+det.art = det.body:CreateTexture(nil, "BACKGROUND")
+det.art:SetPoint("TOPRIGHT", -4, 0)
+det.art:SetSize(104, 52)
+det.art:SetTexCoord(0.08, 0.92, 0.30, 0.72)
+det.art:SetAlpha(0.13)
+det.stats = CreateFrame("Frame", nil, det.body)
+det.stats:SetHeight(58)
+Tex(det.stats, "BACKGROUND", C.panel2):SetAllPoints()
+for i, label in ipairs({"Available", "In bank", "Reserved"}) do
+  local value = Font(det.stats, 19, C.white, nil, true)
+  local caption = Font(det.stats, 11, C.muted)
+  caption:SetText(label)
+  det.stats[i] = {value=value, caption=caption}
+end
 
-function det:Reset(icon, quality, titleText, subtitle)
+det.actionBar = CreateFrame("Frame", nil, det)
+det.actionBar:SetPoint("BOTTOMLEFT", 1, 0)
+det.actionBar:SetPoint("BOTTOMRIGHT")
+det.actionBar:SetHeight(46)
+Tex(det.actionBar, "BACKGROUND", C.panel2):SetAllPoints()
+det.actionBar.request = Btn(det.actionBar, "Request item", 105, 28, "accent")
+det.actionBar.request:SetPoint("LEFT", 10, 0)
+det.actionBar.mail = Btn(det.actionBar, "Mail by profession", 132, 28)
+det.actionBar.mail:SetPoint("RIGHT", -10, 0)
+
+det.pools = { text = {}, box = {}, btn = {}, label = {}, rule = {}, progress = {} }
+det.used = { text = 0, box = 0, btn = 0, label = 0, rule = 0, progress = 0 }
+
+function det:Reset(icon, quality, titleText, subtitle, iconCoords)
   self.casualDraft=nil
   for k in pairs(self.used) do
     for i = 1, #self.pools[k] do self.pools[k][i]:Hide() end
     self.used[k] = 0
   end
-  self.y = -52
   self.scroll:SetVerticalScroll(0)
-  if icon then self.icon:SetTexture(icon); self.icon:Show() else self.icon:Hide() end
+  self.scroll:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -4, 0)
+  self.art:Hide()
+  self.stats:Hide()
+  self.actionBar:Hide()
+  local nav = UI.nav and UI.nav[UI.view]
+  self.icon:SetTexture(icon or (nav and nav.icon:GetTexture()) or ns.LOGO_SMALL)
+  self.icon:SetTexCoord(unpack(iconCoords or {0.08, 0.92, 0.08, 0.92}))
+  self.icon:Show()
   local q = quality and QColor(quality) or C.white
   self.title:SetText(titleText or "")
   SetColor(self.title, q)
   self.subtitle:SetText(subtitle or "")
+  self.y = -math.max(52, 27 + self.title:GetStringHeight()
+    + (subtitle and subtitle~="" and self.subtitle:GetStringHeight() or 0))
+end
+
+function det:ShowItemSummary(icon, free, held, reserved)
+  if icon then self.art:SetTexture(icon); self.art:Show() end
+  local width = (self.panelWidth - 26) / 3
+  self.stats:SetPoint("TOPLEFT", 10, self.y)
+  self.stats:SetWidth(width * 3)
+  local counts = {free, held, reserved}
+  for i, stat in ipairs(self.stats) do
+    stat.value:SetPoint("TOPLEFT", 12 + (i - 1) * width, -7)
+    stat.value:SetText(counts[i])
+    stat.caption:SetPoint("TOPLEFT", 12 + (i - 1) * width, -34)
+  end
+  SetColor(self.stats[1].value, free > 0 and C.green or C.muted)
+  self.stats:Show()
+  self.y = self.y - 70
+end
+
+function det:ShowItemActions(request, mail)
+  if not request and not mail then return end
+  local bar = self.actionBar
+  bar.request:SetShown(request ~= nil)
+  bar.request:SetScript("OnClick", request)
+  bar.mail:SetShown(mail ~= nil)
+  bar.mail:SetScript("OnClick", mail)
+  bar:Show()
+  self.scroll:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", -4, 0)
 end
 
 function det:Take(kind, make)
@@ -780,7 +1047,7 @@ function det:Text(str, color)
   -- automatic measurement before laying out the next paragraph or heading.
   fs:SetHeight(0)
   fs:SetWordWrap(true); fs:SetNonSpaceWrap(true); fs:SetJustifyV("TOP")
-  fs:SetWidth(DETAILS_W - 24)
+  fs:SetWidth(self.panelWidth - 24)
   fs:SetText(str)
   SetColor(fs, color or C.text)
   local height=math.max(14,math.ceil(fs:GetStringHeight() or 14))
@@ -795,7 +1062,7 @@ function det:Field(label, value, width, numeric)
   l:SetText(label)
   local b = self:Take("box", function() return Box(self.body, 100, "") end)
   b:SetNumeric(numeric == true)
-  b:SetWidth(math.min(width or 150, DETAILS_W - 90 - 14))
+  b:SetWidth(math.min(width or 150, self.panelWidth - 90 - 14))
   b:SetPoint("TOPLEFT", 90, self.y)
   b:SetText(value or "")
   b.onChange, b.onEnter = nil, nil
@@ -812,7 +1079,7 @@ function det:Buttons(specs)
     b:SetLabel(s[1])
     local w = math.max(56, (b.text:GetStringWidth() or 40) + 18)
     b:SetWidth(w)
-    if x + w > DETAILS_W - 16 then x = 12; self.y = self.y - 28 end
+    if x + w > self.panelWidth - 16 then x = 12; self.y = self.y - 28 end
     b:SetPoint("TOPLEFT", x, self.y)
     b.tip = s.tip
     b:SetScript("OnClick", s[2])
@@ -822,6 +1089,34 @@ function det:Buttons(specs)
 end
 
 function det:Gap(n) self.y = self.y - (n or 6) end
+
+function det:Section(title)
+  self:Gap(5)
+  local rule=self:Take("rule",function() return Tex(self.body,"BORDER",C.line) end)
+  rule:SetPoint("TOPLEFT",12,self.y)
+  rule:SetPoint("TOPRIGHT",-12,self.y)
+  rule:SetHeight(1)
+  self:Gap(9)
+  self:Text(title,C.gold)
+end
+
+function det:Progress(done,total)
+  done,total=tonumber(done) or 0,tonumber(total) or 0
+  if total<=0 then return end
+  local line=self:Take("progress",function()
+    local bar=CreateFrame("Frame",nil,self.body)
+    Tex(bar,"BACKGROUND",C.panel2):SetAllPoints()
+    bar.fill=Tex(bar,"ARTWORK",C.green)
+    bar.fill:SetPoint("TOPLEFT"); bar.fill:SetPoint("BOTTOMLEFT")
+    return bar
+  end)
+  local width=self.panelWidth-24
+  line:SetPoint("TOPLEFT",12,self.y)
+  line:SetSize(width,5)
+  line.fill:SetWidth(math.max(1,width*math.max(0,math.min(done/total,1))))
+  line.fill:SetShown(done>0)
+  self:Gap(14)
+end
 
 -- Call after filling: sizes the scrolling body to what was added.
 function det:Finish()
@@ -833,15 +1128,31 @@ function UI:CloseDetails()
   det:Hide()
   det.kind, det.key = nil, nil
   self.selected = nil
+  self.detailHistory=nil
   self:Layout()
   self:Refresh()
 end
 
-function UI:OpenDetails(kind, key)
+function UI:OpenDetails(kind, key, back)
+  if not back and det:IsShown() and det.kind and (det.kind~=kind or det.key~=key) then
+    local history=self.detailHistory or {}
+    self.detailHistory=history
+    history[#history+1]={kind=det.kind,key=det.key}
+    if #history>12 then table.remove(history,1) end
+  end
+  if (kind == "banksort" or kind == "professionmail") and (det.kind ~= kind or det.key ~= key) then
+    det.mailProfession, det.mailQuantity = nil, nil
+  end
   det.kind, det.key = kind, key
   det:Show()
   self:Layout()
   self:FillDetails()
+end
+
+function UI:BackDetails()
+  local previous=self.detailHistory and table.remove(self.detailHistory)
+  if not previous then return self:CloseDetails() end
+  self:OpenDetails(previous.kind,previous.key,true)
 end
 
 ---------------------------------------------------------------------------
@@ -854,7 +1165,7 @@ UI.state = {
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "all", role = nil, review = nil },
-  sync = { filter = "guild" },
+  sync = { filter = "guild", status = "all", sort = "recent" },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
 local REQ_FILTERS = { { "open", "Open" }, { "pending", "Pending" }, { "approved", "Approved / accepted" }, { "filled", "Filled / made" },
@@ -871,7 +1182,17 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "news", "needs", "shopping", "market", "bank", "requests", "donations", "roster", "invites", "crafters", "recipes", "activities", "membertools", "projects", "onboarding", "sync", "officer" }
+local ORDER = { "home", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "activities", "roster", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local GROUPS = {
+  {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
+  {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
+  {label="Guild", first="activities", iconView="activities", "activities", "roster", "projects", "invites", "news"},
+  {label="Member tools", first="membertools", iconView="membertools", "membertools", "onboarding"},
+}
+local groupFor = {}
+for _, group in ipairs(GROUPS) do
+  for _, key in ipairs(group) do groupFor[key] = group end
+end
 local STAR = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:12:12|t"   -- marks designated guild crafters
 
 local function AddDropdownArrow(b)
@@ -941,8 +1262,9 @@ Views.shopping = {
   label = "Shopping", icon = "Interface\\Icons\\INV_Misc_Coin_02",
   count = function() return #ns.ShoppingList(), C.panel2, C.muted end,
   tools = function(bar)
-    bar:Add(Btn(bar, "Send to Auctionator", 140, 22, "accent"), "right", function() ns.ExportAuctionator() end,
+    bar.export = bar:Add(Btn(bar, "Send to Auctionator", 140, 22, "accent"), "right", function() ns.ExportAuctionator() end,
       "Save this list as the \"" .. ns.SHOPPING_LIST_NAME .. "\" shopping list in Auctionator, with quantities.")
+    bar.export.disabledTip = "Load Auctionator to send your shopping list to it."
   end,
   rows = function(g, q)
     local out = {}
@@ -952,12 +1274,13 @@ Views.shopping = {
         local id = r.id
         out[#out + 1] = {
           key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-          title = name, sub = "need " .. r.need .. "  ·  approved requests " .. r.req .. "  ·  have " .. r.have,
-          right = "buy " .. r.buy, rightColor = C.gold,
+          title = name, sub = "need " .. r.need .. "  ·  approved requests " .. r.req,
+          stock=tostring(r.have), right=tostring(r.buy), rightColor=C.gold,
           onClick = function() UI:OpenDetails("item", id) end,
         }
       end
     end
+    if #out>0 then table.insert(out,1,{key="shopping-columns",title="Item",stock="On hand",right="To buy",titleColor=C.muted,rightColor=C.muted}) end
     return out
   end,
   footer = function() return ns.HasAuctionator() and "Shortfalls plus approved requests the bank can't cover." or "Install Auctionator to send this list to the auction house." end,
@@ -967,13 +1290,21 @@ Views.shopping = {
 -- Bank ----------------------------------------------------------------------
 Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
+  clearFilters = function()
+    local st=UI.state.bank
+    if st.mode~="sort" then st.cat, st.stock, st.quality=nil,"all",nil end
+  end,
+  filtered = function()
+    local st=UI.state.bank
+    return st.mode~="sort" and (st.cat or st.stock~="all" or st.quality~=nil)
+  end,
   tools = function(bar)
     UI.bankCatChip = DropChip(bar, 116, "Show one kind of item", function()
       local counts = {}
       for id in pairs(ns.BankCatalog()) do local c=ns.ItemCategory(id); counts[c]=(counts[c] or 0)+1 end
-      local items = { { label = "All categories", value = false } }
+      local items = { { label = "All categories", value = false, icon = Views.bank.icon } }
       for _, c in ipairs(ns.CATEGORIES) do
-        if counts[c] then items[#items + 1] = { label = c, value = c, right = tostring(counts[c]) } end
+        if counts[c] then items[#items + 1] = { label = c, value = c, right = tostring(counts[c]), icon = BankCategoryIcon(c) } end
       end
       return items
     end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil end)
@@ -983,12 +1314,6 @@ Views.bank = {
     UI.bankQualityChip=DropChip(bar,96,'Filter by item quality',function()
       return {{label='Any quality',value=false},{label='Poor',value=0},{label='Common',value=1},{label='Uncommon',value=2},{label='Rare',value=3},{label='Epic+',value=4}}
     end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil end)
-    UI.bankSort=bar:Add(Btn(bar,'Sort',56,22),'right',function()
-      local st=UI.state.bank; st.mode=(st.mode~='sort') and 'sort' or nil; UI.bankPlan=nil; UI:CloseDetails()
-    end,'Sort the bank: who should get each recipe, materials that help guildmates skill up, and what to sell')
-    UI.bankReset=bar:Add(Btn(bar,'Reset',52,22),'right',function()
-      local st=UI.state.bank; st.cat=nil; st.stock='all'; st.quality=nil; UI.search:SetText(''); UI:Refresh()
-    end,'Clear bank filters and search')
   end,
   rows = function(g, q)
     if UI.state.bank.mode == 'sort' then return UI.BankSortRows(q) end
@@ -1009,6 +1334,7 @@ Views.bank = {
     local groups, order = {}, {}
     for i, c in ipairs(ns.CATEGORIES) do order[c] = i end
     local only = UI.state.bank.cat
+    local shown,total = 0,0
     for id, c in pairs(totals) do
       -- one odd item mustn't take the whole page down
       local ok, err = ns.SafeCall(function()
@@ -1020,11 +1346,14 @@ Views.bank = {
         local stockMatch=stock=='all' or (stock=='stocked' and held>0) or (stock=='available' and free>0) or (stock=='restock' and (held==0 or asked>held))
         local quality=select(3,GetItemInfo(id)); local wanted=UI.state.bank.quality
         local qualityMatch=wanted==nil or (quality and (wanted==4 and quality>=4 or quality==wanted))
+        total=total+1
         if stockMatch and qualityMatch and (not only or cat == only) and Match(q, name, holders[id], cat) then
+          shown=shown+1
           groups[cat] = groups[cat] or {}
           table.insert(groups[cat], {
             key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-            title = name, sub = ns.BankRequestAvailability(id), right = c>0 and tostring(c) or 'Out of stock', count = c, sort = name,
+            title = name, sub = c==0 and "Out of stock · requests wait for restock" or asked>0 and (asked.." requested") or nil,
+            stock=tostring(c), right=tostring(free), rightColor=free>0 and C.green or C.muted, count=c, sort=name,
             onClick = function() UI:OpenDetails("item", id) end,
           })
         end
@@ -1038,16 +1367,17 @@ Views.bank = {
     for cat in pairs(groups) do cats[#cats + 1] = cat end
     table.sort(cats, function(a, b) return (order[a] or 99) < (order[b] or 99) end)
     local out = {}
+    if #cats>0 then out[1]={key="bank-columns",title="Item",stock="In bank",right="Available",titleColor=C.muted,rightColor=C.muted} end
     for _, cat in ipairs(cats) do
       local list = groups[cat]
       table.sort(list, function(a, b) if a.count ~= b.count then return a.count > b.count end return a.sort < b.sort end)
       local total = 0
       for _, r in ipairs(list) do total = total + r.count end
-      out[#out + 1] = { key = "cat:" .. cat, title = "|cfff2c14e" .. cat .. "|r",
+      out[#out + 1] = { key = "cat:" .. cat, title = "|cfff2c14e" .. cat .. "|r", icon = BankCategoryIcon(cat),
         sub = #list .. (#list == 1 and " kind of item" or " kinds of items"), right = tostring(total) }
       for _, r in ipairs(list) do out[#out + 1] = r end
     end
-    return out
+    return out,total,shown
   end,
   footer = function(g)
     if UI.state.bank.mode == 'sort' then
@@ -1055,14 +1385,13 @@ Views.bank = {
       return (src and ("Prices: " .. (({ledger="AHledger",tsm="TSM",auctionator="Auctionator"})[src] or src) .. ", less the 5% AH cut. ")
         or "No price addon loaded; values use vendor prices. ") .. "Click an item for details and Mail buttons."
     end
-    local parts = {}
-    for alt, s in pairs(g.bank) do
-      if not s.retired then parts[#parts + 1] = alt .. " " .. Money(s.money) .. " (" .. Ago(s.bankTime or s.v) .. ")" end
+    local latest = 0
+    for _, snapshot in pairs(g.bank) do
+      if not snapshot.retired then latest=math.max(latest,tonumber(snapshot.bankTime or snapshot.v) or 0) end
     end
-    table.sort(parts)
-    return #parts > 0 and table.concat(parts, "   ") or "No bank yet. On the bank character: /epu bankalt on"
+    return latest>0 and ("Newest bank snapshot · "..Ago(latest)) or "No bank yet. On the bank character: /epu bankalt on"
   end,
-  empty = "No items match. Use Reset to clear bank filters and search. Sold-out equipment stays hidden.",
+  empty = "No items in the bank catalog yet. Stock appears after a bank character shares it.",
 }
 
 -- Sort the bank ------------------------------------------------------------
@@ -1116,7 +1445,7 @@ function UI.BankSortRows(q)
       .. ((r.ah and r.unit > (r.vendor or 0)) and " on the AH" or " to a vendor")
     return row(r, sub, Money(r.value))
   end)
-  return out
+  return out,#plan.recipes+#plan.mats+#plan.sell
 end
 local function FindPlanRow(id)
   local plan = UI.BankSortPlan()
@@ -1307,12 +1636,75 @@ Views.donations = {
 -- Sync ------------------------------------------------------------------------
 local SYNC_KIND = { asked = "Asked", sent = "Answered", relayed = "Passed on", officer = "Synced", relay = "Unconfirmed",
   dropped = "Cleaned up", checkin = "Check-in", behind = "Behind" }
+local function OlderSyncVersion(report)
+  local release = ns.newestVersion or ns.RELEASE_VERSION
+  return release and report.ver and ns.VersionNumber(report.ver) < ns.VersionNumber(release)
+end
+local function SyncMemberStatus(r)
+  if r.none then return "No sync activity recorded", "sync_noseen" end
+  if r.asked and ns.Now()-r.asked < 120 and (not r.t or r.asked > r.t+60) then
+    return "Requested data "..Ago(r.asked), "sync_wait"
+  end
+  if r.t then
+    local source = r.from and (" from "..r.from) or ""
+    return "Last report "..Ago(r.t)..source, r.kind=="relay" and "sync_unconf" or "sync_ok"
+  end
+  if r.asked then return "Last requested "..Ago(r.asked), "sync_none" end
+  if r.name==ns.me and ns.IsTrusted(ns.me) then return "Holds this guild's copy", "sync_host" end
+  return "Waiting for guild data", "sync_none"
+end
+local syncFilters = {
+  {value="all", label="All statuses"},
+  {value="sync_ok", label="Reported"},
+  {value="sync_wait", label="Requested"},
+  {value="sync_unconf", label="Unconfirmed"},
+  {value="sync_host", label="Officer copy"},
+  {value="sync_none", label="No report"},
+  {value="sync_noseen", label="No addon seen"},
+  {value="online", label="Online"},
+  {value="outdated", label="Older version"},
+}
+local syncSorts = {
+  {value="recent", label="Latest activity"},
+  {value="name", label="Name A–Z"},
+  {value="online", label="Online first"},
+  {value="version", label="Newest version"},
+}
 Views.sync = {
   label = "Sync", icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", stateKey = "sync",
-  chips = { { "guild", "Members" }, { "all", "Whole roster" }, { "mine", "This PC" } },
+  filtered = function() return UI.state.sync.filter~="mine" and UI.state.sync.status~="all" end,
+  clearFilters = function() UI.state.sync.status="all" end,
+  chips = {
+    { "guild", "Members", "Members whose addon has checked in.", "Interface\\Icons\\INV_Misc_Head_Human_01" },
+    { "all", "Whole roster", "Include members whose addon hasn't been seen.", "Interface\\Icons\\INV_Misc_GroupLooking" },
+    { "mine", "This PC", "Local sync activity log.", "Interface\\Icons\\INV_Misc_Book_09" },
+  },
   tools = function(bar)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT"); bar:SetPoint("TOPRIGHT"); bar:SetHeight(TOOLBAR_H)
     bar:Add(Btn(bar, "Sync now", 80, 22, "accent"), "right", function() ns.FullSync() end,
       "Ask online officers for everything again (it also happens by itself)")
+    local function Choice(field, options, width, x)
+      local b = Btn(bar,"",width,22)
+      b:SetPoint("TOPLEFT",bar,"BOTTOMLEFT",x,-1)
+      AddDropdownArrow(b)
+      b:SetScript("OnClick",function()
+        local st = UI.state.sync
+        local choices = options
+        if field=="status" and not (ns.newestVersion or ns.RELEASE_VERSION) then
+          choices = {}
+          for _, option in ipairs(options) do
+            if option.value~="outdated" then choices[#choices+1]=option end
+          end
+        end
+        OpenMenu(b,choices,st[field],function(value)
+          st[field]=value; scroll:SetVerticalScroll(0); UI:Refresh()
+        end)
+      end)
+      return b
+    end
+    bar.status = Choice("status",syncFilters,132,10)
+    bar.sort = Choice("sort",syncSorts,160,148)
   end,
   rows = function(g, q)
     local st, out = UI.state.sync, {}
@@ -1322,63 +1714,61 @@ Views.sync = {
           out[#out + 1] = {
             key = "synclog:" .. i, title = e.text or "?", titleColor = (e.kind == "relay" or e.kind == "behind") and C.gold or C.text,
             sub = (SYNC_KIND[e.kind] or e.kind or "") .. "  ·  " .. Ago(e.t),
+            icon = Views.sync.icon, onClick = function() UI:OpenDetails("synclog", e) end,
           }
         end
       end
-      return out
+      return out,#(g.syncLog or {})
     end
     local reports = {}
     for _, r in ipairs(ns.SyncReports()) do reports[r.name] = r end
     if st.filter == "all" then
       for name in pairs(ns.roster) do reports[name] = reports[name] or { name = name, none = true } end
     end
-    local list = {}
-    for _, r in pairs(reports) do list[#list + 1] = r end
-    table.sort(list, function(a, b)
-      if (a.none or false) ~= (b.none or false) then return not a.none end
-      return math.max(a.t or 0, a.asked or 0) > math.max(b.t or 0, b.asked or 0)
-    end)
-    local newest = ns.newestVersion or ns.VERSION
-    for _, r in ipairs(list) do
+    local total=0
+    for _, r in pairs(reports) do
+      total=total+1
       if Match(q, r.name, r.from, r.what, r.ver) then
-        local sub, pill
-        if r.none then
-          sub = "No addon seen yet"
-        elseif r.t then
-          sub = ((r.kind == "relay") and "Unconfirmed copy from " or "Synced from ") .. tostring(r.from or "?") .. " " .. Ago(r.t)
-            .. "  ·  " .. tostring(r.what or "")
-          if r.kind == "relay" then pill = "sync_unconf" end
-          if r.asked and r.asked > r.t + 60 then sub = "Asked " .. Ago(r.asked) .. ", no answer yet  ·  last: " .. sub; pill = "sync_wait" end
-        elseif r.asked then
-          sub = "Asked " .. Ago(r.asked) .. ", hasn't synced yet"
-          pill = "sync_wait"
-        else
-          sub = r.from or "Waiting for guild data"
+        local sub,pill = SyncMemberStatus(r)
+        local old = OlderSyncVersion(r)
+        local online = Online(r.name)
+        if st.status=="all" or st.status==pill or (st.status=="online" and online) or (st.status=="outdated" and old) then
+          local icon, coords = ns.ClassIcon((ns.roster[r.name] or {}).classFile)
+          out[#out + 1] = {
+            key = "sync:" .. r.name, name = r.name, dot = online,
+            icon = icon, iconCoords = coords,
+            title = ns.WhoLabel(r.name)..(r.name==ns.me and " (you)" or ""), titleColor = r.none and C.muted or C.text,
+            sub = sub, pill = pill, activity = math.max(r.t or 0, r.asked or 0),
+            version = r.ver and ns.VersionNumber(r.ver) or 0,
+            right = r.ver and ("v" .. r.ver) or nil, rightColor = old and C.red or C.muted,
+            onClick = function() UI:OpenDetails("syncmember", r.name) end,
+          }
         end
-        local old = r.ver and ns.VersionNumber(r.ver) < ns.VersionNumber(newest)
-        out[#out + 1] = {
-          key = "sync:" .. r.name, dot = ns.roster[r.name] ~= nil and ns.roster[r.name].online == true,
-          title = ns.WhoLabel and ns.WhoLabel(r.name) or r.name, titleColor = r.none and C.muted or C.text,
-          sub = sub, pill = pill,
-          right = r.ver and ("v" .. r.ver) or nil, rightColor = old and C.red or C.muted,
-          tip = old and { " ", "Older addon version: they should update in the CurseForge app." } or nil,
-        }
       end
     end
-    return out
+    table.sort(out,function(a,b)
+      if st.sort=="recent" then
+        if a.activity~=b.activity then return a.activity>b.activity end
+      elseif st.sort=="online" and a.dot~=b.dot then
+        return a.dot
+      elseif st.sort=="version" and a.version~=b.version then
+        return a.version>b.version
+      end
+      return a.name:lower()<b.name:lower()
+    end)
+    return out,total
   end,
   footer = function(g)
     if UI.state.sync.filter == "mine" then return "What this PC's addon sent and received. Kept on this PC only." end
     local n, day, old = 0, 0, 0
-    local newest = ns.newestVersion or ns.VERSION
     for _, r in ipairs(ns.SyncReports()) do
       n = n + 1
       if r.t and ns.Now() - r.t < 86400 then day = day + 1 end
-      if r.ver and ns.VersionNumber(r.ver) < ns.VersionNumber(newest) then old = old + 1 end
+      if OlderSyncVersion(r) then old = old + 1 end
     end
-    return n .. " with the addon  ·  " .. day .. " synced today" .. (old > 0 and ("  ·  |cffff6b6b" .. old .. " on an older version|r") or "")
+    return n .. " addons seen  ·  " .. day .. " reported in the last 24h" .. (old > 0 and ("  ·  |cffff6b6b" .. old .. " on an older version|r") or "")
   end,
-  empty = "Nothing yet. Members show up here as their addon syncs.",
+  empty = "No matching sync activity. Try another status or clear the search.",
 }
 
 -- Crafters ------------------------------------------------------------------
@@ -1472,6 +1862,14 @@ local MAX_LIST = 250   -- long lists: show the first 250 and ask people to searc
 
 Views.recipes = {
   label = "Recipes", icon = "Interface\\Icons\\INV_Misc_Book_09",
+  filtered = function()
+    local st=UI.state.recipes
+    return st.prof or st.online or st.designated or st.crafter or st.skillup
+  end,
+  clearFilters = function()
+    local st=UI.state.recipes
+    st.prof,st.crafter,st.online,st.designated,st.skillup=nil,nil,false,false,false
+  end,
   tools = function(bar)
     UI.profChip = DropChip(bar, 116, "Pick a profession", function()
       local counts = {}
@@ -1500,9 +1898,12 @@ Views.recipes = {
   end,
   rows = function(g, q)
     local st, out = UI.state.recipes, {}
+    local total=0
     for _, e in ipairs(ns.RecipeIndex()) do
       local name = e.item and ns.ItemName(e.item, true) or e.name
-      if (not st.prof or e.prof == st.prof) and ns.IsBoP(e.item or 0) ~= true then
+      local shareable=ns.IsBoP(e.item or 0)~=true
+      if shareable then total=total+1 end
+      if shareable and (not st.prof or e.prof == st.prof) then
         local crafters, anyOnline, anyDes, anySkill, hasCrafter = {}, false, false, false, st.crafter == nil
         for _, c in ipairs(e.crafters) do
           local des = ns.IsDesignated(c.who, c.prof)
@@ -1546,7 +1947,7 @@ Views.recipes = {
     if #out > MAX_LIST then
       for i = #out, MAX_LIST + 1, -1 do out[i] = nil end
     end
-    return out
+    return out,total
   end,
   footer = function()
     local n = UI.recipeTotal or 0
@@ -1669,8 +2070,10 @@ Views.roster = {
           local rev = rv or ns.Review(name)
           if rev.inactive then pill = "roster_inactive" elseif rev.promote then pill = "roster_promote" end
         end
+        local icon, coords = ns.ClassIcon(r.classFile)
         out[#out + 1] = {
-          key = "member:" .. name, dot = r.online,
+          key = "member:" .. name, dot = r.online, iconCoords = coords,
+          icon = icon,
           title = ns.WhoLabel(name), titleColor = ClassColor(r.classFile),
           sub = table.concat(parts, "  ·  "), right = ns.RoleText(roles), pill = pill,
           sortOnline = r.online and 1 or 0, sortLevel = r.level or 0, sortName = name,
@@ -1706,7 +2109,7 @@ end
 
 -- Crafting projects and onboarding ---------------------------------------
 Views.projects = {
-  label="Projects", icon="Interface\Icons\Trade_BlackSmithing",
+  label="Projects", icon="Interface\\Icons\\Trade_BlackSmithing",
   tools=function(bar)
     bar:Add(Btn(bar,"New project",100,22),"right",function()
       if ns.IsTrusted(ns.me) then UI:OpenDetails("newproject","new") else ns.Print("Ask an officer to create a project.") end
@@ -1727,7 +2130,7 @@ Views.projects = {
   footer=function() return "Projects connect shared recipes, assigned crafters, materials and delivery progress." end,
 }
 Views.onboarding = {
-  label="Getting started", icon="Interface\Icons\INV_Misc_Book_09",
+  label="Getting started", icon="Interface\\Icons\\INV_Misc_Book_09",
   tools=function(bar)
     bar:Add(Btn(bar,"My checklist",100,22),"left",function() UI:OpenDetails("checklist",ns.me) end)
   end,
@@ -1749,6 +2152,74 @@ Views.onboarding = {
 if ns.InstallCasualViews then ns.InstallCasualViews(Views,{Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI}) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
+Views.home = {
+  label = "Home", icon = "Interface\\Icons\\INV_Misc_Map_01",
+  rows = function(g, query)
+    local rows = {}
+    local function Add(title, sub, icon, click, featured)
+      if Match(query, title, sub) then
+        rows[#rows + 1] = {key=title, title=title, sub=sub, icon=icon, featured=featured, onClick=function()
+          UI.search:SetText("")
+          click()
+        end}
+      end
+    end
+    local state=ns.CommunityState()
+    if state and ns.GetBubbleActions then
+      local total=0
+      for _, items in pairs(ns.GetBubbleActions(g,state)) do total=total+#items end
+      if total>0 then Add("Needs your attention", total..(total==1 and " action" or " actions"),
+        "Interface\\Icons\\INV_Misc_Note_01", function() UI:OpenDetails("bubbleactions","all") end, true) end
+    end
+    local myRequests = 0
+    for _, r in pairs(g.requests) do
+      if ns.IsActiveRequest(r) and (ns.MainOf(r.who)==ns.MainOf(ns.me) or ns.IAmCrafter(r)) then myRequests=myRequests+1 end
+    end
+    Add("My requests", myRequests.." open", Views.requests.icon, function()
+      local filters=UI.state.requests
+      filters.mine, filters.crafts, filters.filter=true,false,"open"
+      UI:SetView("requests")
+    end)
+    local nextEvent
+    for _, event in pairs(g.guildEvents or {}) do
+      if event.status=="scheduled" and event.starts>ns.Now() then
+        if not nextEvent or event.starts<nextEvent.starts then nextEvent=event end
+      end
+    end
+    Add("Next event", nextEvent and (nextEvent.title.." · "..date("%b %d, %H:%M",nextEvent.starts))
+      or "No events scheduled.", Views.activities.icon, function()
+      SlashCmdList.EPUGUILD("calendar")
+    end)
+    Add("Guild bank", "Browse stock and request an item.", Views.bank.icon, function() UI:SetView("bank") end)
+    Add("Guild news", #ns.UnreadNews().." unread announcements", Views.news.icon, function() UI:SetView("news") end)
+    Add("Getting started", "See your guild checklist.", Views.onboarding.icon, function() UI:SetView("onboarding") end)
+    if ns.IsTrusted(ns.me) then
+      Add("Bank fulfillment", "Review approved requests and preview mail.", "Interface\\Icons\\INV_Misc_Bag_08",
+        function() UI:OpenDetails("fulfillment","all") end)
+    end
+    return rows
+  end,
+  empty="No shortcuts match your search.",
+}
+Views.settings = {
+  label = "Settings", icon = "Interface\\Icons\\INV_Misc_Gear_01",
+  rows = function(_,query)
+    local options = {
+      {key="notifications", title="Notifications", sub="Alerts, quiet hours and the floating Events button.",
+        icon="Interface\\Icons\\INV_Misc_PocketWatch_01",
+        onClick=function() SlashCmdList.EPUGUILD("notifications"); UI:OpenDetails("noticeform","all") end},
+      {key="map", title="Map and sharing", sub="Guild location markers and sharing preferences.",
+        icon=Views.home.icon,
+        onClick=function() SlashCmdList.EPUGUILD("map") end},
+      {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
+        onClick=function() ns.ShowMinimapButtonSettings() end},
+    }
+    local rows={}
+    for _, row in ipairs(options) do if Match(query,row.title,row.sub) then rows[#rows+1]=row end end
+    return rows
+  end,
+  empty="No settings match your search.",
+}
 
 Views.officer = {
   label = "Officer", icon = "Interface\\Icons\\INV_Misc_Key_03", officer = true,
@@ -1763,6 +2234,37 @@ local function NewBar(view)
   local bar = CreateFrame("Frame", nil, toolbar)
   bar:SetAllPoints()
   bar.leftX, bar.rightX = 10, 10
+  bar.controls = {}
+  function bar:Fit(width)
+    local left, right, lower = 10, 10, 10
+    for _, entry in ipairs(self.controls) do
+      local b=entry.button
+      if b:IsShown() then
+        local padding = b.arrow and 31 or b.icon and 34 or 16
+        local size = math.min(math.max(104,width*0.43), math.max(entry.width,TextWidth(b.text)+padding))
+        b:SetWidth(size)
+        b:ClearAllPoints()
+        if entry.right then
+          b:SetPoint("TOPRIGHT",self,"TOPRIGHT",-right,-6)
+          right=right+size+6
+        end
+      end
+    end
+    for _, entry in ipairs(self.controls) do
+      local b=entry.button
+      if b:IsShown() and not entry.right then
+        local size=b:GetWidth()
+        if lower>10 or left+size+right>width then
+          b:SetPoint("TOPLEFT",self,"TOPLEFT",lower,-34)
+          lower=lower+size+4
+        else
+          b:SetPoint("TOPLEFT",self,"TOPLEFT",left,-6)
+          left=left+size+4
+        end
+      end
+    end
+    return lower>10
+  end
   function bar:Add(w, side, onClick, tip)
     w:SetParent(self)
     if w.text and not w.arrow and (w.text:GetText() or "") ~= "" then   -- fit plain buttons to their label
@@ -1778,6 +2280,7 @@ local function NewBar(view)
     end
     if onClick then w:SetScript("OnClick", onClick) end
     w.tip = tip
+    self.controls[#self.controls+1]={button=w,width=w:GetWidth(),right=side=="right"}
     return w
   end
   bar.chips = {}
@@ -1788,8 +2291,14 @@ local function NewBar(view)
     probe:SetWidth(math.max(36, (probe.text:GetStringWidth() or 40) + 18))
     local b = bar:Add(probe, "left", function()
       UI.state[stateKey].filter = key
+      if view == Views.sync then scroll:SetVerticalScroll(0); UI:Layout() end
       UI:Refresh()
     end, ch[3])
+    if ch[4] then
+      local width = b:GetWidth()+20
+      b:SetWidth(width); bar.leftX = bar.leftX+20
+      b:SetIcon(ch[4])
+    end
     b.key, b.label = key, ch[2]
     bar.chips[#bar.chips + 1] = b
   end
@@ -2142,19 +2651,36 @@ officerScroll:SetScript("OnSizeChanged", function(self, w) if w and w > 0 then o
 UI.officerPage = officerPage
 do
   local y = -12
-  local function Row(labelText, height)
+  local function Row(labelText, height, icon)
+    local badge = officerPage:CreateTexture(nil, "ARTWORK")
+    badge:SetTexture(icon)
+    badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    badge:SetSize(22, 22)
+    badge:SetPoint("TOPLEFT", 14, y - 4)
     local l = Font(officerPage, 12, C.text)
-    l:SetPoint("TOPLEFT", 14, y - 4)
+    l:SetPoint("TOPLEFT", 45, y - 4)
     l:SetText(labelText)
-    local hint = Font(officerPage, 10, C.muted)
-    hint:SetPoint("TOPLEFT", 14, y - 20)
-    y = y - (height or 44)
+    local hint = Font(officerPage, 11, C.muted)
+    hint:SetPoint("TOPLEFT", 45, y - 21)
+    local line=Tex(officerPage,"BORDER",C.line)
+    line:SetPoint("TOPLEFT",14,y-(height or 48)+6)
+    line:SetPoint("TOPRIGHT",-14,y-(height or 48)+6)
+    line:SetHeight(1)
+    y = y - (height or 48)
     return l, hint
   end
 
-  local _, h1 = Row("Trusted ranks")
+  local lineY=y
+  local _, queueHint=Row("Bank fulfillment",54,Views.bank.icon)
+  UI.queueHint=queueHint
+  local queueButton=Btn(officerPage,"Review fulfillment",132,24,"accent")
+  queueButton:SetPoint("TOPRIGHT",-14,lineY)
+  queueButton:SetScript("OnClick",function() UI:OpenDetails("fulfillment","all") end)
+
+  lineY=y
+  local _, h1 = Row("Trusted ranks",nil,Views.officer.icon)
   UI.rankBtn = Btn(officerPage, "", 230, 22)
-  UI.rankBtn:SetPoint("TOPRIGHT", -14, -12)
+  UI.rankBtn:SetPoint("TOPRIGHT", -14, lineY)
   UI.rankBtn.tip = "Members at these ranks (and any rank with \"Bank\" in its name) can change needs, approve requests and publish bank contents. Each officer's addon uses its own setting, so keep them the same."
   h1:SetText("Who can manage the bank")
   UI.rankBtn:SetScript("OnClick", function()
@@ -2165,36 +2691,39 @@ do
     UI:Refresh()
   end)
 
-  local _, h2 = Row("This character is a bank")
+  lineY=y
+  local _, h2 = Row("This character is a bank",nil,Views.bank.icon)
   h2:SetText("Track its bags and bank as guild stock")
   UI.bankToggle = Btn(officerPage, "", 80, 22)
-  UI.bankToggle:SetPoint("TOPRIGHT", -14, -56)
+  UI.bankToggle:SetPoint("TOPRIGHT", -14, lineY)
   UI.bankToggle:SetScript("OnClick", function() ns.SetBankAlt(not ns.IsBankAlt()); UI:Refresh() end)
 
-  local _, h3 = Row("Open requests per player")
+  lineY=y
+  local _, h3 = Row("Open requests per player",nil,Views.requests.icon)
   h3:SetText("Counting alts. 0 means no limit. Shared with the guild.")
   UI.limitBox = Box(officerPage, 50, "0", true)
-  UI.limitBox:SetPoint("TOPRIGHT", -84, -100)
+  UI.limitBox:SetPoint("TOPRIGHT", -84, lineY)
   local limitSave = Btn(officerPage, "Save", 62, 22)
-  limitSave:SetPoint("TOPRIGHT", -14, -100)
+  limitSave:SetPoint("TOPRIGHT", -14, lineY)
   limitSave:SetScript("OnClick", function()
     ns.SetPolicy("maxOpen", tonumber(UI.limitBox:GetText()) or 0)
     UI.limitBox:ClearFocus()
   end)
 
-  local _, h4 = Row("Discord")
+  lineY=y
+  local _, h4 = Row("Discord",nil,Views.sync.icon)
   UI.inboxHint = h4
   local applyInbox = Btn(officerPage, "Apply inbox now", 120, 22)
-  applyInbox:SetPoint("TOPRIGHT", -146, -144)
+  applyInbox:SetPoint("TOPRIGHT", -146, lineY)
   applyInbox.tip = "Apply requests and approvals made in Discord that have arrived in Inbox.lua."
   applyInbox:SetScript("OnClick", function() ns.ProcessInbox(); UI:Refresh() end)
   local saveDiscord = Btn(officerPage, "Save for Discord", 126, 22)
-  saveDiscord:SetPoint("TOPRIGHT", -14, -144)
+  saveDiscord:SetPoint("TOPRIGHT", -14, lineY)
   saveDiscord.tip = "Reloads your UI so WoW saves everything and the Discord bot picks it up."
   saveDiscord:SetScript("OnClick", function() pcall(ns.CacheItemNames); ReloadUI() end)
 
   local rowY = y
-  local _, h6 = Row("Promotion reminder", 62)
+  local _, h6 = Row("Promotion reminder", 62, Views.roster.icon)
   h6:SetText("Tags members at the lowest rank who are ready, so you remember to promote them")
   -- [Days in guild: __]  [Min level: __]  [Save], with their own labels
   local promoSave = Btn(officerPage, "Save", 62, 22)
@@ -2210,7 +2739,7 @@ do
   daysLabel:SetPoint("RIGHT", UI.promoDays, "LEFT", -4, 0)
   daysLabel:SetText("Days in guild")
   h6:ClearAllPoints()
-  h6:SetPoint("TOPLEFT", 14, rowY - 20)
+  h6:SetPoint("TOPLEFT", 45, rowY - 20)
   UI.promoRule = Font(officerPage, 11, C.gold)       -- the rule in plain words
   UI.promoRule:SetPoint("TOPLEFT", 14, rowY - 38)
   promoSave.tip = "Members at the lowest rank who meet both get a \"Promote?\" tag on the Roster page (officers only)."
@@ -2220,7 +2749,7 @@ do
     UI.promoDays:ClearFocus(); UI.promoLevel:ClearFocus()
   end)
 
-  local _, h5 = Row("Tools", 40)
+  local _, h5 = Row("Tools", 40, Views.settings.icon)
   h5:SetText("")
   local tools = {
     { "Post needs to guild", function() ns.PostNeeds() end, "Posts the top open needs in guild chat." },
@@ -2284,11 +2813,13 @@ local function RefreshOfficerPage(g)
   end
   local waiting = InboxWaiting()
   UI.inboxHint:SetText(waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
-  local open, pending, members = 0, 0, 0
+  local open, pending, members, fulfillment = 0, 0, 0, 0
   for _, r in pairs(g.requests) do
     if ns.IsActiveRequest(r) then open = open + 1 end
     if r.status == "pending" or r.status == "open" then pending = pending + 1 end
+    if not r.crafter and r.status=="approved" and ns.Remaining(r)>0 then fulfillment=fulfillment+1 end
   end
+  UI.queueHint:SetText(fulfillment==0 and "No approved bank requests to fill." or (fulfillment.." approved bank requests to fill"))
   for _ in pairs(g.crafters) do members = members + 1 end
   local gaps, noGuild = {}, {}
   for _, row in ipairs(ns.Coverage()) do
@@ -2336,10 +2867,55 @@ function UI:FillDetails()
 
   if ns.FillCasualDetails and ns.FillCasualDetails(kind,key,det) then
     -- Activity forms and details are supplied by CasualUI.
+  elseif kind=="syncmember" then
+    local report
+    for _, r in ipairs(ns.SyncReports()) do if r.name==key then report=r; break end end
+    report = report or {name=key, none=true}
+    local summary = SyncMemberStatus(report)
+    local icon, coords = ns.ClassIcon((ns.roster[key] or {}).classFile)
+    det:Reset(icon or Views.sync.icon,nil,ns.WhoLabel(key),summary,coords)
+    det:Text(report.ver and ("Addon version: v"..report.ver) or "Addon version unknown",C.muted)
+    if OlderSyncVersion(report) then det:Text("An updated version is available on CurseForge.",C.gold) end
+    if report.asked then det:Text("Last request: "..date("%b %d, %H:%M",report.asked),C.muted) end
+    if report.t then
+      det:Section("Latest reported sync")
+      det:Text((report.kind=="relay" and "Unconfirmed copy" or "Officer copy")..
+        (report.from and (" from "..report.from) or "").." · "..date("%b %d, %H:%M",report.t))
+      if report.what and report.what~="" then det:Text(report.what,C.muted) end
+    end
+  elseif kind=="synclog" then
+    local label = SYNC_KIND[key.kind] or "Sync activity"
+    det:Reset(Views.sync.icon,nil,label,Ago(key.t))
+    det:Text(key.text or label)
+  elseif kind=="bubbleactions" then
+    ns.FillBubbleActions(det)
+  elseif kind=="fulfillment" and officer then
+    det:Reset(nil,nil,"Bank fulfillment","Stock estimates use the latest bank snapshots")
+    local queue = ns.BankFulfillmentQueue()
+    for _, section in ipairs({{"Ready to fill",queue.ready},{"Pull from bank",queue.pull},{"Waiting for stock",queue.restock}}) do
+      det:Text(section[1].." ("..#section[2]..")",C.gold)
+      for _, group in ipairs(section[2]) do
+        local who = group.who
+        det:Text(who.." · "..#group.rows.." approved"
+          ..(group.short>0 and (" · "..group.short.." short in recorded stock") or ""))
+        det:Buttons({{"Preview mail",function() UI:OpenDetails("membermail",who) end}})
+      end
+    end
+    det:Text("Needs review ("..#queue.review..")",C.gold)
+    for _, id in ipairs(queue.review) do
+      local request = g.requests[id]
+      det:Text(ns.RequestName(request,true).." · "..(request.to or request.who).." · "..request.status)
+      det:Buttons({{"Open request",function() UI:OpenDetails("request",id) end}})
+    end
   elseif kind=="membermail" then
     det:Reset(nil,nil,"Fill mail for member",key)
     local rows=ns.MemberMailPlan(key)
-    for _,row in ipairs(rows) do det:Text(ns.RequestName(row.r,true).." x"..ns.Remaining(row.r)) end
+    local shortage={}
+    for _,row in ipairs(rows) do shortage[row.r.item]=(shortage[row.r.item] or 0)+ns.RequestRestock(row.id) end
+    for _,line in ipairs(ns.MemberMailPreview(rows)) do
+      det:Text(ns.ItemName(line.item,true).." · "..line.ready.." of "..line.remaining.." in next mail"
+        ..((shortage[line.item] or 0)>0 and (" · "..shortage[line.item].." short in recorded stock") or ""))
+    end
     det:Text("Combines approved bank requests for this exact recipient. Uses items in your bags, up to the game's attachment limit. Missing quantities stay open. Sending is manual.",C.muted)
     if officer then det:Buttons({{"Fill mail",function() ns.MailMemberRequests(key) end,accent=true}}) end
   elseif kind=="newproject" then
@@ -2351,7 +2927,14 @@ function UI:FillDetails()
     local p=ns.PlanningStore().projects[key]; if not p then return UI:CloseDetails() end
     local done,total=ns.ProjectProgress(p)
     det:Reset(nil,1,p.title,done.." of "..total.." items delivered")
+    det:Progress(done,total)
     det:Text(p.note)
+    if officer then
+      det:Buttons({{"Add craft task",function() UI:OpenDetails("projecttask",key) end,accent=true},
+        {"Stock materials",function() ns.StockProject(key) end}})
+    end
+    det:Section("Assigned work")
+    if #p.tasks==0 then det:Text("No tasks assigned yet.",C.muted) end
     for _,task in ipairs(p.tasks) do
       local r=g.requests[task.rid]; local rid=task.rid
       det:Text((r and ns.RequestName(r,true) or task.key).." x"..task.qty.." - "..task.crafter)
@@ -2359,11 +2942,10 @@ function UI:FillDetails()
       if r then det:Buttons({{"View request",function() UI:OpenDetails("request",rid) end}}) end
     end
     if p.recipient then det:Text("Starter kit for "..p.recipient,C.gold) end
-    det:Text("Materials and bank supplies still required",C.gold)
+    det:Section("Materials and bank supplies")
     for item,n in pairs(ns.ProjectMaterials(p)) do det:Text(ns.ItemName(item,true).." x"..n.." (bank: "..ns.BankCount(item)..")") end
     if officer then
-      det:Buttons({{"Add craft task",function() UI:OpenDetails("projecttask",key) end},
-        {"Stock materials",function() ns.StockProject(key) end}, {"Archive",function() ns.ArchiveProject(key); UI:CloseDetails() end}})
+      det:Buttons({{"Archive project",function() ns.ArchiveProject(key); UI:CloseDetails() end}})
     end
   elseif kind=="projecttask" then
     det:Reset(nil,1,"Add craft task","Pick a shared recipe and a crafter who knows it")
@@ -2379,7 +2961,12 @@ function UI:FillDetails()
     end,accent=true}})
   elseif kind=="checklist" then
     det:Reset(nil,1,"Getting started",key)
-    for _,s in ipairs(ns.Checklist(key)) do
+    local steps=ns.Checklist(key)
+    local done=0
+    for _,s in ipairs(steps) do if s.done then done=done+1 end end
+    det:Text(done.." of "..#steps.." steps complete",C.muted)
+    det:Progress(done,#steps)
+    for _,s in ipairs(steps) do
       local step=s.id; local value=s.done
       det:Text((value and "[Done] " or "[ ] ")..s.title,value and C.green or C.white)
       det:Text(s.text,C.muted)
@@ -2417,6 +3004,7 @@ function UI:FillDetails()
     local prof = e and e.prof
     det:Text("Asked by " .. ns.WhoLabel(r.who) .. ((r.to and r.to ~= r.who) and (", for " .. r.to) or ""))
     det:Text("Delivered: " .. (r.delivered or 0) .. " / " .. r.qty .. "   Remaining: " .. ns.Remaining(r))
+    det:Progress(r.delivered or 0,r.qty)
     det:Text("Crafter: " .. ((prof and ns.IsDesignated(r.crafter, prof)) and (STAR .. " ") or "") .. r.crafter
       .. (Online(r.crafter) and "  |cff4ade80online|r" or ""))
     det:Text(MATS_LABEL[r.mats or "me"] or "", C.muted)
@@ -2472,20 +3060,12 @@ function UI:FillDetails()
     else
       det:Text("Offline" .. (r.away and ("  ·  last seen " .. (r.away < 1 and "today" or (math.floor(r.away) .. " days ago"))) or ""), C.muted)
     end
-    local prof = ns.ProfileOf(key)
-    if prof and prof.roles then det:Text("Plays: " .. ns.RoleText(prof.roles)) end
-    if prof and prof.lf then det:Text("Looking for: |cfff2c14e" .. prof.lf .. "|r") end
-    local main, alts = ns.MainOf(key), ns.AltsOf(ns.MainOf(key))
-    if #alts > 0 then det:Text("Characters: " .. main .. ", " .. table.concat(alts, ", "), C.muted) end
-    local c = g.crafters[key]
-    if c and c.profs and next(c.profs) then
-      local parts = {}
-      for p2, v in pairs(c.profs) do parts[#parts + 1] = p2 .. " " .. v end
-      table.sort(parts)
-      det:Text("Professions: " .. table.concat(parts, ", "), C.muted)
+    local specs = {}
+    if key==ns.me then
+      specs[1]={"Edit my profile",function() UI:OpenDetails("profile",key) end,accent=true}
+    else
+      specs[1]={"Whisper",function() if ChatFrame_OpenChat then ChatFrame_OpenChat("/w "..key.." ") end end,accent=true}
     end
-    det:Gap()
-    local specs = { { "Whisper", function() if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. key .. " ") end end, accent = true } }
     if where == "other" then
       specs[#specs + 1] = { "Ask to join their layer", function()
         if ChatFrame_OpenChat then
@@ -2507,10 +3087,22 @@ function UI:FillDetails()
     if officer and key ~= ns.me then
       det:Buttons({ { "Request for " .. (key:match("^(%S+)") or key), function() UI:RequestFor(key) end } })
     end
+    local prof = ns.ProfileOf(key)
+    local main, alts = ns.MainOf(key), ns.AltsOf(ns.MainOf(key))
+    local c = g.crafters[key]
+    if prof or #alts>0 or (c and next(c.profs or {})) then
+      det:Section("Character profile")
+      if prof and prof.roles then det:Text("Plays: "..ns.RoleText(prof.roles)) end
+      if prof and prof.lf then det:Text("Looking for: "..prof.lf,C.gold) end
+      if #alts>0 then det:Text("Characters: "..main..", "..table.concat(alts,", "),C.muted) end
+      local parts={}
+      for profession,skill in pairs(c and c.profs or {}) do parts[#parts+1]=profession.." "..skill end
+      table.sort(parts)
+      if #parts>0 then det:Text("Professions: "..table.concat(parts,", "),C.muted) end
+    end
     if officer then
       local rv = ns.Review(key)
-      det:Gap()
-      det:Text("|cfff2c14eOfficer review|r")
+      det:Section("Officer review")
       if rv.joined then
         det:Text((rv.joinedSeed and "In the guild since before " or "Joined ") .. date("%b %d", rv.joined)
           .. " (" .. rv.daysIn .. (rv.daysIn == 1 and " day" or " days") .. ")")
@@ -2803,19 +3395,57 @@ function UI:FillDetails()
       UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
     end } }) end
 
-  elseif kind == "banksort" then
+  elseif kind == "banksort" or (kind == "professionmail" and officer) then
     local r = FindPlanRow(key)
+    if kind == "professionmail" and not r then
+      r = {count = ns.BankCount(key), quality = Quality(key)}
+    end
     if not r then return UI:CloseDetails() end
-    det:Reset(ns.ItemIcon(key), r.quality or 1, r.name or ns.ItemName(key, true), "Held by " .. Holders(r))
+    local subtitle = r.holders and ("Held by " .. Holders(r)) or ("In bank: " .. r.count)
+    det:Reset(ns.ItemIcon(key), r.quality or 1, r.name or ns.ItemName(key, true), subtitle)
     local specs = {}
+    local offered = {}
     local quantity
-    if r.users then
-      quantity = det:Field("Quantity", "1", 70, true)
+    local profession = det.mailProfession
+    local recipients, choices = {}, {}
+    if not r.isRecipe then
+      for who, crafter in pairs(g.crafters or {}) do
+        if who ~= ns.me and ns.InGuild(who) then
+          for prof, skill in pairs(crafter.profs or {}) do
+            skill = tonumber(skill)
+            if skill and skill > 0 then
+              if not recipients[prof] then
+                recipients[prof] = {}
+                choices[#choices + 1] = {label = prof, value = prof}
+              end
+              recipients[prof][#recipients[prof] + 1] = {who = who, skill = skill}
+            end
+          end
+        end
+      end
+      table.sort(choices, function(a, b) return a.label < b.label end)
+      table.insert(choices, 1, {label = "All recommendations", value = false})
+      if not recipients[profession] then profession = nil end
+    end
+    if r.users or #choices > 1 then
+      quantity = det:Field("Quantity", det.mailQuantity or "1", 70, true)
+      quantity.onChange = function()
+        if det.kind == kind and det.key == key then det.mailQuantity = quantity:GetText() end
+      end
       det:Text("Available from your bags: " .. ns.BankSortMailLimit(key) ..
         ". Needs and open requests stay on this character.", C.muted)
+      if #choices > 1 then
+        det:Buttons({{"Profession: " .. (profession or "All"), function(button)
+          OpenMenu(button, choices, profession or false, function(value)
+            det.mailProfession, det.mailQuantity = value or nil, quantity:GetText()
+            UI:FillDetails()
+          end)
+        end}})
+      end
     end
     local function mail(who, n)
-      if #specs < 3 and who ~= ns.me then
+      if #specs < 3 and who ~= ns.me and not offered[who] then
+        offered[who] = true
         specs[#specs + 1] = { "Mail to " .. First(who), function() ns.MailBankItem(who, key, n or (quantity and tonumber(quantity:GetText()))) end, accent = #specs == 0,
           tip = "Open a mailbox on the character holding it. The item goes into a mail for you to check and send." }
       end
@@ -2832,7 +3462,34 @@ function UI:FillDetails()
       end
       if #specs == 0 and r.closest then mail(r.closest.who, 1) end
     end
-    if r.users then
+    if profession then
+      local skillUps = {}
+      for _, u in ipairs(r.users or {}) do
+        if u.prof == profession then
+          local prev = skillUps[u.who]
+          if not prev or (prev.color ~= "o" and u.color == "o") then skillUps[u.who] = u end
+        end
+      end
+      local list = recipients[profession]
+      table.sort(list, function(a, b)
+        local function priority(candidate)
+          local u = skillUps[candidate.who]
+          return u and (u.color == "o" and 2 or 1) or 0
+        end
+        if priority(a) ~= priority(b) then return priority(a) > priority(b) end
+        if a.skill ~= b.skill then return a.skill > b.skill end
+        return a.who < b.who
+      end)
+      for _, candidate in ipairs(list) do
+        local who = candidate.who
+        local use = skillUps[who]
+        det:Text(who .. " · " .. profession .. " " .. candidate.skill
+          .. (use and (" · " .. use.name .. (use.color == "o" and " (orange)" or " (yellow)")) or ""))
+        det:Buttons({{"Mail to " .. First(who), function()
+          ns.MailBankItem(who, key, tonumber(quantity:GetText()))
+        end}})
+      end
+    elseif r.users then
       if #r.users > 0 then det:Text("|cfff2c14eSkill-ups|r (orange first)") end
       for i, u in ipairs(r.users) do
         if i > 8 then det:Text("…and " .. (#r.users - 8) .. " more", C.muted); break end
@@ -2844,8 +3501,11 @@ function UI:FillDetails()
         for _, c in ipairs(r.use.crafters or {}) do mail(c.who) end
       end
     end
-    det:Text("Sells for " .. (r.ah and (Money(r.ah) .. " on the AH (" .. Money(math.floor(r.ah * 0.95)) .. " after the cut)") or "nothing listed on the AH")
-      .. (r.vendor and r.vendor > 0 and (", " .. Money(r.vendor) .. " to a vendor") or "") .. ".", C.muted)
+    if r.holders then
+      det:Text("Sells for " .. (r.ah and (Money(r.ah) .. " on the AH (" .. Money(math.floor(r.ah * 0.95)) .. " after the cut)") or "nothing listed on the AH")
+        .. (r.vendor and r.vendor > 0 and (", " .. Money(r.vendor) .. " to a vendor") or "") .. ".", C.muted)
+    end
+    if kind == "professionmail" and #choices <= 1 then det:Text("No guildmates have shared their professions yet.", C.muted) end
     if r.surplus and r.surplus < r.count then det:Text((r.count - r.surplus) .. " kept for needs and open requests.", C.muted) end
     det:Gap()
     if #specs > 0 then det:Buttons(specs) end
@@ -2854,20 +3514,33 @@ function UI:FillDetails()
     for alt, s in pairs(g.bank) do
       if not s.retired and s.items and s.items[key] then holders[#holders + 1] = alt .. ": " .. s.items[key] end
     end
-    det:Reset(ns.ItemIcon(key), Quality(key), ns.ItemName(key, true), "In bank: " .. ns.BankCount(key))
+    local held, asked, free=ns.BankRequestStock(key)
+    local icon=ns.ItemIcon(key)
+    det:Reset(icon, Quality(key), ns.ItemName(key, true), ns.ItemCategory(key))
+    local reserved=held-free
+    det:ShowItemSummary(icon, free, held, reserved)
+    if asked>reserved then det:Text((asked-reserved).." requested beyond current stock", C.muted) end
+    if #holders>0 then det:Section("Bank holders") end
+    table.sort(holders)
     for _, h in ipairs(holders) do det:Text(h) end
     if #holders == 0 then det:Text("None in the bank right now.", C.muted) end
-    det:Text(ns.BankRequestAvailability(key),C.gold)
-    if ns.BankCount(key)==0 then det:Text('Previously stocked. You can request this item and wait for a restock.',C.muted) end
+    if held==0 then det:Text('Previously stocked. You can request this item and wait for a restock.',C.muted) end
     det:Gap()
-    if ns.CanBankRequest(key) then det:Buttons({ { "Request this", function()
-      UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
-    end, accent = true } }) end
+    local request, mail
+    if ns.CanBankRequest(key) then
+      request = function() UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus() end
+    end
     if officer then
+      local classID = select(6, GetItemInfoInstant(key)) or select(12, GetItemInfo(key))
+      if held > 0 and classID == (Enum and Enum.ItemClass and Enum.ItemClass.Tradegoods or 7) then
+        mail = function() UI:OpenDetails("professionmail", key) end
+      end
+      det:Section("Officer actions")
       det:Buttons({ { "Add as a need", function()
         UI:SetView("needs"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
       end } })
     end
+    det:ShowItemActions(request, mail)
 
   elseif kind == "donation" then
     local d = g.donations[key]
@@ -2925,17 +3598,7 @@ function UI:FillDetails()
     det:Reset(e.item and ns.ItemIcon(e.item) or "Interface\\Icons\\Trade_Engraving", e.item and Quality(e.item) or 1,
       name, e.prof .. "  ·  " .. #e.crafters .. (#e.crafters == 1 and " crafter" or " crafters"))
     if e.item then det:Text("In bank: " .. ns.BankCount(e.item), C.muted) end
-    local mats = MatsLines(key)
-    if #mats > 0 then
-      local n = ns.CraftsCovered(key) or 0
-      det:Text(n > 0 and ("|cff4ade80Bank materials cover " .. n .. (n == 1 and " craft" or " crafts") .. "|r")
-        or "The bank doesn't have the materials for one yet.", n > 0 and C.text or C.muted)
-      if officer then
-        det:Buttons({ { "Stock mats for 5 crafts", function() ns.StockMatsFor(key, 5) end,
-          tip = "Raises the bank's needs so it keeps enough of each material for 5 crafts." } })
-      end
-    end
-    det:Gap()
+    det:Section("Find a crafter")
     local list = {}
     for _, cr in ipairs(e.crafters) do list[#list + 1] = cr end
     table.sort(list, function(a, b)
@@ -2963,6 +3626,17 @@ function UI:FillDetails()
       det:Buttons(specs)
     end
     if #list > 0 then det:Text(SkillMark("o") .. " Orange always gives the crafter a skill point, yellow usually, green sometimes.", C.muted) end
+    det:Section("Materials")
+    local mats=MatsLines(key)
+    if #mats>0 then
+      local covered=ns.CraftsCovered(key) or 0
+      det:Text(covered>0 and ("Bank stock covers "..covered..(covered==1 and " craft" or " crafts"))
+        or "The bank does not have enough materials for one craft.",covered>0 and C.green or C.muted)
+      if officer then
+        det:Buttons({{"Stock mats for 5 crafts",function() ns.StockMatsFor(key,5) end,
+          tip="Raises the bank's needs to cover five crafts."}})
+      end
+    end
     if e.item then
       det:Gap()
       det:Buttons({ { "Request one from the bank", function()
@@ -2982,23 +3656,35 @@ do
   local y = -8
   for _, key in ipairs(ORDER) do
     local v = Views[key]
-    local b = CreateFrame("Button", nil, side)
+    local isTab = groupFor[key] ~= nil
+    local b = CreateFrame("Button", nil, isTab and sectionTabs or side)
     b:SetSize(SIDEBAR_W - 12, 28)
     b:SetPoint("TOPLEFT", 6, y)
     b.bg = Tex(b, "BACKGROUND", C.panel2)
     b.bg:SetAllPoints()
     b.bg:Hide()
     b.strip = Tex(b, "BORDER", C.gold)
-    b.strip:SetPoint("TOPLEFT"); b.strip:SetPoint("BOTTOMLEFT"); b.strip:SetWidth(2)
+    if isTab then
+      b.strip:SetPoint("BOTTOMLEFT"); b.strip:SetPoint("BOTTOMRIGHT"); b.strip:SetHeight(2)
+    else
+      b.strip:SetPoint("TOPLEFT"); b.strip:SetPoint("BOTTOMLEFT"); b.strip:SetWidth(2)
+    end
     b.strip:Hide()
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetSize(18, 18)
     b.icon:SetPoint("LEFT", 8, 0)
     b.icon:SetTexture(v.icon)
     b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    b.label = Font(b, 12, C.muted)
-    b.label:SetPoint("LEFT", b.icon, "RIGHT", 8, 0)
-    b.label:SetText(v.label)
+    b.label = Font(b, isTab and 11 or 10, C.muted)
+    if isTab then
+      b.icon:Hide()
+      b.label:SetPoint("LEFT", 8, 0)
+    else
+      b.icon:ClearAllPoints()
+      b.icon:SetPoint("TOP", 0, -3)
+      b.label:SetPoint("TOP", b.icon, "BOTTOM", 0, -2)
+    end
+    b.label:SetText(({bank="Stock", activities="Activities", invites="Invites", onboarding="Start here"})[key] or v.label)
     b.badge = CreateFrame("Frame", nil, b)
     b.badge:SetSize(22, 14)
     b.badge:SetPoint("RIGHT", -6, 0)
@@ -3007,9 +3693,19 @@ do
     b.badge.text = Font(b.badge, 10, C.gold)
     b.badge.text:SetPoint("CENTER")
     b.badge.text:SetJustifyH("CENTER")
-    b:SetScript("OnEnter", function(self) if UI.view ~= self.key then self.bg:Show() end end)
-    b:SetScript("OnLeave", function(self) if UI.view ~= self.key then self.bg:Hide() end end)
+    b:SetScript("OnEnter", function(self)
+      if UI.view~=self.key then self.bg:Show() end
+      if self.label:GetText()==v.label and TextWidth(self.label)<=self.label:GetWidth()+1 then return end
+      GameTooltip:SetOwner(self,"ANCHOR_BOTTOM")
+      GameTooltip:SetText(v.label,1,1,1,1,true)
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+      if UI.view~=self.key then self.bg:Hide() end
+      GameTooltip_Hide()
+    end)
     b:SetScript("OnClick", function(self)
+      if self.key=="bank" and UI.state.bank.mode then UI.state.bank.mode=nil; UI:CloseDetails() end
       if v.onSelect then v.onSelect() else UI:SetView(self.key) end
     end)
     b.key = key
@@ -3018,18 +3714,83 @@ do
     y = y - 30
   end
 end
+UI.bankSort=Btn(sectionTabs,"Sort",70,25)
+UI.bankSort:SetIcon("Interface\\Icons\\INV_Misc_Gem_Variety_02")
+UI.bankSort.tip="Recommend recipe recipients, distribute materials, or review items to sell."
+UI.bankSort:SetScript("OnClick",function()
+  UI.state.bank.mode="sort"
+  UI.bankPlan=nil
+  UI:CloseDetails()
+  UI:SetView("bank")
+end)
+for _, group in ipairs(GROUPS) do
+  local button = Btn(side, group.label, SIDEBAR_W - 12, 28)
+  local icon = button:CreateTexture(nil,"ARTWORK")
+  icon:SetSize(18,18)
+  icon:SetPoint("TOP",0,-3)
+  icon:SetTexture(Views[group.iconView].icon)
+  icon:SetTexCoord(0.08,0.92,0.08,0.92)
+  button.text:ClearAllPoints()
+  button.text:SetPoint("TOP",icon,"BOTTOM",0,-2)
+  if button.text:SetFont(FONT,10,"") == false then button.text:SetFont(fallbackFont,10,"") end
+  button:SetScript("OnClick", function()
+    UI.search:SetText("")
+    local v=Views[group.first]
+    if v.onSelect then v.onSelect() else UI:SetView(group.first) end
+  end)
+  group.button=button
+end
 
 ---------------------------------------------------------------------------
 -- Layout / view switching / refresh
 ---------------------------------------------------------------------------
 function UI:Layout()
   local v = Views[self.view]
+  local group = groupFor[self.view]
+  self.wideNav = group ~= nil and self:GetWidth() >= 930 and not (ns.MailboxOpen and ns.MailboxOpen())
+  local subnavWidth = self.wideNav and SUBNAV_W or 0
+  local mainWidth = self:GetWidth() - SIDEBAR_W - subnavWidth - 2
+  self.mainWidth = mainWidth
+  UI.pageStatus:SetWidth(math.floor(mainWidth*0.41))
+  UI.pageTitle:SetWidth(math.floor(mainWidth*0.55)-18)
+  content:SetPoint("TOPLEFT", side, "TOPRIGHT", subnavWidth, 0)
+  sectionTabs:ClearAllPoints()
+  page:ClearAllPoints()
+  sectionLine:ClearAllPoints()
+  if self.wideNav then
+    sectionTabs:SetPoint("TOPLEFT", side, "TOPRIGHT")
+    sectionTabs:SetPoint("BOTTOMRIGHT", content, "BOTTOMLEFT")
+    sectionLine:SetPoint("TOPRIGHT"); sectionLine:SetPoint("BOTTOMRIGHT"); sectionLine:SetWidth(1)
+    page:SetPoint("TOPLEFT", content, "TOPLEFT")
+    page:SetPoint("TOPRIGHT", content, "TOPRIGHT")
+  else
+    sectionTabs:SetPoint("TOPLEFT", content, "TOPLEFT")
+    sectionTabs:SetPoint("TOPRIGHT", content, "TOPRIGHT")
+    sectionTabs:SetHeight(group and 30 or 0.01)
+    sectionLine:SetPoint("BOTTOMLEFT"); sectionLine:SetPoint("BOTTOMRIGHT"); sectionLine:SetHeight(1)
+    page:SetPoint("TOPLEFT", sectionTabs, "BOTTOMLEFT")
+    page:SetPoint("TOPRIGHT", sectionTabs, "BOTTOMRIGHT")
+  end
+  sectionTabs:SetShown(group ~= nil)
+  local showTools = v and (v.tools ~= nil or v.chips ~= nil)
+    and not (self.view == "bank" and self.state.bank.mode == "sort")
+  toolbar:SetShown(showTools == true)
+  local filterHeight = self.view=="sync" and self.state.sync.filter~="mine" and 28 or 0
+  toolbar:SetHeight(showTools and TOOLBAR_H+filterHeight or 0.01)
   local showComposer = v and not v.custom and v.composer ~= nil and (v.composer ~= "need" or ns.IsTrusted(ns.me))
   composer:SetShown(showComposer)
   composer:SetHeight(showComposer and COMPOSER_H or 0.01)
   listArea:ClearAllPoints()
   listArea:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT")
-  if det:IsShown() then
+  local compact = det:IsShown() and mainWidth < 650
+  det.panelWidth = compact and mainWidth or DETAILS_W
+  det:SetWidth(det.panelWidth)
+  det.body:SetWidth(det.panelWidth-6)
+  det.title:SetWidth(det.panelWidth-105)
+  det.subtitle:SetWidth(det.panelWidth-105)
+  local showList = v and not v.custom and self.view ~= "market" and not compact
+  scroll:SetShown(showList == true)
+  if det:IsShown() and not compact then
     listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT", -DETAILS_W, 0)
   else
     listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT")
@@ -3066,20 +3827,23 @@ function UI:SetView(key)
   if self.view ~= key then
     if det:IsShown() then det:Hide(); det.kind, det.key = nil, nil; self.selected = nil end
     self.requestTo = nil
+    self.detailHistory=nil
     if key == "invites" or key == "market" then self.search:SetText("") end
   end
   self.view = key
+  local searchHint=({bank="Search items or bank holders",roster="Search guildmates or roles",recipes="Search recipes or crafters",
+    activities="Search events and activities",market="Search materials and crafts",settings="Search settings"})[key]
+  self.search.ph:SetText(searchHint or ("Search "..Views[key].label:lower()))
   for k, b in pairs(self.nav) do
     local on = (k == key)
     b.bg:SetShown(on); b.strip:SetShown(on)
-    SetColor(b.label, on and C.white or C.muted)
+    SetColor(b.label, on and C.gold or C.muted)
   end
   for _, v in pairs(Views) do if v.bar then v.bar:Hide() end end
   local v = Views[key]
   if not v.bar then v.bar = NewBar(v); UI.bars = UI.bars or {}; UI.bars[key] = v.bar end
   v.bar:Show()
-  toolbar:SetShown(key ~= "market")
-  ns.SetGatheringMarketVisible(key == "market", content, footer)
+  ns.SetGatheringMarketVisible(key == "market", content, footer, page)
   officerScroll:SetShown(v.custom == true)
   officerPage:Show()
   scroll:SetShown(not v.custom and key ~= "market")
@@ -3095,26 +3859,91 @@ function UI:SetTab(name) self:SetView(TAB_ALIASES[name] or name) end
 
 function UI:Refresh()
   if not self:IsShown() or not self.view then return end
+  self.emptyAction:Hide()
+  self:SetFilterSummary()
   local g = ns.G()
   local officer = ns.IsTrusted(ns.me)
+  local pageNames={bank="Guild bank",officer="Officer tools"}
+  self.pageTitle:SetText(self.view=="bank" and self.state.bank.mode=="sort" and "Sort the bank"
+    or pageNames[self.view] or Views[self.view].label)
+  self.pageStatus:SetText("")
+  SetColor(self.pageStatus,C.muted)
+  if g and self.view=="roster" then
+    local online=0
+    for _, member in pairs(ns.roster) do if member.online then online=online+1 end end
+    self.pageStatus:SetText(online.." online")
+  elseif g and self.view=="officer" then
+    local waiting=InboxWaiting()
+    self.pageStatus:SetText(waiting>0 and (waiting.." Discord updates waiting") or "")
+  elseif g and self.view=="sync" then
+    local label, tone = ns.SyncStatus()
+    self.pageStatus:SetText(label)
+    SetColor(self.pageStatus,tone=="green" and C.green or tone=="gold" and C.gold or C.muted)
+  end
 
   -- Sidebar permissions and badges.
   local y = -8
-  local nVisible = 0
+  local nVisible = #GROUPS
   local visibility = {}
   for _, key in ipairs(ORDER) do
     local v = Views[key]
     visibility[key] = (not v.officer or officer) and (not v.visible or v.visible())
-    if visibility[key] then nVisible = nVisible + 1 end
+    if visibility[key] and not groupFor[key] then nVisible = nVisible + 1 end
   end
-  local step = math.max(18, math.min(30, math.floor(((side:GetHeight() or 400) - 64) / nVisible)))
+  local active = groupFor[self.view]
+  local tabs = 0
+  for _, key in ipairs(active or {}) do if visibility[key] then tabs = tabs+1 end end
+  local inBank=active==groupFor.bank
+  if inBank then tabs=tabs+1 end
+  local tabWidth = math.min(108, math.floor((self:GetWidth()-SIDEBAR_W-16)/math.max(1,tabs)))
+  local tabX, subY = 7, -12
+  local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 60) / nVisible))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
-    local visible = visibility[key]
+    local group = groupFor[key]
+    if group and group[1] == key then
+      local button = group.button
+      button:SetHeight(step - 2)
+      button:ClearAllPoints(); button:SetPoint("TOPLEFT", 6, y); y = y - step
+      button:SetOn(active == group)
+    end
+    local visible = visibility[key] and (not group or group == active)
     b:SetShown(visible)
     if visible then
-      b:SetHeight(step - 2)
-      b:ClearAllPoints(); b:SetPoint("TOPLEFT", 6, y); y = y - step
+      b:ClearAllPoints()
+      if group then
+        b.strip:ClearAllPoints()
+        b.label:ClearAllPoints()
+        b.badge:ClearAllPoints()
+        b.icon:SetSize(self.wideNav and 18 or 14,self.wideNav and 18 or 14)
+        b.icon:Show()
+        if self.wideNav then
+          b:SetSize(SUBNAV_W-16,34)
+          b:SetPoint("TOPLEFT",8,subY)
+          subY=subY-37
+          b.strip:SetPoint("TOPLEFT"); b.strip:SetPoint("BOTTOMLEFT"); b.strip:SetWidth(2)
+          b.label:SetPoint("LEFT",b.icon,"RIGHT",7,0)
+          b.badge:SetHeight(14)
+          b.badge:SetPoint("RIGHT",-6,0)
+        else
+          b:SetSize(tabWidth,28)
+          b:SetPoint("TOPLEFT",tabX,-1)
+          tabX=tabX+tabWidth
+          b.strip:SetPoint("BOTTOMLEFT"); b.strip:SetPoint("BOTTOMRIGHT"); b.strip:SetHeight(2)
+          b.label:SetPoint("LEFT",b.icon,"RIGHT",4,-2)
+          b.badge:SetHeight(12)
+          b.badge:SetPoint("TOPRIGHT",-2,1)
+        end
+        local selected=self.view==key and (key~="bank" or self.state.bank.mode~="sort")
+        b.bg:SetShown(selected); b.strip:SetShown(selected)
+        SetColor(b.label,selected and C.gold or C.muted)
+      else
+        b:SetHeight(step-2)
+        b:SetPoint("TOPLEFT",6,y)
+        y=y-step
+      end
+    end
+    if visibility[key] then
       local n, bg, fg = 0, C.goldBg, C.gold
       if g and v.count then
         local ok, a, b2, c2 = pcall(v.count, g)
@@ -3129,7 +3958,24 @@ function UI:Refresh()
       else
         b.badge:Hide()
       end
+      if visible and group then
+        local labelLeft = self.wideNav and 33 or 26
+        local badgeWidth = self.wideNav and b.badge:IsShown() and b.badge:GetWidth()+4 or 0
+        b.label:SetWidth(b:GetWidth()-labelLeft-badgeWidth-6)
+      end
     end
+  end
+  self.bankSort:SetShown(inBank)
+  if inBank then
+    self.bankSort:ClearAllPoints()
+    if self.wideNav then
+      self.bankSort:SetPoint("TOPLEFT",8,subY)
+      self.bankSort:SetSize(SUBNAV_W-16,32)
+    else
+      self.bankSort:SetPoint("TOPLEFT",tabX,-2)
+      self.bankSort:SetSize(tabWidth-4,25)
+    end
+    self.bankSort:SetOn(self.view=="bank" and self.state.bank.mode=="sort")
   end
   if Views[self.view].officer and not officer then return self:SetView("needs") end
 
@@ -3145,11 +3991,13 @@ function UI:Refresh()
 
   local gold = 0
   for _, s in pairs(g and g.bank or {}) do if not s.retired then gold = gold + (s.money or 0) end end
-  goldText:SetText(g and (Money(gold) .. "  |cff7e8590on hand|r") or "")
+  goldText:SetText(g and Money(gold) or "")
   if ns.newestVersion then
-    syncText:SetText("|cfff2c14eUpdate available: v" .. ns.newestVersion .. "|r")
+    syncText:SetText("|cfff2c14ev" .. ns.newestVersion .. " out|r")
   elseif ns.SyncStatus then
     local label, tone = ns.SyncStatus()
+    label = ({["Sync cooling down"]="Sync paused",["Unconfirmed data"]="Unconfirmed",
+      ["Waiting for an officer"]="Awaiting officer",["Waiting for guild data"]="Awaiting sync"})[label] or label
     local hex = (tone == "green" and "6fcf73") or (tone == "gold" and "f2c14e") or "7e8590"
     syncText:SetText("|cff" .. hex .. label .. "|r")
   else
@@ -3159,7 +4007,6 @@ function UI:Refresh()
   if self.view == "market" then
     self.empty:Hide()
     thumb:Hide()
-    self.footerText:SetText("Market prices and daily sales are estimates.")
     ns.RefreshGatheringMarket()
     return
   end
@@ -3171,11 +4018,10 @@ function UI:Refresh()
     local stKey = v.stateKey or (v == Views.requests and "requests") or (v == Views.needs and "needs") or (v == Views.crafters and "crafters") or nil
     for _, chip in ipairs(bar.chips) do chip:SetOn(stKey and self.state[stKey].filter == chip.key) end
     if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
+    if v == Views.shopping then bar.export:SetEnabled(ns.HasAuctionator()) end
     if v == Views.bank then
       local sorting = self.state.bank.mode == 'sort'
-      self.bankSort:SetLabel(sorting and 'Back' or 'Sort'); self.bankSort:SetOn(sorting)
       self.bankCatChip:SetShown(not sorting); self.bankStockChip:SetShown(not sorting); self.bankQualityChip:SetShown(not sorting)
-      self.bankReset:SetShown(not sorting)
       self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
       self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
       self.bankStockChip:SetLabel(({all='All stock',stocked='In stock',available='Available now',restock='Awaiting restock'})[self.state.bank.stock] or 'All stock')
@@ -3216,6 +4062,18 @@ function UI:Refresh()
       end
       self.statusChip:SetOn(self.state.requests.filter ~= "open")
     end
+    if v == Views.sync then
+      local st = self.state.sync
+      local showFilters = st.filter~="mine"
+      bar.status:SetShown(showFilters); bar.sort:SetShown(showFilters)
+      for _, option in ipairs(syncFilters) do
+        if option.value==st.status then bar.status:SetLabel(option.label); break end
+      end
+      for _, option in ipairs(syncSorts) do
+        if option.value==st.sort then bar.sort:SetLabel("Sort: "..option.label); break end
+      end
+      bar.status:SetOn(st.status~="all")
+    end
   end
 
   if v.custom then
@@ -3227,7 +4085,8 @@ function UI:Refresh()
 
   local width = (scroll:GetWidth() or 400)
   child:SetWidth(width)
-  local okRows, rows = ns.SafeCall(v.rows, g, Q())
+  local query=Q()
+  local okRows, rows, total, shown = ns.SafeCall(v.rows, g, query)
   if not okRows then
     -- never leave the last page's rows on screen under this page's name
     local e = rows
@@ -3239,6 +4098,7 @@ function UI:Refresh()
       ns.Print("|cff9aa1abDetails: " .. e.raw .. "|r")
     end
     ShowRows({}, width)
+    self.empty:SetWidth(math.max(200,width-40))
     self.empty:SetText("|cffff6060The " .. (v.label or "") .. " page couldn't load.|r\n\n"
       .. "|cffffffffWhat went wrong:|r " .. e.plain .. "\n"
       .. "|cffffffffWhere:|r " .. (e.where or "unknown") .. ", addon v" .. ns.VERSION .. "\n\n"
@@ -3248,17 +4108,42 @@ function UI:Refresh()
     self.footerText:SetText("")
     return
   end
-  ShowRows(rows, width)
+  if bar and toolbar:IsShown() then
+    local wrap=bar:Fit(self.mainWidth or width)
+    local syncFiltersVisible=v==Views.sync and self.state.sync.filter~="mine"
+    toolbar:SetHeight(TOOLBAR_H+((wrap or syncFiltersVisible) and 28 or 0))
+  end
+  ShowRows(rows, width, v.icon)
+  local filtersOn=v.filtered and v.filtered()
+  local function ClearFilters()
+    v.clearFilters()
+    scroll:SetVerticalScroll(0)
+    if self.search:GetText()~="" then self.clearSearch:Click() else self:Refresh() end
+  end
+  if total and v.clearFilters and (query~="" or filtersOn) then
+    self:SetFilterSummary(shown or #rows,total,ClearFilters)
+  end
   self.empty:SetWidth(math.max(200, width - 60))
   local emptyText = v.empty
-  local g0 = ns.G()
-  if Q() == "" and g0 and not g0.syncedAt and not ns.IsTrusted(ns.me) then
-    -- a member who hasn't received the guild's data yet
-    emptyText = (emptyText and (emptyText .. "\n\n") or "")
-      .. "|cfff2c14eWaiting for guild data.|r It arrives by itself as soon as an officer\n"
-      .. "(or a guildmate with the addon) is online. Nothing to do on your end."
+  if #rows==0 then
+    local label, action
+    if query~="" then
+      emptyText = "|cffffffffNo search results|r\nTry a shorter search or clear it to see this page again."
+      label,action="Clear search",function() self.clearSearch:Click() end
+    elseif filtersOn then
+      emptyText = "|cffffffffNothing matches these filters|r\nClear the filters to see more results."
+      label,action="Clear filters",ClearFilters
+    elseif not g.syncedAt and not ns.IsTrusted(ns.me) then
+      emptyText = "|cffffffffWaiting for guild data|r\nThis page will fill in after a guildmate shares data."
+      label,action="Sync now",function() ns.FullSync() end
+    end
+    if label then
+      self.emptyAction:SetLabel(label)
+      self.emptyAction:SetScript("OnClick",action)
+      self.emptyAction:Show()
+    end
   end
-  self.empty:SetText(Q() ~= "" and ("Nothing matches \"" .. Q() .. "\".") or emptyText)
+  self.empty:SetText(emptyText or "Nothing to show here yet.")
   self.empty:SetShown(#rows == 0)
   local foot = v.footer and v.footer(g) or ""
   if ns.HasUnconfirmed and ns.HasUnconfirmed() then
@@ -3267,37 +4152,47 @@ function UI:Refresh()
   self.footerText:SetText(foot)
   UpdateThumb()
   -- don't wipe what an officer is typing in the details panel
-  if det:IsShown() and not (det.casualDraft or (ns.CasualFormKind and ns.CasualFormKind(det.kind))) and not (self.focusBox and self.focusBox:GetParent() == det.body) then self:FillDetails() end
+  if det:IsShown() and not (det.casualDraft or (ns.CasualFormKind and ns.CasualFormKind(det.kind))) and not (self.focusBox and self.focusBox:GetParent() == det.body) then
+    local offset=det.scroll:GetVerticalScroll()
+    self:FillDetails()
+    if det:IsShown() then
+      det.scroll:SetVerticalScroll(math.max(0,math.min(offset,det.body:GetHeight()-det.scroll:GetHeight())))
+      det:UpdateScroll()
+    end
+  end
 end
 
 UI:SetScript("OnShow", function(self)
   ns.RequestRoster()
-  if not self.view then self:SetView("needs") else self:Layout(); self:Refresh() end
+  if not self.view then self:SetView("home") else self:Layout(); self:Refresh() end
 end)
 
 ns.On("PLAYER_LOGIN", function() UI:RestoreLayout() end)
-ns.On("MAIL_SHOW", function() if UI:IsShown() then UI:Refresh() end end)
+local function RefreshMailboxLayout()
+  if UI:IsShown() then UI:Layout(); UI:Refresh() end
+end
+ns.On("MAIL_SHOW", RefreshMailboxLayout)
+ns.On("MAIL_CLOSED", RefreshMailboxLayout)
 
 ---------------------------------------------------------------------------
 -- Minimap button
 ---------------------------------------------------------------------------
 local mb = CreateFrame("Button", "EPUGuildMinimapButton", Minimap)
-mb:SetSize(31, 31)
-mb:SetHitRectInsets(-6,-6,-6,-6)
+local buttonSize = 28
+mb:SetSize(buttonSize, buttonSize)
 mb:SetClampedToScreen(true)
 mb:SetFrameStrata("MEDIUM")
 mb:SetFrameLevel(8)
 mb:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 mb:RegisterForDrag("LeftButton")
-mb:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-local mbIcon = mb:CreateTexture(nil, "BACKGROUND")
+local mbIcon = mb:CreateTexture(nil, "ARTWORK")
 mbIcon:SetTexture(ns.LOGO_SMALL)
-mbIcon:SetSize(21, 21)
-mbIcon:SetPoint("TOPLEFT", 6, -5)
-local mbBorder = mb:CreateTexture(nil, "OVERLAY")
-mbBorder:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-mbBorder:SetSize(53, 53)
-mbBorder:SetPoint("TOPLEFT")
+mbIcon:SetAllPoints()
+local mbGlow = mb:CreateTexture(nil, "HIGHLIGHT")
+mbGlow:SetTexture(ns.LOGO_SMALL)
+mbGlow:SetAllPoints()
+mbGlow:SetBlendMode("ADD")
+mbGlow:SetAlpha(0.35)
 
 local buttonPanel
 local buttonShapes={
@@ -3323,29 +4218,65 @@ function ns.MinimapButtonOffset(angle,width,height,shape,gap)
   end
   return x*(width/2+gap),y*(height/2+gap)
 end
-local function PlaceButton()
+
+local function NearbyMinimapButtons(scale)
+  local bounds = {}
+  local function Add(button)
+    if not button or button == mb or not button:IsObjectType("Button") or not button:IsVisible() then return end
+    local left,bottom,width,height = button:GetRect()
+    local buttonScale = button:GetEffectiveScale()
+    if not left or not bottom or not width or not height or not buttonScale or buttonScale <= 0 then return end
+    local ratio = buttonScale/scale
+    if width*ratio > 70 or height*ratio > 70 then return end
+    local margin = buttonSize/2 + 3
+    bounds[#bounds+1] = {left*ratio-margin, bottom*ratio-margin,
+      (left+width)*ratio+margin, (bottom+height)*ratio+margin}
+  end
+  local function AddChildren(parent)
+    if not parent then return end
+    for _, child in ipairs({parent:GetChildren()}) do Add(child) end
+  end
+  AddChildren(Minimap)
+  AddChildren(MinimapCluster)
+  AddChildren(MinimapBackdrop)
+  Add(EPUGuildEventBubble)
+  return bounds
+end
+
+local function PlaceButton(dragging)
   if not ns.db then return end
   local w,h=Minimap:GetWidth(),Minimap:GetHeight()
   if not w or not h or w<=0 or h<=0 then return end
   local shape=GetMinimapShape and GetMinimapShape() or "ROUND"
-  local x,y=ns.MinimapButtonOffset(ns.db.settings.minimapAngle,w,h,shape,ButtonGap())
+  local gap=ButtonGap()
+  local angle=tonumber(ns.db.settings.minimapAngle) or 200
+  if angle~=angle or angle==math.huge or angle==-math.huge then angle=200 end
+  local x,y=ns.MinimapButtonOffset(angle,w,h,shape,gap)
   -- Screen clamping alone can push a button back over a map at the screen
   -- edge. Prefer the nearest perimeter position with room for the grab area.
   local mx,my=Minimap:GetCenter(); local scale=Minimap:GetEffectiveScale()
   if mx and my and scale and scale>0 then
     local sw=UIParent:GetWidth()*UIParent:GetEffectiveScale()/scale
     local sh=UIParent:GetHeight()*UIParent:GetEffectiveScale()/scale
-    local function Fits(dx,dy) return mx+dx>=22 and mx+dx<=sw-22 and my+dy>=22 and my+dy<=sh-22 end
-    if not Fits(x,y) then
-      for delta=5,180,5 do
-        local found=false
-        for _,direction in ipairs({1,-1}) do
-          local dx,dy=ns.MinimapButtonOffset((tonumber(ns.db.settings.minimapAngle) or 200)+delta*direction,w,h,shape,ButtonGap())
-          if Fits(dx,dy) then x,y=dx,dy; found=true; break end
-        end
-        if found then break end
+    local bounds=dragging and {} or NearbyMinimapButtons(scale)
+    local function OnScreen(px,py) return px>=22 and px<=sw-22 and py>=22 and py<=sh-22 end
+    local function Open(px,py)
+      for _, box in ipairs(bounds) do
+        if px>box[1] and py>box[2] and px<box[3] and py<box[4] then return false end
+      end
+      return true
+    end
+    local fallbackX,fallbackY
+    for attempt=0,72 do
+      local delta=math.ceil(attempt/2)*5*(attempt%2==1 and 1 or -1)
+      local dx,dy=ns.MinimapButtonOffset(angle+delta,w,h,shape,gap)
+      local px,py=mx+dx,my+dy
+      if OnScreen(px,py) then
+        if not fallbackX then fallbackX,fallbackY=dx,dy end
+        if Open(px,py) then fallbackX,fallbackY=dx,dy; break end
       end
     end
+    if fallbackX then x,y=fallbackX,fallbackY end
   end
   mb:SetFrameLevel(math.max(8,Minimap:GetFrameLevel()+10))
   mb:ClearAllPoints()
@@ -3368,10 +4299,8 @@ function ns.ResetMinimapButton()
 end
 function ns.ShowMinimapButtonSettings()
   if not buttonPanel then
-    local p=CreateFrame("Frame","EPUGuildButtonSettings",UIParent,"BasicFrameTemplateWithInset")
-    buttonPanel=p; p:SetSize(400,330); p:SetPoint("CENTER"); p:SetFrameStrata("DIALOG")
-    p.TitleText:SetText("EPU minimap button")
-    tinsert(UISpecialFrames,"EPUGuildButtonSettings")
+    local p=ns.InterfaceWindow("EPUGuildButtonSettings",UIParent,"Minimap button",400,330)
+    buttonPanel=p
     local hint=Font(p,12,C.text); hint:SetPoint("TOPLEFT",20,-38); hint:SetWidth(360); hint:SetWordWrap(true)
     hint:SetText("Choose a position or drag the button around the edge. Add space to avoid other minimap buttons.")
     local presets={{"Top left",135},{"Top",90},{"Top right",45},{"Left",180},{"Reset",false},{"Right",0},{"Bottom left",225},{"Bottom",270},{"Bottom right",315}}
@@ -3414,10 +4343,14 @@ mb:SetScript("OnDragStart", function(self)
     local y=(py/s-my)/(Minimap:GetHeight()/2+ButtonGap())
     if x==0 and y==0 then return end
     ns.db.settings.minimapAngle = math.deg(math.atan2(y,x))%360
-    PlaceButton()
+    PlaceButton(true)
   end)
 end)
-mb:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil); self.suppressClickUntil=GetTime()+0.25 end)
+mb:SetScript("OnDragStop", function(self)
+  self:SetScript("OnUpdate", nil)
+  self.suppressClickUntil=GetTime()+0.25
+  PlaceButton()
+end)
 mb:SetScript("OnHide",function(self) self:SetScript("OnUpdate",nil) end)
 mb:SetScript("OnEnter", function(self)
   GameTooltip:SetOwner(self, "ANCHOR_LEFT")
@@ -3434,4 +4367,5 @@ mb:SetScript("OnLeave", GameTooltip_Hide)
 ns.On("PLAYER_LOGIN", ns.UpdateMinimapButton)
 ns.On("PLAYER_ENTERING_WORLD",ns.UpdateMinimapButton)
 ns.On("UI_SCALE_CHANGED",ns.UpdateMinimapButton)
-Minimap:HookScript("OnSizeChanged",PlaceButton)
+ns.On("DISPLAY_SIZE_CHANGED",ns.UpdateMinimapButton)
+Minimap:HookScript("OnSizeChanged",function() PlaceButton() end)

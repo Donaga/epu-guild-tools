@@ -376,6 +376,7 @@ local function StartMail(to, subject)
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(to) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText(subject) end
+  ns.BeginBankMailReview(to)
   if ClearCursor then ClearCursor() end
   return true
 end

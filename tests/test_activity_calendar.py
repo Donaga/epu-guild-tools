@@ -163,5 +163,52 @@ check('bubble opens Events and clears filters that could hide upcoming events',B
 B.ex("for _,e in pairs(__ns.CasualStore().guildEvents) do e.starts=__now-60 end; __ns.RefreshEventBubble()")
 check('bubble disappears when all events have started',not B.ev('EPUGuildEventBubble:IsShown()'))
 check('new activity UI raises no runtime errors',A.ev('__errors') in (None,0))
+A.ex("""dungeon=__ns.SaveGuildEvent({title='Weekly run',kind='dungeon',starts=__ns.Now()+3600,minutes=60,slots=5,places={t=1,h=1,d=3}})""")
+check('weekly repeat creates separate events and a second click skips duplicates',
+      A.ev('__ns.RepeatGuildEventWeekly(dungeon,2)')==2 and A.ev('__ns.RepeatGuildEventWeekly(dungeon,2)')==0)
+B.rt.globals()['dungeon']=A.ev('dungeon')
+check('group slot limits sync to guildmates',
+      tick_until(lambda:B.ev('(__ns.CasualStore().guildEvents[dungeon] or {}).places ~= nil'),60))
+B.ex("__ns.RespondGuildEvent(dungeon,'going','h','')")
+check('a going signup joins the waitlist',tick_until(lambda:A.ev("""(function()
+  local g=__ns.CasualStore(); local r=g.eventResponses[dungeon.."\\030Tyler Baker"]
+  return r and __ns.EventPlaceStatus(g.guildEvents[dungeon],r)=='Waitlist'
+end)()"""),60))
+check('the organiser can confirm a role spot', A.ev("__ns.ConfirmEventPlace(dungeon,'Tyler Baker',true)"))
+check('confirmation syncs back to the signup',tick_until(lambda:B.ev("""(function()
+  local g=__ns.CasualStore()
+  return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Confirmed'
+end)()"""),60))
+B.ex("__ns.RespondGuildEvent(dungeon,'declined','h',''); __ns.RespondGuildEvent(dungeon,'going','h','')")
+check('a new signup must be confirmed again',B.ev("""(function()
+  local g=__ns.CasualStore()
+  return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Waitlist'
+end)()"""))
+A.ex("""local g=__ns.G()
+g.guildEvents={}; g.eventResponses={}
+g.requests={
+  bank={who='Tyler Baker',item=2589,qty=2,status='approved',t=__ns.Now()},
+  review={who='Tyler Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+  craft={who='Tyler Baker',crafter='Chris Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+  other={who='Chris Baker',crafter='Pip Baker',item=2589,qty=1,status='pending',t=__ns.Now()},
+}
+__ns.RefreshEventBubble()
+""")
+check('floating button stays visible for work even with no events',A.ev('EPUGuildEventBubble:IsShown()'))
+check('action counts include officer bank work and only my craft requests',A.ev("""(function()
+  local a=__ns.GetBubbleActions(__ns.G(),__ns.CommunityState())
+  return #a.fulfill==1 and #a.review==1 and #a.respond==1 and a.respond[1]=='craft'
+end)()"""))
+A.ex('EPUGuildEventBubble:Click()')
+check('floating button opens the attention list when work exists',A.ev("__ns.UI.details.kind=='bubbleactions'"))
+A.ex("__click('Open bank fulfillment')")
+check('fulfillment shortcut opens existing officer tool',A.ev("__ns.UI.details.kind=='fulfillment'"))
+B.ex("""__ns.G().guildEvents={}; __ns.G().eventResponses={}
+__ns.G().requests={review={who='Tyler Baker',item=2589,qty=1,status='pending',t=__ns.Now()}}
+__ns.RefreshEventBubble()
+""")
+check('ordinary members do not see bank review work',not B.ev('EPUGuildEventBubble:IsShown()'))
+A.ex('__ns.G().requests={}; __ns.Changed()'); tick(1)
+check('badge hides after the last action is gone',not A.ev('EPUGuildEventBubble:IsShown()'))
 print('Typed activities and native calendar:',check.failed,'failed')
 sys.exit(bool(check.failed))

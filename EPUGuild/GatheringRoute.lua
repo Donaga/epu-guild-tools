@@ -4,6 +4,19 @@ local TYPES = {
   [182] = {catalog = "HERB_SPOTS", gatherMate = "Herb Gathering", name = "Herb route", matchNames = true},
   [186] = {catalog = "ORE_SPOTS", gatherMate = "Mining", name = "Ore route"},
 }
+-- GatherMate2 Mining node IDs. Match deposit types rather than localized item names.
+local MINING_NODES = {
+  [2770] = {[201] = true}, -- Copper
+  [2771] = {[202] = true}, -- Tin
+  [2775] = {[204] = true, [209] = true}, -- Silver
+  [2772] = {[203] = true}, -- Iron
+  [2776] = {[205] = true, [210] = true}, -- Gold
+  [3858] = {[206] = true, [207] = true}, -- Mithril
+  [7911] = {[208] = true, [211] = true}, -- Truesilver
+  [11370] = {[217] = true}, -- Dark Iron
+  [10620] = {[212] = true, [213] = true, [214] = true, [215] = true}, -- Thorium
+}
+local STONE_ORE = {[2835] = 2770, [2836] = 2771, [2838] = 2772, [7912] = 3858, [12365] = 10620}
 local ARRIVAL = 12
 local route, hud
 
@@ -168,11 +181,13 @@ local function Points(map, item, profession)
   end
   -- GatherMate2 is optional and its API is not ours: a failure there must never break a route.
   local gather = GatherMate2
-  if gather and gather.GetNodesForZone and gather.DecodeLoc and (not item or kind.matchNames) then
+  local nodes = profession == 186 and MINING_NODES[STONE_ORE[item] or item]
+  if gather and gather.GetNodesForZone and gather.DecodeLoc and (not item or kind.matchNames or nodes) then
     pcall(function()
-      local name = item and ns.ItemName(item, true)
+      local name = item and kind.matchNames and ns.ItemName(item, true)
       for key, node in gather:GetNodesForZone(map, kind.gatherMate, true) do
-        if not item or (gather.GetNameForNode and gather:GetNameForNode(kind.gatherMate, node) == name) then
+        if not item or (nodes and nodes[node]) or
+          (name and gather.GetNameForNode and gather:GetNameForNode(kind.gatherMate, node) == name) then
           Add(gather:DecodeLoc(key))
         end
       end
@@ -277,7 +292,7 @@ local function MakeHUD()
   hud:RegisterForDrag("LeftButton")
   hud:SetBackdrop({bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1})
   hud:SetBackdropColor(.05, .06, .08, .92)
-  hud:SetBackdropBorderColor(.65, .48, .22, 1)
+  hud:SetBackdropBorderColor(.24, .29, .36, 1)
   hud:SetScript("OnDragStart", function(self) self:StartMoving() end)
   hud:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
@@ -301,15 +316,13 @@ local function MakeHUD()
     line:SetThickness(4)
     hud.strokes[#hud.strokes + 1] = {line = line, x = endpoint[1], y = endpoint[2]}
   end
-  hud.title = hud:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  hud.title = ns.InterfaceFont(hud,14,{.95,.76,.31})
   hud.title:SetPoint("TOPLEFT", 49, -9)
-  hud.progress = hud:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  hud.progress = ns.InterfaceFont(hud,12,{.64,.69,.76})
   hud.progress:SetPoint("TOPLEFT", 49, -29)
   local function Button(label, width, offset, command)
-    local button = CreateFrame("Button", nil, hud, "UIPanelButtonTemplate")
-    button:SetSize(width, 23)
+    local button = ns.InterfaceButton(hud,label,width,23)
     button:SetPoint("RIGHT", offset, 0)
-    button:SetText(label)
     button:SetScript("OnClick", function() ns.GatheringRouteCommand(command) end)
   end
   Button("Next spot", 74, -61, "next")

@@ -41,6 +41,8 @@ Open each learned profession after installing the update. **Craft** lists tradab
 
 Select a recipe and enter a batch size to see which ingredients you lack, what you can make from known recipes, and the remaining base materials. Carried items reduce what you need to obtain. Gathered ingredients still count at market value in the margin. Missing prices leave the corresponding estimate blank. Catalogued base materials link back to Gather and show an approximate gathering time when you have saved a yield for that material and zone.
 
+In a recipe's details, enter an optional **Cap (g)** and the total **Batch deposit (s)** from the auction house. **Up front** shows the estimated spending for missing materials plus that deposit and flags a batch over the cap. If nothing sells, the full deposit is at risk. Refresh stale prices before buying. The profit estimate still includes the market value of materials you already own.
+
 ## Guild scope
 
 **Scope: Guild** (on Craft and Buy & Craft) lists every tradable item your guildmates can craft, priced the same way, with who can make it. Online crafters are green and guild crafters are starred. The profession menu switches to the guild's professions. Select a recipe to see its ingredients and crafters, then **Ask a crafter** to open it in Recipes and send a craft request. **Scope: Mine** returns to your own professions.

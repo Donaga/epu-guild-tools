@@ -41,6 +41,14 @@ STATUS_COLOR = {
 }
 
 
+CLASS_ROLE_COLORS = {
+    "DEATHKNIGHT": 0xC41E3A, "DEMONHUNTER": 0xA330C9, "DRUID": 0xFF7C0A,
+    "EVOKER": 0x33937F, "HUNTER": 0xAAD372, "MAGE": 0x3FC7EB, "MONK": 0x00FF98,
+    "PALADIN": 0xF48CBA, "PRIEST": 0xFFFFFF, "ROGUE": 0xFFF468,
+    "SHAMAN": 0x0070DD, "WARLOCK": 0x8788EE, "WARRIOR": 0xC69B6D,
+}
+
+
 def load_config() -> dict:
     path = os.path.join(HERE, "config.json")
     if not os.path.exists(path):
@@ -257,14 +265,14 @@ CATEGORY_EMOJI = {"Cloth": "\U0001F9F5", "Leather": "\U0001F9E5", "Metal & Stone
                   "Weapons & Armor": "\u2694\uFE0F", "Recipes": "\U0001F4DC", "Other": "\U0001F4E6"}
 
 
-def waiting_for_reload(gd: core.GuildData) -> int:
+def pending_bridge_updates(gd: core.GuildData, minimum_age=0) -> dict[str, int]:
     now = time.time()
     kinds = {'request', 'status', 'news', 'news_remove', 'checklist', 'guild_invite', 'event_create', 'event_response'}
     events_by_id = gd.g.get('guildEvents') or {}
-    count = 0
+    counts: dict[str, int] = {}
     for entry in state.data['inbox']:
         kind = entry.get('kind')
-        if kind not in kinds or entry['id'] in gd.inbox_done or entry.get('t', now) > now - 120:
+        if kind not in kinds or entry['id'] in gd.inbox_done or entry.get('t', now) > now - minimum_age:
             continue
         if kind == 'guild_invite' and now - entry['t'] >= 7 * 86400:
             continue
@@ -274,8 +282,12 @@ def waiting_for_reload(gd: core.GuildData) -> int:
             event = events_by_id.get(entry.get('event'))
             if (event and (event.get('status') != 'scheduled' or event.get('ends', 0) <= now)) or now - entry['t'] >= 7 * 86400:
                 continue
-        count += 1
-    return count
+        counts[kind] = counts.get(kind, 0) + 1
+    return counts
+
+
+def waiting_for_reload(gd: core.GuildData) -> int:
+    return sum(pending_bridge_updates(gd, minimum_age=120).values())
 
 
 def status_embed(gd: core.GuildData, reload_count: int | None = None) -> discord.Embed:
@@ -605,7 +617,9 @@ async def refresh(gd: core.GuildData):
     if changes.get("motd"):
         await post_motd(changes["motd"])
     try:
-        await sync_links_roles(gd)
+        result = await sync_links_roles(gd)
+        if summary := role_change_summary(result):
+            state.data["last_automatic_role_changes"] = {"at": int(time.time()), "summary": summary}
     except Exception as e:
         explain(e, "update linked characters and roles", cfg.get("officer_log_channel_id") or cfg["channel_id"])
     if cfg["post_donations"] and changes["new_donations"]:
@@ -1094,6 +1108,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
     if sig == state.data.get("roles_sig") and not confirm and requested_keys <= safety.keys():
         return {}
     out_lines, warned = [], set(state.data.setdefault("role_name_warned", []))
+    created, reused = [], []
     for key in sorted(blocked):
         out_lines.append(f"⚠️ Left managed role **{guild.get_role(int(managed[key])).name}** alone because {safety[key]}. "
                          "No members were added to or removed from this role.")
@@ -1113,6 +1128,7 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
                     managed[key] = str(existing.id)
                     state.data["adopted_roles"] = sorted(set(state.data.get("adopted_roles", [])) | {key})
                     roles[key] = existing
+                    reused.append(existing.name)
                     out_lines.append(f"\U0001F91D Using your existing **{name}** role. Linked members get or lose it as their rank changes; "
                                      "people who haven't linked keep whatever they have.")
                     continue
@@ -1122,8 +1138,12 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
                                      "and gave no one that role. Rename it, or remove the rank from `rank_roles`.")
                     warned.add(key)
                 continue
-            role = await guild.create_role(name=name, mentionable=False, reason="EPU class/rank role")
+            options = {}
+            if key.startswith("class:") and (color := CLASS_ROLE_COLORS.get(key[6:])) is not None:
+                options["color"] = discord.Color(color)
+            role = await guild.create_role(name=name, mentionable=False, reason="EPU class/rank role", **options)
             managed[key] = str(role.id)
+            created.append(role.name)
         roles[key] = role
     state.data["role_name_warned"] = sorted(warned)
     by_id = {str(r.id): k for k, r in roles.items()}
@@ -1193,7 +1213,22 @@ async def sync_roles(gd: core.GuildData, confirm: bool = False) -> dict:
         state.data["roles_sig"] = core.json.dumps([sorted((u, sorted(k)) for u, k in lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"] or None).items()),
                                                    sorted(managed.items()), sorted(holders.items()), sorted(role_safety().items())])
     state.save()
-    return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())), "held": held}
+    return {"lines": out_lines, "added": sum(map(len, adds.values())), "removed": sum(map(len, removes.values())),
+            "held": held, "checked": len(people), "created": created, "adopted": reused,
+            "skipped": bool(blocked or unresolved or skipped_unsafe)}
+
+
+def role_change_summary(result: dict) -> str:
+    parts = []
+    if result.get("created"):
+        parts.append("Created " + ", ".join(result["created"]) + ".")
+    if result.get("adopted"):
+        parts.append("Reused " + ", ".join(result["adopted"]) + ".")
+    for key, verb in (("added", "Added"), ("removed", "Removed")):
+        if count := result.get(key):
+            noun = "assignment" if count == 1 else "assignments"
+            parts.append(f"{verb} {count} role {noun}.")
+    return " ".join(parts)
 
 
 def describe_char(gd: core.GuildData | None, name: str) -> str:
@@ -1460,9 +1495,52 @@ async def whois_cmd(interaction: discord.Interaction, character: str):
 async def chars_cmd(interaction: discord.Interaction, member: discord.Member | None = None):
     who = member or interaction.user
     chars = state.characters_for(who.id)
+    if who.id == interaction.user.id:
+        gd = read_latest()
+        lines = [f"**Verified characters:** {', '.join(chars) or 'None yet.'}"]
+        legacy = state.data.get("legacy_links", {}).get(str(who.id), [])
+        legacy = [legacy] if isinstance(legacy, str) else legacy
+        verified = {name.casefold() for name in chars}
+        legacy = [name for name in legacy if name.casefold() not in verified]
+        if legacy:
+            lines.append("**Legacy characters awaiting verification:** " + ", ".join(legacy))
+        if not chars or legacy:
+            lines.append("Run `/link` here, enter `/epu link CODE` in WoW on the character, then `/reload`.")
+        if not cfg["discord_roles"]:
+            lines.append("Automatic Discord roles are turned off.")
+        elif chars and (gd is None or not lr.member_info(gd)):
+            lines.append("Waiting for a guild roster. Open it in WoW and `/reload`.")
+        elif chars and gd:
+            main = lr.main_for(gd, state, who.id)
+            if main:
+                lines.append(f"**Main:** {main}")
+            if not lr.roster_trusted(state.data.get("roster_seen"), lr.member_info(gd)):
+                lines.append("Role sync is paused until the bot sees a complete guild roster.")
+            desired = lr.desired_roles(gd, state, cfg["rank_roles"], cfg["class_roles"], cfg["member_role"])
+            managed = state.data.get("managed_roles", {})
+            actual = {str(r.id) for r in getattr(who, "roles", [])}
+            keys = sorted(desired.get(str(who.id), ()))
+            assigned = [lr.role_name(k, gd) for k in keys if str(managed.get(k)) in actual]
+            missing = [lr.role_name(k, gd) for k in keys if str(managed.get(k)) not in actual]
+            if assigned:
+                lines.append("**Assigned:** " + ", ".join(assigned))
+            if missing:
+                lines.append("**Expected but missing:** " + ", ".join(missing) + ". Ask an officer to check `/roles Status`.")
+            if not keys:
+                lines.append("No automatic roles expected from the current roster and role settings.")
+        view = None
+        if not chars or legacy:
+            button = discord.ui.Button(label="Get a link code", style=discord.ButtonStyle.primary)
+            async def get_code(click: discord.Interaction):
+                await link_cmd.callback(click)
+            button.callback = get_code
+            view = discord.ui.View(timeout=180)
+            view.add_item(button)
+        await interaction.response.send_message("\n".join(lines)[:2000], ephemeral=True, view=view,
+                                                allowed_mentions=discord.AllowedMentions.none())
+        return
     if not chars:
-        hint = " Use `/link` to get a code." if who == interaction.user else ""
-        await interaction.response.send_message(f"No linked characters for {who.mention}.{hint}", ephemeral=True,
+        await interaction.response.send_message(f"No linked characters for {who.mention}.", ephemeral=True,
                                                 allowed_mentions=discord.AllowedMentions.none())
         return
     gd = read_latest()
@@ -1470,6 +1548,43 @@ async def chars_cmd(interaction: discord.Interaction, member: discord.Member | N
     chars = [main] + [c for c in chars if c != main] if main in chars else chars
     lines = [("⭐ " if c == main else "• ") + describe_char(gd, c) for c in chars]
     await interaction.response.send_message(f"{who.mention}'s characters (⭐ main):\n" + "\n".join(lines), ephemeral=True,
+                                            allowed_mentions=discord.AllowedMentions.none())
+
+
+@tree.command(name="sync_health", description="Officers: check the WoW bridge, roster and bank snapshots", guild=GUILD)
+async def sync_health_cmd(interaction: discord.Interaction):
+    if not is_officer(interaction.user):
+        await interaction.response.send_message("Only officers can view sync health.", ephemeral=True)
+        return
+    gd = read_latest()
+    if gd is None:
+        await interaction.response.send_message("Waiting for a WoW guild save. Log in and `/reload` on this PC.", ephemeral=True)
+        return
+    roster = lr.member_info(gd)
+    stamp = gd.g.get("memberInfoAt")
+    saved_at = int(latest_source_mtime or 0)
+    lines = [f"**WoW save:** <t:{saved_at}:R>" if saved_at else "**WoW save:** waiting"]
+    lines.append(f"**Guild roster:** {len(roster)} characters" + (f", captured <t:{int(stamp)}:R>" if stamp else ""))
+    if not roster or not lr.roster_trusted(state.data.get("roster_seen"), roster):
+        lines.append("Open the guild roster on a guild character and `/reload` to refresh it.")
+    counts = pending_bridge_updates(gd)
+    if counts:
+        lines.append("**Waiting for WoW:** " + ", ".join(f"{k.replace('_', ' ')} × {n}" for k, n in sorted(counts.items())))
+        lines.append("Log in or `/reload` on the bridge PC to import, then reload or log out to save the result.")
+    else:
+        lines.append("**Waiting for WoW:** none")
+    lines.append("**Bank snapshots**")
+    for name, snapshot in sorted(gd.bank.items()):
+        if not isinstance(snapshot, dict) or snapshot.get("retired"):
+            continue
+        seen = snapshot.get("v")
+        bank_at = snapshot.get("bankTime")
+        line = f"• {name}: " + (f"snapshot <t:{int(seen)}:R>" if seen else "snapshot time unavailable")
+        if bank_at:
+            line += f", bank opened <t:{int(bank_at)}:R>"
+        lines.append(line)
+    lines.append("Open the guild bank or the bank alt's bank to refresh stock, then `/reload`.")
+    await interaction.response.send_message("\n".join(lines)[:2000], ephemeral=True,
                                             allowed_mentions=discord.AllowedMentions.none())
 
 
@@ -1495,14 +1610,41 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
         await interaction.response.send_message("Only officers can manage roles.", ephemeral=True)
         return
     gd = read_latest()
-    if action.value == "status" or gd is None:
+    if action.value == "status":
         linked = sum(1 for c in state.data["links"].values() if c)
         held = state.data.get("roles_held")
         managed = ", ".join(f"<@&{r}>" for r in state.data.get("managed_roles", {}).values()) or "none yet"
+        legacy_pending = sum(
+            bool({c.casefold() for c in ([old] if isinstance(old, str) else old)}
+                 - {c.casefold() for c in state.characters_for(uid)})
+            for uid, old in state.data.get("legacy_links", {}).items()
+        )
+        extra = f"\nDiscord accounts with unverified legacy characters: **{legacy_pending}**."
+        if cfg["discord_roles"] and interaction.guild and interaction.guild.me:
+            if not interaction.guild.me.guild_permissions.manage_roles:
+                extra += "\nThe bot needs Manage Roles to assign roles."
+            else:
+                blocked = []
+                for role_id in state.data.get("managed_roles", {}).values():
+                    role = interaction.guild.get_role(int(role_id))
+                    if role and (problem := adopt_problem(interaction.guild, role)):
+                        blocked.append(f"{role.name}: {problem}")
+                if blocked:
+                    extra += "\nBlocked roles: " + "; ".join(blocked)
         await interaction.response.send_message(
-            f"Linked members: **{linked}**. Roles I manage: {managed}.\nEveryone linked: {cfg['member_role'] or 'off'}; rank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
-            f"class roles: {'on' if cfg['class_roles'] else 'off'}." + (f"\n⏸️ Holding back removals for **{held}** people; use Confirm if that's right." if held else ""),
+            (f"Linked members: **{linked}**. Roles I manage: {managed}.\nEveryone linked: {cfg['member_role'] or 'off'}; rank roles: {', '.join(cfg['rank_roles']) or 'off'}; "
+             f"class roles: {'on' if cfg['class_roles'] else 'off'}." + extra
+             + (f"\n⏸️ Holding back removals for **{held}** people; use Confirm if that's right." if held else ""))[:2000],
             ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        return
+    if not cfg["discord_roles"]:
+        await interaction.response.send_message("Automatic Discord roles are turned off.", ephemeral=True)
+        return
+    if gd is None:
+        await interaction.response.send_message("No WoW guild save yet. Log into a guild character and /reload.", ephemeral=True)
+        return
+    if not lr.member_info(gd) and not state.data.get("roster_seen"):
+        await interaction.response.send_message("No saved guild roster yet. Open the guild roster in WoW and /reload.", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True, thinking=True)
     state.data.pop("roles_sig", None)
@@ -1516,8 +1658,25 @@ async def roles_cmd(interaction: discord.Interaction, action: app_commands.Choic
         await interaction.followup.send("\n".join(result["lines"]), ephemeral=True,
                                         allowed_mentions=discord.AllowedMentions.none())
         return
-    await interaction.followup.send(f"Done: {result.get('added', 0)} role(s) given, {result.get('removed', 0)} removed."
-                                    + (" Removals are still held; use Confirm." if result.get("held") else ""), ephemeral=True)
+    message = role_change_summary(result)
+    if result.get("held") or result.get("skipped"):
+        message = message or "No role changes applied."
+        if result.get("held"):
+            message += " Removals are on hold. Review them before choosing Confirm held removals."
+        if result.get("skipped"):
+            message += " Some roles were skipped. Check the bot's role order and permissions."
+    elif not message:
+        checked = result.get("checked")
+        if checked:
+            noun = "member" if checked == 1 else "members"
+            message = f"Roles are already up to date for {checked} linked {noun}."
+        elif checked == 0:
+            message = "No linked Discord members with roles to update."
+        else:
+            message = "Couldn't check Discord roles for this server."
+        if last := state.data.get("last_automatic_role_changes"):
+            message += f"\nLast automatic changes (<t:{last['at']}:R>): {last['summary']}"
+    await interaction.followup.send(message[:2000], ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
 
 class SuggestView(discord.ui.View):

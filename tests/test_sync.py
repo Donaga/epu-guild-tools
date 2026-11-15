@@ -155,6 +155,16 @@ for path in sorted(_glob.glob(os.path.join(os.path.dirname(os.path.abspath(__fil
             bad.append(f"{os.path.basename(path)}:{ln} {line.strip()[:60]}")
 check("addon never overwrites Blizzard globals (taint) %s" % (bad or ""), not bad)
 
+check("source preview keeps its local version without advertising an update",
+      A.ev('__ns.VERSION~=nil and __ns.Digest().ver==nil and __ns.EmptyDigest().ver==nil'))
+check("a CurseForge-stamped build can advertise the released version",
+      A.ev("""(function()
+        local before=__ns.RELEASE_VERSION
+        __ns.RELEASE_VERSION=__ns.VERSION
+        local advertised=__ns.Digest().ver
+        __ns.RELEASE_VERSION=before
+        return advertised==__ns.VERSION
+      end)()"""))
 errs = sum((c.ev("__errors") or 0) for c in clients.values())
 check("no runtime errors (%d)" % errs, errs == 0)
 log = A.ev("__log"); print("--- officer chat log ---")
