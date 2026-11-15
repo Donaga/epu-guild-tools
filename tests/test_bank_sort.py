@@ -84,9 +84,47 @@ end
 check('material details default to a deliberate single-item quantity',
       A.ev('__ns.UI.details.pools.box[1]:GetText()')=='1')
 check('bank mail limit preserves needs and open requests',A.ev('__ns.BankSortMailLimit(2589)')==25)
+A.ex("""
+__ns.G().crafters['Tyler Baker'].profs.Enchanting=75
+function __chooseProfession(prof)
+  for _,b in ipairs(__ns.UI.details.pools.btn) do
+    if b:IsShown() and b.text:GetText():find('Profession:',1,true) then b:Click(); break end
+  end
+  for _,row in ipairs(EPUGuildMenu.rows) do
+    if row:IsShown() and row.value==prof then row:Click(); return true end
+  end
+end
+__ns.UI.details.pools.box[1]:SetText('3')
+__chooseProfession('Tailoring')
+""")
+check('profession filter keeps quantity and includes tailors without a matching skill-up recipe',
+      A.ev("__ns.UI.details.pools.box[1]:GetText()")=='3'
+      and A.ev("""(function()
+        local names={}
+        for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() then names[b.text:GetText()]=true end end
+        return names['Profession: Tailoring'] and names['Mail to Pip'] and names['Mail to Chris'] and names['Mail to Tyler']
+      end)()"""))
+A.ex("__chooseProfession('Enchanting')")
+check('filter excludes guildmates outside the selected profession',
+      A.ev("""(function()
+        local names={}
+        for _,b in ipairs(__ns.UI.details.pools.btn) do if b:IsShown() then names[b.text:GetText()]=true end end
+        return names['Mail to Tyler'] and not names['Mail to Pip'] and not names['Mail to Chris']
+      end)()"""))
+A.ex("""
+__cls[4306]={7,'Cloth'}
+__ns.UI:OpenDetails('item',4306)
+assert(__ns.UI.details.actionBar.mail:IsShown())
+__ns.UI.details.actionBar.mail:Click()
+__chooseProfession('Tailoring')
+""")
+check('officers can choose a profession even for stock omitted from Sort',
+      A.ev("__ns.UI.details.kind=='professionmail' and __ns.UI.details.mailProfession=='Tailoring'"))
+A.ex("__ns.UI:OpenDetails('banksort',2589); __chooseProfession('Enchanting')")
 A.ex("__ns.UI.details.pools.box[1]:SetText('3'); __clickMaterialMail()")
 check('material button attaches the entered quantity, not all carried stock',
-      A.ev('__mailAmount()')==3 and A.ev('GetItemCount(2589)')==37)
+      A.ev('__mailAmount()')==3 and A.ev('GetItemCount(2589)')==37
+      and A.ev('SendMailNameEditBox:GetText()')=='Tyler Baker')
 A.ex("__clickMaterialMail()")
 check('repeated material preparation preserves the existing draft',A.ev('__mailAmount()')==3)
 A.ex("__mailSlots={}; SendMailNameEditBox:SetText(''); SendMailSubjectEditBox:SetText(''); __ns.UI.details.pools.box[1]:SetText('100'); __clickMaterialMail()")

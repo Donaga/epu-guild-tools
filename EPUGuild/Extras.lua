@@ -11,7 +11,7 @@ local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 local GetItemInfoInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
 
 local GOLD = { 0.95, 0.76, 0.31 }
-local MUTED = { 0.55, 0.58, 0.62 }
+local MUTED = ns.InterfaceColors.muted
 
 local function Setting(key, default)
   if not ns.db then return default end
@@ -234,7 +234,7 @@ toast:Hide()
 do
   local bg = toast:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints()
-  bg:SetColorTexture(0.082, 0.090, 0.106, 0.95)
+  bg:SetColorTexture(0.056, 0.066, 0.086, 1)
   local edge = toast:CreateTexture(nil, "BORDER")
   edge:SetPoint("TOPLEFT"); edge:SetPoint("BOTTOMLEFT"); edge:SetWidth(3)
   edge:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
@@ -242,14 +242,12 @@ do
   toast.icon:SetSize(34, 34)
   toast.icon:SetPoint("LEFT", 12, 0)
   toast.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  toast.title = toast:CreateFontString(nil, "OVERLAY")
-  toast.title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 13, "")
+  toast.title = ns.InterfaceFont(toast,14)
   toast.title:SetTextColor(1, 1, 1)
   toast.title:SetPoint("TOPLEFT", 54, -10)
   toast.title:SetWidth(260)
   toast.title:SetJustifyH("LEFT")
-  toast.text = toast:CreateFontString(nil, "OVERLAY")
-  toast.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 11, "")
+  toast.text = ns.InterfaceFont(toast,12,MUTED)
   toast.text:SetTextColor(MUTED[1], MUTED[2], MUTED[3])
   toast.text:SetPoint("TOPLEFT", 54, -28)
   toast.text:SetWidth(260)
@@ -357,31 +355,17 @@ ns.DonatePanel = don
 don.rows, don.pick = {}, {}
 
 local function DText(parent, size, c)
-  local fs = parent:CreateFontString(nil, "OVERLAY")
-  fs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", size, "")
-  fs:SetTextColor(c[1], c[2], c[3])
-  fs:SetJustifyH("LEFT")
-  return fs
+  return ns.InterfaceFont(parent,size,c)
 end
 
-local function DBtn(parent, label, w)
-  local b = CreateFrame("Button", nil, parent)
-  b:SetSize(w, 20)
-  b.bg = b:CreateTexture(nil, "BACKGROUND")
-  b.bg:SetAllPoints()
-  b.bg:SetColorTexture(0.165, 0.184, 0.216, 1)
-  b.text = DText(b, 11, { 0.85, 0.86, 0.88 })
-  b.text:SetPoint("CENTER")
-  b.text:SetText(label)
-  b:SetScript("OnEnter", function(self) self.bg:SetColorTexture(0.22, 0.24, 0.28, 1) end)
-  b:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.165, 0.184, 0.216, 1) end)
-  return b
+local function DBtn(parent, label, w, style)
+  return ns.InterfaceButton(parent,label,w,20,style)
 end
 
 do
   local bg = don:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints()
-  bg:SetColorTexture(0.082, 0.090, 0.106, 0.97)
+  bg:SetColorTexture(0.056, 0.066, 0.086, 1)
   local top = don:CreateTexture(nil, "BORDER")
   top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(2)
   top:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
@@ -459,10 +443,7 @@ do
   don.moneyText:SetPoint("BOTTOMRIGHT", -12, 72)
   don.total = DText(don, 11, MUTED)
   don.total:SetPoint("BOTTOMRIGHT", -12, 44)
-  don.fill = DBtn(don, "Fill mail", 276)
-  don.fill.bg:SetColorTexture(0.17, 0.14, 0.07, 1)
-  don.fill.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-  don.fill:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.17, 0.14, 0.07, 1) end)
+  don.fill = DBtn(don, "Fill mail", 276,"accent")
   don.fill:SetPoint("BOTTOMLEFT", 12, 12)
   don.fill:SetScript("OnClick", function() if don.mode == "vault" then ns.DepositDonation() else ns.FillDonation() end end)
 end
@@ -905,11 +886,8 @@ local function BuildWelcome()
     ns.SetMain(chars[idx % #chars + 1])
     welcome:Refresh()
   end)
-  local ok = DBtn(card, "Got it", 120)
+  local ok = DBtn(card, "Got it", 120,"accent")
   ok:SetPoint("BOTTOMRIGHT", -18, 14)
-  ok.bg:SetColorTexture(0.17, 0.14, 0.07, 1)
-  ok.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
-  ok:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.17, 0.14, 0.07, 1) end)
   ok:SetScript("OnClick", function()
     ns.db.settings.welcomed = true
     welcome:Hide()
@@ -977,7 +955,7 @@ local function BuildDialog()
   dialog.body:SetWordWrap(true)
   dialog.buttons = {}
   for i = 1, 2 do
-    local b = DBtn(dialog, "", 110)
+    local b = DBtn(dialog, "", 110,i==1 and "accent" or nil)
     b:SetHeight(22)
     dialog.buttons[i] = b
   end

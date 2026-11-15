@@ -25,6 +25,8 @@ check('fulfillment preview respects the attachment limit without modifying bags'
       end)()"""))
 A.ex("__ns.MailMemberRequests('Tyler Baker')")
 check('one draft contains both different requested items',A.ev('__attached(2589)')==5 and A.ev('__attached(4306)')==4)
+check('mail review summarizes each distinct item in the draft',
+      A.ev(r'EPUGuildBankMailReview.items:GetText()=="5 Linen Cloth · 1 stack\n4 Silk Cloth · 1 stack"'))
 check('same-item requests share one attachment when stack allows',A.ev('#__mailSlots')==2)
 check('whole inventory stacks are not sent',A.ev('__bags[0][1][2]')==15 and A.ev('__bags[0][2][2]')==16)
 check('mail preparation does not mark requests delivered',A.ev('__ns.G().requests.a.delivered')==2 and A.ev('__ns.G().requests.b.delivered') is None)

@@ -10,6 +10,8 @@ ns.comm = {}                      -- message handlers, keyed by one-letter kind
 
 local getMeta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
 ns.VERSION = (getMeta and getMeta(ADDON, "Version")) or "0.0.0"
+local published = getMeta and getMeta(ADDON, "X-CurseForge-Version")
+ns.RELEASE_VERSION = published == ns.VERSION and published or nil
 
 ---------------------------------------------------------------------------
 -- Event dispatch
@@ -19,6 +21,16 @@ local frame = CreateFrame("Frame")
 -- Keyed by Blizzard's item class and subclass numbers (same on every client).
 ns.CATEGORIES = { "Cloth", "Leather", "Metal & Stone", "Herbs", "Cooking", "Enchanting", "Elemental",
   "Parts & Engineering", "Other Trade Goods", "Consumables", "Reagents", "Bags", "Weapons & Armor", "Recipes", "Other" }
+local classicClassCoords = {
+  WARRIOR={0,0.25,0,0.25}, MAGE={0.25,0.5,0,0.25}, ROGUE={0.5,0.75,0,0.25}, DRUID={0.75,1,0,0.25},
+  HUNTER={0,0.25,0.25,0.5}, SHAMAN={0.25,0.5,0.25,0.5}, PRIEST={0.5,0.75,0.25,0.5}, WARLOCK={0.75,1,0.25,0.5},
+  PALADIN={0,0.25,0.5,0.75},
+}
+function ns.ClassIcon(classFile)
+  if not classFile then return end
+  local coords = (CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[classFile]) or classicClassCoords[classFile]
+  if coords then return "Interface\\TargetingFrame\\UI-Classes-Circles", coords end
+end
 local TRADE = { [5] = "Cloth", [6] = "Leather", [7] = "Metal & Stone", [9] = "Herbs", [8] = "Cooking",
   [12] = "Enchanting", [10] = "Elemental", [1] = "Parts & Engineering", [2] = "Parts & Engineering", [3] = "Parts & Engineering" }
 function ns.CategoryOf(classID, subclassID)

@@ -47,7 +47,7 @@ local function FieldDigests(g)
 end
 
 function ns.EmptyDigest()
-  return { needs = 0, bank = {}, since = 0, ver = ns.VERSION, at = ns.Now() }
+  return { needs = 0, bank = {}, since = 0, ver = ns.RELEASE_VERSION, at = ns.Now() }
 end
 
 function ns.Digest()
@@ -196,7 +196,7 @@ local function SendAnswer(to, d, relay)
   ns.LogSync(relay and "relayed" or "sent", to, (relay and "Passed on to " or "Answered ") .. to .. ": " .. ns.SyncWhat(ns.SyncCount(b)))
   for i, p in ipairs(parts) do
     p.sync, p.part, p.parts, p.hs = to, i, #parts, tonumber(d.at) or 0
-    p.ver = ns.VERSION
+    p.ver = ns.RELEASE_VERSION
     if relay then p.relay = true end
     ns.Send("D", p)
     ns.SliceCheck()
@@ -406,7 +406,7 @@ local function Report(kind, from, counts)
   S.lastWhat = what
   ns.SeenSync(ns.me, { t = ns.Now(), from = from, kind = kind, what = what, ver = ns.VERSION })
   ns.LogSync(kind, from, (kind == "relay" and "Unconfirmed data from " or "Synced from ") .. tostring(from) .. ": " .. what)
-  ns.Send("Y", { kind = kind, from = from, what = what, ver = ns.VERSION, at = ns.Now() })
+  ns.Send("Y", { kind = kind, from = from, what = what, ver = ns.RELEASE_VERSION, at = ns.Now() })
 end
 
 ns.comm.Y = function(sender, y)

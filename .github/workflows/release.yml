@@ -75,4 +75,11 @@ jobs:
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
         run: |
           VERSION="${{ github.event.release.tag_name }}"; VERSION="${VERSION#v}"
-          python tools/curseforge_upload.py "dist/EPUGuild-${VERSION}.zip" "${VERSION}" CHANGELOG.md
+          if [ -z "$CF_API_KEY" ] || [ -z "$CURSEFORGE_PROJECT_ID" ]; then
+            exit 0
+          fi
+          sed -i "/^## Version:/a ## X-CurseForge-Version: ${VERSION}" EPUGuild/EPUGuild.toc
+          mkdir -p "${RUNNER_TEMP}/curseforge"
+          CF_ZIP="${RUNNER_TEMP}/curseforge/EPUGuild-${VERSION}.zip"
+          zip -r "$CF_ZIP" EPUGuild
+          python tools/curseforge_upload.py "$CF_ZIP" "${VERSION}" CHANGELOG.md

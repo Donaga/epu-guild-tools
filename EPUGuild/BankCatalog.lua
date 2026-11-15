@@ -184,7 +184,7 @@ local function SkillUpUsers()
             if id then
               users[id] = users[id] or {}
               local list, dup = users[id], false
-              for _, u in ipairs(list) do if u.who == c.who and u.name == name then dup = true end end
+              for _, u in ipairs(list) do if u.who == c.who and u.prof == c.prof and u.name == name then dup = true end end
               if not dup and #list < 30 then list[#list + 1] = {who = c.who, prof = c.prof, name = name, color = c.diff} end
             end
           end
@@ -235,7 +235,8 @@ function ns.BankSortPlan()
     local _, asked = ns.BankRequestStock(id)
     local surplus = math.max(0, count - Keep(g, id) - (asked or 0))
     local base = {item = id, name = name or ns.ItemName(id, true), count = count, holders = holders[id], quality = quality,
-      ah = ah, basis = info and info.basis, vendor = tonumber(vendor) or 0, unit = unit, surplus = surplus}
+      ah = ah, basis = info and info.basis, vendor = tonumber(vendor) or 0, unit = unit, surplus = surplus,
+      isRecipe = classID == RECIPE}
     local placed = false
     if classID == RECIPE and name then
       local prof, need = ns.RecipeRequirement(id)
@@ -315,9 +316,19 @@ function ns.MailBankItem(target, item, qty)
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(target) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("From the guild bank: " .. ns.ItemName(item, true)) end
+  ns.BeginBankMailReview(target)
   if ClearCursor then ClearCursor() end
+  local function Attached(n)
+    if n == 0 then return ns.Print("Couldn't attach it. Check it's unlocked and not soulbound.") end
+    local remaining = n < qty and (" " .. (qty - n) .. " still to attach.") or ""
+    ns.Print("Attached " .. n .. "x " .. ns.ItemName(item, true) .. " for " .. Short(target) .. "." .. remaining .. " Check the mail, then click Send.")
+  end
+  local first = ns.PreviewMailItem(item, qty, 1)
+  if first > 0 and first < qty and (ATTACHMENTS_MAX_SEND or 12) > 1 then
+    ns.Print("Preparing multiple stacks. Wait for EPU to finish before sending.")
+    return ns.AttachBankMailStacks(item, qty, target, Attached)
+  end
   local n = ns.AttachExactMailItem(item, qty, 1)
-  if n == 0 then return ns.Print("Couldn't attach it. Check it's unlocked and not soulbound.") end
-  ns.Print("Attached " .. n .. "x " .. ns.ItemName(item, true) .. " for " .. Short(target) .. ". Check the mail, then click Send.")
+  Attached(n)
   return n
 end

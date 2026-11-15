@@ -28,6 +28,12 @@ local gatherCatalogs = {
   }},
 }
 local gatherOrder = {182, 186, 393, 356}
+local gatherIcons = {
+  [182] = "Interface\\Icons\\Spell_Nature_NatureTouchGrow",
+  [186] = "Interface\\Icons\\Trade_Mining",
+  [393] = "Interface\\Icons\\INV_Misc_Pelt_Wolf_01",
+  [356] = "Interface\\Icons\\Trade_Fishing",
+}
 local circle = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FACTION_PAYOUT = 95
 local buySorts = {
@@ -288,7 +294,7 @@ function ns.GatheringMarketRows(source, skill, profession)
       rows[#rows + 1] = row
     end
   end
-  return Sort(rows)
+  return Sort(rows), #catalog.items
 end
 
 local function RecipeCost(source, recipe, reagentPrice, costs)
@@ -317,6 +323,7 @@ end
 -- skillUps: only orange and yellow recipes, cheapest expected skill-up first.
 function ns.CraftingMarketRows(source, professions, buySort, pendingItems, skillUps)
   local rows, costs = {}, {}
+  local eligible = 0
   local reagentPrice = buySort and "budget" or true
   for name, scan in pairs((ns.cdb and ns.cdb.recipes) or {}) do
     local skill = professions[name]
@@ -325,6 +332,7 @@ function ns.CraftingMarketRows(source, professions, buySort, pendingItems, skill
         local bound = ns.IsBoP(item)
         if bound == nil and pendingItems then pendingItems[item] = true end
         if bound == false then
+          eligible = eligible+1
           local price, info = Market(source, item)
           local recipe, cost = CheapestRecipe(source, entry, reagentPrice, costs)
           local volume = info.volume
@@ -360,7 +368,7 @@ function ns.CraftingMarketRows(source, professions, buySort, pendingItems, skill
       end
     end
   end
-  return Sort(rows)
+  return Sort(rows), eligible
 end
 
 -- Which of a crafter's shared recipes Market can price. Only crafters on 0.22.0 or
@@ -680,7 +688,7 @@ local function GatherSelection(player)
     local prof = player.professions[id]
     if prof and not firstLearned then firstLearned = id end
     options[#options + 1] = {
-      value = id, label = prof and prof.name or ns.GUIDE_PROFESSIONS[id],
+      value = id, label = prof and prof.name or ns.GUIDE_PROFESSIONS[id], icon = gatherIcons[id],
       right = FocusMark(id) .. (prof and tostring(prof.rank) or "Unlearned"),
     }
   end
@@ -736,7 +744,9 @@ local function SourceStatus(rows)
 end
 
 local function Label(parent, text, font)
-  local label = parent:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightSmall")
+  local size = font == "GameFontNormalLarge" and 16 or 12
+  local muted = font == "GameFontDisableSmall" and {.64,.69,.76} or nil
+  local label = ns.InterfaceFont(parent, size, muted)
   label:SetText(text)
   return label
 end
@@ -862,14 +872,19 @@ end
 local function Refresh()
   local width = math.max(478, frame:GetWidth())
   local height = math.max(358, frame:GetHeight())
-  local sidebar = math.floor(width * .31)
+  local compact = frame.selected and width < 650
+  local sidebar = compact and 0 or math.floor(width * .31)
   local detailWidth = width - sidebar - 35
   frame.chart:SetSize(width - sidebar - 76, height - 234)
   local offset = 27
   frame.detail:ClearAllPoints()
   frame.detail:SetPoint("TOPLEFT", sidebar + 20, -107 - offset)
   frame.detail:SetPoint("BOTTOMRIGHT", -12, 8)
+  frame.scroll:SetShown(not compact)
   frame.detailText:SetWidth(detailWidth)
+  local routeY=ns.UI:GetHeight()<480 and -132 or -181
+  frame.startTarget:ClearAllPoints(); frame.startTarget:SetPoint("TOPLEFT",0,routeY)
+  frame.markTarget:ClearAllPoints(); frame.markTarget:SetPoint("TOPRIGHT",0,routeY)
   frame.zonePreview:SetSize(detailWidth, 59)
   frame.detailList:SetWidth(detailWidth - 18)
   local player = ns.GuidePlayer()
@@ -883,6 +898,7 @@ local function Refresh()
   frame.gatherSkill = skill
   frame.gatherID, frame.gatherChoices = gatherID, gatherChoices
   frame.gatherProfession:SetText(gatherName)
+  frame.gatherProfession:SetIcon(gatherIcons[gatherID])
   frame.gatherProfession:SetShown(not craftMode)
   local learned, options, groups, professions, scanned = CharacterCrafts(player)
   frame.professions = professions
@@ -896,17 +912,18 @@ local function Refresh()
   frame.scope:SetText(guild and "Scope: Guild" or "Scope: Mine")
   frame.scope:ClearAllPoints()
   frame.scope:SetPoint("TOPLEFT", guild and 173 or 299, -61)
-  frame.craftTab:SetButtonState(craftMode and not buySort and "PUSHED" or "NORMAL", craftMode and not buySort)
-  frame.gatherTab:SetButtonState(not craftMode and "PUSHED" or "NORMAL", not craftMode)
-  frame.buyTab:SetButtonState(buySort and "PUSHED" or "NORMAL", buySort ~= nil)
+  frame.craftTab:SetOn(craftMode and not buySort)
+  frame.gatherTab:SetOn(not craftMode)
+  frame.buyTab:SetOn(buySort ~= nil)
   frame.craftSort:SetShown(craftMode and not buySort and not guild)
   frame.craftSort:SetText(skillUps and "Sort: Skill-ups" or "Sort: Profit")
   for key, button in pairs(frame.sourceButtons) do
     local active = key == activeSource.key
-    button:SetButtonState(active and "PUSHED" or "NORMAL", active)
+    button:SetOn(active)
   end
   frame.pendingItems = {}
   frame.skill:SetText("My skill: " .. (skillOnly and "On" or "Off"))
+  frame.skill:SetOn(skillOnly)
   frame.skill:SetShown(not craftMode and skill ~= nil and gatherCatalogs[gatherID].thresholds == true)
   frame.yieldSort:SetText(routeOrder and "Sort: My gold/hr" or "Sort: Market")
   -- Until the member chooses, show this zone's materials whenever it has recorded spots.
@@ -914,10 +931,12 @@ local function Refresh()
   if zoneActive == nil then zoneActive = routable and #ns.GatheringRoutePreview(nil, gatherID) > 0 end
   frame.zoneActive = zoneActive
   frame.zoneFilter:SetText(zoneActive and "This zone: On" or "This zone: Off")
+  frame.zoneFilter:SetOn(zoneActive)
   frame.routeButton:SetText(gatherID == 186 and "Start ore route" or "Start herb route")
-  local rows, guildInfo
+  local rows, guildInfo, total
   if guild then
     rows, guildInfo = ns.GuildCraftingRows(activeSource.key, buySort, frame.pendingItems)
+    total = #rows
     local counts = {}
     for _, row in ipairs(rows) do counts[row.profession] = (counts[row.profession] or 0) + 1 end
     local choices = {}
@@ -929,9 +948,11 @@ local function Refresh()
     if guildProfession then
       for i = #rows, 1, -1 do if rows[i].profession ~= guildProfession then table.remove(rows, i) end end
     end
+  elseif craftMode then
+    rows, total = ns.CraftingMarketRows(activeSource.key, professions, buySort, frame.pendingItems, skillUps)
+    if not skillUps then total=#rows end
   else
-    rows = craftMode and ns.CraftingMarketRows(activeSource.key, professions, buySort, frame.pendingItems, skillUps)
-      or ns.GatheringMarketRows(activeSource.key, skillOnly and skill or nil, gatherID)
+    rows, total = ns.GatheringMarketRows(activeSource.key, skillOnly and skill or nil, gatherID)
   end
   local status, stale = SourceStatus(rows)
   if craftMode and not guild and professionFilter then
@@ -979,6 +1000,17 @@ local function Refresh()
       end)
     end
   end
+  local filtered = query~="" or guild and guildProfession or craftMode and (not guild and professionFilter or skillUps)
+    or not craftMode and (routable and zoneActive or skillOnly and skill and gatherCatalogs[gatherID].thresholds)
+  local function ClearFilters()
+    if craftMode then
+      if guild then guildProfession=nil else professionFilter=nil; craftSort="profit" end
+    else
+      zoneOnly,skillOnly=false,false
+    end
+    if ns.UI.search:GetText()~="" then ns.UI.clearSearch:Click() else Refresh() end
+  end
+  ns.UI:SetFilterSummary(#rows,total,filtered and ClearFilters or nil)
   -- The gold highlight follows whatever the list is sorted by.
   local highlightField = not craftMode and "price" or skillUps and "score" or buySort or "profit"
   frame.highlightLabel = highlightLabels[highlightField]
@@ -1012,7 +1044,7 @@ local function Refresh()
     or string.format("%s %s · %d/%d plotted · %s", gatherName, skill or "unlearned", shown, #rows, label))
   local sourceLine
   if not (Available("ledger") or Available("tsm") or Available("auctionator")) then
-    sourceLine = "|cffffb347No price addon found. Install AHledger or Auctionator: EPU reads their prices and never scans the auction house itself.|r"
+    sourceLine = "|cffffb347No price addon found. Load AHledger, TSM, or Auctionator.|r"
   elseif not Available(activeSource.key) then
     sourceLine = "Load " .. activeSource.title .. " with current market data, then press Refresh."
   else
@@ -1038,7 +1070,8 @@ local function Refresh()
   else
     frame.scroll:SetPoint("BOTTOMRIGHT", -26, (focusLine and not craftMode) and 60 or 42)
   end
-  local listWidth = craftMode and not frame.selected and width - 38 or sidebar - 16
+  local listWidth = craftMode and not frame.selected and width - 38 or math.max(1, sidebar - 16)
+  local showMetric = craftMode and not frame.selected and listWidth >= 560 and not skillUps
   frame.list:SetSize(listWidth, math.max(28, #rows * 30))
   -- Only jump back to the top when the member changed what the list shows.
   local viewKey = table.concat({tostring(craftMode), tostring(buySort), tostring(craftSort), tostring(professionFilter),
@@ -1060,10 +1093,17 @@ local function Refresh()
       button:SetPoint("TOPRIGHT", 0, -(i - 1) * 30)
       button:SetHeight(29)
       button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+      button.icon = button:CreateTexture(nil,"ARTWORK")
+      button.icon:SetSize(22,22)
+      button.icon:SetPoint("LEFT",2,0)
+      button.icon:SetTexCoord(0.08,0.92,0.08,0.92)
       button.name = Label(button, "")
-      button.name:SetPoint("TOPLEFT", 3, -1)
+      button.name:SetPoint("TOPLEFT", 29, -1)
       button.summary = Label(button, "", "GameFontDisableSmall")
-      button.summary:SetPoint("TOPLEFT", 3, -15)
+      button.summary:SetPoint("TOPLEFT", 29, -15)
+      button.metric = Label(button,"")
+      button.metric:SetPoint("RIGHT",-8,0)
+      button.metric:SetJustifyH("RIGHT")
       for _, label in ipairs({button.name, button.summary}) do
         label:SetPoint("RIGHT", -3, 0)
         label:SetJustifyH("LEFT")
@@ -1071,6 +1111,11 @@ local function Refresh()
       end
       listRows[i] = button
     end
+    button.icon:SetTexture(ns.ItemIcon(row.item))
+    button.metric:SetShown(showMetric)
+    button.metric:SetText(showMetric and (Gold(row.profit).." / craft") or "")
+    button.name:SetPoint("RIGHT",showMetric and -110 or -3,0)
+    button.summary:SetPoint("RIGHT",showMetric and -110 or -3,0)
     button.row = row
     local title = row.highlight and ("|cfff2c14e" .. row.name .. " · " .. frame.highlightLabel .. "|r") or row.name
     if row.tag then title = title .. "  |cff" .. tagColors[row.tag] .. row.tag .. "|r" end
@@ -1095,20 +1140,28 @@ local function Refresh()
   for i = #rows + 1, #listRows do listRows[i]:Hide() end
   frame.empty:ClearAllPoints()
   frame.empty:SetPoint("TOPLEFT", 12, -105 - offset)
+  frame.empty:SetPoint("TOPRIGHT", -12, -105 - offset)
   frame.empty:SetShown(#rows == 0)
   local needsScan = craftMode and not guild and (professionFilter and not scanned[professionFilter] or not next(scanned))
-  frame.empty:SetText(query ~= "" and "No market items match your search."
+  frame.empty:SetText(query ~= "" and "No market items match. Try a shorter search or clear it to see results."
     or guild and (guildInfo.waiting > 0 and "Guild recipes appear once crafters update EPU and open their professions."
       or buySort and "No guild recipes with positive profit and daily sales data."
       or "No guild recipes to compare yet. Crafters share them by opening their professions.")
     or craftMode and #options == 0 and "Learn a crafting profession to see recipes here."
     or needsScan and "Open a profession to scan your learned recipes."
-    or skillUps and "No orange or yellow recipes with complete ingredient prices."
+    or skillUps and "No priced skill-ups. Try Sort: Profit to see other recipes."
     or buySort and (activeSource.key == "auctionator" and "Choose AHledger or TSM for daily sales."
       or "No learned recipes with positive profit and daily sales data.")
     or craftMode and "No auctionable crafts with complete recipe data."
     or routable and zoneActive and "No recorded spots match your filters in this zone. Turn off This zone to see every material."
-    or ("No " .. gatherName .. " materials match your skill filter."))
+    or ("No " .. gatherName .. " materials match. Turn off My skill to see more materials."))
+  local clearSearch = query~=""
+  local allZones = not craftMode and routable and zoneActive
+  frame.emptyAction:SetShown(#rows==0 and (clearSearch or allZones))
+  frame.emptyAction:SetLabel(clearSearch and "Clear search" or "Show all zones")
+  frame.emptyAction:SetScript("OnClick",function()
+    if clearSearch then ns.UI.clearSearch:Click() else zoneOnly=false; Refresh() end
+  end)
   RenderDetail()
 end
 
@@ -1122,7 +1175,9 @@ RenderDetail = function()
   local row = frame.selected
   frame.detail:SetShown(row ~= nil)
   if not row then return end
+  frame.detailIcon:SetTexture(ns.ItemIcon(row.item))
   frame.detailTitle:SetText(row.name)
+  frame.detailText:SetWordWrap(craftMode)
   frame.crafts:SetShown(craftMode)
   frame.craftsLabel:SetShown(craftMode)
   frame.cap:SetShown(craftMode)
@@ -1158,6 +1213,9 @@ RenderDetail = function()
     if not frame.yieldInput:HasFocus() then frame.yieldInput:SetText(tostring(yields and yields[row.item] or "")) end
     -- A spot is worth recording whenever you see the node, whatever your skill.
     local canGather = row.skill == nil or row.skill <= (frame.gatherSkill or 0)
+    frame.startTarget:SetText(count == 0 and "No recorded spots" or not canGather and "Skill too low" or "Start route")
+    frame.startTarget.disabledTip = count==0 and "Use Record spot at a node, or load compatible GatherMate2 data."
+      or ("Requires "..(ns.GUIDE_PROFESSIONS[row.gatherProfession] or "skill").." "..tostring(row.skill or 0)..".")
     frame.startTarget:SetEnabled(count > 0 and canGather)
     frame.markTarget:SetEnabled(true)
     for i = 1, count do
@@ -1175,10 +1233,11 @@ RenderDetail = function()
       pin:Show()
     end
     for i = count + 1, #frame.zonePins do frame.zonePins[i]:Hide() end
-    frame.zonePreview:SetShown(count > 0)
+    frame.zonePreview:SetShown(count>0 and ns.UI:GetHeight()>=480)
     return
   end
   local crafts = math.min(999, math.max(1, math.floor(tonumber(frame.crafts:GetText()) or 1)))
+  frame.detailScroll:SetPoint("TOPLEFT",frame.detailText,"BOTTOMLEFT",0,-6)
   local plan = ns.CraftingMaterialPlan(activeSource.key, row, crafts, frame.professions)
   local cap = tonumber(frame.cap:GetText())
   local deposit = tonumber(frame.deposit:GetText())
@@ -1241,6 +1300,13 @@ RenderDetail = function()
       button:SetPoint("TOPRIGHT", 0, -(i - 1) * 21)
       button.label = Label(button, "")
       button.label:SetPoint("LEFT", 0, 0)
+      button.label:SetPoint("RIGHT", -5, 0)
+      button:SetScript("OnEnter",function(self)
+        GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+        GameTooltip:SetText(self.label:GetText(),1,1,1,1,true)
+        GameTooltip:Show()
+      end)
+      button:SetScript("OnLeave",function() GameTooltip:Hide() end)
       button:SetScript("OnClick", function(self)
         if not self.item then return end
         local id = gatherItemProfession[self.item]
@@ -1265,16 +1331,14 @@ RenderDetail = function()
   frame.detailList:SetHeight(math.max(21, #entries * 21))
 end
 
-local function Create(parent, footer)
+local function Create(parent, footer, sectionTabs)
   frame = CreateFrame("Frame", "EPUGuildGatheringMarket", parent)
   craftMode = true
-  frame:SetPoint("TOPLEFT", parent)
+  frame:SetPoint("TOPLEFT", sectionTabs, "BOTTOMLEFT")
   frame:SetPoint("BOTTOMRIGHT", footer, "TOPRIGHT")
   local function Button(text, width, x, y, callback)
-    local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    button:SetSize(width, 23)
+    local button = ns.InterfaceButton(frame, text, width, 23)
     button:SetPoint("TOPLEFT", x, y)
-    button:SetText(text)
     button:SetScript("OnClick", callback)
     return button
   end
@@ -1285,6 +1349,9 @@ local function Create(parent, footer)
   frame.craftTab = Button("Craft", 69, 12, -7, function() SetMode(true) end)
   frame.gatherTab = Button("Gather", 69, 85, -7, function() SetMode(false) end)
   frame.buyTab = Button("Buy & Craft", 106, 159, -7, function() SetMode(true, buySorts[1].value) end)
+  frame.craftTab:SetIcon("Interface\\Icons\\Trade_BlackSmithing")
+  frame.gatherTab:SetIcon(gatherIcons[186])
+  frame.buyTab:SetIcon("Interface\\Icons\\INV_Misc_Coin_02")
   frame.buySort = Button("Profit + demand", 102, 12, -34, function(self)
     ns.OpenMenu(self, buySorts, buySort, function(key) buySort = key; Refresh() end)
   end)
@@ -1345,6 +1412,7 @@ local function Create(parent, footer)
     ns.GuideState().savedOnly = false
     ns.OpenMemberTools("guides", "profession")
   end)
+  frame.professionGuides:SetIcon("Interface\\Icons\\INV_Misc_Book_09")
   frame.routeButton = Button("Start herb route", 120, 0, 0, function()
     if ns.GatheringRouteCommand("start", nil, frame.gatherID) then ns.UI:Hide() end
   end)
@@ -1372,7 +1440,8 @@ local function Create(parent, footer)
   frame.sourceText:SetPoint("TOPLEFT", 12, -81)
   frame.sourceText:SetPoint("RIGHT", -12, 0)
   frame.sourceText:SetJustifyH("LEFT")
-  frame.sourceText:SetWordWrap(false)
+  frame.sourceText:SetWordWrap(true)
+  if frame.sourceText.SetMaxLines then frame.sourceText:SetMaxLines(2) end
   frame.chart = CreateFrame("Frame", nil, frame)
   frame.chart:SetPoint("TOPLEFT", 56, -145)
   local bg = frame.chart:CreateTexture(nil, "BACKGROUND")
@@ -1397,14 +1466,24 @@ local function Create(parent, footer)
   frame.scroll:SetScrollChild(frame.list)
   frame.empty = Label(frame, "")
   frame.empty:SetPoint("TOPLEFT", 12, -105)
+  frame.empty:SetWordWrap(true)
+  frame.emptyAction=ns.InterfaceButton(frame,"",120,24)
+  frame.emptyAction:SetPoint("TOPLEFT",frame.empty,"BOTTOMLEFT",0,-10)
+  frame.emptyAction:Hide()
   frame.detail = CreateFrame("Frame", nil, frame)
+  frame.detailIcon = frame.detail:CreateTexture(nil,"ARTWORK")
+  frame.detailIcon:SetSize(25,25)
+  frame.detailIcon:SetPoint("TOPLEFT",0,-1)
+  frame.detailIcon:SetTexCoord(0.08,0.92,0.08,0.92)
   frame.detailTitle = Label(frame.detail, "", "GameFontNormalLarge")
-  frame.detailTitle:SetPoint("TOPLEFT")
+  frame.detailTitle:SetPoint("TOPLEFT",32,0)
+  frame.detailTitle:SetPoint("RIGHT",0,0)
+  frame.detailTitle:SetWordWrap(false)
   frame.age = Label(frame.detail, "", "GameFontDisableSmall")
-  frame.age:SetPoint("TOPLEFT", 0, -19)
+  frame.age:SetPoint("TOPLEFT", 32, -19)
   frame.craftsLabel = Label(frame.detail, "Crafts")
   frame.craftsLabel:SetPoint("TOPLEFT", 0, -33)
-  frame.crafts = CreateFrame("EditBox", nil, frame.detail, "InputBoxTemplate")
+  frame.crafts = ns.InterfaceInput(frame.detail,60,"",true)
   frame.crafts:SetSize(60, 24)
   frame.crafts:SetPoint("TOPLEFT", 48, -27)
   frame.crafts:SetAutoFocus(false)
@@ -1415,7 +1494,7 @@ local function Create(parent, footer)
   local function BudgetInput(label,x,width)
     local caption=Label(frame.detail,label)
     caption:SetPoint("TOPLEFT",x,-33)
-    local input=CreateFrame("EditBox",nil,frame.detail,"InputBoxTemplate")
+    local input=ns.InterfaceInput(frame.detail,48,"",true)
     input:SetSize(48,24)
     input:SetPoint("LEFT",caption,"RIGHT",6,0)
     input:SetAutoFocus(false)
@@ -1438,7 +1517,7 @@ local function Create(parent, footer)
   frame.zonePins = {}
   frame.yieldLabel = Label(frame.detail, "Your units/hour (Enter to save)")
   frame.yieldLabel:SetPoint("TOPLEFT", 0, -35)
-  frame.yieldInput = CreateFrame("EditBox", nil, frame.detail, "InputBoxTemplate")
+  frame.yieldInput = ns.InterfaceInput(frame.detail,55,"",true)
   frame.yieldInput:SetSize(55, 22)
   frame.yieldInput:SetPoint("TOPLEFT", 183, -31)
   frame.yieldInput:SetAutoFocus(false)
@@ -1459,17 +1538,15 @@ local function Create(parent, footer)
   frame.detailScroll:SetPoint("BOTTOMRIGHT", -20, 29)
   frame.detailList = CreateFrame("Frame", nil, frame.detailScroll)
   frame.detailScroll:SetScrollChild(frame.detailList)
-  local function DetailButton(text, width, anchor, x, y, click)
-    local button = CreateFrame("Button", nil, frame.detail, "UIPanelButtonTemplate")
+  local function DetailButton(text, width, anchor, x, y, click, style)
+    local button = ns.InterfaceButton(frame.detail, text, width, 23, style)
     button:SetPoint(anchor, x, y)
-    button:SetSize(width, 23)
-    button:SetText(text)
     button:SetScript("OnClick", click)
     return button
   end
   frame.startTarget = DetailButton("Start route", 128, "TOPLEFT", 0, -181, function()
     if ns.GatheringRouteCommand("start", frame.selected.item, frame.selected.gatherProfession) then ns.UI:Hide() end
-  end)
+  end,"accent")
   frame.markTarget = DetailButton("Record spot", 101, "TOPRIGHT", 0, -181, function()
     ns.RecordGatheringSpot(frame.selected.item)
     RenderDetail()
@@ -1501,12 +1578,12 @@ local function Create(parent, footer)
   end)
 end
 
-function ns.SetGatheringMarketVisible(visible, parent, footer)
+function ns.SetGatheringMarketVisible(visible, parent, footer, sectionTabs)
   if not visible then
     if frame then frame:Hide() end
     return
   end
-  if not frame then Create(parent, footer) end
+  if not frame then Create(parent, footer, sectionTabs) end
   if not activeSource then
     for _, source in ipairs(sources) do
       if Available(source.key) then activeSource = source; break end

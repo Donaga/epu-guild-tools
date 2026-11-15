@@ -132,7 +132,7 @@ check('first upgrade resets prior disabled map settings once',C.ev('__ns.db.sett
 check('map reset leaves unrelated preferences alone',C.ev('__ns.db.settings.quietOtherSetting') is True)
 C.ex("__ns.db.settings.shareLocation=false; __ns.db.settings.guildWorldMap=false; __ns.db.settings.guildMinimap=false; __ns.db.settings.guildClassIcons=false; __fire('ADDON_LOADED','EPUGuild')")
 check('later reloads preserve player choices after the reset',C.ev('__ns.db.settings.shareLocation==false and __ns.db.settings.guildWorldMap==false and __ns.db.settings.guildMinimap==false and __ns.db.settings.guildClassIcons==false') is True)
-A.ex("__ns.ShowGuildMapSettings(); EPUGuildMapSettings.icons:SetChecked(false); EPUGuildMapSettings.icons:Click()")
+A.ex("__ns.ShowGuildMapSettings(); EPUGuildMapSettings.icons:SetChecked(true); EPUGuildMapSettings.icons:Click()")
 check('map settings expose the working icon-style control',A.ev('__ns.db.settings.guildClassIcons') is False)
 print('Guild map tests:',check.failed,'failed')
 sys.exit(1 if check.failed else 0)

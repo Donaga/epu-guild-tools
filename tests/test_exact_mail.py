@@ -4,6 +4,14 @@ def prepare(qty=3,stack=20,delivered=0):
     c=Client('Chris Baker')
     c.ex('__advance(60); MailFrame._shown=true; __ns.cdb.bankAlt=true')
     c.ex(f'''__bags[0]={{{{2589,{stack}}}}}; __ns.G().requests.mailtest={{who='Tyler Baker',item=2589,qty={qty},delivered={delivered},status='approved',t=__now,u=__now}}''')
+    c.ex('''function GetItemCount(id)
+      local total=0
+      for _,bag in pairs(__bags) do
+        for _,stack in pairs(bag) do if stack[1]==id then total=total+stack[2] end end
+      end
+      return total
+    end
+    C_Container.GetContainerNumSlots=function(bag) return bag==0 and 16 or 0 end''')
     return c
 def amount(c):return c.ev('(function() local n=0 for _,s in pairs(__mailSlots) do n=n+s[2] end return n end)()')
 A=prepare();A.ex('__ns.MailRequest("mailtest")')
@@ -34,5 +42,54 @@ check('exact quantity can span two inventory stacks',amount(I)==10 and I.ev('__b
 J=prepare(5,20,2);J.ex('''local r=__ns.G().requests.mailtest; r.crafter='Tyler Baker'; r.key='item:30001'
 __ns.G().mats[r.key]={t=__now,r={2589,2}}; __ns.MailCraftMats('mailtest')''')
 check('craft materials use the undelivered remainder',amount(J)==6 and 'x3' in J.ev('SendMailSubjectEditBox:GetText()'))
-check('no runtime errors',sum(c.ev('__errors') or 0 for c in [A,B,C,D,E,F,G,H,I,J])==0)
+K=prepare(); K.ex('''
+__ns.G().requests.mailtest=nil
+__bags[0]={{2589,4},{2589,12},{2589,20}}
+local click=ClickSendMailItemButton
+local read=GetSendMailItem
+local pending
+ClickSendMailItemButton=function(index)
+  assert(not pending, 'attempted a second attachment before the previous one settled')
+  pending=index
+  C_Timer.After(0.3,function() pending=nil; __fire('MAIL_SEND_INFO_UPDATE') end)
+  click(index)
+end
+GetSendMailItem=function(index)
+  local name,id,icon,count=read(index)
+  if index==pending and count then count=count+1 end
+  return name,id,icon,count
+end
+__ns.MailBankItem('Tyler Baker',2589,21)
+''')
+check('multi-stack bank draft starts with just the first attachment',amount(K)==4)
+check('review does not present a settling quantity as attached',
+      K.ev('EPUGuildBankMailReview.items:GetText()=="Waiting for attachment quantities"'))
+K.ex("__ns.MailBankItem('Pip Baker',2589,21); for i=1,20 do __advance(0.1) end")
+check('bank mail waits out intermediate counts and attaches two whole stacks and the exact split',
+      amount(K)==21 and K.ev('__mailSlots[3][2]')==5 and K.ev('__bags[0][3][2]')==15
+      and K.ev('SendMailNameEditBox:GetText()')=='Tyler Baker')
+check('review shows the actual recipient and quantity across all verified stacks',
+      K.ev('EPUGuildBankMailReview.recipient:GetText()=="To Tyler Baker"'
+           ' and EPUGuildBankMailReview.items:GetText()=="21 Linen Cloth · 3 stacks"'
+           ' and not EPUGuildBankMailReview.warning:IsShown()'))
+L=prepare(); L.ex('''
+__ns.G().requests.mailtest=nil; __bags[0]={{2589,4},{2589,12}}
+C_Container.SplitContainerItem=function(b,s,n) C_Container.PickupContainerItem(b,s) end
+__ns.MailBankItem('Tyler Baker',2589,10)
+for i=1,20 do __advance(0.1) end
+''')
+check('a bad split in a later stack is detached while the verified stack stays',
+      amount(L)==4 and L.ev('GetItemCount(2589)')==12)
+M=prepare(); M.ex('''
+__ns.G().requests.mailtest=nil; __bags[0]={{2589,4},{2589,12}}
+__ns.MailBankItem('Tyler Baker',2589,10)
+SendMailNameEditBox:SetText('Pip Baker')
+__advance(1)
+''')
+check('changing the recipient stops further pickups',amount(M)==4 and M.ev('__bags[0][2][2]')==12)
+check('review reflects an edited recipient and warns about the change',
+      M.ev('EPUGuildBankMailReview.recipient:GetText()=="To Pip Baker" and EPUGuildBankMailReview.warning:IsShown()'))
+M.ex("__fire('MAIL_CLOSED')")
+check('mail review hides when the mailbox closes',not M.ev('EPUGuildBankMailReview:IsShown()'))
+check('no runtime errors',sum(c.ev('__errors') or 0 for c in [A,B,C,D,E,F,G,H,I,J,K,L,M])==0)
 sys.exit(1 if check.failed else 0)

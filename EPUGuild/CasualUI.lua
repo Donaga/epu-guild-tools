@@ -1,6 +1,12 @@
 local ADDON, ns = ...
 local E, UI, C
-local categories={{label="Activities",value="events"},{label="Quick quest help",value="help"},{label="Quick dungeon",value="dungeon"},{label="Available helpers",value="helpers"},{label="Starter kits",value="kits"}}
+local categories={
+  {label="Activities",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
+  {label="Quick quest help",value="help",icon="Interface\\Icons\\INV_Misc_Note_01"},
+  {label="Quick dungeon",value="dungeon",icon="Interface\\Icons\\INV_Misc_Key_03"},
+  {label="Available helpers",value="helpers",icon="Interface\\Icons\\INV_Misc_Head_Human_01"},
+  {label="Starter kits",value="kits",icon="Interface\\Icons\\INV_Misc_Gift_01"},
+}
 local drafts={}
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
@@ -18,11 +24,13 @@ function ns.InstallCasualViews(views,env)
   E=env; UI=E.UI; C=E.C
   UI.state.activities={kind="events",mine=false,near=false}
   views.activities={label="Guild activities",icon="Interface\\Icons\\INV_Misc_GroupLooking",tools=function(bar)
-    local choose=bar:Add(E.Btn(bar,"Quest / elite help",126,22),"left")
+    local choose=bar:Add(E.Btn(bar,"",142,22),"left")
+    choose:SetIcon(categories[1].icon)
+    choose:SetLabel(categories[1].label)
     choose:SetScript("OnClick",function() E.OpenMenu(choose,categories,State().kind,function(kind) SetCategory(kind) end) end)
     local mine=bar:Add(E.Btn(bar,"Mine",46,22),"left",function(self) State().mine=not State().mine; self:SetOn(State().mine); UI:Refresh() end)
     local near=bar:Add(E.Btn(bar,"My level",70,22),"left",function(self) State().near=not State().near; self:SetOn(State().near); UI:Refresh() end)
-    bar.casualNew=bar:Add(E.Btn(bar,"New / edit",80,22),"right",function()
+    bar.casualNew=bar:Add(E.Btn(bar,"New / edit",80,22,"accent"),"right",function()
       local kind=State().kind
       if ns.CommunityNewAction and ns.CommunityNewAction(kind) then return end
       if kind=="helpers" then Open("helperform",ns.me)
@@ -38,7 +46,9 @@ function ns.InstallCasualViews(views,env)
     ns.CasualStore(); local st=State(); local rows={}
     local bar=views.activities.bar
     if bar then
-      for _,v in ipairs(categories) do if v.value==st.kind then bar.casualChoose:SetLabel(v.label) end end
+      for _,v in ipairs(categories) do
+        if v.value==st.kind then bar.casualChoose:SetLabel(v.label); bar.casualChoose:SetIcon(v.icon); break end
+      end
       bar.casualMine:SetOn(st.mine); bar.casualNear:SetOn(st.near)
       bar.casualMine:SetShown(st.kind~="kits"); bar.casualNear:SetShown(st.kind~="kits")
       bar.casualNear:SetLabel("My level")
@@ -125,6 +135,7 @@ function ns.FillCasualDetails(kind,key,det)
     det:Text(MemberText(r.who)); det:Text(r.zone.." · suggested levels "..r.minLevel.."–"..r.maxLevel)
     det:Text(r.note)
     local n=ns.ActivityCounts(key)
+    det:Section("Group")
     det:Text(n.ready.." ready / "..r.slots.." planned; "..n.tentative.." tentative",C.gold)
     det:Text(n.t.." tank · "..n.h.." healer · "..n.d.." DPS",C.muted)
     if n.ready>r.slots then det:Text("More people are interested than planned slots. Check with the organiser before travelling.",C.gold) end

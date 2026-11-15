@@ -18,10 +18,6 @@ function ns.ApplyGuildMapDefaults()
   return reset
 end
 local circle='Interface\\CharacterFrame\\TempPortraitAlphaMask'
-local classes='Interface\\TargetingFrame\\UI-Classes-Circles'
--- Classic class atlas layout; used when the global table is unavailable.
-local classCoords={WARRIOR={0,0.25,0,0.25},MAGE={0.25,0.5,0,0.25},ROGUE={0.5,0.75,0,0.25},DRUID={0.75,1,0,0.25},
-  HUNTER={0,0.25,0.25,0.5},SHAMAN={0.25,0.5,0.25,0.5},PRIEST={0.5,0.75,0.25,0.5},WARLOCK={0.75,1,0.25,0.5},PALADIN={0,0.25,0.5,0.75}}
 
 local function Setting(key) return ns.db and ns.db.settings[key] end
 local function Number(n,lo,hi)
@@ -165,10 +161,10 @@ function ns.RefreshGuildMap()
       if pair.key~=key then
         pins:RemoveWorldMapIcon(ref,pair.world); pins:RemoveMinimapIcon(ref,pair.mini)
         local color=RAID_CLASS_COLORS and RAID_CLASS_COLORS[r.classFile]
-        local coords=r.classFile and ((CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[r.classFile]) or classCoords[r.classFile])
+        local texture,coords=ns.ClassIcon(r.classFile)
         for _,f in ipairs({pair.world,pair.mini}) do
-          if Setting('guildClassIcons')~=false and coords then
-            f.dot:SetTexture(classes); f.dot:SetTexCoord(unpack(coords)); f.dot:SetVertexColor(1,1,1,1)
+          if Setting('guildClassIcons')~=false and texture then
+            f.dot:SetTexture(texture); f.dot:SetTexCoord(unpack(coords)); f.dot:SetVertexColor(1,1,1,1)
           else
             f.dot:SetTexture(circle); f.dot:SetTexCoord(0,1,0,1)
             f.dot:SetVertexColor(color and color.r or 0.3,color and color.g or 1,color and color.b or 0.4,1)
@@ -259,33 +255,35 @@ function ns.RefreshGuildMapSettings()
 end
 function ns.ShowGuildMapSettings()
   if not panel then
-    panel=CreateFrame("Frame","EPUGuildMapSettings",UIParent,"BasicFrameTemplateWithInset")
-    panel:SetSize(380,344); panel:SetPoint("CENTER"); panel:SetFrameStrata("DIALOG")
+    panel=ns.InterfaceWindow("EPUGuildMapSettings",UIParent,"Guild map",380,344)
     panel:SetMovable(true); panel:EnableMouse(true); panel:RegisterForDrag("LeftButton")
     panel:SetScript("OnDragStart",panel.StartMoving); panel:SetScript("OnDragStop",panel.StopMovingOrSizing)
-    panel.TitleText:SetText("EPU Guild Map")
-    tinsert(UISpecialFrames,"EPUGuildMapSettings")
     local function Check(key,label,y,callback)
-      local b=CreateFrame("CheckButton",nil,panel,"UICheckButtonTemplate")
+      local b=ns.InterfaceButton(panel,label,348,28)
       b:SetPoint("TOPLEFT",16,y)
-      b.label=b:CreateFontString(nil,"OVERLAY","GameFontHighlight")
-      b.label:SetPoint("LEFT",b,"RIGHT",0,0)
-      b.label:SetText(label)
-      b:SetScript("OnClick",function(self) callback(self:GetChecked()==true); ns.RefreshGuildMap(); ns.RefreshGuildMapSettings() end)
+      b.text:ClearAllPoints(); b.text:SetPoint("LEFT",10,0)
+      function b:SetChecked(on)
+        self.checked=on==true
+        self:SetOn(self.checked)
+        self:SetLabel(label.."  ·  "..(self.checked and "On" or "Off"))
+      end
+      function b:GetChecked() return self.checked end
+      b:SetScript("OnClick",function(self) callback(not self:GetChecked()); ns.RefreshGuildMap(); ns.RefreshGuildMapSettings() end)
       panel[key]=b
     end
     Check("share","Share my outdoor location",-38,ns.SetLocationSharing)
     Check("world","Show guildmates on the world map",-76,function(on) ns.db.settings.guildWorldMap=on end)
     Check("mini","Show nearby guildmates on the minimap",-114,function(on) ns.db.settings.guildMinimap=on end)
     Check('icons','Use class icons (off = round dots)',-152,function(on) ns.db.settings.guildClassIcons=on end)
-    panel.status=panel:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    panel.status=ns.InterfaceFont(panel,12)
     panel.status:SetPoint("TOPLEFT",20,-198); panel.status:SetWidth(340); panel.status:SetJustifyH("LEFT")
-    panel.buttonSettings=CreateFrame("Button",nil,panel,"UIPanelButtonTemplate")
-    panel.buttonSettings:SetSize(180,24); panel.buttonSettings:SetPoint("BOTTOMLEFT",20,52)
-    panel.buttonSettings:SetText("Move minimap button")
+    panel.status:SetWordWrap(true)
+    panel.buttonSettings=ns.InterfaceButton(panel,"Move minimap button",180,24)
+    panel.buttonSettings:SetPoint("BOTTOMLEFT",20,52)
     panel.buttonSettings:SetScript("OnClick",function() ns.ShowMinimapButtonSettings() end)
-    local hint=panel:CreateFontString(nil,"OVERLAY","GameFontDisableSmall")
+    local hint=ns.InterfaceFont(panel,11,{.64,.69,.76})
     hint:SetPoint("BOTTOMLEFT",20,18); hint:SetWidth(340)
+    hint:SetWordWrap(true)
     hint:SetText("Both players need EPU 0.11+ (0.22.3+ for layers). No location history is saved. Click a marker to whisper.")
   end
   ns.RefreshGuildMapSettings(); panel:Show()

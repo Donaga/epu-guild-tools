@@ -2,6 +2,17 @@
 
 ## 0.23.1
 
+- The interface uses Inter, a midnight-blue header, and an icon rail with a second navigation column on wide windows. Home brings requests, the next event and pending actions up front. Bank item details show stock at a glance and keep Request item and Mail by profession within reach while you scroll.
+- Reorganized the addon into Home, Bank, Professions, Guild, and Member tools. Bank stock and Shopping use separate quantity columns. Bank and Market use the same dark theme and controls, and narrow windows open details with a Back button.
+- Every view uses a titled layout. Events put your RSVP before the signup list, the roster puts contact actions ahead of character details, Recipes puts crafters first, and Officer tools puts fulfillment first. Progress meters, detail history, the calendar picker, guide links, map settings, donation controls, toasts, route HUD and the floating badge use the same interface styling.
+- Selected buttons have a gold underline, unavailable actions explain why where possible, and crowded toolbars wrap on narrow windows. The minimap button has a smaller guild crest and adjusts its position around nearby buttons.
+- Bank, Recipes, Market, and Sync show how many results match the current filters and offer **Clear filters**. Sync has class icons, status filters and sorting, with the transfer details one click away.
+- Bank mail shows the recipient and the quantity and stack count for each item as attachments are verified. It flags recipient changes before sending.
+- Local and GitHub builds no longer advertise their versions over guild sync. The CurseForge upload receives a separate package marked with its release version.
+
+- Bank Sort lets you filter material recipients by profession, such as Tailoring for cloth. Officers can also use **Mail by profession** from a stocked trade good's details.
+- Bank Sort waits for each attachment to settle before adding the next stack. It still removes attachments when the verified item or quantity is wrong.
+
 - The floating Events button keeps the upcoming event count and adds an orange badge for work your character can act on. Click for requests, craft work, event signups, invites and Discord imports, with shortcuts to their details.
 
 - Discord `/chars` shows your verified links, legacy links and expected roles, with a button to get a link code. `/roles` explains skipped checks and scans that found everyone up to date. New class roles use WoW class colors.

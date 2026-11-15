@@ -79,6 +79,7 @@ function ns.MailMemberRequests(target)
   if MailFrameTab2 and not SendMailFrame:IsShown() then MailFrameTab2:Click() end
   if SendMailNameEditBox then SendMailNameEditBox:SetText(target) end
   if SendMailSubjectEditBox then SendMailSubjectEditBox:SetText("Guild bank: "..#rows.." requests") end
+  ns.BeginBankMailReview(target)
   if ClearCursor then ClearCursor() end
   local items,order,ids=GroupItems(rows)
   ns.mailRequestID=nil; ns.mailRequestIDs=ids

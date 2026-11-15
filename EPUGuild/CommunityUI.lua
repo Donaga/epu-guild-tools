@@ -1,12 +1,26 @@
 local ADDON,ns=...
 local E,UI,C
 local DAY=86400
+local eventIcons={
+  dungeon="Interface\\Icons\\INV_Misc_Key_03",
+  leveling="Interface\\Icons\\INV_Misc_Map_01",
+  quest="Interface\\Icons\\INV_Misc_Note_01",
+  fishing="Interface\\Icons\\Trade_Fishing",
+  profession="Interface\\Icons\\Trade_BlackSmithing",
+  farming="Interface\\Icons\\Trade_Mining",
+  other="Interface\\Icons\\INV_Misc_GroupLooking",
+}
 local memberTools={
-  {key="guides", title="Your guides", hint="Find leveling, talent, and profession guides for your character."},
-  {key="quests", title="Quest matching", hint="Find guildmates working on the same quests."},
-  {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications."},
-  {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours."},
-  {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.", open=function() ns.ShowGatheringMarket() end},
+  {key="guides", title="Your guides", hint="Find leveling, talent, and profession guides for your character.",
+    icon="Interface\\Icons\\INV_Misc_Book_09"},
+  {key="quests", title="Quest matching", hint="Find guildmates working on the same quests.",
+    icon="Interface\\Icons\\INV_Misc_GroupLooking"},
+  {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications.",
+    icon="Interface\\Icons\\INV_Scroll_03"},
+  {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours.",
+    icon="Interface\\Icons\\INV_Misc_PocketWatch_01"},
+  {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
+    icon="Interface\\Icons\\INV_Misc_Coin_02", open=function() ns.ShowGatheringMarket() end},
 }
 local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={
@@ -81,7 +95,7 @@ function ns.InstallCommunityViews(views,env)
     onSelect=function() ns.OpenMemberTools("all") end,
     tools=function(bar)
       bar.allTools=bar:Add(E.Btn(bar,"All tools",80,22),"left",function() ns.OpenMemberTools("all") end)
-      bar.toolTitle=bar:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+      bar.toolTitle=ns.InterfaceFont(bar,12,C.muted)
       bar.toolTitle:SetPoint("LEFT",bar.allTools,"RIGHT",10,0)
       bar.toolAction=bar:Add(E.Btn(bar,"Settings",80,22),"right",function()
         ns.CommunityNewAction(UI.state.membertools.kind)
@@ -107,7 +121,8 @@ function ns.InstallCommunityViews(views,env)
         for _,tool in ipairs(memberTools) do
           if E.Match(q,tool.title,tool.hint) then
             local key=tool.key
-            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,right="Open",onClick=tool.open or function() ns.OpenMemberTools(key) end}
+            rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,icon=tool.icon,right="Open",
+              onClick=tool.open or function() ns.OpenMemberTools(key) end}
           end
         end
         return rows
@@ -152,15 +167,12 @@ end
 
 function ns.ShowActivityDatePicker(initial,chosen,clock)
   if not picker then
-    picker=CreateFrame("Frame","EPUGuildActivityDatePicker",UI,"BasicFrameTemplateWithInset")
-    tinsert(UISpecialFrames,"EPUGuildActivityDatePicker")
-    picker:SetSize(420,350); picker:SetPoint("CENTER"); picker:SetFrameStrata("DIALOG"); picker:SetClampedToScreen(true)
-    picker.TitleText:SetText("Activity calendar · local dates")
-    picker.heading=picker:CreateFontString(nil,"OVERLAY","GameFontNormal")
-    picker.heading:SetPoint("TOP",0,-36)
+    picker=ns.InterfaceWindow("EPUGuildActivityDatePicker",UI,"Activity calendar",420,350)
+    picker.heading=ns.InterfaceFont(picker,14,C.white)
+    picker.heading:SetPoint("TOP",0,-43)
     picker.days={}
     for i,name in ipairs({"Sun","Mon","Tue","Wed","Thu","Fri","Sat"}) do
-      local label=picker:CreateFontString(nil,"OVERLAY","GameFontNormalSmall")
+      local label=ns.InterfaceFont(picker,11,C.muted)
       label:SetPoint("TOPLEFT",15+(i-1)*56,-64); label:SetText(name)
     end
     for i=1,42 do
@@ -172,8 +184,8 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
       local days,y,m=ns.ActivityCalendarDays(picker.year,picker.month+step)
       picker.year=y; picker.month=m; picker:Paint(days)
     end
-    local prev=E.Btn(picker,"<",32,22); prev:SetPoint("TOPLEFT",12,-32); prev:SetScript("OnClick",function() Move(-1) end)
-    local next=E.Btn(picker,">",32,22); next:SetPoint("TOPRIGHT",-12,-32); next:SetScript("OnClick",function() Move(1) end)
+    local prev=E.Btn(picker,"<",32,22); prev:SetPoint("TOPLEFT",12,-37); prev:SetScript("OnClick",function() Move(-1) end)
+    local next=E.Btn(picker,">",32,22); next:SetPoint("TOPRIGHT",-12,-37); next:SetScript("OnClick",function() Move(1) end)
     picker.clear=E.Btn(picker,"All dates",85,22); picker.clear:SetPoint("BOTTOMLEFT",12,12)
     picker.clear:SetScript("OnClick",function() PickDate(nil) end)
     picker.today=E.Btn(picker,"Today",65,22)
@@ -187,7 +199,7 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
     picker.today:SetScript("OnClick",function() Jump(0) end)
     picker.tomorrow=E.Btn(picker,"Tomorrow",85,22); picker.tomorrow:SetPoint('BOTTOMLEFT',82,12)
     picker.tomorrow:SetScript('OnClick',function() Jump(1) end)
-    picker.timeText=picker:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
+    picker.timeText=ns.InterfaceFont(picker,12,C.text)
     picker.timeText:SetPoint('TOPLEFT',12,-327)
     local function ClockMenu(button,values,key,label)
       local items={}
@@ -215,7 +227,7 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
       picker:Hide()
       picker.chosen(picker.startValue)
     end)
-    picker.hint=picker:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall')
+    picker.hint=ns.InterfaceFont(picker,11,C.muted)
     picker.hint:SetPoint('BOTTOMLEFT',12,43)
     function picker:Paint(days)
       self.heading:SetText(date('%B %Y',time({year=self.year,month=self.month,day=1,hour=12,min=0,sec=0})))
@@ -233,6 +245,7 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
       local start=value and ns.ParseEventLocal(value)
       self.startValue=start and start>=ns.Now()+60 and start<=ns.Now()+28*DAY and value or nil
       self.apply:SetEnabled(self.startValue~=nil)
+      self.apply.disabledTip='Choose a valid future start time within 28 days.'
       self.hint:SetText(self.startValue and date('%a, %b %d at %I:%M %p',start) or 'Choose a valid future time within 28 days.')
       self.timeText:SetText('Start time (your local time)')
     end
@@ -294,7 +307,7 @@ function ns.CommunityRows(g,q,st,bar)
       bar.casualNear:SetOn(st.eventType~=nil)
       bar.casualNear:SetScript("OnClick",function(self)
         local options={{label="All types",value="all"}}
-        for _,kind in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[kind],value=kind} end
+        for _,kind in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[kind],value=kind,icon=eventIcons[kind]} end
         E.OpenMenu(self,options,st.eventType or "all",function(kind) st.eventType=kind~="all" and kind or nil; UI:Refresh() end)
       end)
       bar.casualAvailability:SetOn(st.eventDate~=nil)
@@ -309,7 +322,7 @@ function ns.CommunityRows(g,q,st,bar)
         and (not st.eventDate or date("%Y-%m-%d",r.starts)==st.eventDate)
         and (not st.mine or r.who==ns.me or ((myCalendar or response) and (myCalendar or response).state~="declined")) and E.Match(q,r.title,r.note,r.zone,r.who,ns.EVENT_TYPES[r.kind or "other"]) then
         local localTime,server=ns.EventTimes(r.starts); local n=ns.EventCounts(id)
-        out[#out+1]={key="event:"..id,title=ns.EVENT_TYPES[r.kind or "other"].." · "..r.title,sub="Local "..localTime.." · "..r.zone.." · levels "..(r.minLevel or 1).."–"..(r.maxLevel or 60),
+        out[#out+1]={key="event:"..id,icon=eventIcons[r.kind or "other"],title=ns.EVENT_TYPES[r.kind or "other"].." · "..r.title,sub="Local "..localTime.." · "..r.zone.." · levels "..(r.minLevel or 1).."–"..(r.maxLevel or 60),
           right=r.status=="cancelled" and "Cancelled" or (n.going.." going · "..n.tentative.." tentative"),at=r.starts,onClick=function() Open("event",id) end}
       end
     end
@@ -415,7 +428,7 @@ function ns.FillCommunityDetails(kind,key,det)
     end
     det:Buttons({{"Choose type",function(self)
       local options={}
-      for _,value in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[value],value=value} end
+      for _,value in ipairs(ns.EVENT_TYPE_ORDER) do options[#options+1]={label=ns.EVENT_TYPES[value],value=value,icon=eventIcons[value]} end
       E.OpenMenu(self,options,activityType,ApplyType)
     end},{'Choose dungeon',function(self)
       local groups={}
@@ -521,31 +534,19 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Reset(nil,nil,r.title,r.status=="cancelled" and "Cancelled" or (r.ends<=ns.Now() and "Ended" or "Guild event"))
     det:Text("Local: "..localTime.."\nServer (current offset): "..server,C.gold)
     det:Text(ns.EVENT_TYPES[r.kind or "other"].." · Suggested levels "..(r.minLevel or 1).."–"..(r.maxLevel or 60)..(r.dungeon and r.dungeon~=r.title and ("\nDungeon: "..r.dungeon) or "").."\nOrganiser: "..r.who.."\nMeet at: "..r.zone.."\nDuration: "..math.floor((r.ends-r.starts)/60).." minutes")
-    det:Text(r.note)
+    if r.note~="" then det:Text(r.note) end
     local n=ns.EventCounts(key)
     det:Text(n.going.." going / "..r.slots.." planned · "..n.tentative.." tentative")
     det:Text(n.t.." tank · "..n.h.." healer · "..n.d.." DPS\n"..n.g.." helper · "..n.c.." crafter · "..n.m.." mentor",C.muted)
     if r.places then
       det:Text("Group slots · "..r.places.t.." tank · "..r.places.h.." healer · "..r.places.d.." DPS",C.gold)
     end
-    local snapshot=ns.CalendarSignupSnapshot(key)
-    det:Text(snapshot and ("WoW signups refreshed "..math.floor(GetTime()-snapshot.at).."s ago. Calendar status takes priority; each member is counted once.") or "Showing EPU signups. Open the linked WoW event to refresh calendar attendees; snapshots expire after 3 minutes.",C.muted)
-    for _,reply in ipairs(ns.EventResponses(key)) do
-      local name=reply.who
-      local signup=g.eventResponses[key.."\030"..name]
-      local place=reply.state=="going" and signup and ns.EventPlaceStatus(r,signup)
-      det:Text(name.." · "..(place or reply.state).." · "..ns.EVENT_ROLES[reply.role].." · "..(reply.source or "EPU")..(reply.note~="" and ("\n"..reply.note) or ""))
-      local buttons={{"Whisper",function() Whisper(name) end}}
-      if place and r.who==ns.me and r.status=="scheduled" and r.ends>ns.Now() then
-        buttons[#buttons+1]={place=="Confirmed" and "Release place" or "Confirm place",function()
-          if ns.ConfirmEventPlace(key,name,place~="Confirmed") then UI:FillDetails() end
-        end}
-      end
-      det:Buttons(buttons)
-    end
-    det:Text("Signups show interest; the organiser confirms the group. No automatic invitations or attendance penalties.",C.muted)
+    local replies=ns.EventResponses(key)
+    local responseLabels={going="Going",tentative="Tentative",declined="Can't make it"}
     if r.status=="scheduled" and r.ends>ns.Now() then
       local cur=g.eventResponses[key.."\030"..ns.me]; local role=cur and cur.role or (r.kind=="dungeon" and "d" or "g")
+      det:Section("Your response")
+      if cur then det:Text(ns.EventPlaceStatus(r,cur) or responseLabels[cur.state],C.muted) end
       local status=det:Text("My role: "..ns.EVENT_ROLES[role],C.gold)
       RoleButtons(det,role,function(value) role=value; det.casualDraft=true; status:SetText("My role: "..ns.EVENT_ROLES[role]) end,r.kind=="dungeon")
       local note=det:Field("My note",cur and cur.note or "",160); note.onChange=function() det.casualDraft=true end
@@ -556,6 +557,30 @@ function ns.FillCommunityDetails(kind,key,det)
         local function Both(state) ns.CalendarRespond(key,state,role,note:GetText()); UI:FillDetails() end
         det:Buttons({{"Going in both",function() Both("going") end},{"Tentative in both",function() Both("tentative") end},{"Decline in both",function() Both("declined") end}})
       end
+    end
+    det:Section("Signups ("..#replies..")")
+    local snapshot=ns.CalendarSignupSnapshot(key)
+    if snapshot then
+      det:Text("WoW calendar synced "..math.floor(GetTime()-snapshot.at).."s ago. One signup per member.",C.muted)
+    end
+    if #replies==0 then det:Text("No signups yet.",C.muted) end
+    for _,reply in ipairs(replies) do
+      local name=reply.who
+      local signup=g.eventResponses[key.."\030"..name]
+      local place=reply.state=="going" and signup and ns.EventPlaceStatus(r,signup)
+      det:Text(name.." · "..(place or responseLabels[reply.state] or reply.state).." · "..ns.EVENT_ROLES[reply.role].." · "..(reply.source or "EPU"),
+        place=="Confirmed" and C.green or place=="Waitlist" and C.gold or C.text)
+      if reply.note~="" then det:Text(reply.note,C.muted) end
+      local buttons={{"Whisper",function() Whisper(name) end}}
+      if place and r.who==ns.me and r.status=="scheduled" and r.ends>ns.Now() then
+        buttons[#buttons+1]={place=="Confirmed" and "Release place" or "Confirm place",function()
+          if ns.ConfirmEventPlace(key,name,place~="Confirmed") then UI:FillDetails() end
+        end}
+      end
+      det:Buttons(buttons)
+    end
+    if r.status=="scheduled" and r.ends>ns.Now() then
+      det:Section((r.who==ns.me or ns.IsTrusted(ns.me)) and "Manage event" or "Calendar")
       det:Buttons({{"WoW calendar",function() Open("eventcalendar",key) end}})
       if r.who==ns.me and r.starts>ns.Now() then det:Buttons({{"Edit event",function() Open("eventform",key) end}}) end
       if r.who==ns.me then

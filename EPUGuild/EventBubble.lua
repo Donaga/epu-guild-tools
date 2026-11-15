@@ -29,11 +29,19 @@ icon:SetPoint('BOTTOMRIGHT', -3, 3)
 icon:SetTexture(ns.LOGO_SMALL)
 Round(icon)
 bubble:SetHighlightTexture('Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight')
-local countLabel = bubble:CreateFontString(nil, 'OVERLAY', 'NumberFontNormal')
-countLabel:SetPoint('BOTTOMRIGHT', 1, 0)
-local actionLabel = bubble:CreateFontString(nil, 'OVERLAY', 'NumberFontNormal')
-actionLabel:SetPoint('TOPRIGHT', 3, 1)
-actionLabel:SetTextColor(1, 0.65, 0.24)
+local function Badge(point,y,bg,fg)
+  local badge=CreateFrame("Frame",nil,bubble)
+  badge:SetPoint(point,bubble,point,4,y)
+  badge:SetHeight(17)
+  local fill=badge:CreateTexture(nil,"BACKGROUND")
+  fill:SetAllPoints()
+  fill:SetColorTexture(bg[1],bg[2],bg[3],1)
+  badge.text=ns.InterfaceFont(badge,12,fg)
+  badge.text:SetPoint("CENTER")
+  return badge
+end
+local eventBadge=Badge("BOTTOMRIGHT",-3,ns.InterfaceColors.panel2,ns.InterfaceColors.white)
+local actionBadge=Badge("TOPRIGHT",3,{1,.65,.24},ns.InterfaceColors.bg)
 
 local function PlaceBubble()
   local state = ns.CommunityState()
@@ -124,11 +132,17 @@ function ns.RefreshEventBubble()
     actions = ns.GetBubbleActions(guild, state)
     for _, group in pairs(actions) do total = total + #group end
   end
-  countLabel:SetText(count == 0 and '' or count > 99 and '99+' or tostring(count))
-  actionLabel:SetText(total == 0 and '' or total > 99 and '99+' or tostring(total))
+  for _, entry in ipairs({{eventBadge,count},{actionBadge,total}}) do
+    local badge,n=entry[1],entry[2]
+    badge.text:SetText(n>99 and "99+" or tostring(n))
+    badge:SetWidth(math.max(17,badge.text:GetStringWidth()+8))
+    badge:SetShown(n>0)
+  end
   local visible = count > 0 or total > 0
-  if visible and not bubble:IsShown() then PlaceBubble() end
+  local changed = visible ~= bubble:IsShown()
+  if visible and changed then PlaceBubble() end
   bubble:SetShown(visible)
+  if changed then ns.UpdateMinimapButton() end
 end
 
 local function OpenEvents()
@@ -237,6 +251,7 @@ local function StopDrag(self)
     state.eventBubbleX = math.max(0, math.min(1, x / UIParent:GetWidth()))
     state.eventBubbleY = math.max(0, math.min(1, y / UIParent:GetHeight()))
   end
+  ns.UpdateMinimapButton()
 end
 bubble:SetScript('OnDragStop', StopDrag)
 bubble:SetScript('OnHide', StopDrag)

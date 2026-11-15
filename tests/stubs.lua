@@ -36,7 +36,14 @@ function M:RegisterEvent(e)
   if __missingEvents[e] then error("Attempt to register unknown event \"" .. e .. "\"") end
   self._events[e] = true
 end
-function M:Click() if self._scripts.OnClick then self._scripts.OnClick(self) end end
+function M:Click() if self:IsEnabled() and self._scripts.OnClick then self._scripts.OnClick(self) end end
+function M:IsEnabled() return self._enabled ~= false end
+function M:SetEnabled(enabled)
+  local changed = self:IsEnabled() ~= enabled
+  self._enabled = enabled
+  local fn = self._scripts[enabled and "OnEnable" or "OnDisable"]
+  if changed and fn then fn(self) end
+end
 function M:GetCenter() return 0, 0 end
 function M:GetEffectiveScale() return 1 end
 function M:SetSize(w, h) self._w, self._h = w, h end
@@ -109,7 +116,7 @@ C_ChatInfo = {
   end,
   RegisterAddonMessagePrefix = noop,
 }
-C_AddOns = { GetAddOnMetadata = function() return "0.1.0" end }
+C_AddOns = { GetAddOnMetadata = function(_, key) if key == "Version" then return "0.1.0" end end }
 function GetServerTime() return math.floor(__now) end
 function GetTime() return __now end
 -- Forever-style names: UnitName returns (first, surname); roster and addon
