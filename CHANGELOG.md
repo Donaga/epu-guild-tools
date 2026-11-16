@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.23.2
+
+- Updated Enhancement leveling guide notices for the live November 12 tuning and documented the November 13 dungeon XP restriction.
+
 ## 0.23.1
 
 - The interface uses Inter, a midnight-blue header, and an icon rail with a second navigation column on wide windows. Home brings requests, the next event and pending actions up front. Bank item details show stock at a glance and keep Request item and Mail by profession within reach while you scroll.
