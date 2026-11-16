@@ -4,6 +4,7 @@ local categories={
   {label="Activities",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
   {label="Quick quest help",value="help",icon="Interface\\Icons\\INV_Misc_Note_01"},
   {label="Quick dungeon",value="dungeon",icon="Interface\\Icons\\INV_Misc_Key_03"},
+  {label="Run requests",value="runs",icon="Interface\\Icons\\INV_Misc_Key_14"},
   {label="Available helpers",value="helpers",icon="Interface\\Icons\\INV_Misc_Head_Human_01"},
   {label="Starter kits",value="kits",icon="Interface\\Icons\\INV_Misc_Gift_01"},
 }

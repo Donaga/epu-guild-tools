@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.24.0
+
+- **Run requests.** Ask the guild "I want to run this dungeon, anyone else?" without scheduling an event. In **Guild activities → Run requests**, click **Request a run**:
+  - pick the dungeon from the list
+  - choose **Quests**, **Loot farming** or **Either**, and your role
+  - pick up to three days (Today, Tomorrow or later this week) with a time range for each, in 30-minute steps
+- Guildmates open the request, choose a role and tick the days that work, narrowing the times if they need to, then click **I'm in**.
+- The request shows the **best times**: where most people's times overlap, with tank, healer and DPS counts.
+- The requester or an officer can **Schedule** a best time, which turns it into a 90-minute dungeon event. Everyone who picked that time is signed up automatically with their role. Anyone who picked other times gets a message instead.
+- Guildmates get a notice when a new run request comes in, and the requester gets one when someone is in. Times show in each player's own time zone. Requests close on their own after their last time passes.
+- Everyone posting or responding needs 0.24.0. Players on older versions don't see run requests.
+
 ## 0.23.3
 
 - The donate panel at the mailbox has a clearer quantity button. It reads **Need** when the bank still needs some of an item and picks exactly that, then reads **Max** and picks everything you carry. The -, + and Max buttons are a little larger and easier to hit.

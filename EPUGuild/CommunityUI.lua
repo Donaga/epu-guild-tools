@@ -268,9 +268,10 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
   picker.hour=(h+11)%12+1; picker.minute=mn; picker.period=h>=12 and 'PM' or 'AM'
   picker.year=year; picker.month=month; picker.chosen=chosen; picker.selected=initial; picker:Paint(days); picker:Show()
 end
-function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" end
+function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" or kind=="runform" end
 function ns.CommunityNewAction(kind)
   if kind=="events" then Open("eventform","new")
+  elseif kind=="runs" then Open("runform","new")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
   elseif kind=="notifications" then Open("noticeform","all")
@@ -293,6 +294,7 @@ function ns.CommunityRows(g,q,st,bar)
       ns.ShowActivityDatePicker(st.eventDate,function(day) st.eventDate=day; UI:Refresh() end)
     end or function() Open("helperform",ns.me) end)
   end
+  if st.kind=="runs" then return ns.RunRequestRows(g,q,st,bar) end
   if st.kind~="events" and not toolActions[st.kind] then
     if bar then bar.casualNew:SetLabel("New / edit") end
     return
@@ -360,6 +362,7 @@ function ns.CommunityRows(g,q,st,bar)
   return out
 end
 function ns.CommunityFooter(kind)
+  if kind=="runs" then return "Ask for a dungeon run and the times that suit you; guildmates mark the times they can make. Times show in your local time." end
   if kind=="events" then return (State().eventDate and ("Date: "..State().eventDate.." · Calendar > All dates to clear. ") or "Calendar selects a date; numbers show activities. ").."Local dates; open an activity for server time and signups."
   elseif kind=="quests" then return "Exact quest IDs match; phases and quest-chain eligibility can differ. Shared progress expires after three minutes."
   elseif kind=="catchup" then return "Latest relevant updates from data synced so far; active projects and upcoming events remain visible after review."
@@ -380,6 +383,7 @@ function ns.AddPersonalActions(kind,key,det)
   det:Gap(); det:Buttons(buttons)
 end
 function ns.FillCommunityDetails(kind,key,det)
+  if (kind=="runform" or kind=="run") and ns.FillRunDetails then return ns.FillRunDetails(kind,key,det) end
   local g=ns.CasualStore(); local s,since=ns.CommunityState()
   if not g or not s then return false end
   if kind=="eventform" then
@@ -711,5 +715,261 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Buttons({{"Mark reviewed",function() ns.MarkCatchupReviewed(); UI:CloseDetails(); UI:Refresh() end,accent=true},
       {"Notifications",function() State().kind="notifications"; UI:CloseDetails(); UI:Refresh() end}})
   else return false end
+  return true
+end
+
+---------------------------------------------------------------------------
+-- Run requests board and forms
+---------------------------------------------------------------------------
+ns.DUNGEON_GROUPS=dungeonGroups
+function ns.DungeonRange(name)
+  local d=dungeons[name]
+  return d and d[3] and {d[3],d[4]} or nil
+end
+local runIcon="Interface\\Icons\\INV_Misc_Key_14"
+local runDrafts,interestDrafts={},{}
+local SLOT=1800
+local function Clock(epoch)
+  local h,m=tonumber(date("%H",epoch)),date("%M",epoch)
+  return ((h+11)%12+1)..":"..m.." "..(h<12 and "AM" or "PM")
+end
+local function DayStart(offset)
+  local d=date("*t",ns.Now()); d.day=d.day+offset; d.hour=0; d.min=0; d.sec=0; d.isdst=nil
+  return time(d)
+end
+local function DayLabel(epoch)
+  local today=date("%Y-%m-%d",ns.Now())
+  if date("%Y-%m-%d",epoch)==today then return "Today" end
+  if date("%Y-%m-%d",epoch)==date("%Y-%m-%d",DayStart(1)) then return "Tomorrow" end
+  return date("%a %b ",epoch)..tonumber(date("%d",epoch))
+end
+function ns.RunRangeText(s,e)
+  local endText=(date("%Y-%m-%d",e-1)~=date("%Y-%m-%d",s)) and (DayLabel(e).." "..Clock(e)) or Clock(e)
+  return DayLabel(s).." "..Clock(s).."–"..endText
+end
+-- Moments on the 30-minute grid for one day: {epoch...} from start to midnight.
+local function DayTimes(offset)
+  local out={}
+  local start,stop=DayStart(offset),DayStart(offset+1)
+  local t=start
+  while t<=stop do out[#out+1]=t; t=t+SLOT end
+  return out
+end
+local function RoleText(roles) return roles.t.." tank · "..roles.h.." healer · "..roles.d.." DPS" end
+local function WindowsText(w)
+  local parts={}
+  for _,x in ipairs(w or {}) do parts[#parts+1]=ns.RunRangeText(x.s,x.e) end
+  return table.concat(parts,"; ")
+end
+
+function ns.RunRequestRows(g,q,st,bar)
+  if bar then
+    bar.casualNew:SetLabel("Request a run")
+    bar.casualAvailability:Hide()
+    bar.casualMine:SetShown(true); bar.casualNear:SetShown(true)
+  end
+  local out={}
+  local lvl=(ns.roster[ns.me] or {}).level or 1
+  for id,r in pairs(g.runRequests or {}) do
+    local info=dungeons[r.dungeon]
+    local mine=g.runInterest[id.."\030"..ns.me]
+    local active=ns.RunActive(r)
+    local scheduled=r.status=="scheduled" and r.event and g.guildEvents[r.event]
+    if (active or (scheduled and scheduled.ends>ns.Now())) and ns.Member(r.who)
+      and (not st.mine or r.who==ns.me or (mine and mine.state=="in"))
+      and (not st.near or not info or not info[3] or (lvl>=info[3]-3 and lvl<=info[4]+3))
+      and E.Match(q,r.dungeon,r.note,r.who,ns.RUN_PURPOSES[r.purpose]) then
+      local n=#ns.RunInterested(id)+1
+      local best=active and ns.RunBestTimes(id,1)[1]
+      local first=r.windows[1]
+      out[#out+1]={key="run:"..id,icon=runIcon,title=r.dungeon.." · "..ns.RUN_PURPOSES[r.purpose],
+        sub=r.who.." · "..ns.RunRangeText(first.s,first.e)..(#r.windows>1 and (" +"..(#r.windows-1).." more") or "")
+          ..(info and info[3] and (" · levels "..info[3].."–"..info[4]) or ""),
+        right=scheduled and ("Scheduled "..DayLabel(scheduled.starts).." "..Clock(scheduled.starts))
+          or (n.." in"..(best and #best.who>1 and (" · best "..DayLabel(best.s).." "..Clock(best.s)) or "")),
+        at=first.s,onClick=function() Open("run",id) end}
+    end
+  end
+  table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
+  return out
+end
+
+local function ChooseDungeon(self,current,apply)
+  local groups={}
+  for i,group in ipairs(dungeonGroups) do groups[#groups+1]={label=group.label,value=i} end
+  E.OpenMenu(self,groups,nil,function(index)
+    local entries={}
+    for _,entry in ipairs(dungeonGroups[index].entries) do
+      entries[#entries+1]={label=entry[1],value=entry[1],right=entry[3] and (entry[3]..'–'..entry[4]) or nil}
+    end
+    E.OpenMenu(self,entries,current,apply)
+  end)
+end
+local function TimeMenu(self,offset,current,after,before,apply)
+  local options={}
+  for _,t in ipairs(DayTimes(offset)) do
+    if (not after or t>after) and (not before or t<before) and t+SLOT>ns.Now() then
+      options[#options+1]={label=(t==DayStart(offset+1) and "Midnight" or Clock(t)),value=t}
+    end
+  end
+  if #options==0 then return ns.Print("No times left on that day.") end
+  E.OpenMenu(self,options,current,apply)
+end
+local function DefaultWindow(offset)
+  local start=offset==0 and ns.RunSlot(ns.Now(),true) or DayStart(offset)+19*3600
+  local stop=math.min(start+3*3600,DayStart(offset+1))
+  if offset==0 and start>=DayStart(1) then return DefaultWindow(1) end
+  return {day=offset,s=start,e=stop}
+end
+local function OffsetOf(epoch)
+  for i=0,7 do if epoch>=DayStart(i) and epoch<DayStart(i+1) then return i end end
+  return 0
+end
+
+function ns.FillRunDetails(kind,key,det)
+  local g=ns.CasualStore(); if not g then return false end
+  if kind=="runform" then
+    local cur=key~="new" and g.runRequests[key]
+    if cur and cur.who~=ns.me then UI:CloseDetails(); return true end
+    local d=runDrafts[key]
+    if not d then
+      d={dungeon=cur and cur.dungeon,purpose=cur and cur.purpose or "e",note=cur and cur.note or "",
+        role=cur and cur.role or (((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d"),windows={}}
+      for _,x in ipairs(cur and cur.windows or {}) do d.windows[#d.windows+1]={day=OffsetOf(x.s),s=x.s,e=x.e} end
+      if #d.windows==0 then d.windows[1]=DefaultWindow(0) end
+      runDrafts[key]=d
+    end
+    local function Again() det.casualDraft=true; UI:FillDetails() end
+    det:Reset(runIcon,nil,cur and "Edit run request" or "Request a dungeon run","Times are in your local time")
+    det:Section("Dungeon")
+    local info=d.dungeon and dungeons[d.dungeon]
+    det:Buttons({{d.dungeon or "Choose dungeon",function(self) ChooseDungeon(self,d.dungeon,function(name) d.dungeon=name; Again() end) end,accent=not d.dungeon}})
+    if info then det:Text(info[2]..(info[3] and (" · suggested levels "..info[3].."–"..info[4]) or ""),C.muted) end
+    det:Section("Why")
+    local why={}
+    for _,p in ipairs(ns.RUN_PURPOSE_ORDER) do
+      why[#why+1]={ns.RUN_PURPOSES[p],function() d.purpose=p; Again() end,on=d.purpose==p}
+    end
+    det:Buttons(why)
+    det:Section("My role")
+    local roles={}
+    for _,role in ipairs({"t","h","d"}) do roles[#roles+1]={ns.EVENT_ROLES[role],function() d.role=role; Again() end,on=d.role==role} end
+    det:Buttons(roles)
+    det:Section("When (up to three)")
+    for i,w in ipairs(d.windows) do
+      det:Buttons({
+        {DayLabel(DayStart(w.day)),function(self)
+          local options={}
+          for o=0,7 do options[#options+1]={label=DayLabel(DayStart(o)),value=o} end
+          E.OpenMenu(self,options,w.day,function(o) d.windows[i]=DefaultWindow(o); Again() end)
+        end},
+        {"From "..Clock(w.s),function(self) TimeMenu(self,w.day,w.s,nil,w.e,function(t) w.s=t; Again() end) end},
+        {"To "..(w.e==DayStart(w.day+1) and "midnight" or Clock(w.e)),function(self)
+          TimeMenu(self,w.day,w.e,w.s,nil,function(t) w.e=t; Again() end)
+        end},
+        #d.windows>1 and {"Remove",function() table.remove(d.windows,i); Again() end} or nil,
+      })
+    end
+    if #d.windows<3 then
+      det:Buttons({{"Add another day",function()
+        local last=d.windows[#d.windows]
+        local o=math.min(7,(last and last.day or -1)+1)
+        d.windows[#d.windows+1]=DefaultWindow(o)
+        Again()
+      end}})
+    end
+    local note=det:Field("Notes",d.note,160); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
+    det:Text("Guildmates see these times in their own time zone and tick the ones that work for them.",C.muted)
+    det:Buttons({{cur and "Save" or "Post request",function()
+      if not d.dungeon then return ns.Print("Choose a dungeon first.") end
+      d.note=note:GetText()
+      local id=ns.SaveRunRequest({dungeon=d.dungeon,purpose=d.purpose,role=d.role,note=d.note,windows=d.windows},cur and key)
+      if id then runDrafts[key]=nil; Open("run",id) end
+    end,accent=true},{"Cancel",function() runDrafts[key]=nil; UI:CloseDetails() end}})
+    return true
+  end
+  -- kind == "run"
+  local r=g.runRequests[key]; if not r then UI:CloseDetails(); return true end
+  local info=dungeons[r.dungeon]
+  local active=ns.RunActive(r)
+  local scheduled=r.status=="scheduled" and r.event and g.guildEvents[r.event]
+  det:Reset(runIcon,nil,r.dungeon,ns.RUN_PURPOSES[r.purpose].." · asked by "..r.who)
+  if info then det:Text(info[2]..(info[3] and (" · suggested levels "..info[3].."–"..info[4]) or ""),C.muted) end
+  if r.note~="" then det:Text(r.note) end
+  det:Text(r.who.." ("..ns.EVENT_ROLES[r.role]..") can do: "..WindowsText(r.windows))
+  if scheduled then
+    det:Text("Scheduled for "..DayLabel(scheduled.starts).." "..Clock(scheduled.starts)..".",C.green)
+    det:Buttons({{"Open event",function() Open("event",r.event) end,accent=true}})
+  elseif not active then
+    det:Text(r.status=="closed" and "This request was closed." or "These times have passed.",C.muted)
+  end
+  local mayManage=r.who==ns.me or ns.IsTrusted(ns.me)
+  if active then
+    det:Section("Best times")
+    local best=ns.RunBestTimes(key,3)
+    if #best==0 then det:Text("No times left.",C.muted) end
+    for _,b in ipairs(best) do
+      det:Text(ns.RunRangeText(b.s,b.e).." · "..#b.who.." "..(#b.who==1 and "person" or "people").." ("..RoleText(b.roles)..")",#b.who>1 and C.gold or C.text)
+      det:Text(table.concat(b.who,", "),C.muted)
+      if mayManage then
+        det:Buttons({{"Schedule "..DayLabel(b.s).." "..Clock(b.s),function()
+          local id=ns.ScheduleRunRequest(key,b.s,90,info)
+          if id then Open("event",id) end
+        end,tip="Creates a 90-minute guild event. Everyone interested who picked this time is signed up automatically."}})
+      end
+    end
+  end
+  local interested=ns.RunInterested(key)
+  det:Section("Interested ("..(#interested+1)..")")
+  det:Text(r.who.." · "..ns.EVENT_ROLES[r.role].." · asked for the run",C.muted)
+  for _,x in ipairs(interested) do
+    det:Text(x.who.." · "..ns.EVENT_ROLES[x.role].." · "..WindowsText(x.windows))
+    if x.note~="" then det:Text(x.note,C.muted) end
+  end
+  if active and r.who~=ns.me then
+    local cur=g.runInterest[key.."\030"..ns.me]
+    local d=interestDrafts[key]
+    if not d then
+      d={role=cur and cur.role or (((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d"),note=cur and cur.note or "",windows={}}
+      for i,w in ipairs(r.windows) do
+        local mine
+        for _,x in ipairs(cur and cur.state=="in" and cur.windows or {}) do
+          if x.s<w.e and x.e>w.s then mine={s=math.max(x.s,w.s),e=math.min(x.e,w.e)} break end
+        end
+        d.windows[i]={on=(not cur or cur.state~="in") or mine~=nil,s=mine and mine.s or math.max(w.s,ns.RunSlot(ns.Now())),e=mine and mine.e or w.e}
+      end
+      interestDrafts[key]=d
+    end
+    local function Again() det.casualDraft=true; UI:FillDetails() end
+    det:Section(cur and cur.state=="in" and "You're in. Change your times" or "Can you make it?")
+    local roles={}
+    for _,role in ipairs({"t","h","d"}) do roles[#roles+1]={ns.EVENT_ROLES[role],function() d.role=role; Again() end,on=d.role==role} end
+    det:Buttons(roles)
+    for i,w in ipairs(r.windows) do
+      local x=d.windows[i]
+      if w.e>ns.Now() then
+        local offset=OffsetOf(w.s)
+        det:Buttons({
+          {(x.on and "[x] " or "[ ] ")..DayLabel(w.s),function() x.on=not x.on; Again() end,on=x.on},
+          {"From "..Clock(x.s),function(self) TimeMenu(self,offset,x.s,w.s-1,math.min(x.e,w.e),function(t) x.s=t; Again() end) end},
+          {"To "..Clock(x.e),function(self) TimeMenu(self,offset,x.e,math.max(x.s,w.s),w.e+1,function(t) x.e=t; Again() end) end},
+        })
+      end
+    end
+    local note=det:Field("Note",d.note,160); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
+    local function Send(state)
+      local windows={}
+      for i,x in ipairs(d.windows) do if x.on and r.windows[i] and x.e>x.s then windows[#windows+1]={s=x.s,e=x.e} end end
+      if ns.RespondRunRequest(key,state,d.role,windows,note:GetText()) then interestDrafts[key]=nil; UI:FillDetails() end
+    end
+    det:Buttons({{cur and cur.state=="in" and "Update" or "I'm in",function() Send("in") end,accent=true},
+      cur and cur.state=="in" and {"Not anymore",function() Send("out") end} or nil})
+  end
+  det:Section("Contact")
+  local buttons={}
+  if r.who~=ns.me then buttons[#buttons+1]={"Whisper "..(r.who:match("^(%S+)") or r.who),function() Whisper(r.who) end} end
+  if r.who==ns.me and active then buttons[#buttons+1]={"Edit",function() Open("runform",key) end} end
+  if mayManage and active then buttons[#buttons+1]={"Close request",function() ns.CloseRunRequest(key); UI:FillDetails() end} end
+  if #buttons>0 then det:Buttons(buttons) end
   return true
 end

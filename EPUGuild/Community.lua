@@ -5,7 +5,7 @@ local DAY=86400
 ns.EVENT_TYPES={dungeon="Dungeon",leveling="Leveling",quest="Quest / elite help",fishing="Fishing",profession="Profession",farming="Farming",other="Other"}
 ns.EVENT_TYPE_ORDER={"dungeon","leveling","quest","fishing","profession","farming","other"}
 ns.EVENT_ROLES={t="Tank",h="Healer",d="DPS",g="Helper",c="Crafter",m="Mentor"}
-for _,f in ipairs({"guildEvents","eventResponses"}) do ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]=f end
+for _,f in ipairs({"guildEvents","eventResponses","runRequests","runInterest"}) do ns.CASUAL_FIELDS[#ns.CASUAL_FIELDS+1]=f end
 local baselines={}
 function ns.CommunityState()
   if not ns.cdb then return end
@@ -220,13 +220,21 @@ function ns.OwnCommunityRecords(b)
     local e=g.guildEvents[r.event]
     if r.who==ns.me and e and e.ends>ns.Now() then b.eventResponses=b.eventResponses or {}; b.eventResponses[id]=r; any=true end
   end
+  for id,r in pairs(g.runRequests or {}) do
+    if r.who==ns.me and ns.RunActive(r) then b.runRequests=b.runRequests or {}; b.runRequests[id]=r; any=true end
+  end
+  for id,r in pairs(g.runInterest or {}) do
+    if r.who==ns.me and ns.RunActive(g.runRequests[r.request]) then b.runInterest=b.runInterest or {}; b.runInterest[id]=r; any=true end
+  end
   return any
 end
 function ns.MergeCommunity(sender,b,trusted)
   local g=ns.CasualStore(); if not g then return false end
   local changed=false
   local definitions={guildEvents={valid=ValidEvent,cap=500,keys={"who","by","title","note","zone","starts","ends","slots","status","created","t","kind","minLevel","maxLevel","dungeon","places","confirmed"}},
-    eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t","via","bridgeBy","sourceID","sourceRevision"}}}
+    eventResponses={valid=ValidResponse,cap=5000,keys={"who","event","state","role","note","t","via","bridgeBy","sourceID","sourceRevision"}},
+    runRequests={valid=function(id,r) return ns.ValidRunRequest(id,r) end,cap=300,keys={"who","t","created","dungeon","purpose","note","role","windows","status","event","by"}},
+    runInterest={valid=function(id,r) return ns.ValidRunInterest(id,r) end,cap=3000,keys={"who","t","request","state","role","windows","note"}}}
   for f,d in pairs(definitions) do
     if type(b[f])=="table" then
       local size=Count(g[f])
@@ -238,6 +246,8 @@ function ns.MergeCommunity(sender,b,trusted)
           local allowed=true
           if cur and f=="guildEvents" then
             allowed=r.who==cur.who and r.created==cur.created and (cur.status~="cancelled" or r.status=="cancelled")
+          elseif cur and f=="runRequests" then
+            allowed=r.who==cur.who and r.created==cur.created
           end
           if allowed and (cur or size<d.cap) and ns.Newer(r,cur,"t") then
             local copy={} for _,k in ipairs(d.keys) do copy[k]=r[k] end
@@ -250,6 +260,7 @@ function ns.MergeCommunity(sender,b,trusted)
   if changed then
     ns.Changed()
     if b.guildEvents and ns.RefreshEventBubble then ns.RefreshEventBubble() end
+    if (b.runRequests or b.guildEvents) and ns.CheckScheduledRuns then ns.Debounce("runCheck",2,ns.CheckScheduledRuns) end
   end
   return changed
 end
@@ -322,3 +333,182 @@ ns.On("PLAYER_LOGIN",function() ns.CommunityState() end)
 ns.On("PLAYER_LOGOUT",function()
   for key in pairs(baselines) do if ns.cdb.community and ns.cdb.community[key] then ns.cdb.community[key].lastSeen=ns.Now() end end
 end)
+
+---------------------------------------------------------------------------
+-- Run requests: "I want to run this dungeon, anyone else?" A member picks a
+-- dungeon, why (quests or loot) and up to three time ranges. Guildmates mark
+-- which of those times suit them; the best overlap can become a guild event.
+---------------------------------------------------------------------------
+ns.RUN_PURPOSES={q="Quests",l="Loot farming",e="Either"}
+ns.RUN_PURPOSE_ORDER={"q","l","e"}
+local SLOT=1800
+local RUN_ROLES={t=true,h=true,d=true}
+local function Windows(w,max)
+  if type(w)~="table" or #w<1 or #w>max then return false end
+  for k in pairs(w) do if not Int(k,1,max) then return false end end
+  for _,x in ipairs(w) do
+    if type(x)~="table" or not Int(x.s,1e9,4e9) or not Int(x.e,1e9,4e9) or x.e<=x.s or x.e-x.s>14*3600
+      or x.s%SLOT~=0 or x.e%SLOT~=0 then return false end
+  end
+  return true
+end
+function ns.ValidRunRequest(id,r)
+  return Revision(r) and Text(r.who,80,true) and ns.Member(r.who) and #id<=180 and id:sub(1,#r.who+1)==r.who.."\031"
+    and Int(r.created,1e9,4e9) and Text(r.dungeon,80,true) and ns.RUN_PURPOSES[r.purpose]~=nil and Text(r.note,200)
+    and RUN_ROLES[r.role]==true and (r.status=="open" or r.status=="closed" or r.status=="scheduled")
+    and (r.event==nil or Text(r.event,180,true)) and (r.status~="scheduled" or r.event~=nil)
+    and (r.by==nil or (Text(r.by,80,true) and ns.Member(r.by))) and Windows(r.windows,3)
+end
+function ns.ValidRunInterest(id,r)
+  return Revision(r) and Text(r.request,180,true) and Text(r.who,80,true) and ns.Member(r.who)
+    and id==r.request.."\030"..r.who and (r.state=="in" or r.state=="out") and RUN_ROLES[r.role]==true
+    and Text(r.note,120) and (r.state=="out" and r.windows==nil or Windows(r.windows,6))
+end
+local function LastEnd(w) local e=0 for _,x in ipairs(w or {}) do if x.e>e then e=x.e end end return e end
+function ns.RunActive(r)
+  return r and r.status=="open" and ns.Member(r.who) and LastEnd(r.windows)>ns.Now()
+end
+-- Snap a moment to the 30-minute grid the time pickers use.
+function ns.RunSlot(epoch,up) local n=math.floor(epoch/SLOT)*SLOT; if up and n<epoch then n=n+SLOT end return n end
+local function CleanWindows(w,max)
+  local out={}
+  for _,x in ipairs(w or {}) do
+    local s,e=tonumber(x.s),tonumber(x.e)
+    if s and e then
+      s,e=ns.RunSlot(s),ns.RunSlot(e,true)
+      if e>ns.Now() and e>s then out[#out+1]={s=s,e=e} end
+    end
+  end
+  table.sort(out,function(a,b) return a.s<b.s end)
+  while #out>max do table.remove(out) end
+  return out
+end
+function ns.SaveRunRequest(opts,id)
+  local g=ns.CasualStore(); if not g then return end
+  local cur=id and g.runRequests[id]
+  if cur and cur.who~=ns.me then return ns.Print("Only the member who asked can edit this run request.") end
+  if not cur then
+    local open=0 for _,r in pairs(g.runRequests) do if r.who==ns.me and ns.RunActive(r) then open=open+1 end end
+    if open>=3 then return ns.Print("Close one of your run requests first; you can have three open.") end
+    if Count(g.runRequests)>=300 then return ns.Print("The guild has too many run requests; try again later.") end
+    serial=serial+1; id=ns.me.."\031"..ns.Now().."\031"..serial
+  end
+  local windows=CleanWindows(opts.windows,3)
+  if #windows==0 then return ns.Print("Pick at least one day and time range that hasn't passed yet.") end
+  for _,x in ipairs(windows) do
+    if x.e-x.s>14*3600 then return ns.Print("Keep each time range under 14 hours.") end
+    if x.s>ns.Now()+8*DAY then return ns.Print("Pick times within the next week.") end
+  end
+  local r={who=ns.me,t=cur and cur.t or ns.Now(),created=cur and cur.created or ns.Now(),dungeon=Clean(opts.dungeon,80),
+    purpose=opts.purpose,note=Clean(opts.note,200),role=opts.role or "d",windows=windows,status="open"}
+  if not ns.ValidRunRequest(id,r) then return ns.Print("Choose a dungeon, quests or loot, your role and at least one time range.") end
+  g.runRequests[id]=r; Publish("runRequests",id,r)
+  return id
+end
+function ns.CloseRunRequest(id)
+  local g=ns.CasualStore(); local r=g and g.runRequests[id]
+  if not r or (r.who~=ns.me and not ns.IsTrusted(ns.me)) or r.status~="open" then return false end
+  r.status="closed"; r.by=ns.me~=r.who and ns.me or nil; Publish("runRequests",id,r); return true
+end
+function ns.RespondRunRequest(id,state,role,windows,note)
+  local g=ns.CasualStore(); local req=g and g.runRequests[id]
+  if not ns.RunActive(req) then return ns.Print("That run request has closed or its times have passed.") end
+  if req.who==ns.me then return ns.Print("You asked for this run, so you're already counted.") end
+  local key=id.."\030"..ns.me; local cur=g.runInterest[key]
+  local r={who=ns.me,t=cur and cur.t or ns.Now(),request=id,state=state,role=role or "d",note=Clean(note,120)}
+  if state=="in" then
+    r.windows=CleanWindows(windows,6)
+    if #r.windows==0 then return ns.Print("Tick at least one time that works for you.") end
+  end
+  if not ns.ValidRunInterest(key,r) then return end
+  g.runInterest[key]=r; Publish("runInterest",key,r)
+  ns.FollowUpdates("run",id,state=="in")
+  return true
+end
+function ns.RunInterested(id)
+  local g=ns.CasualStore(); local out={}
+  for _,r in pairs(g and g.runInterest or {}) do
+    if r.request==id and r.state=="in" and ns.Member(r.who) then out[#out+1]=r end
+  end
+  table.sort(out,function(a,b) return a.who<b.who end)
+  return out
+end
+local function Covers(w,s,e)
+  for _,x in ipairs(w or {}) do if x.s<=s and x.e>=e then return true end end
+  return false
+end
+-- The time ranges that suit the most people (the requester included):
+-- { {s=,e=,who={names},roles={t=,h=,d=}}, ... } best first.
+function ns.RunBestTimes(id,limit)
+  local g=ns.CasualStore(); local req=g and g.runRequests[id]
+  if not req then return {} end
+  local people={{who=req.who,role=req.role,windows=req.windows}}
+  for _,r in ipairs(ns.RunInterested(id)) do people[#people+1]=r end
+  local now=ns.RunSlot(ns.Now())
+  local runs={}
+  for _,w in ipairs(req.windows) do
+    local cur
+    for s=math.max(w.s,now),w.e-SLOT,SLOT do
+      local who={}
+      for _,p in ipairs(people) do if Covers(p.windows,s,s+SLOT) then who[#who+1]=p.who end end
+      local sig=table.concat(who,"\031")
+      if cur and cur.sig==sig and cur.e==s then cur.e=s+SLOT
+      else cur={s=s,e=s+SLOT,who=who,sig=sig}; runs[#runs+1]=cur end
+    end
+  end
+  for _,r in ipairs(runs) do
+    r.roles={t=0,h=0,d=0}
+    for _,p in ipairs(people) do
+      for _,name in ipairs(r.who) do if name==p.who then r.roles[p.role]=r.roles[p.role]+1 end end
+    end
+    r.sig=nil
+  end
+  table.sort(runs,function(a,b)
+    if #a.who~=#b.who then return #a.who>#b.who end
+    if (a.e-a.s)~=(b.e-b.s) then return (a.e-a.s)>(b.e-b.s) end
+    return a.s<b.s
+  end)
+  local out={}
+  for i=1,math.min(limit or 3,#runs) do out[i]=runs[i] end
+  return out
+end
+-- Turn a run request into a guild event at a chosen start.
+function ns.ScheduleRunRequest(id,start,minutes,dungeonInfo)
+  local g=ns.CasualStore(); local req=g and g.runRequests[id]
+  if not ns.RunActive(req) then return ns.Print("That run request has closed or its times have passed.") end
+  if req.who~=ns.me and not ns.IsTrusted(ns.me) then return ns.Print("The member who asked, or an officer, can schedule this run.") end
+  local interested=#ns.RunInterested(id)+1
+  local note=ns.RUN_PURPOSES[req.purpose]..". From "..req.who.."'s run request"..(req.note~="" and (": "..req.note) or ".")
+  local eventId=ns.SaveGuildEvent({title=req.dungeon..(req.purpose=="q" and " (quests)" or req.purpose=="l" and " (loot)" or ""),
+    zone=dungeonInfo and dungeonInfo[2] or "",note=note,starts=start,minutes=minutes or 90,slots=math.max(5,math.min(40,interested)),
+    kind="dungeon",dungeon=req.dungeon,minLevel=dungeonInfo and dungeonInfo[3] or 1,maxLevel=dungeonInfo and dungeonInfo[4] or 60})
+  if not eventId then return end
+  req=g.runRequests[id]
+  req.status="scheduled"; req.event=eventId; req.by=ns.me~=req.who and ns.me or nil
+  Publish("runRequests",id,req)
+  return eventId
+end
+-- When a run you were interested in becomes an event at a time you said
+-- works, sign up for it with your role (once). Otherwise just let you know.
+function ns.CheckScheduledRuns()
+  local g=ns.CasualStore(); local s=ns.CommunityState()
+  if not g or not s or not ns.me then return end
+  s.runJoined=s.runJoined or {}
+  for id,req in pairs(g.runRequests) do
+    local e=req.status=="scheduled" and req.event and g.guildEvents[req.event]
+    if e and e.status=="scheduled" and e.ends>ns.Now() and not s.runJoined[id] then
+      local mine=req.who==ns.me and {role=req.role,windows=req.windows} or g.runInterest[id.."\030"..ns.me]
+      if mine and (mine.state==nil or mine.state=="in") and e.who~=ns.me then
+        s.runJoined[id]=true
+        local already=g.eventResponses[req.event.."\030"..ns.me]
+        if not already and Covers(mine.windows,e.starts,e.starts+SLOT) then
+          ns.RespondGuildEvent(req.event,"going",mine.role,"From the run request")
+          ns.Print("Signed you up for "..e.title.." on "..date("%a %H:%M",e.starts).." (from the run request). Open Guild activities to change it.")
+        elseif not already then
+          ns.Print(e.title.." is scheduled for "..date("%a %H:%M",e.starts)..", outside the times you picked. Open Guild activities to sign up.")
+        end
+      end
+    end
+  end
+end
+ns.On("PLAYER_LOGIN",function() C_Timer.After(30,function() pcall(ns.CheckScheduledRuns) end) end)
