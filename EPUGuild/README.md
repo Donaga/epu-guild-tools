@@ -130,6 +130,21 @@ missed guild data; old activity records are removed after 30 days. Starter-kit
 templates are retained until retired, and retirement records are retained to
 prevent old copies reappearing. The Discord companion does not manage these boards.
 
+## Run requests (0.24+)
+
+Want to run a dungeon but don't want to schedule an event yet? Open **Guild activities**, choose **Run requests** and click **Request a run**:
+
+1. **Choose dungeon** from the list (Forever dungeons show their suggested levels).
+2. Pick **Quests**, **Loot farming** or **Either**, and your role.
+3. Under **When**, pick a day (Today, Tomorrow or later this week) and a **From** and **To** time. **Add another day** for up to three. Times use 30-minute steps.
+4. Add a note if you like, then **Post request**.
+
+Guildmates get a notice. They open the request, pick a role, tick the days that work (and narrow the times if they need to) and click **I'm in**. **Not anymore** takes them back out.
+
+**Best times** shows where the most people's times overlap, with tank, healer and DPS counts. When it looks good, the requester or an officer clicks **Schedule** on one of them. That creates a 90-minute dungeon event, and everyone who picked that time is signed up automatically with their role. People who picked other times get a message so they can sign up themselves.
+
+Times are stored as real moments, so everyone sees them in their own time zone. You can have three open requests. They close when their last time passes, or when you or an officer closes them. Both players need 0.24 or newer.
+
 ## One mail for a member's bank requests
 
 With a mailbox open, view an approved bank request and choose **Fill mail for

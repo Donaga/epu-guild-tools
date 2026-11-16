@@ -55,7 +55,7 @@ local function FieldDigests(g)
     local confirmed={}
     for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=DigestView(wire,v) end end
     -- The optional invite bridge adds no hello traffic when it has no records.
-    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus' and wire~='gatherSpots' and wire~='discordClaims') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
+    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus' and wire~='gatherSpots' and wire~='discordClaims' and wire~='runRequests' and wire~='runInterest') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
   end
   return out
 end
@@ -132,6 +132,7 @@ local GROUPS = {
   { "news", "feed" },
   { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps", "guildFocus", "gatherSpots", "discordClaims" },
   { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses", "syncHelpers" },
+  { "runRequests", "runInterest" },
 }
 local CHUNKED = { recipes = 3, mats = 40 }   -- big tables go out a few entries at a time
 
@@ -222,7 +223,7 @@ end
 -- Relayed (unconfirmed) data: fills gaps only
 ---------------------------------------------------------------------------
 local function Owner(f, k, x)
-  if f=="guildEvents" or f=="eventResponses" then return x.who end
+  if f=="guildEvents" or f=="eventResponses" or f=="runRequests" or f=="runInterest" then return x.who end
   if f=="activityPosts" or f=="activityReplies" or f=="helpers" then return x.who end
   if f=="kitTemplates" then return x.by end
   if f == "req" then return x.who end
@@ -253,7 +254,7 @@ local VALID = {
 }
 
 local function Tables(g)
-  return { guildEvents=g.guildEvents or {}, eventResponses=g.eventResponses or {}, activityPosts=g.activityPosts or {}, activityReplies=g.activityReplies or {}, helpers=g.helpers or {}, kitTemplates=g.kitTemplates or {}, projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
+  return { guildEvents=g.guildEvents or {}, eventResponses=g.eventResponses or {}, runRequests=g.runRequests or {}, runInterest=g.runInterest or {}, activityPosts=g.activityPosts or {}, activityReplies=g.activityReplies or {}, helpers=g.helpers or {}, kitTemplates=g.kitTemplates or {}, projects=g.projects or {}, onboarding=g.onboarding or {}, onboardingSteps=g.onboardingSteps or {}, altVerified=g.altVerified or {}, bank = g.bank, req = g.requests, don = g.donations, craft = g.crafters, recipes = g.recipes,
     mats = g.mats, alts = g.alts, profiles = g.profiles, feed = g.feed, news = g.news, joined = g.joined }
 end
 
@@ -335,7 +336,7 @@ end
 -- reports a one-line summary after it syncs ("Y"), which the Sync tab lists.
 ---------------------------------------------------------------------------
 local LABELS = {
-  { "guildEvents", "events" }, { "eventResponses", "event signups" },
+  { "guildEvents", "events" }, { "eventResponses", "event signups" }, { "runRequests", "run requests" }, { "runInterest", "run interest" },
   { "activityPosts", "activities" }, { "activityReplies", "responses" }, { "helpers", "helpers" }, { "kitTemplates", "kit templates" },
   { "projects", "projects" }, { "onboarding", "checklist updates" }, { "onboardingSteps", "checklist instructions" },
   { "altVerified", "character confirmations" },

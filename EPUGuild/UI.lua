@@ -1075,7 +1075,7 @@ function det:Buttons(specs)
   for _, s in ipairs(specs) do
     local b = self:Take("btn", function() return Btn(self.body, "", 80, 22) end)
     b.style = s.accent and "accent" or nil
-    b:SetOn(false)
+    b:SetOn(s.on == true)
     b:SetLabel(s[1])
     local w = math.max(56, (b.text:GetStringWidth() or 40) + 18)
     b:SetWidth(w)

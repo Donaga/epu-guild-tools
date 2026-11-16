@@ -63,11 +63,12 @@ end
 function ns.OpenPersonalNotice(c)
   if not c or not c.kind or not c.key or not ns.UI then return false end
   if c.kind=='guildinvite' and not ns.CanInviteGuild() then return false end
-  local view=({event="activities",activity="activities",guildinvite="invites",project="projects",request="requests",news="news"})[c.kind]
+  local view=({event="activities",activity="activities",run="activities",guildinvite="invites",project="projects",request="requests",news="news"})[c.kind]
   if not view then return false end
   ns.UI:Show()
   if c.kind=="guildinvite" then ns.UI.search:SetText("")
   elseif c.kind=="event" then ns.UI.state.activities.kind="events"
+  elseif c.kind=="run" then ns.UI.state.activities.kind="runs"
   elseif c.kind=="activity" then local r=ns.CasualStore().activityPosts[c.key]; ns.UI.state.activities.kind=r and r.kind or "help" end
   ns.UI:SetView(view); ns.UI:OpenDetails(c.kind,c.key); return true
 end
@@ -116,7 +117,7 @@ local merge=ns.Merge
 ns.Merge=function(sender,b,catchingUp)
   local g=ns.CasualStore(); local before,candidates={},{}
   if g then
-    for _,f in ipairs({"projects","requests","activityPosts","guildEvents","activityReplies","eventResponses"}) do
+    for _,f in ipairs({"projects","requests","activityPosts","guildEvents","activityReplies","eventResponses","runRequests","runInterest"}) do
       before[f]={}; candidates[f]={}
       local src=type(b)=="table" and type(b[f])=="table" and b[f] or {}
       for id in pairs(src) do candidates[f][id]=true; if g[f][id] then before[f][id]=ns.Fingerprint(g[f][id]) end end
@@ -141,6 +142,25 @@ ns.Merge=function(sender,b,catchingUp)
       local r=g.requests[id]
       if r and r.who~=ns.me and r.to~=ns.me and r.crafter~=ns.me and before.requests[id]~=ns.Fingerprint(r) and s.followed[ns.PersonalToken("request",id)] then
         ns.QueueCommunityNotice(r.crafter and "crafts" or "requests","request",id,"Request updated",ns.RequestName(r,true).." · "..r.status,r.u or r.t)
+      end
+    end
+    -- A new run request near your level, and interest in runs you asked for or joined.
+    local lvl=(ns.roster[ns.me] or {}).level or 1
+    for id in pairs(candidates.runRequests) do
+      local r=g.runRequests[id]
+      local range=r and ns.DungeonRange and ns.DungeonRange(r.dungeon)
+      if r and not before.runRequests[id] and r.who~=ns.me and ns.RunActive(r)
+        and (not range or (lvl>=range[1]-3 and lvl<=range[2]+3)) then
+        ns.QueueCommunityNotice("activities","run",id,"Run request: "..r.dungeon,
+          r.who.." wants to run it ("..ns.RUN_PURPOSES[r.purpose].."). Open it to pick the times that suit you.",r.t)
+      end
+    end
+    for id in pairs(candidates.runInterest) do
+      local x=g.runInterest[id]; local req=x and g.runRequests[x.request]
+      if x and req and x.state=="in" and before.runInterest[id]~=ns.Fingerprint(x)
+        and (req.who==ns.me or s.followed[ns.PersonalToken("run",x.request)]) then
+        ns.QueueCommunityNotice("activities","run",x.request,req.dungeon..": "..x.who.." is in",
+          ns.EVENT_ROLES[x.role].." · "..#ns.RunInterested(x.request)+1 .." interested so far",x.who..":"..x.t)
       end
     end
     for _,f in ipairs({"activityReplies","eventResponses"}) do
