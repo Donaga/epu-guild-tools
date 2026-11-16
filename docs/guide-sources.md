@@ -38,17 +38,20 @@ matching chosen/detected specialization. Saved guides bypass neither filter.
 Short `notice` fields flag verified conflicts or announced changes without
 inventing post-hotfix builds.
 
-November 10 Enhancement tuning remains announced as of this review. Blizzard
-advises collecting Strength/Attack Power equipment now; some linked material
-still prioritizes Intellect. Show the caution, then recheck after the hotfix.
-Do not guess new talent allocations. The full automated check found 98 accessible
+Blizzard confirmed that the delayed Enhancement tuning went live on November 12.
+The November 13 Mobalytics guide now favors Strength and Attack Power. The
+Icy Veins leveling reference still ranks Intellect above Strength and carries
+a dated caution. No talent allocations are copied into the catalog.
+
+The full automated check found 98 accessible
 sources and nine Mobalytics HTTP 403 responses; blocked pages were checked with
 the web tool. No broken links were confirmed. Icy Veins text was unchanged even
 where raw-page hashes differed. Beta route table edits were read but no recipe
 quantities are copied into the addon.
 Blizzard also confirmed a November 8 hotfix increasing dungeon enemy kill XP by
 50%; class leveling sources now carry a dated note about older route comparisons.
-Source: https://us.forums.blizzard.com/en/wow/t/dungeon-enemy-xp-increased-november-8/2406595/1
+Since November 13, dungeon kills award zero XP to the entire party when the enemy
+is trivial to any party member. See the official hotfix references in the registry.
 
 Player relevance is mandatory: current class, level, learned profession IDs and
 skill range, and matching talent focus for specialization entries. Never show
