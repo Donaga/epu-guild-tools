@@ -35,11 +35,25 @@ end
 local FIELDS={req="requests",don="donations",craft="crafters",alts="alts",altVerified="altVerified",
   recipes="recipes",mats="mats",projects="projects",onboarding="onboarding",onboardingSteps="onboardingSteps"}
 for _,f in ipairs(ns.CASUAL_FIELDS or {}) do FIELDS[f]=f end
+-- Fields added to a record type after release, left out of its digest so
+-- clients that don't know them yet still agree. Every change to them also
+-- bumps the record's revision (t), which the digest does cover.
+local LATER_KEYS={guildEvents={places=true,confirmed=true}}
+local function DigestView(wire,v)
+  local skip=LATER_KEYS[wire]
+  if not skip or type(v)~="table" then return v end
+  local has=false
+  for key in pairs(skip) do if v[key]~=nil then has=true break end end
+  if not has then return v end
+  local copy={}
+  for key,value in pairs(v) do if not skip[key] then copy[key]=value end end
+  return copy
+end
 local function FieldDigests(g)
   local out={}
   for wire,field in pairs(FIELDS) do
     local confirmed={}
-    for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=v end end
+    for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=DigestView(wire,v) end end
     -- The optional invite bridge adds no hello traffic when it has no records.
     if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus' and wire~='gatherSpots' and wire~='discordClaims') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
   end

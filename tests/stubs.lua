@@ -47,6 +47,8 @@ end
 function M:GetCenter() return 0, 0 end
 function M:GetEffectiveScale() return 1 end
 function M:SetSize(w, h) self._w, self._h = w, h end
+function M:SetHitRectInsets(l, r, t, b) self._hit = { l, r, t, b } end
+function M:GetHitRectInsets() local h = self._hit or { 0, 0, 0, 0 } return h[1], h[2], h[3], h[4] end
 function M:SetWidth(w) self._w = w end
 function M:SetHeight(h) self._h = h end
 function M:GetWidth() return self._w or 400 end

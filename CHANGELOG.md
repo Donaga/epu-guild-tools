@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.23.3
+
+- The donate panel at the mailbox has a clearer quantity button. It reads **Need** when the bank still needs some of an item and picks exactly that, then reads **Max** and picks everything you carry. The -, + and Max buttons are a little larger and easier to hit.
+- Installs from GitHub, the EPU updater and WowUp report their version over guild sync again, like CurseForge installs. Officers see everyone's version in Sync, and update prompts reach all of them. Local test copies still stay quiet.
+- Players on 0.23.0 or older no longer cause dungeon events with role slots to re-sync at every check-in. (They still see those events without the slots until they update.)
+- After updating from 0.23.0 or older, restart WoW once (not just /reload) so the new fonts and header art load.
+
 ## 0.23.2
 
 - Updated Enhancement leveling guide notices for the live November 12 tuning and documented the November 13 dungeon XP restriction.
