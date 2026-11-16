@@ -51,6 +51,9 @@ jobs:
           VERSION="${{ github.event.release.tag_name }}"
           VERSION="${VERSION#v}"
           sed -i "s/^## Version: .*/## Version: ${VERSION}/" EPUGuild/EPUGuild.toc
+          # Released builds (GitHub, updater, WowUp and CurseForge) advertise their
+          # version over guild sync; local and dev copies never carry this line.
+          sed -i "/^## Version:/a ## X-CurseForge-Version: ${VERSION}" EPUGuild/EPUGuild.toc
           mkdir -p dist
           zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
           zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json" "epu-discord/items.*"
@@ -78,7 +81,7 @@ jobs:
           if [ -z "$CF_API_KEY" ] || [ -z "$CURSEFORGE_PROJECT_ID" ]; then
             exit 0
           fi
-          sed -i "/^## Version:/a ## X-CurseForge-Version: ${VERSION}" EPUGuild/EPUGuild.toc
+          grep -q "^## X-CurseForge-Version: ${VERSION}$" EPUGuild/EPUGuild.toc || sed -i "/^## Version:/a ## X-CurseForge-Version: ${VERSION}" EPUGuild/EPUGuild.toc
           mkdir -p "${RUNNER_TEMP}/curseforge"
           CF_ZIP="${RUNNER_TEMP}/curseforge/EPUGuild-${VERSION}.zip"
           zip -r "$CF_ZIP" EPUGuild

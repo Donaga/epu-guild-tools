@@ -174,7 +174,14 @@ check('a going signup joins the waitlist',tick_until(lambda:A.ev("""(function()
   local g=__ns.CasualStore(); local r=g.eventResponses[dungeon.."\\030Tyler Baker"]
   return r and __ns.EventPlaceStatus(g.guildEvents[dungeon],r)=='Waitlist'
 end)()"""),60))
+before = A.ev('__ns.Digest().fields.guildEvents')
+A.ex('''__oldCopy={} for id,e in pairs(__ns.CasualStore().guildEvents) do local c={} for k,v in pairs(e) do if k~="places" and k~="confirmed" then c[k]=v end end __oldCopy[id]=c end
+__real=__ns.CasualStore().guildEvents; for id in pairs(__real) do end''')
+check('a client that predates role slots computes the same event digest',
+      A.ev('''(function() local g=__ns.CasualStore(); local keep=g.guildEvents; g.guildEvents=__oldCopy
+        local d=__ns.Digest().fields.guildEvents; g.guildEvents=keep; return d end)()''') == before)
 check('the organiser can confirm a role spot', A.ev("__ns.ConfirmEventPlace(dungeon,'Tyler Baker',true)"))
+check('confirming a spot still changes the digest', A.ev('__ns.Digest().fields.guildEvents') != before)
 check('confirmation syncs back to the signup',tick_until(lambda:B.ev("""(function()
   local g=__ns.CasualStore()
   return __ns.EventPlaceStatus(g.guildEvents[dungeon],g.eventResponses[dungeon.."\\030Tyler Baker"])=='Confirmed'

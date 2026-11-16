@@ -521,20 +521,23 @@ local function DonateRow(i)
   r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   r.name = DText(r, 11, { 1, 1, 1 })
   r.name:SetPoint("TOPLEFT", 34, -2)
-  r.name:SetWidth(118)
+  r.name:SetWidth(110)
   r.info = DText(r, 10, MUTED)
   r.info:SetPoint("TOPLEFT", 34, -16)
-  r.info:SetWidth(118)
+  r.info:SetWidth(110)
   r.minus = DBtn(r, "-", 20)
-  r.minus:SetPoint("LEFT", 154, 0)
+  r.minus:SetPoint("LEFT", 146, 0)
   r.qty = DText(r, 12, GOLD)
   r.qty:SetPoint("LEFT", r.minus, "RIGHT", 2, 0)
   r.qty:SetWidth(26)
   r.qty:SetJustifyH("CENTER")
   r.plus = DBtn(r, "+", 20)
   r.plus:SetPoint("LEFT", r.qty, "RIGHT", 2, 0)
-  r.max = DBtn(r, "Max", 34)
+  r.max = DBtn(r, "Max", 40)
   r.max:SetPoint("LEFT", r.plus, "RIGHT", 4, 0)
+  r.max.text:SetPoint("LEFT", 2, 0); r.max.text:SetPoint("RIGHT", -2, 0)
+  -- Small targets: let a near miss above or below still count as a click.
+  for _, b in ipairs({ r.minus, r.plus, r.max }) do b:SetHitRectInsets(-1, -1, -5, -5) end
   local function Change(delta, absolute)
     local id = r.id
     if not id then return end
@@ -546,13 +549,15 @@ local function DonateRow(i)
   -- shift-click +/- moves 10 at a time
   r.minus:SetScript("OnClick", function() Change(IsShiftKeyDown() and -10 or -1) end)
   r.plus:SetScript("OnClick", function() Change(IsShiftKeyDown() and 10 or 1) end)
+  -- The label says what the click does: "Need" fills what the bank still
+  -- needs, then the button turns into "Max" for everything you carry.
   r.max:SetScript("OnClick", function()
-    if (don.pick[r.id] or 0) >= (r.suggest or 0) and (r.suggest or 0) > 0 and r.suggest < r.carry then
-      Change(0, r.carry)     -- second click: everything you carry
-    else
-      Change(0, r.suggest and r.suggest > 0 and r.suggest or r.carry)
-    end
+    Change(0, r.NeedFirst and r:NeedFirst() and r.suggest or r.carry)
   end)
+  function r:NeedFirst()
+    local s = self.suggest or 0
+    return s > 0 and s < (self.carry or 0) and (don.pick[self.id] or 0) < s
+  end
   -- the wheel scrolls the list; hold Ctrl to change the amount instead
   r:SetScript("OnMouseWheel", function(_, delta)
     if IsControlKeyDown and IsControlKeyDown() and r.id then Change(delta) else don:Scroll(-delta) end
@@ -561,7 +566,7 @@ local function DonateRow(i)
     if not self.id then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetHyperlink("item:" .. self.id)
-    GameTooltip:AddLine("Use - / + (shift for 10) or Max. Max first picks what the bank still needs; click again for all you carry. Ctrl + mouse wheel also changes the amount.", 1, 1, 1, true)
+    GameTooltip:AddLine("Use - / + (shift for 10). Need picks what the bank still needs; Max picks everything you carry. Ctrl + mouse wheel also changes the amount.", 1, 1, 1, true)
     GameTooltip:Show()
   end)
   r:SetScript("OnLeave", GameTooltip_Hide)
@@ -650,6 +655,7 @@ function don:Update()
       if c and c.r then r.name:SetTextColor(c.r, c.g, c.b) else r.name:SetTextColor(1, 1, 1) end
       r.info:SetText((e.still > 0) and ("needs " .. e.still .. "  ·  you have " .. e.carry) or ("you have " .. e.carry))
       r.qty:SetText(tostring(self.pick[e.id] or 0))
+      r.max:SetLabel(r:NeedFirst() and "Need" or "Max")
     end
     r:Show()
     y = y + h
