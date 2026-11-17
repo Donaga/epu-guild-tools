@@ -20,7 +20,7 @@ check('Guild activities are now the Groups page, top-level with Guildmates',
       A.ev('__ns.UI.nav.activities:IsShown() and __ns.UI.nav.roster:IsShown()') is True)
 A.ex('__ns.UI:SetView("activities")')
 check('the board menu still reaches events, quick dungeons, run requests, helpers and kits',
-      A.ev('__ns.UI.bars.activities.casualChoose.text:GetText()') == 'Everything' and A.ev('__ns.UI.bars.activities.casualNew.text:GetText()') == 'Create a group')
+      A.ev('__ns.UI.bars.activities.casualChoose.text:GetText()') == 'Everything' and A.ev('__ns.UI.bars.activities.casualNew.text:GetText()') == 'Create')
 A.ex('__ns.UI:SetView("home")')
 check('Roster is now called Guildmates and opens on who is online',
       A.ev('__ns.UI.nav.roster.label:GetText()') == 'Guildmates' and A.ev('__ns.UI.state.roster.filter') == 'online')
@@ -34,6 +34,17 @@ check('Home shows who is where', 'Who is where' in home and 'zone:' in home)
 B.ex('__ns.UI:Show(); __ns.UI:SetView("groups"); __ns.UI:OpenDetails("groupform","new")')
 lb = B.ev('__labels()')
 check('the form offers type, when and role', all(s in lb for s in ('Dungeon', 'Raid', 'PvP', 'Other', 'Now', 'Today', 'Tomorrow', 'Tank', 'Post')))
+check('the Create form switches between group, event, quest help and helper', all(s in lb for s in ('Group', 'Event', 'Quest help', 'I can help')))
+B.ex('__click("Today")')
+check('a later group offers a fixed start instead', 'Pick one fixed start instead' in B.ev('__labels()'))
+B.ex('__ns.CommunityState(); local d=nil; __click("Pick one fixed start instead")')
+check('switching to an event keeps the dungeon type and day', B.ev('__ns.UI.details.kind') == 'eventform'
+      and B.ev('__ns.UI.details.pools.box[4]:GetText()') == B.ev('date("%Y-%m-%d",__ns.RunSlot(__now,true))') + B.ev('__ns.UI.details.pools.box[4]:GetText()')[10:]
+      and 'Event' in B.ev('__labels()'))
+B.ex('__click("Quest help")')
+check('Quest help opens the help form with the same switcher', B.ev('__ns.UI.details.kind') == 'activityform' and 'Group' in B.ev('__labels()'))
+B.ex('__click("Group")')
+B.ex('__click("Now")')
 B.ex('__click("PvP")')
 check('PvP asks what the group is for instead of a dungeon', 'Choose dungeon' not in B.ev('__labels()'))
 B.ex('__click("Dungeon")')

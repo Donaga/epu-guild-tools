@@ -13,7 +13,8 @@
   - **Today in the guild:** joins, level-ups and milestones from the last day, plus new announcements
   - shortcuts to the bank, news and the getting started checklist
 - **Everything board:** quick groups, run requests and events this week in one list, sorted into Right now, Later today and This week. **Mine** shows only yours.
-- **Create a group:** one form for everything.
+- **One Create button** on every Groups board. Its form starts with **Group · Event · Quest help · I can help**, and the event, quest help and helper forms carry the same switcher, so everything is one click apart. Switching from a group to **Event** keeps the dungeon, day and time you picked. A later-this-week group also offers **Pick one fixed start instead**.
+- **Group** (in Create):
   - Pick **Dungeon** (from the list), **Raid**, **PvP** or **Other**, then **Quests**, **Loot farming** or **Either**.
   - Pick when: **Now** posts a quick group for 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From–To time, posts a run request guildmates can tick times on.
   - Optionally **Tell guild chat**: one line so guildmates without EPU see it too.

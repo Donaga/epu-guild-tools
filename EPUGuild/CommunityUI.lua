@@ -270,9 +270,11 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" or kind=="runform" end
 function ns.CommunityNewAction(kind)
-  if kind=="all" then Open("groupform","new")
-  elseif kind=="events" then Open("eventform","new")
-  elseif kind=="runs" then Open("runform","new")
+  if kind=="all" or kind=="dungeon" then ns.OpenCreate("group")
+  elseif kind=="runs" then ns.OpenCreate("group","today")
+  elseif kind=="events" then ns.OpenCreate("event")
+  elseif kind=="help" then ns.OpenCreate("help")
+  elseif kind=="helpers" then ns.OpenCreate("helper")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
   elseif kind=="notifications" then Open("noticeform","all")
@@ -401,6 +403,7 @@ function ns.FillCommunityDetails(kind,key,det)
     if draft then dungeon=draft.dungeon end
     local defaultZone=(GetZoneText and GetZoneText()) or ''
     det:Reset(nil,nil,cur and "Edit guild event" or "New guild event","Dates use your computer's local timezone")
+    if not cur and ns.CreateSwitcher then ns.CreateSwitcher(det,"event") end
     local typeLabel=det:Text("Type: "..ns.EVENT_TYPES[activityType],C.gold)
     local title,zone,note,when,duration,slots,low,high,summary
     local function UpdateLabels()
@@ -1091,7 +1094,8 @@ end
 local function FillGroupForm(det)
   local d=GroupDraft()
   local function Again() det.casualDraft=true; UI:FillDetails() end
-  det:Reset(groupIcons.event,nil,"Create a group","Now, later today or this week")
+  det:Reset(groupIcons.event,nil,"Create","Pick what you'd like to do")
+  ns.CreateSwitcher(det,"group")
   local types={}
   for _,t in ipairs(GROUP_TYPES) do types[#types+1]={t[2],function() d.type=t[1]; Again() end,on=d.type==t[1]} end
   det:Buttons(types)
@@ -1127,7 +1131,9 @@ local function FillGroupForm(det)
       {"From "..Clock(d.s),function(self) TimeMenu(self,d.when,d.s,nil,d.e,function(t) d.s=t; Again() end) end},
       {"To "..(d.e==DayStart(d.when+1) and "midnight" or Clock(d.e)),function(self) TimeMenu(self,d.when,d.e,d.s,nil,function(t) d.e=t; Again() end) end},
     })
-    det:Text("Guildmates tick the times that suit them; the best overlap can become an event.",C.muted)
+    det:Text("Flexible: guildmates tick the times that suit them, and the best overlap can become an event.",C.muted)
+    det:Buttons({{"Pick one fixed start instead",function() ns.OpenCreate("event") end,
+      tip="Makes a guild event with a set start time, sign-ups and role slots, using what you picked here."}})
   end
   det:Section("My role")
   local roles={}
@@ -1150,3 +1156,37 @@ function ns.FillCommunityDetails(kind,key,det)
 end
 local formKind=ns.CommunityFormKind
 function ns.CommunityFormKind(kind) return kind=="groupform" or formKind(kind) end
+
+-- One Create entry point: the same switcher heads every "new" form, so
+-- groups, events, quest help and helper availability are one click apart.
+local CREATE_KINDS={{"group","Group"},{"event","Event"},{"help","Quest help"},{"helper","I can help"}}
+local function EventDraftFromGroup()
+  local d=groupDrafts.new
+  if not d then return nil end
+  local name=(d.type=="dungeon" and d.dungeon) or (d.title~="" and d.title) or nil
+  local info=name and dungeons[name]
+  local start=d.when~="now" and d.s or ns.Now()+1800
+  local minutes=d.when~="now" and d.e and math.max(30,math.min(360,math.floor((d.e-d.s)/60))) or 90
+  return {kind=(d.type=="dungeon" or d.type=="raid") and "dungeon" or "other",dungeon=info and name or nil,
+    values={name,info and info[2] or nil,d.note~="" and d.note or nil,date("%Y-%m-%d %H:%M",start),tostring(minutes),
+      tostring(d.type=="raid" and 10 or 5),info and info[3] and tostring(info[3]) or nil,info and info[4] and tostring(info[4]) or nil}}
+end
+function ns.OpenCreate(what,when)
+  if what=="event" then
+    UI.details.eventFormDraft=EventDraftFromGroup()
+    return UI:OpenDetails("eventform","new")
+  elseif what=="help" then return UI:OpenDetails("activityform","help")
+  elseif what=="helper" then return UI:OpenDetails("helperform",ns.me) end
+  local d=GroupDraft()
+  if when=="today" and d.when=="now" then d.when=0; local w=DefaultWindow(0); d.s,d.e=w.s,w.e end
+  return UI:OpenDetails("groupform","new")
+end
+function ns.CreateSwitcher(det,current)
+  local specs={}
+  for _,k in ipairs(CREATE_KINDS) do
+    specs[#specs+1]={k[2],function() if k[1]~=current then ns.OpenCreate(k[1]) end end,on=k[1]==current,
+      tip=({group="A group now, or later this week with flexible times",event="A set start time with sign-ups and role slots",
+        help="Ask for a hand with a quest or area",helper="Let guildmates know you're free to help for a while"})[k[1]]}
+  end
+  det:Buttons(specs)
+end

@@ -64,13 +64,17 @@ function ns.InstallCasualViews(views,env)
     end
     if st.kind=="all" then
       if bar then
-        bar.casualNew:SetLabel("Create a group")
+        bar.casualNew:SetLabel("Create")
         bar.casualAvailability:Show(); bar.casualAvailability:SetLabel("Calendar")
         bar.casualAvailability:SetScript("OnClick",function() SlashCmdList.EPUGUILD("calendar") end)
       end
       return ns.GroupRows and ns.GroupRows(q,st) or {}
     end
-    if ns.CommunityRows then local extra=ns.CommunityRows(g,q,st,bar); if extra then return extra end end
+    if ns.CommunityRows then
+      local extra=ns.CommunityRows(g,q,st,bar)
+      if bar and st.kind~="kits" then bar.casualNew:SetLabel("Create") end
+      if extra then return extra end
+    end
     if st.kind=="kits" then
       for id,r in pairs(ns.KitTemplates()) do
         if E.Match(q,r.title,r.note) then
@@ -132,6 +136,7 @@ function ns.FillCasualDetails(kind,key,det)
     local r=g.activityPosts[key]
     local activity=r and r.kind or key
     det:Reset(nil,nil,r and "Edit activity" or (activity=="dungeon" and "Find dungeon company" or "Ask for a hand"),"No guild-chat broadcast or automatic invitations")
+    if not r and activity=="help" and ns.CreateSwitcher then ns.CreateSwitcher(det,"help") end
     local title=det:Field(activity=="dungeon" and "Dungeon" or "Need help",r and r.title or "",160)
     local zone=det:Field("Zone",r and r.zone or (ns.roster[ns.me] or {}).zone or "",160)
     local note=det:Field("Details",r and r.note or "",160)
@@ -182,6 +187,7 @@ function ns.FillCasualDetails(kind,key,det)
   elseif kind=="helperform" then
     local cur=g.helpers[ns.me]; local roles=cur and cur.roles or ""
     det:Reset(nil,nil,"Happy to help","Voluntary, time-limited availability")
+    if ns.CreateSwitcher then ns.CreateSwitcher(det,"helper") end
     local info=det:Text(ns.HelperRoleText(roles),C.gold)
     RoleButtons(det,roles,function(r,self)
       if roles:find(r,1,true) then roles=roles:gsub(r,"") else roles=roles..r end
