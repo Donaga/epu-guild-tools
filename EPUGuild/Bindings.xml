@@ -1,0 +1,14 @@
+<Bindings>
+  <Binding name="EPUGUILD_TOGGLE" header="EPUGUILD" category="ADDONS">
+    EPUGuild_Binding("")
+  </Binding>
+  <Binding name="EPUGUILD_GROUPS" category="ADDONS">
+    EPUGuild_Binding("groups")
+  </Binding>
+  <Binding name="EPUGUILD_LFG" category="ADDONS">
+    EPUGuild_Binding("lfg")
+  </Binding>
+  <Binding name="EPUGUILD_GUILDMATES" category="ADDONS">
+    EPUGuild_Binding("who")
+  </Binding>
+</Bindings>

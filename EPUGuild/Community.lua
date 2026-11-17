@@ -339,7 +339,7 @@ end)
 -- dungeon, why (quests or loot) and up to three time ranges. Guildmates mark
 -- which of those times suit them; the best overlap can become a guild event.
 ---------------------------------------------------------------------------
-ns.RUN_PURPOSES={q="Quests",l="Loot farming",e="Either"}
+ns.RUN_PURPOSES={q="Quests",l="Loot farming",e="Quests or loot"}
 ns.RUN_PURPOSE_ORDER={"q","l","e"}
 local SLOT=1800
 local RUN_ROLES={t=true,h=true,d=true}

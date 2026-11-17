@@ -403,6 +403,13 @@ local HELP = {
 
 SLASH_EPUGUILD1 = "/epu"
 SLASH_EPUGUILD2 = "/epuguild"
+-- Key bindings (Bindings.xml; set them under Options > Keybindings > AddOns).
+BINDING_HEADER_EPUGUILD = "EPU Guild Tools"
+BINDING_NAME_EPUGUILD_TOGGLE = "Open or close EPU Guild Tools"
+BINDING_NAME_EPUGUILD_GROUPS = "Open Groups (find a group)"
+BINDING_NAME_EPUGUILD_LFG = "Create a group or run request"
+BINDING_NAME_EPUGUILD_GUILDMATES = "Open Guildmates (who's online)"
+function EPUGuild_Binding(cmd) SlashCmdList.EPUGUILD(cmd or "") end
 SlashCmdList.EPUGUILD = function(msg)
   msg = msg or ""
   local cmd, args = msg:match("^%s*(%S*)%s*(.-)%s*$")

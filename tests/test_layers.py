@@ -64,7 +64,7 @@ check('Roster shows no tag when the layer is unknown','layer' not in (sub('Newbi
 check('your own row has no layer tag','layer' not in (sub('Chris Baker') or ''))
 A.ex("__ns.UI.state.roster.filter='layer'; __ns.UI:Refresh()")
 shown=A.ev("""(function() local t={}
-  for _,row in ipairs(__ns.UI.rows) do if row:IsShown() and row.data and row.data.key then t[#t+1]=row.data.key end end
+  for _,row in ipairs(__ns.UI.rows) do if row:IsShown() and row.data and row.data.key and not tostring(row.data.key):find("^cat:") then t[#t+1]=row.data.key end end
   table.sort(t); return table.concat(t,',') end)()""")
 check('Same layer filter keeps only guildmates on your layer',shown=='member:Pip Baker,member:Tyler Baker')
 

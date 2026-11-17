@@ -53,7 +53,7 @@ check('guildmates can tick times and update their interest', '[x] ' in lp and 'U
 B.ex("__ns.UI:OpenDetails('runform','new')")
 lf = labels(B)
 check('the request form has a dungeon list, purpose, role and time pickers',
-      all(s in lf for s in ('Choose dungeon', 'Quests', 'Loot farming', 'Either', 'Tank', 'From ', 'To ', 'Add another day', 'Post request')))
+      all(s in lf for s in ('Choose dungeon', 'Quests', 'Loot farming', 'Quests or loot', 'Tank', 'From ', 'To ', 'Add another day', 'Post request')))
 check('the form shows no errors', B.ev('__errors') in (None, 0))
 
 # scheduling

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.27.0
+
+- **Cleaner Home.** Your stats sit in a row of four tiles (online, open groups, your requests, next event). Below them are two columns: **Right now** and **Coming up** on the left, **Who is where** and **Today in the guild** on the right. Section titles are gold with a thin line, and card text no longer overlaps.
+- **Tidier sidebar.** Every entry has the same flat look, split into three blocks by thin lines: Home, Groups and Guildmates; Bank, Professions and Guild; Member tools, Settings and Sync. Hover any entry for a one-line description of what it's for.
+- **Clearer labels everywhere:**
+  - Bank tabs are now Bank stock, Item requests, Bank needs, To buy and Donations.
+  - Groups boards are now All groups and events, Dungeons and raids, Scheduled events, Quest help wanted, Groups forming now, Run requests (planned), Guildmates offering help and Starter kits. The filters are now **Only mine** and **Near my level**.
+  - Create offers **Group or run · Scheduled event · Ask for quest help · Offer to help**, with **Activity** and **Going for** headings. "Either" is now **Quests or loot**.
+- **Run requests are easier to find.** The Groups button in the sidebar always opens on everything. In Create → Group, picking a day instead of **Now** turns it into a **Run request**, and the button changes to **Post run request**.
+- **Guildmates is a table:** name, level, zone, layer, group status, EPU and role. One **Show** menu picks who's listed: Online, Everyone, Near my level, Looking for a partner or On my layer.
+- **Looking for a partner:** click **I want a partner** and guildmates see it in their list and on your tooltip until you turn it off or log out. It also shows when a guildmate is in a group.
+- **Right-click a guildmate** to whisper, invite, set a waypoint to them (when they share their location) or ask to join their layer.
+- **Dungeons and raids board** on Groups: every dungeon and raid with its level range, how many guildmates are online in range, and open groups or run requests for it. Dungeons in your range are green, and **Near my level** shows only those. Click one to see who's in range, jump to its groups, or **Start a group now** / **Request a run** with the dungeon already filled in. Classic dungeons now have suggested level ranges.
+- **Raid picker** in Create → Group → Raid. Groups made from it use the raid's real size.
+- **Groups button on the floating Events bubble:** click it to find a group, right-click to start one. The bubble's action list also has **Find a group**.
+- **Key bindings** (Options → Keybindings → AddOns → EPU Guild Tools): open the addon, open Groups, create a group, open Guildmates.
+- Updating: **restart WoW once** (not just /reload) so the new key bindings load.
+
 ## 0.26.0
 
 - **Playing together comes first.** **Groups** and **Guildmates** (the Roster, renamed) now sit right under **Home** in the sidebar, instead of being buried under Guild. Guildmates opens on who's online.

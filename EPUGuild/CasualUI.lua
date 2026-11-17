@@ -1,12 +1,13 @@
 local ADDON, ns = ...
 local E, UI, C
 local categories={
-  {label="Everything",value="all",icon="Interface\\Icons\\INV_Misc_GroupNeedMore"},
-  {label="Events",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
-  {label="Quick quest help",value="help",icon="Interface\\Icons\\INV_Misc_Note_01"},
-  {label="Quick dungeon",value="dungeon",icon="Interface\\Icons\\INV_Misc_Key_03"},
-  {label="Run requests",value="runs",icon="Interface\\Icons\\INV_Misc_Key_14"},
-  {label="Available helpers",value="helpers",icon="Interface\\Icons\\INV_Misc_Head_Human_01"},
+  {label="All groups and events",value="all",icon="Interface\\Icons\\INV_Misc_GroupNeedMore"},
+  {label="Dungeons and raids",value="dungeons",icon="Interface\\Icons\\INV_Misc_Key_03"},
+  {label="Scheduled events",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
+  {label="Quest help wanted",value="help",icon="Interface\\Icons\\INV_Misc_Note_01"},
+  {label="Groups forming now",value="dungeon",icon="Interface\\Icons\\INV_Misc_Key_03"},
+  {label="Run requests (planned)",value="runs",icon="Interface\\Icons\\INV_Misc_Key_14"},
+  {label="Guildmates offering help",value="helpers",icon="Interface\\Icons\\INV_Misc_Head_Human_01"},
   {label="Starter kits",value="kits",icon="Interface\\Icons\\INV_Misc_Gift_01"},
 }
 local drafts={}
@@ -31,13 +32,14 @@ function ns.InstallCasualViews(views,env)
     for _,x in ipairs(ns.OpenGroups and ns.OpenGroups() or {}) do if x.who~=ns.me then n=n+1 end end
     return n,C.goldBg,C.gold
   end,tools=function(bar)
-    local choose=bar:Add(E.Btn(bar,"",142,22),"left")
+    local choose=bar:Add(E.Btn(bar,"",136,22),"left")
+    choose.tip="Which board to show: everything, dungeons and raids, events, run requests and more."
     choose:SetIcon(categories[1].icon)
     choose:SetLabel(categories[1].label)
     choose:SetScript("OnClick",function() E.OpenMenu(choose,categories,State().kind,function(kind) SetCategory(kind) end) end)
-    local mine=bar:Add(E.Btn(bar,"Mine",46,22),"left",function(self) State().mine=not State().mine; self:SetOn(State().mine); UI:Refresh() end)
-    local near=bar:Add(E.Btn(bar,"My level",70,22),"left",function(self) State().near=not State().near; self:SetOn(State().near); UI:Refresh() end)
-    bar.casualNew=bar:Add(E.Btn(bar,"New / edit",80,22,"accent"),"right",function()
+    local mine=bar:Add(E.Btn(bar,"Only mine",62,22),"left",function(self) State().mine=not State().mine; self:SetOn(State().mine); UI:Refresh() end)
+    local near=bar:Add(E.Btn(bar,"Near my level",84,22),"left",function(self) State().near=not State().near; self:SetOn(State().near); UI:Refresh() end)
+    bar.casualNew=bar:Add(E.Btn(bar,"Create",60,22,"accent"),"right",function()
       local kind=State().kind
       if ns.CommunityNewAction and ns.CommunityNewAction(kind) then return end
       if kind=="helpers" then Open("helperform",ns.me)
@@ -46,7 +48,7 @@ function ns.InstallCasualViews(views,env)
         drafts.new={title="",note="",lines={}}; Open("kitedit","new")
       else Open("activityform",kind) end
     end)
-    bar.casualAvailability=bar:Add(E.Btn(bar,"My availability",90,22),"right",function() Open("helperform",ns.me) end)
+    bar.casualAvailability=bar:Add(E.Btn(bar,"Calendar",70,22),"right",function() Open("helperform",ns.me) end)
     bar.casualMine=mine; bar.casualNear=near; bar.casualChoose=choose
     bar.levelFilterClick=near:GetScript("OnClick")
   end,rows=function(g,q)
@@ -58,7 +60,7 @@ function ns.InstallCasualViews(views,env)
       end
       bar.casualMine:SetOn(st.mine); bar.casualNear:SetOn(st.near)
       bar.casualMine:SetShown(st.kind~="kits"); bar.casualNear:SetShown(st.kind~="kits")
-      bar.casualNear:SetLabel("My level")
+      bar.casualNear:SetLabel("Near my level")
       bar.casualNear:SetScript("OnClick",bar.levelFilterClick)
       bar.casualNear.tip=nil
     end
@@ -107,7 +109,7 @@ function ns.InstallCasualViews(views,env)
     end
     table.sort(rows,function(a,b) if a.title==b.title then return a.key<b.key end return a.title<b.title end)
     return rows
-  end,empty="Nothing matches this board. Choose another board, clear the search or turn off Mine / My level.",footer=function()
+  end,empty="Nothing matches this board. Choose another board, clear the search or turn off Only mine / Near my level.",footer=function()
     local kind=State().kind
     if kind=="all" then return "Everything people want to do together. Use the board menu for one kind: events, quick dungeons, run requests, quest help, helpers or starter kits." end
     if ns.CommunityFooter then local extra=ns.CommunityFooter(kind); if extra then return extra end end

@@ -130,24 +130,25 @@ missed guild data; old activity records are removed after 30 days. Starter-kit
 templates are retained until retired, and retirement records are retained to
 prevent old copies reappearing. The Discord companion does not manage these boards.
 
-## Home, Groups and Guildmates (0.26+)
+## Home, Groups and Guildmates (0.26+, redesigned in 0.27)
 
-The sidebar starts with the things you do together:
+The sidebar has three blocks: **Home, Groups, Guildmates** (playing together), **Bank, Professions, Guild**, and **Member tools, Settings, Sync**. Hover any entry for a one-line description.
 
 - **Home** shows what's happening:
   - the message of the day, and anything waiting for you
-  - who's online (and how many use EPU), open groups, your requests and the next event
-  - **Right now:** quick groups and help wanted, with tank, healer and DPS counts
-  - **Coming up:** run requests and events
-  - **Who is where:** online guildmates by zone, with levels. Click a zone to list them.
-  - **Today in the guild:** joins, level-ups, milestones and new announcements
-- **Groups** (formerly Guild activities) opens on **Everything**: quick groups, run requests and events for the week, grouped into Right now, Later today and This week. The board menu narrows it to Events, Quick quest help, Quick dungeon, Run requests, Available helpers or Starter kits, and **Calendar** jumps to events by date. Click **Create**. The top row picks **Group**, **Event** (a set start time with sign-ups and role slots), **Quest help** or **I can help**; switching from a group to an event keeps what you picked. For a group:
-  1. Pick **Dungeon** (choose it from the list), **Raid**, **PvP** or **Other** (type what it's for). For dungeons and raids, pick **Quests**, **Loot farming** or **Either**.
-  2. Pick when. **Now** posts a quick group that closes after 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From and To time, posts a run request guildmates tick their times on (see Run requests).
-  3. Pick your role, add a note if you like, and tick **Tell guild chat** to post one line in guild chat as well. Then **Post**.
-- **Guildmates** (the old Roster) opens on who's online.
+  - four tiles: who's online (and how many use EPU), open groups, your open requests and the next event
+  - left column: **Right now** (quick groups and help wanted, with tank, healer and DPS counts) and **Coming up** (run requests and events)
+  - right column: **Who is where** (online guildmates by zone; click a zone to list them) and **Today in the guild** (joins, level-ups, milestones, new announcements)
+- **Groups** opens on **All groups and events**: quick groups, run requests and events for the week, grouped into Right now, Later today and This week. The board menu switches to **Dungeons and raids**, Scheduled events, Quest help wanted, Groups forming now, Run requests (planned), Guildmates offering help or Starter kits. **Only mine** and **Near my level** narrow any board; **Calendar** jumps to events by date.
+- **Dungeons and raids** lists every dungeon and raid with its level range, how many guildmates are online in range and how many groups or run requests are open for it. Dungeons in your range are green. Click one to see who's in range (click a name to whisper or invite), open its groups, or **Start a group now** / **Request a run** with it already filled in. Classic ranges are the usual suggested ones, so treat them as a guide.
+- **Create** (on every Groups board). The top row picks **Group or run**, **Scheduled event** (a set start time with sign-ups and role slots), **Ask for quest help** or **Offer to help**; switching from a group to an event keeps what you picked. For a group:
+  1. **Activity:** **Dungeon** (choose it from the list), **Raid** (choose from the raid list or type one), **PvP** or **Other** (type what it's for). **Going for:** **Quests**, **Loot farming** or **Quests or loot**.
+  2. **When:** **Now** posts a quick group that stays open 1, 2 or 4 hours (**Post group**). **Today**, **Tomorrow** or a weekday, with a From and To time, makes a **run request** guildmates tick their times on (**Post run request**; see Run requests).
+  3. Pick your role, add a note if you like, and tick **Also post in guild chat** for guildmates without EPU.
+- **Guildmates** is a table: name, level (green within 5 of yours), zone, layer, group status, EPU and role. **Show** picks Online, Everyone, Near my level, Looking for a partner or On my layer. **I want a partner** flags you as looking for a leveling partner in everyone's list and on your tooltip until you turn it off or log out. **Right-click** a guildmate to whisper, invite, set a waypoint to them (when they share their location) or ask to join their layer.
+- The floating **Events bubble** has a small **Groups** button: click to find a group, right-click to start one.
 
-Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildmates online.
+Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildmates online. Key bindings for opening the addon, Groups, Create a group and Guildmates are under **Options → Keybindings → AddOns** (restart WoW once after updating to 0.27 so they appear).
 
 ## STV pages (0.25+)
 
