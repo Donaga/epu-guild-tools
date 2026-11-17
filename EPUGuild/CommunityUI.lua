@@ -1133,7 +1133,7 @@ local function FillGroupForm(det)
   local roles={}
   for _,role in ipairs({"t","h","d"}) do roles[#roles+1]={ns.EVENT_ROLES[role],function() d.role=role; Again() end,on=d.role==role} end
   det:Buttons(roles)
-  local note=det:Field("Note (optional)",d.note,120); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
+  local note=det:Field("Note",d.note,120); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
   det:Buttons({{(d.chat and "[x] " or "[ ] ").."Tell guild chat",function() d.chat=not d.chat; Again() end,on=d.chat,
     tip="Also posts one line in guild chat, so guildmates without EPU see it too."}})
   det:Buttons({{"Post",function()
