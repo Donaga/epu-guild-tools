@@ -24,22 +24,23 @@ local memberTools={
 }
 local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={
+  -- Classic ranges are the commonly suggested ones; treat them as a guide.
   {label='Classic · Early', entries={
-    {'Ragefire Chasm','Orgrimmar'}, {'The Deadmines','Westfall'}, {'Wailing Caverns','The Barrens'},
-    {'Shadowfang Keep','Silverpine Forest'}, {'Blackfathom Deeps','Ashenvale'}, {'The Stockade','Stormwind City'},
-    {'Gnomeregan','Dun Morogh'}, {'Razorfen Kraul','The Barrens'},
+    {'Ragefire Chasm','Orgrimmar',13,18}, {'The Deadmines','Westfall',17,26}, {'Wailing Caverns','The Barrens',17,24},
+    {'Shadowfang Keep','Silverpine Forest',22,30}, {'Blackfathom Deeps','Ashenvale',24,32}, {'The Stockade','Stormwind City',24,32},
+    {'Gnomeregan','Dun Morogh',29,38}, {'Razorfen Kraul','The Barrens',29,38},
   }},
   {label='Classic · Mid levels', entries={
-    {'Scarlet Monastery: Graveyard','Tirisfal Glades'}, {'Scarlet Monastery: Library','Tirisfal Glades'},
-    {'Scarlet Monastery: Armory','Tirisfal Glades'}, {'Scarlet Monastery: Cathedral','Tirisfal Glades'},
-    {'Razorfen Downs','The Barrens'}, {'Uldaman','Badlands'}, {'Zul’Farrak','Tanaris'}, {'Maraudon','Desolace'},
-    {'Sunken Temple','Swamp of Sorrows'},
+    {'Scarlet Monastery: Graveyard','Tirisfal Glades',28,38}, {'Scarlet Monastery: Library','Tirisfal Glades',29,39},
+    {'Scarlet Monastery: Armory','Tirisfal Glades',32,42}, {'Scarlet Monastery: Cathedral','Tirisfal Glades',35,45},
+    {'Razorfen Downs','The Barrens',37,46}, {'Uldaman','Badlands',41,51}, {'Zul’Farrak','Tanaris',44,54}, {'Maraudon','Desolace',46,55},
+    {'Sunken Temple','Swamp of Sorrows',50,56},
   }},
   {label='Classic · Late', entries={
-    {'Blackrock Depths','Blackrock Mountain'}, {'Lower Blackrock Spire','Blackrock Mountain'},
-    {'Upper Blackrock Spire','Blackrock Mountain'}, {'Dire Maul: East','Feralas'}, {'Dire Maul: North','Feralas'},
-    {'Dire Maul: West','Feralas'}, {'Scholomance','Western Plaguelands'},
-    {'Stratholme: Main Gate','Eastern Plaguelands'}, {'Stratholme: Service Gate','Eastern Plaguelands'},
+    {'Blackrock Depths','Blackrock Mountain',52,60}, {'Lower Blackrock Spire','Blackrock Mountain',55,60},
+    {'Upper Blackrock Spire','Blackrock Mountain',58,60}, {'Dire Maul: East','Feralas',55,60}, {'Dire Maul: North','Feralas',57,60},
+    {'Dire Maul: West','Feralas',57,60}, {'Scholomance','Western Plaguelands',58,60},
+    {'Stratholme: Main Gate','Eastern Plaguelands',58,60}, {'Stratholme: Service Gate','Eastern Plaguelands',58,60},
   }},
   -- Suggested ranges from Blizzard's Forever dungeon overview (news/24301455).
   {label='Forever dungeons', entries={
@@ -50,10 +51,19 @@ local dungeonGroups={
     {'Shaper’s Terrace','Un’Goro Crater',58,60},
   }},
 }
+-- name, zone, min level, max level, raid size
+local raidList={
+  {'Zul’Gurub','Stranglethorn Vale',60,60,20}, {'Ruins of Ahn’Qiraj','Silithus',60,60,20},
+  {'Molten Core','Blackrock Mountain',60,60,40}, {'Onyxia’s Lair','Dustwallow Marsh',60,60,40},
+  {'Blackwing Lair','Blackrock Mountain',60,60,40}, {'Temple of Ahn’Qiraj','Silithus',60,60,40},
+  {'Naxxramas','Eastern Plaguelands',60,60,40},
+}
 local dungeons={}
 for _,group in ipairs(dungeonGroups) do
   for _,entry in ipairs(group.entries) do dungeons[entry[1]]=entry end
 end
+for _,entry in ipairs(raidList) do dungeons[entry[1]]=entry end
+ns.RAIDS=raidList
 local function Open(kind,key) UI:OpenDetails(kind,key) end
 local function State() return UI.state.activities end
 local function Whisper(name) if ChatFrame_SendTell then ChatFrame_SendTell(name) end end
@@ -270,7 +280,7 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" or kind=="runform" end
 function ns.CommunityNewAction(kind)
-  if kind=="all" or kind=="dungeon" then ns.OpenCreate("group")
+  if kind=="all" or kind=="dungeon" or kind=="dungeons" then ns.OpenCreate("group")
   elseif kind=="runs" then ns.OpenCreate("group","today")
   elseif kind=="events" then ns.OpenCreate("event")
   elseif kind=="help" then ns.OpenCreate("help")
@@ -298,6 +308,7 @@ function ns.CommunityRows(g,q,st,bar)
     end or function() Open("helperform",ns.me) end)
   end
   if st.kind=="runs" then return ns.RunRequestRows(g,q,st,bar) end
+  if st.kind=="dungeons" then return ns.DungeonCatalogRows(g,q,st,bar) end
   if st.kind~="events" and not toolActions[st.kind] then
     if bar then bar.casualNew:SetLabel("New / edit") end
     return
@@ -307,7 +318,7 @@ function ns.CommunityRows(g,q,st,bar)
   if bar then
     bar.casualNear:SetShown(st.kind=="events"); bar.casualMine:SetShown(st.kind=="events")
     if st.kind=="events" then
-      bar.casualNear:SetLabel("Type")
+      bar.casualNear:SetLabel("Event type")
       bar.casualNear.tip=st.eventType and ns.EVENT_TYPES[st.eventType] or "All activity types"
       bar.casualNear:SetOn(st.eventType~=nil)
       bar.casualNear:SetScript("OnClick",function(self)
@@ -1002,7 +1013,7 @@ function ns.OpenGroups()
   for id,r in pairs(g.activityPosts or {}) do
     if (r.kind=="dungeon" or r.kind=="help") and ns.ActiveActivity(r) then
       local n=ns.ActivityCounts(id)
-      out[#out+1]={key="activity:"..id,who=r.who,when="now",at=r.created,icon=groupIcons[r.kind],
+      out[#out+1]={key="activity:"..id,who=r.who,when="now",at=r.created,icon=groupIcons[r.kind],place=r.kind=="dungeon" and r.title or nil,
         title=(r.kind=="help" and "Help: " or "")..r.title,
         sub=r.who.." · "..n.ready.."/"..r.slots.." ready · "..n.t.." tank · "..n.h.." healer · "..n.d.." DPS · "..math.max(0,math.ceil((r.expires-now)/60)).." min left",
         open=ShowIn("activity",id)}
@@ -1014,7 +1025,7 @@ function ns.OpenGroups()
       for _,w in ipairs(r.windows) do if w.e>now and (not first or w.s<first.s) then first=w end end
       local best=ns.RunBestTimes(id,1)[1]
       local n=#ns.RunInterested(id)+1
-      out[#out+1]={key="run:"..id,who=r.who,when=WhenOf(first.s,first.e),at=first.s,icon=runIcon,
+      out[#out+1]={key="run:"..id,who=r.who,when=WhenOf(first.s,first.e),at=first.s,icon=runIcon,place=r.dungeon,
         title=r.dungeon.." · "..ns.RUN_PURPOSES[r.purpose],
         sub=r.who.." · "..ns.RunRangeText(first.s,first.e).." · "..n.." in"..(best and #best.who>1 and (" · best "..DayLabel(best.s).." "..Clock(best.s)) or ""),
         open=ShowIn("run",id)}
@@ -1080,7 +1091,7 @@ function ns.PostGroup(d)
     id=ns.SaveActivity("dungeon",{title=name,zone=info and info[2] or (ns.roster[ns.me] or {}).zone or "",
       note=(purposeText and (purposeText..". ") or "")..(d.note or ""),
       minLevel=info and info[3] or math.max(1,lvl-5),maxLevel=info and info[4] or math.min(60,lvl+5),
-      slots=d.type=="raid" and 10 or 5,minutes=d.minutes})
+      slots=info and info[5] or (d.type=="raid" and 10 or 5),minutes=d.minutes})
     if id then ns.RespondActivity(id,d.role,"ready",""); kind="activity" end
   else
     id=ns.SaveRunRequest({dungeon=name,purpose=purposeText and d.purpose or "e",role=d.role,note=d.note,windows={{s=d.s,e=d.e}}})
@@ -1096,6 +1107,7 @@ local function FillGroupForm(det)
   local function Again() det.casualDraft=true; UI:FillDetails() end
   det:Reset(groupIcons.event,nil,"Create","Pick what you'd like to do")
   ns.CreateSwitcher(det,"group")
+  det:Section("Activity")
   local types={}
   for _,t in ipairs(GROUP_TYPES) do types[#types+1]={t[2],function() d.type=t[1]; Again() end,on=d.type==t[1]} end
   det:Buttons(types)
@@ -1104,12 +1116,20 @@ local function FillGroupForm(det)
     det:Buttons({{d.dungeon or "Choose dungeon",function(self) ChooseDungeon(self,d.dungeon,function(name) d.dungeon=name; Again() end) end,accent=not d.dungeon}})
     if info then det:Text(info[2]..(info[3] and (" · levels "..info[3].."–"..info[4]) or ""),C.muted) end
   else
-    local title=det:Field(d.type=="raid" and "Raid" or d.type=="pvp" and "Battleground or activity" or "What",d.title,80)
+    if d.type=="raid" then
+      det:Buttons({{d.title~="" and d.title or "Choose raid",function(self)
+        local items={}
+        for _,r in ipairs(raidList) do items[#items+1]={label=r[1],value=r[1],right=r[5].." players"} end
+        E.OpenMenu(self,items,d.title,function(name) d.title=name; Again() end)
+      end,accent=d.title==""}})
+    end
+    local title=det:Field(d.type=="raid" and "Or type the raid" or d.type=="pvp" and "Battleground or activity" or "What the group is for",d.title,80)
     title.onChange=function() d.title=title:GetText(); det.casualDraft=true end
   end
   if d.type=="dungeon" or d.type=="raid" then
     local why={}
     for _,p in ipairs(ns.RUN_PURPOSE_ORDER) do why[#why+1]={ns.RUN_PURPOSES[p],function() d.purpose=p; Again() end,on=d.purpose==p} end
+    det:Section("Going for")
     det:Buttons(why)
   end
   det:Section("When")
@@ -1122,16 +1142,16 @@ local function FillGroupForm(det)
   det:Buttons(whens)
   if d.when=="now" then
     local spans={}
-    for _,m in ipairs({60,120,240}) do spans[#spans+1]={"For "..(m/60).." h",function() d.minutes=m; Again() end,on=d.minutes==m} end
+    for _,m in ipairs({60,120,240}) do spans[#spans+1]={"Open "..(m/60).." h",function() d.minutes=m; Again() end,on=d.minutes==m} end
     det:Buttons(spans)
-    det:Text("Shows under Right now and closes on its own after that.",C.muted)
+    det:Text("Shows under Right now and closes on its own after that. Pick Today, Tomorrow or a day to request a run instead.",C.muted)
   else
     if not d.s then local w=DefaultWindow(d.when); d.s,d.e=w.s,w.e end
     det:Buttons({
       {"From "..Clock(d.s),function(self) TimeMenu(self,d.when,d.s,nil,d.e,function(t) d.s=t; Again() end) end},
       {"To "..(d.e==DayStart(d.when+1) and "midnight" or Clock(d.e)),function(self) TimeMenu(self,d.when,d.e,d.s,nil,function(t) d.e=t; Again() end) end},
     })
-    det:Text("Flexible: guildmates tick the times that suit them, and the best overlap can become an event.",C.muted)
+    det:Text("|cfff2c14eRun request:|r guildmates mark interest and tick the times that suit them; the best overlap can become an event.",C.muted)
     det:Buttons({{"Pick one fixed start instead",function() ns.OpenCreate("event") end,
       tip="Makes a guild event with a set start time, sign-ups and role slots, using what you picked here."}})
   end
@@ -1140,18 +1160,148 @@ local function FillGroupForm(det)
   for _,role in ipairs({"t","h","d"}) do roles[#roles+1]={ns.EVENT_ROLES[role],function() d.role=role; Again() end,on=d.role==role} end
   det:Buttons(roles)
   local note=det:Field("Note",d.note,120); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
-  det:Buttons({{(d.chat and "[x] " or "[ ] ").."Tell guild chat",function() d.chat=not d.chat; Again() end,on=d.chat,
+  det:Buttons({{(d.chat and "[x] " or "[ ] ").."Also post in guild chat",function() d.chat=not d.chat; Again() end,on=d.chat,
     tip="Also posts one line in guild chat, so guildmates without EPU see it too."}})
-  det:Buttons({{"Post",function()
+  det:Buttons({{d.when=="now" and "Post group" or "Post run request",function()
     d.note=note:GetText()
     local kind,id=ns.PostGroup(d)
     if kind then UI:OpenDetails(kind,id) end
   end,accent=true},{"Cancel",function() groupDrafts.new=nil; UI:CloseDetails() end}})
   return true
 end
+
+---------------------------------------------------------------------------
+-- Dungeon catalogue: every dungeon and raid with its levels, who in the guild
+-- is online and in range, and any open group or run request for it.
+---------------------------------------------------------------------------
+local artCache
+local function InstanceArt(name)
+  if not artCache then
+    artCache={}
+    pcall(function()
+      if not (EJ_GetNumTiers and EJ_SelectTier and EJ_GetInstanceByIndex) then return end
+      for tier=1,EJ_GetNumTiers() do
+        EJ_SelectTier(tier)
+        for _,raid in ipairs({false,true}) do
+          local i=1
+          while true do
+            local id,iname,_,_,button1,_,button2=EJ_GetInstanceByIndex(i,raid)
+            if not id then break end
+            if iname then artCache[iname:lower()]=button2 or button1 end
+            i=i+1
+          end
+        end
+      end
+    end)
+  end
+  local key=tostring(name):lower():gsub("’","'")
+  return artCache[key] or artCache[tostring(name):lower()] or artCache[(key:match("^([^:]+)") or key):gsub("%s+$","")]
+end
+ns.InstanceArt=InstanceArt
+local raidIcon="Interface\\Icons\\INV_Misc_Head_Dragon_01"
+local function InRange(lvl,info) return info[3] and lvl>=info[3] and lvl<=info[4] end
+local function GuildmatesInRange(info)
+  local out={}
+  if not info[3] then return out end
+  for name,r in pairs(ns.roster) do
+    if r.online and name~=ns.me and r.level and r.level>=info[3] and r.level<=info[4] then out[#out+1]=name end
+  end
+  table.sort(out,function(a,b) local la,lb=ns.roster[a].level,ns.roster[b].level if la~=lb then return la>lb end return a<b end)
+  return out
+end
+local function GroupsFor(name)
+  local out={}
+  for _,x in ipairs(ns.OpenGroups()) do if x.place==name then out[#out+1]=x end end
+  return out
+end
+function ns.DungeonCatalogRows(g,q,st,bar)
+  if bar then
+    bar.casualNew:SetLabel("Create")
+    bar.casualAvailability:Hide()
+    bar.casualMine:Hide(); bar.casualNear:Show()
+    bar.casualNear:SetLabel("Near my level"); bar.casualNear:SetOn(st.near)
+    bar.casualNear.tip="Only dungeons where your level is inside the suggested range."
+  end
+  local lvl=(ns.roster[ns.me] or {}).level or 1
+  local groupsByPlace={}
+  for _,x in ipairs(ns.OpenGroups()) do if x.place then groupsByPlace[x.place]=(groupsByPlace[x.place] or 0)+1 end end
+  local out={}
+  local function Header(key,label)
+    out[#out+1]={key="cat:"..key,title="|cfff2c14e"..label.."|r",header=true,
+      columns={{text="Levels",w=60,align="CENTER"},{text="Zone",w="flex"},{text="Online in range",w=104,align="CENTER"},{text="Open",w=46,align="CENTER"}}}
+  end
+  local function Add(entry,raid)
+    local name,zone=entry[1],entry[2]
+    local mine=InRange(lvl,entry)
+    if st.near and not mine then return end
+    if not E.Match(q,name,zone) then return end
+    local inRange=#GuildmatesInRange(entry)
+    local open=groupsByPlace[name] or 0
+    local levels=entry[3] and (entry[3]==entry[4] and tostring(entry[3]) or (entry[3].."–"..entry[4])) or "?"
+    out[#out+1]={key="dungeon:"..name,icon=InstanceArt(name) or (raid and raidIcon or groupIcons.dungeon),
+      title=(mine and "|cff4ade80" or "")..name..(mine and "|r" or ""),titleWidth=210,
+      sub=zone.." · levels "..levels..(raid and (" · "..entry[5].." players") or "")..(inRange>0 and (" · "..inRange.." online in range") or "")
+        ..(open>0 and (" · "..open.." open") or ""),
+      right=mine and "|cff4ade80Your level|r" or nil,
+      columns={{text=levels,w=60,align="CENTER",color=mine and {0.29,0.87,0.50} or nil},{text=zone,w="flex"},
+        {text=inRange>0 and tostring(inRange) or "–",w=104,align="CENTER"},
+        {text=open>0 and ("|cfff2c14e"..open.."|r") or "–",w=46,align="CENTER"}},
+      onClick=function() Open("dungeoninfo",name) end}
+  end
+  for gi,group in ipairs(dungeonGroups) do
+    local before=#out
+    Header("dg"..gi,group.label)
+    for _,entry in ipairs(group.entries) do Add(entry,false) end
+    if #out==before+1 then out[#out]=nil end
+  end
+  local before=#out
+  Header("raids","Raids")
+  for _,entry in ipairs(raidList) do Add(entry,true) end
+  if #out==before+1 then out[#out]=nil end
+  return out
+end
+local function FillDungeonInfo(det,name)
+  local info=dungeons[name]
+  if not info then UI:CloseDetails(); return true end
+  local raid=info[5]~=nil
+  local lvl=(ns.roster[ns.me] or {}).level or 1
+  local levels=info[3] and (info[3]==info[4] and tostring(info[3]) or (info[3].."–"..info[4])) or "?"
+  det:Reset(InstanceArt(name) or (raid and raidIcon or groupIcons.dungeon),nil,name,info[2].." · levels "..levels..(raid and (" · "..info[5].." players") or ""))
+  if InRange(lvl,info) then det:Text("|cff4ade80Your level ("..lvl..") is in range.|r")
+  elseif info[3] and lvl<info[3] then det:Text("You're level "..lvl..", "..(info[3]-lvl).." below the suggested range.",C.muted)
+  elseif info[4] and lvl>info[4] then det:Text("You're level "..lvl..": above the range, good for helping others through.",C.muted) end
+  local function Create(when)
+    local d=GroupDraft()
+    d.type=raid and "raid" or "dungeon"
+    if raid then d.title=name else d.dungeon=name end
+    if when=="later" and d.when=="now" then d.when=0; local w=DefaultWindow(0); d.s,d.e=w.s,w.e
+    elseif when=="now" then d.when="now" end
+    UI:OpenDetails("groupform","new")
+  end
+  det:Buttons({{"Start a group now",function() Create("now") end,accent=true,
+      tip="Posts a group under Right now; guildmates join with their role."},
+    {"Request a run",function() Create("later") end,
+      tip="Pick a day and a time range; guildmates tick the times that suit them."}})
+  det:Section("Open groups and run requests")
+  local open=GroupsFor(name)
+  if #open==0 then det:Text("None yet. Start one above.",C.muted) end
+  for _,x in ipairs(open) do det:Buttons({{x.title,x.open,tip=x.sub}}) end
+  det:Section("Guildmates online in range")
+  local mates=GuildmatesInRange(info)
+  if #mates==0 then det:Text(info[3] and "Nobody online in this range right now." or "No level range known.",C.muted) end
+  for i,mate in ipairs(mates) do
+    if i>12 then det:Text("+"..(#mates-12).." more",C.muted); break end
+    local r=ns.roster[mate]
+    local st=ns.GuildmateStatus and ns.GuildmateStatus(mate) or {}
+    det:Buttons({{mate.." · "..r.level.." "..(r.class or "")..(r.zone and (" · "..r.zone) or "")..(st.lf and " · |cff4ade80looking|r" or ""),
+      function(self) if ns.GuildmateMenu then ns.GuildmateMenu(self,mate) end end,tip="Whisper, invite or set a waypoint"}})
+  end
+  return true
+end
 local fillCommunity=ns.FillCommunityDetails
 function ns.FillCommunityDetails(kind,key,det)
   if kind=="groupform" then return FillGroupForm(det) end
+  if kind=="dungeoninfo" then return FillDungeonInfo(det,key) end
   return fillCommunity(kind,key,det)
 end
 local formKind=ns.CommunityFormKind
@@ -1159,7 +1309,7 @@ function ns.CommunityFormKind(kind) return kind=="groupform" or formKind(kind) e
 
 -- One Create entry point: the same switcher heads every "new" form, so
 -- groups, events, quest help and helper availability are one click apart.
-local CREATE_KINDS={{"group","Group"},{"event","Event"},{"help","Quest help"},{"helper","I can help"}}
+local CREATE_KINDS={{"group","Group or run"},{"event","Scheduled event"},{"help","Ask for quest help"},{"helper","Offer to help"}}
 local function EventDraftFromGroup()
   local d=groupDrafts.new
   if not d then return nil end
@@ -1169,7 +1319,7 @@ local function EventDraftFromGroup()
   local minutes=d.when~="now" and d.e and math.max(30,math.min(360,math.floor((d.e-d.s)/60))) or 90
   return {kind=(d.type=="dungeon" or d.type=="raid") and "dungeon" or "other",dungeon=info and name or nil,
     values={name,info and info[2] or nil,d.note~="" and d.note or nil,date("%Y-%m-%d %H:%M",start),tostring(minutes),
-      tostring(d.type=="raid" and 10 or 5),info and info[3] and tostring(info[3]) or nil,info and info[4] and tostring(info[4]) or nil}}
+      tostring(info and info[5] or (d.type=="raid" and 10 or 5)),info and info[3] and tostring(info[3]) or nil,info and info[4] and tostring(info[4]) or nil}}
 end
 function ns.OpenCreate(what,when)
   if what=="event" then

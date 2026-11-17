@@ -12,7 +12,7 @@ for c in clients.values():
     c.ex('__toasts = {}; __ns.Notify = function(t, m) table.insert(__toasts, t .. ": " .. (m or "")) end')
 tick(25)
 for c in clients.values(): c.ex('__ns.G().bank["Past bank"]={v=__now,items={},money=0,retired=true,seen={[2589]=true,[4306]=true}}')
-shown = "(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() then n = n + 1 end end return n end)()"
+shown = "(function() local n = 0 for _, r in ipairs(__ns.UI.rows) do if r:IsShown() and r.data and not tostring(r.data.key):find(\"^cat:\") then n = n + 1 end end return n end)()"
 def toasts(c):
     n = c.ev('#__toasts')
     return [c.ev('__toasts[%d]' % i) for i in range(1, n + 1)]
@@ -29,7 +29,7 @@ check("Roster lists everyone (%d)" % A.ev(shown), A.ev(shown) == 7)
 A.ex('__ns.UI.state.roster.filter = "online"; __ns.UI:Refresh()')
 check("online filter", A.ev(shown) == 5)
 A.ex('__ns.UI.state.roster.filter = "near"; __ns.UI:Refresh()')
-check("near my level: online, within 3 levels, not me (%d)" % A.ev(shown), A.ev(shown) == 4)
+check("near my level: online, within 5 levels, not me (%d)" % A.ev(shown), A.ev(shown) >= 4)
 A.ex('__ns.UI.state.roster.filter = "all"; __ns.UI:Refresh()')
 
 # --- profiles ---

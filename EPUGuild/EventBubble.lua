@@ -162,7 +162,7 @@ function ns.FillBubbleActions(det)
   if not guild or not state then return end
   local current = ns.GetBubbleActions(guild, state)
   det:Reset(nil, nil, 'Needs your attention', ns.me)
-  det:Buttons({{'Open Events', OpenEvents}})
+  det:Buttons({{'Open Events', OpenEvents}, {'Find a group', function() SlashCmdList.EPUGUILD('groups') end}})
   local empty = true
   for _, section in ipairs(sections) do
     local kind, group = section[1], current[section[1]]
@@ -234,6 +234,35 @@ bubble:SetScript('OnClick', function(self, button)
     OpenEvents()
   end
 end)
+-- A small Groups button rides on the bubble: one click to find or start a group.
+local lfg = CreateFrame('Button', 'EPUGuildEventBubbleLFG', bubble)
+lfg:SetSize(22, 22)
+lfg:SetPoint('TOPLEFT', bubble, 'BOTTOMRIGHT', -14, 8)
+lfg:SetFrameLevel(bubble:GetFrameLevel() + 3)
+lfg.ring = lfg:CreateTexture(nil, 'BACKGROUND')
+lfg.ring:SetAllPoints()
+lfg.ring:SetColorTexture(0.06, 0.07, 0.09, 0.9)
+lfg.icon = lfg:CreateTexture(nil, 'ARTWORK')
+lfg.icon:SetPoint('TOPLEFT', 2, -2); lfg.icon:SetPoint('BOTTOMRIGHT', -2, 2)
+lfg.icon:SetTexture('Interface\\Icons\\INV_Misc_GroupNeedMore')
+lfg.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+lfg:SetHighlightTexture('Interface\\Buttons\\ButtonHilight-Square')
+lfg:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
+lfg:SetScript('OnEnter', function(self)
+  GameTooltip:SetOwner(self, 'ANCHOR_LEFT')
+  GameTooltip:SetText('Groups')
+  local n = 0
+  for _, x in ipairs(ns.OpenGroups and ns.OpenGroups() or {}) do if x.who ~= ns.me then n = n + 1 end end
+  GameTooltip:AddLine(n == 1 and '1 open group from guildmates' or (n..' open groups from guildmates'), 1, 1, 1)
+  GameTooltip:AddLine('Click to find a group. Right-click to start one.', 0.85, 0.85, 0.85, true)
+  GameTooltip:Show()
+end)
+lfg:SetScript('OnLeave', function() GameTooltip:Hide() end)
+lfg:SetScript('OnClick', function(_, button)
+  SlashCmdList.EPUGUILD(button == 'RightButton' and 'lfg' or 'groups')
+end)
+ns.EventBubbleLFG = lfg
+
 bubble:SetScript('OnDragStart', function(self)
   GameTooltip:Hide()
   self.moving = true

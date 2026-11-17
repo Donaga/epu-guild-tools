@@ -680,9 +680,13 @@ local function RowLeave(self)
   GameTooltip_Hide()
 end
 
-local function RowClick(self)
+local function RowClick(self, button)
   local d = self.data
   if not d then return end
+  if button == "RightButton" then
+    if d.onRightClick then d.onRightClick(self) end
+    return
+  end
   if d.item and IsModifiedClick("CHATLINK") then
     local _, link = GetItemInfo(d.item)
     if link then ChatEdit_InsertLink(link) end
@@ -756,37 +760,80 @@ local function GetRow(i)
   r:SetScript("OnEnter", RowEnter)
   r:SetScript("OnLeave", RowLeave)
   r:SetScript("OnClick", RowClick)
+  if r.RegisterForClicks then r:RegisterForClicks("LeftButtonUp", "RightButtonUp") end
   UI.rows[i] = r
   return r
 end
 
+-- Home is laid out as a dashboard: full-width cards (message of the day,
+-- needs attention), a row of stat tiles, then two panes of sections side by
+-- side (d.pane = 1 or 2), then a grid of shortcut cards.  Other views are a
+-- plain list.
+local function HomePlacer(width)
+  local gap = 10
+  local twoPane = width >= 600
+  local paneW = math.floor((width - gap * 3) / 2)
+  local y, gridCols, gridCol, gridH = 12, 0, 0, 0
+  local paneY
+  local function CloseGrid()
+    if gridCol > 0 then y = y + gridH + gap end
+    gridCol, gridH = 0, 0
+  end
+  local function ClosePanes()
+    if paneY then y = math.max(paneY[1], paneY[2]) + 4; paneY = nil end
+  end
+  local place = {}
+  function place.Height(d)
+    return d.section and 28 or d.tile and 52 or d.compact and 44 or 58
+  end
+  function place.Next(d)
+    local h = place.Height(d)
+    if d.pane and twoPane then
+      CloseGrid()
+      if not paneY then paneY = { y, y } end
+      local p = d.pane == 2 and 2 or 1
+      local x, top = gap + (p - 1) * (paneW + gap), paneY[p]
+      paneY[p] = top + h + (d.section and 2 or 6)
+      return x, top, paneW, h
+    elseif d.featured or d.section or d.pane then
+      CloseGrid(); ClosePanes()
+      local top = y
+      y = y + h + (d.section and 2 or (d.pane and 6 or gap))
+      return gap, top, width - gap * 2, h
+    end
+    ClosePanes()
+    local n = d.tile and (width >= 600 and 4 or 2) or (width >= 460 and 2 or 1)
+    if gridCols ~= n then CloseGrid(); gridCols = n end
+    local w = math.floor((width - gap * (n + 1)) / n)
+    local x = gap + gridCol * (w + gap)
+    gridH = math.max(gridH, h)
+    gridCol = gridCol + 1
+    local top = y
+    if gridCol == n then y = y + gridH + gap; gridCol, gridH = 0, 0 end
+    return x, top, w, h
+  end
+  function place.Total() CloseGrid(); ClosePanes(); return y end
+  return place
+end
+
 local function ShowRows(data, width, viewIcon)
   local home = UI.view == "home"
-  local columns = home and width >= 460 and 2 or 1
-  local gap, col, y = 10, 0, home and 12 or 0
-  local cardWidth = math.floor((width - gap * (columns + 1)) / columns)
-  local lastHeight = 0
+  local place = home and HomePlacer(width)
+  local y = 0
   for i, d in ipairs(data) do
     local r = GetRow(i)
     r.data = d
-    local wide = d.featured or d.section
-    if home and wide and col > 0 then y, col = y + lastHeight + gap, 0 end   -- start a full-width row on its own line
-    local height = home and (d.section and 30 or d.compact and 46 or 64) or ROW_H
-    lastHeight = height
-    local rowWidth = home and (wide and width - gap * 2 or cardWidth) or width
+    local x, top, rowWidth, height = 0, y, width, ROW_H
+    if home then x, top, rowWidth, height = place.Next(d) else y = y + ROW_H end
     r:SetSize(rowWidth, height)
     r:ClearAllPoints()
-    r:SetPoint("TOPLEFT", home and gap + col * (cardWidth + gap) or 0, -y)
-    col = col + 1
-    if col == columns or wide or i == #data then
-      y, col = y + height + (home and (d.section and 2 or gap) or 0), 0
-    end
+    r:SetPoint("TOPLEFT", x, -top)
     r.card:SetShown(home and not d.section)
     local cardColor = d.featured and C.goldBg or C.panel
     r.card:SetColorTexture(cardColor[1], cardColor[2], cardColor[3], 1)
     r.sep:SetShown(not home)
     r.sub:ClearAllPoints()
-    r.sub:SetPoint("TOPLEFT", 48, home and (d.compact and -25 or -35) or -22)
+    r.sub:SetPoint("TOPLEFT", 48, home and (d.compact and -24 or -30) or -22)
 
     -- icon / quality border / online dot
     local icon = d.icon or ((d.onClick or d.dot ~= nil) and viewIcon)
@@ -869,7 +916,7 @@ local function ShowRows(data, width, viewIcon)
     r.title:SetText(d.title or "")
     SetColor(r.title, d.titleColor or C.text)
     r.title:ClearAllPoints()
-    if d.sub or d.frac then r.title:SetPoint("TOPLEFT", 48, home and -15 or -5) else r.title:SetPoint("LEFT", 48, 0) end
+    if d.sub or d.frac then r.title:SetPoint("TOPLEFT", 48, home and (d.compact and -8 or -11) or -5) else r.title:SetPoint("LEFT", 48, 0) end
 
     if d.frac then
       r.sub:Hide()
@@ -884,12 +931,68 @@ local function ShowRows(data, width, viewIcon)
       if d.sub then r.sub:SetWidth(textW); r.sub:SetText(d.sub); r.sub:Show() else r.sub:Hide() end
     end
 
+    -- table-style columns: name, then fixed or "flex" width cells on one line
+    r.cols = r.cols or {}
+    local used = 0
+    if d.columns and not home and rowWidth >= 480 then
+      local titleW = d.titleWidth or 160
+      local fixed, flexCount = 0, 0
+      for _, c in ipairs(d.columns) do if c.w == "flex" then flexCount = flexCount + 1 else fixed = fixed + c.w end end
+      local flexW = math.max(50, math.floor((rowWidth - 48 - titleW - fixed - rightEdge - 8) / math.max(1, flexCount)))
+      r.title:SetWidth(titleW - 6); r.title:ClearAllPoints(); r.title:SetPoint("LEFT", 48, 0)
+      r.sub:Hide()
+      local x = 48 + titleW
+      for ci, c in ipairs(d.columns) do
+        local fs = r.cols[ci]
+        if not fs then fs = Font(r, 11, C.text); fs:SetWordWrap(false); r.cols[ci] = fs end
+        local w = c.w == "flex" and flexW or c.w
+        fs:ClearAllPoints(); fs:SetPoint("LEFT", x, 0); fs:SetWidth(w - 6)
+        fs:SetJustifyH(c.align or "LEFT")
+        fs:SetText(c.text or "")
+        SetColor(fs, c.color or (d.header and C.muted or C.text))
+        fs:Show()
+        x = x + w
+        used = ci
+      end
+      if d.header then SetColor(r.title, C.muted) end
+    end
+    for ci = used + 1, #r.cols do r.cols[ci]:Hide() end
+
+    -- home section headings: gold title with a thin rule running to the right
+    if not r.rule then r.rule = Tex(r, "ARTWORK", C.line); r.rule:SetHeight(1) end
+    r.rule:Hide()
+    if home and d.section then
+      r.sub:Hide()
+      r.title:ClearAllPoints(); r.title:SetPoint("BOTTOMLEFT", 2, 6)
+      local tw = math.min(TextWidth(r.title) + 1, rowWidth - 40)
+      r.title:SetWidth(tw)
+      r.rule:ClearAllPoints()
+      r.rule:SetPoint("LEFT", r.title, "RIGHT", 8, 0)
+      r.rule:SetPoint("RIGHT", r, "RIGHT", -2, 0)
+      r.rule:Show()
+    end
+    -- home stat tiles: a big number, its label beside it, a small line under
+    if not r.big then r.big = Font(r, 18, C.gold, nil, true) end
+    r.big:Hide()
+    if home and d.tile then
+      r.big:SetText(d.big or "")
+      r.big:SetWidth(math.max(1, math.min(TextWidth(r.big) + 1, rowWidth - 60)))
+      r.big:ClearAllPoints(); r.big:SetPoint("TOPLEFT", 48, -7)
+      r.big:Show()
+      r.title:ClearAllPoints(); r.title:SetPoint("BOTTOMLEFT", r.big, "BOTTOMRIGHT", 5, 1)
+      r.title:SetWidth(math.max(20, rowWidth - 48 - r.big:GetWidth() - 12))
+      SetColor(r.title, d.titleColor or C.text)
+      r.sub:ClearAllPoints(); r.sub:SetPoint("TOPLEFT", 48, -31)
+      r.sub:SetWidth(math.max(20, rowWidth - 54))
+    end
+
     local selected = UI.selected ~= nil and UI.selected.key ~= nil and UI.selected.key == d.key
     r.hl:SetShown(selected)
     r.selectedMark:SetShown(selected)
     r:Show()
   end
   for i = #data + 1, #UI.rows do UI.rows[i]:Hide(); UI.rows[i].data = nil end
+  if home then y = place.Total() end
   child:SetHeight(math.max(1, y))
 end
 
@@ -2061,9 +2164,12 @@ end
 
 Views.roster = {
   label = "Guildmates", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", stateKey = "roster",
-  chips = { { "all", "All" }, { "online", "Online" }, { "near", "Near level", "Online and within 3 levels of you" },
-    { "layer", "My layer", "Online guildmates on your layer of this zone. Target or mouse over any NPC to detect yours." } },
   tools = function(bar)
+    local SHOW = { { label = "Online", value = "online" }, { label = "Everyone", value = "all" },
+      { label = "Near my level (±5)", value = "near" }, { label = "Looking for a partner", value = "looking" },
+      { label = "On my layer", value = "layer" } }
+    UI.showChip = DropChip(bar, 112, "Who to show. On my layer: target or mouse over any NPC to detect yours.", function() return SHOW end,
+      function() return UI.state.roster.filter end, function(v) UI.state.roster.filter = v or "online" end)
     UI.roleChip = DropChip(bar, 64, "Show one role", function()
       local items = { { label = "Any role", value = false } }
       for _, r in ipairs({ "t", "h", "d" }) do items[#items + 1] = { label = ns.ROLES[r], value = r } end
@@ -2073,7 +2179,12 @@ Views.roster = {
       return { { label = "Everyone", value = false }, { label = "Inactive " .. ns.INACTIVE_DAYS .. "+ days", value = "inactive" },
         { label = "Ready for promotion", value = "promote" }, { label = "Has an officer note", value = "note" } }
     end, function() return UI.state.roster.review or false end, function(v) UI.state.roster.review = v or nil end)
-    bar:Add(Btn(bar, "Profile", 60, 22), "right", function() UI:OpenDetails("profile", ns.me) end,
+    UI.lookingBtn = bar:Add(Btn(bar, "I want a partner", 76, 22), "right", function(self)
+      if ns.SetLookingForPartner then ns.SetLookingForPartner(not ns.LookingForPartner()) end
+      self:SetOn(ns.LookingForPartner and ns.LookingForPartner() or false)
+      UI:Refresh()
+    end, "Looking for a partner: guildmates see it in their Guildmates list and on your tooltip until you log off or untick it")
+    bar:Add(Btn(bar, "My profile", 52, 22), "right", function() UI:OpenDetails("profile", ns.me) end,
       "Your role and what you're looking for, shown to the guild")
   end,
   rows = function(g, q)
@@ -2082,9 +2193,12 @@ Views.roster = {
     for name, r in pairs(ns.roster) do
       local prof = ns.ProfileOf(name)
       local roles = prof and prof.roles or ""
+      local status = ns.GuildmateStatus and ns.GuildmateStatus(name)
+      local looking = r.online and status and status.lf
       local ok = (st.filter == "all") or (st.filter == "online" and r.online)
-        or (st.filter == "near" and r.online and name ~= ns.me and math.abs((r.level or 0) - myLevel) <= 3)
+        or (st.filter == "near" and r.online and name ~= ns.me and math.abs((r.level or 0) - myLevel) <= 5)
         or (st.filter == "layer" and r.online and name ~= ns.me and ns.LayerOf and ns.LayerOf(name) == "same")
+        or (st.filter == "looking" and looking)
       if ok and st.role then ok = roles:find(st.role, 1, true) ~= nil end
       local rv = (officer and st.review) and ns.Review(name) or nil
       if ok and rv then
@@ -2092,15 +2206,21 @@ Views.roster = {
           or (st.review == "note" and rv.note and rv.note.text ~= "")
       end
       if ok and Match(q, name, r.zone, r.class, ns.MainOf(name), prof and prof.lf, ns.RoleText(roles)) then
-        local parts = { "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or "") }
-        if r.online then
-          if r.zone and r.zone ~= "" then parts[#parts + 1] = r.zone end
-          local where = name ~= ns.me and ns.LayerOf and ns.LayerOf(name)
-          if where == "same" then parts[#parts + 1] = "|cff4ade80same layer|r"
-          elseif where == "other" then parts[#parts + 1] = "|cffffb347other layer|r" end
-        else
-          parts[#parts + 1] = r.away and (r.away < 1 and "seen today" or ("seen " .. math.floor(r.away) .. "d ago")) or "offline"
-        end
+        local where = r.online and name ~= ns.me and ns.LayerOf and ns.LayerOf(name)
+        local seen = g.syncSeen and g.syncSeen[name]
+        local epu = name == ns.me or (seen and ns.Now() - (seen.t or 0) < 30 * 86400)
+        local zoneText = r.online and (r.zone or "")
+          or (r.away and (r.away < 1 and "seen today" or ("seen " .. math.floor(r.away) .. "d ago")) or "offline")
+        local groupText = ""
+        if looking then groupText = "|cfff2c14eLooking|r"
+        elseif r.online and UnitInParty and name ~= ns.me and (UnitInParty(name) or (UnitInRaid and UnitInRaid(name))) then groupText = "|cff4ade80With you|r"
+        elseif status and (status.g or 0) > 1 then groupText = "In group (" .. status.g .. ")"
+        elseif status and r.online then groupText = "Solo" end
+        local layerText = where == "same" and "|cff4ade80same|r" or where == "other" and "|cffffb347other|r" or ""
+        local parts = { "Level " .. tostring(r.level or "?") .. (r.class and (" " .. r.class) or ""), zoneText }
+        if where == "same" then parts[#parts + 1] = "|cff4ade80same layer|r"
+        elseif where == "other" then parts[#parts + 1] = "|cffffb347other layer|r" end
+        if groupText ~= "" then parts[#parts + 1] = groupText end
         if prof and prof.lf then parts[#parts + 1] = "|cfff2c14e" .. prof.lf .. "|r" end
         local pill
         if officer then
@@ -2108,21 +2228,38 @@ Views.roster = {
           if rev.inactive then pill = "roster_inactive" elseif rev.promote then pill = "roster_promote" end
         end
         local icon, coords = ns.ClassIcon(r.classFile)
+        local lvlColor = (r.level and math.abs(r.level - myLevel) <= 5) and C.green or C.text
         out[#out + 1] = {
           key = "member:" .. name, dot = r.online, iconCoords = coords,
           icon = icon,
-          title = ns.WhoLabel(name), titleColor = ClassColor(r.classFile),
-          sub = table.concat(parts, "  ·  "), right = ns.RoleText(roles), pill = pill,
-          sortOnline = r.online and 1 or 0, sortLevel = r.level or 0, sortName = name,
+          title = ns.WhoLabel(name) .. (name == ns.me and " (you)" or ""), titleColor = ClassColor(r.classFile),
+          sub = table.concat(parts, "  ·  "),
+          columns = {
+            { text = tostring(r.level or "?"), w = 34, align = "CENTER", color = lvlColor },
+            { text = zoneText, w = "flex", color = r.online and C.text or C.muted },
+            { text = layerText, w = 52 },
+            { text = groupText, w = 92 },
+            { text = epu and "EPU" or "", w = 36, color = C.muted },
+          },
+          titleWidth = 170,
+          right = ns.RoleText(roles), pill = pill,
+          sortOnline = r.online and 1 or 0, sortLooking = looking and 1 or 0, sortLevel = r.level or 0, sortName = name,
           onClick = function() UI:OpenDetails("member", name) end,
+          onRightClick = function(self) if ns.GuildmateMenu then ns.GuildmateMenu(self, name) end end,
         }
       end
     end
     table.sort(out, function(a, b)
       if a.sortOnline ~= b.sortOnline then return a.sortOnline > b.sortOnline end
+      if a.sortLooking ~= b.sortLooking then return a.sortLooking > b.sortLooking end
       if a.sortLevel ~= b.sortLevel then return a.sortLevel > b.sortLevel end
       return a.sortName < b.sortName
     end)
+    if #out > 0 then
+      table.insert(out, 1, { key = "cat:rosterheader", header = true, title = "Name", titleWidth = 170,
+        columns = { { text = "Lv", w = 34, align = "CENTER" }, { text = "Zone", w = "flex" }, { text = "Layer", w = 52 },
+          { text = "Group", w = 92 }, { text = "", w = 36 } }, right = "Role", rightColor = C.muted })
+    end
     return out
   end,
   footer = function()
@@ -2193,13 +2330,17 @@ Views.home = {
   label = "Home", icon = "Interface\\Icons\\INV_Misc_Map_01",
   rows = function(g, query)
     local rows = {}
+    local pane
     local function Add(row)
+      if not (row.featured or row.tile) then row.pane = pane end
       if row.section or Match(query, row.title, row.sub) then rows[#rows + 1] = row end
     end
-    local function Section(title, sub)
+    -- side: 1 = left pane, 2 = right pane, nil = full width below the panes
+    local function Section(title, side)
       -- drop an empty section header left by the previous section
       if rows[#rows] and rows[#rows].section then rows[#rows] = nil end
-      rows[#rows + 1] = { key = "section:" .. title, section = true, title = "|cfff2c14e" .. title .. "|r", sub = sub }
+      pane = side
+      rows[#rows + 1] = { key = "section:" .. title, section = true, pane = side, title = "|cfff2c14e" .. title .. "|r" }
     end
     local function Go(fn) return function() UI.search:SetText(""); fn() end end
     local c = ns.CasualStore and ns.CasualStore() or {}
@@ -2236,11 +2377,12 @@ Views.home = {
     for _, r in pairs(g.requests) do
       if ns.IsActiveRequest(r) and (ns.MainOf(r.who) == ns.MainOf(ns.me) or ns.IAmCrafter(r)) then myRequests = myRequests + 1 end
     end
-    Add({ key = "online", title = online .. " online", sub = withEPU .. " with EPU · see who's where", icon = Views.roster.icon, compact = true,
+    Add({ key = "online", tile = true, big = tostring(online), title = "online", sub = withEPU .. " with EPU", icon = Views.roster.icon,
       onClick = Go(function() UI.state.roster.filter = "online"; UI:SetView("roster") end) })
-    Add({ key = "groups", title = #groups .. (#groups == 1 and " open group" or " open groups"), sub = #now .. " right now · " .. #soon .. " later",
-      icon = Views.activities.icon, compact = true, onClick = Go(function() ns.ShowGroups() end) })
-    Add({ key = "myrequests", title = "My requests", sub = myRequests .. " open", icon = Views.requests.icon, compact = true,
+    Add({ key = "groups", tile = true, big = tostring(#groups), title = #groups == 1 and "open group" or "open groups",
+      sub = #now .. " now · " .. #soon .. " later", icon = Views.activities.icon, onClick = Go(function() ns.ShowGroups() end) })
+    Add({ key = "myrequests", tile = true, big = tostring(myRequests), title = myRequests == 1 and "request" or "requests",
+      sub = "yours, still open", icon = Views.requests.icon,
       onClick = Go(function()
         local filters = UI.state.requests
         filters.mine, filters.crafts, filters.filter = true, false, "open"
@@ -2252,24 +2394,26 @@ Views.home = {
         if not nextEvent or event.starts < nextEvent.starts then nextEvent = event end
       end
     end
-    Add({ key = "nextevent", title = "Next event", sub = nextEvent and (nextEvent.title .. " · " .. date("%a %H:%M", nextEvent.starts)) or "Nothing scheduled",
-      icon = Views.activities.icon, compact = true, onClick = Go(function() SlashCmdList.EPUGUILD("calendar") end) })
+    Add({ key = "nextevent", tile = true, big = nextEvent and date("%a", nextEvent.starts) or "—",
+      title = nextEvent and date("%H:%M", nextEvent.starts) or "no events",
+      sub = nextEvent and nextEvent.title or "Next event: nothing planned",
+      icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", onClick = Go(function() SlashCmdList.EPUGUILD("calendar") end) })
     -- right now
-    Section("Right now", "Groups and help wanted at the moment")
+    Section("Right now", 1)
     for i, x in ipairs(now) do
       if i > 4 then break end
-      Add({ key = "now:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
+      Add({ key = "now:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, compact = true, onClick = Go(x.open) })
     end
     if #now == 0 then
-      Add({ key = "nobody", title = "Nobody's looking for a group", sub = "Start one: pick a dungeon and when", icon = Views.activities.icon,
+      Add({ key = "nobody", title = "Nobody's looking for a group", sub = "Start one: pick a dungeon and when", icon = Views.activities.icon, compact = true,
         onClick = Go(function() ns.ShowGroups(); UI:OpenDetails("groupform", "new") end) })
     end
     if #soon > 0 then
-      Section("Coming up", "Run requests and events")
+      Section("Coming up", 1)
       for i, x in ipairs(soon) do
-        if i > 4 then Add({ key = "more", title = "See all groups", sub = (#soon - 4) .. " more", icon = Views.activities.icon,
+        if i > 4 then Add({ key = "more", title = "See all groups", sub = (#soon - 4) .. " more", icon = Views.activities.icon, compact = true,
           onClick = Go(function() ns.ShowGroups() end) }); break end
-        Add({ key = "soon:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
+        Add({ key = "soon:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, compact = true, onClick = Go(x.open) })
       end
     end
     -- who is where
@@ -2277,7 +2421,7 @@ Views.home = {
     for zone, names in pairs(zones) do zoneList[#zoneList + 1] = { zone = zone, names = names } end
     table.sort(zoneList, function(a, b) if #a.names ~= #b.names then return #a.names > #b.names end return a.zone < b.zone end)
     if #zoneList > 0 then
-      Section("Who is where", "Online guildmates by zone")
+      Section("Who is where", 2)
       for i, z in ipairs(zoneList) do
         if i > 6 then break end
         table.sort(z.names)
@@ -2306,7 +2450,7 @@ Views.home = {
     end
     table.sort(feed, function(a, b) return a.t > b.t end)
     if #feed > 0 then
-      Section("Today in the guild")
+      Section("Today in the guild", 2)
       for i, e in ipairs(feed) do
         if i > 6 then break end
         local ago = math.floor((ns.Now() - e.t) / 60)
@@ -3868,7 +4012,30 @@ do
       b.icon:SetPoint("TOP", 0, -3)
       b.label:SetPoint("TOP", b.icon, "BOTTOM", 0, -2)
     end
-    b.label:SetText(({bank="Stock", invites="Invites", onboarding="Start here"})[key] or v.label)
+    b.label:SetText(({bank="Bank stock", requests="Item requests", needs="Bank needs", shopping="To buy",
+      donations="Donations", invites="Invites", onboarding="Start here"})[key] or v.label)
+    -- one line on what each page is for, shown on hover
+    b.desc = ({
+      home="Your guild at a glance: who's on, open groups, today's news.",
+      activities="Find or start a group, request a dungeon run, see events.",
+      roster="Who's online, where they are, their level and layer.",
+      bank="Everything the guild bank holds. Click an item to request it.",
+      requests="Item requests from guildmates and where each one stands.",
+      needs="Items the bank is collecting, with how many are still wanted.",
+      shopping="What still has to be bought or farmed to cover needs and requests.",
+      donations="Who has given what to the guild bank.",
+      market="Prices guildmates ask for gathered materials and crafts.",
+      crafters="Who can craft what, and their profession skill.",
+      recipes="Every recipe guildmates know. Ask someone to craft one.",
+      news="Guild announcements and milestones.",
+      projects="Guild crafting projects and who is working on which part.",
+      invites="Invite requests for new members.",
+      membertools="Quest guides, catch-up help and your notifications.",
+      onboarding="Your guild checklist for getting started.",
+      settings="Notifications, map sharing and the minimap button.",
+      sync="How up to date your guild data is and who has shared it.",
+      officer="Officer tools: Discord updates, member review and the officer log.",
+    })[key]
     b.badge = CreateFrame("Frame", nil, b)
     b.badge:SetSize(22, 14)
     b.badge:SetPoint("RIGHT", -6, 0)
@@ -3879,9 +4046,10 @@ do
     b.badge.text:SetJustifyH("CENTER")
     b:SetScript("OnEnter", function(self)
       if UI.view~=self.key then self.bg:Show() end
-      if self.label:GetText()==v.label and TextWidth(self.label)<=self.label:GetWidth()+1 then return end
+      if not self.desc and self.label:GetText()==v.label and TextWidth(self.label)<=self.label:GetWidth()+1 then return end
       GameTooltip:SetOwner(self,"ANCHOR_BOTTOM")
-      GameTooltip:SetText(v.label,1,1,1,1,true)
+      GameTooltip:SetText(self.label:GetText() or v.label,1,1,1,1,true)
+      if self.desc then GameTooltip:AddLine(self.desc,0.85,0.85,0.85,true) end
       GameTooltip:Show()
     end)
     b:SetScript("OnLeave", function(self)
@@ -3890,6 +4058,9 @@ do
     end)
     b:SetScript("OnClick", function(self)
       if self.key=="bank" and UI.state.bank.mode then UI.state.bank.mode=nil; UI:CloseDetails() end
+      -- the sidebar always opens Groups on Everything, so a board picked earlier
+      -- (Events from the calendar, say) doesn't hide run requests and groups
+      if self.key=="activities" and UI.view~="activities" then UI.state.activities.kind="all" end
       if v.onSelect then v.onSelect() else UI:SetView(self.key) end
     end)
     b.key = key
@@ -3915,23 +4086,62 @@ UI.bankStv:SetScript("OnClick",function()
   UI:CloseDetails()
   UI:SetView("bank")
 end)
+-- Section buttons look exactly like the other sidebar entries (flat, icon over label,
+-- gold strip when selected) so the sidebar reads as one list.
 for _, group in ipairs(GROUPS) do
-  local button = Btn(side, group.label, SIDEBAR_W - 12, 28)
+  local button = CreateFrame("Button", nil, side)
+  button:SetSize(SIDEBAR_W - 12, 28)
+  button.bg = Tex(button, "BACKGROUND", C.panel2)
+  button.bg:SetAllPoints()
+  button.bg:Hide()
+  button.strip = Tex(button, "BORDER", C.gold)
+  button.strip:SetPoint("TOPLEFT"); button.strip:SetPoint("BOTTOMLEFT"); button.strip:SetWidth(2)
+  button.strip:Hide()
   local icon = button:CreateTexture(nil,"ARTWORK")
   icon:SetSize(18,18)
   icon:SetPoint("TOP",0,-3)
   icon:SetTexture(Views[group.iconView].icon)
   icon:SetTexCoord(0.08,0.92,0.08,0.92)
-  button.text:ClearAllPoints()
+  button.icon = icon
+  button.text = Font(button, 10, C.muted)
   button.text:SetPoint("TOP",icon,"BOTTOM",0,-2)
-  if button.text:SetFont(FONT,10,"") == false then button.text:SetFont(fallbackFont,10,"") end
+  button.text:SetText(group.label)
+  function button:SetOn(on)
+    self.on = on and true or false
+    self.bg:SetShown(self.on or self.hovered)
+    self.strip:SetShown(self.on)
+    SetColor(self.text, self.on and C.gold or C.muted)
+  end
+  local groupDesc = ({Bank="Bank stock, item requests, needs, what to buy and donations.",
+    Professions="Market prices, crafters and recipes.", Guild="News, crafting projects and invites.",
+    ["Member tools"]="Quest guides, catch-up help and your getting-started checklist."})[group.label]
+  button:SetScript("OnEnter", function(self)
+    self.hovered=true; self:SetOn(self.on)
+    if groupDesc then
+      GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+      GameTooltip:SetText(group.label,1,1,1,1,true)
+      GameTooltip:AddLine(groupDesc,0.85,0.85,0.85,true)
+      GameTooltip:Show()
+    end
+  end)
+  button:SetScript("OnLeave", function(self) self.hovered=false; self:SetOn(self.on); GameTooltip_Hide() end)
   button:SetScript("OnClick", function()
     UI.search:SetText("")
     local v=Views[group.first]
     if v.onSelect then v.onSelect() else UI:SetView(group.first) end
   end)
+  button:SetOn(false)
   group.button=button
 end
+-- Thin rules split the sidebar into Together (Home, Groups, Guildmates),
+-- Guild (Bank, Professions, Guild) and You (Member tools, Settings, Sync).
+UI.navRules = {}
+for i = 1, 2 do
+  local rule = Tex(side, "ARTWORK", C.line)
+  rule:SetHeight(1)
+  UI.navRules[i] = rule
+end
+local NAV_BREAK = { bank = 1, membertools = 2 }
 
 ---------------------------------------------------------------------------
 -- Layout / view switching / refresh
@@ -4090,10 +4300,17 @@ function UI:Refresh()
   if inBank then tabs=tabs+2 end
   local tabWidth = math.min(108, math.floor((self:GetWidth()-SIDEBAR_W-16)/math.max(1,tabs)))
   local tabX, subY = 7, -12
-  local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 60) / nVisible))
+  local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 76) / nVisible))
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local group = groupFor[key]
+    local rule = NAV_BREAK[key] and self.navRules[NAV_BREAK[key]]
+    if rule then
+      rule:ClearAllPoints()
+      rule:SetPoint("TOPLEFT", side, "TOPLEFT", 12, y - 3)
+      rule:SetPoint("TOPRIGHT", side, "TOPLEFT", SIDEBAR_W - 12, y - 3)
+      y = y - 8
+    end
     if group and group[1] == key then
       local button = group.button
       button:SetHeight(step - 2)
@@ -4234,10 +4451,14 @@ function UI:Refresh()
     end
     if v == Views.roster then
       local st = self.state.roster
-      self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Role")
+      local shows = { online = "Online", all = "Everyone", near = "Near my level", looking = "Looking for partner", layer = "On my layer" }
+      self.showChip:SetLabel("Show: " .. (shows[st.filter] or "Online"))
+      self.showChip:SetOn(st.filter ~= "online")
+      if self.lookingBtn then self.lookingBtn:SetOn(ns.LookingForPartner and ns.LookingForPartner() or false) end
+      self.roleChip:SetLabel(st.role and ns.ROLES[st.role] or "Any role")
       self.roleChip:SetOn(st.role ~= nil)
       local labels = { inactive = "Inactive", promote = "Promote?", note = "Has note" }
-      self.reviewChip:SetLabel(st.review and labels[st.review] or "Review")
+      self.reviewChip:SetLabel(st.review and labels[st.review] or "Officer review")
       self.reviewChip:SetOn(st.review ~= nil)
       self.reviewChip:SetShown(ns.IsTrusted(ns.me))
     end

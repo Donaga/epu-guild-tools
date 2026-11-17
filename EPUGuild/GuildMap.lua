@@ -307,3 +307,107 @@ ns.On("PLAYER_LOGIN",function()
   end
   C_Timer.After(10+math.random()*20,Tick)
 end)
+
+---------------------------------------------------------------------------
+-- Live status for the Guildmates list: "looking for a partner" and the size
+-- of your group. Ephemeral like locations: nothing is saved, and it is only
+-- sent while there is something to say (or once to clear it).
+---------------------------------------------------------------------------
+local status, lookingSince = {}, nil
+local STATUS_TTL, STATUS_BEAT = 200, 90
+local lastStatus, lastStatusAt
+local function GroupSize()
+  local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+  return n > 1 and n or 1
+end
+local function SendStatus(force)
+  if not IsInGuild or not IsInGuild() then return end
+  local looking = lookingSince ~= nil
+  local g = GroupSize()
+  local sig = (looking and "L" or "-") .. g
+  local now = GetTime()
+  local idle = not looking and g <= 1
+  if not force and sig == lastStatus and (idle or now - (lastStatusAt or 0) < STATUS_BEAT) then return end
+  if idle and (lastStatus == nil or lastStatus == "-1") and not force then lastStatus = sig; return end
+  lastStatus, lastStatusAt = sig, now
+  ns.SendEphemeral("P", { lf = looking or nil, g = g }, 20)
+end
+ns.comm.P = function(sender, data, channel)
+  if channel ~= "GUILD" or type(data) ~= "table" or sender == ns.me or not ns.roster[sender] then return end
+  local g = tonumber(data.g)
+  status[sender] = { lf = data.lf == true, g = (g and g >= 1 and g <= 40 and g % 1 == 0) and g or nil, at = GetTime() }
+  ns.Changed()
+end
+function ns.GuildmateStatus(name)
+  if name == ns.me then return { lf = lookingSince ~= nil, g = GroupSize() } end
+  local s = status[name]
+  if not s or GetTime() - s.at > STATUS_TTL then return nil end
+  return s
+end
+function ns.LookingForPartner() return lookingSince ~= nil end
+function ns.SetLookingForPartner(on)
+  lookingSince = on and GetTime() or nil
+  SendStatus(true)
+  ns.Print(on and "Guildmates now see you're looking for a partner (until you untick it or log off)." or "No longer looking for a partner.")
+end
+ns.On("GROUP_ROSTER_UPDATE", function() if ns.Debounce then ns.Debounce("guildStatus", 2, SendStatus) else SendStatus() end end)
+ns.On("PLAYER_LOGIN", function()
+  if C_Timer and C_Timer.NewTicker then C_Timer.NewTicker(30, function() pcall(SendStatus) end) end
+end)
+
+-- Right-click a guildmate: whisper, invite, waypoint, layer.
+function ns.GuildmateMenu(anchor, name)
+  local items = {}
+  local short = name:match("^(%S+)") or name
+  local r = ns.roster[name] or {}
+  if name ~= ns.me then
+    items[#items + 1] = { label = "Whisper " .. short, value = "whisper" }
+    if r.online then items[#items + 1] = { label = "Invite to group", value = "invite" } end
+    local p = locations[name]
+    if p and GetTime() - p.at < TTL then items[#items + 1] = { label = "Set a waypoint to them", value = "waypoint" } end
+    if ns.LayerOf and ns.LayerOf(name) == "other" then items[#items + 1] = { label = "Ask to join their layer", value = "layer" } end
+  end
+  items[#items + 1] = { label = "Details", value = "details" }
+  ns.OpenMenu(anchor, items, nil, function(v)
+    if v == "whisper" then if ChatFrame_SendTell then ChatFrame_SendTell(name) end
+    elseif v == "invite" then
+      if C_PartyInfo and C_PartyInfo.InviteUnit then C_PartyInfo.InviteUnit(name) elseif InviteUnit then InviteUnit(name) end
+    elseif v == "waypoint" then ns.WaypointTo(name)
+    elseif v == "layer" then
+      if ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. name .. " Could you invite me to a group so I can join your layer in "
+        .. (r.zone or "this zone") .. "? I'll accept the world refresh and leave the group after.") end
+    else ns.UI:OpenDetails("member", name) end
+  end)
+end
+function ns.WaypointTo(name)
+  local p = locations[name]
+  if not p then return ns.Print(name .. " isn't sharing a location right now.") end
+  if C_Map and C_Map.SetUserWaypoint and UiMapPoint and UiMapPoint.CreateFromCoordinates then
+    local ok = pcall(C_Map.SetUserWaypoint, UiMapPoint.CreateFromCoordinates(p.map, p.x, p.y))
+    if ok then
+      if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, true) end
+      return ns.Print("Waypoint set to " .. name .. "'s last shared position.")
+    end
+  end
+  if TomTom and TomTom.AddWaypoint then
+    TomTom:AddWaypoint(p.map, p.x, p.y, { title = name })
+    return ns.Print("TomTom waypoint set to " .. name .. ".")
+  end
+  ns.Print("This client can't place map waypoints. " .. name .. " is at " .. math.floor(p.x * 1000) / 10 .. ", " .. math.floor(p.y * 1000) / 10 .. ".")
+end
+
+-- Guildmate tooltips: who's looking for a partner.
+local function TooltipStatus(tt)
+  if not tt or not tt.GetUnit then return end
+  local ok, _, unit = pcall(tt.GetUnit, tt)
+  if not ok or not unit or not UnitIsPlayer or not UnitIsPlayer(unit) then return end
+  local okn, n = pcall(UnitName, unit)
+  if not okn or type(n) ~= "string" or (issecretvalue and issecretvalue(n)) then return end
+  local s = ns.roster[n] and ns.GuildmateStatus(n)
+  if s and s.lf then tt:AddLine("Looking for a partner (EPU)", 0.95, 0.76, 0.31) end
+end
+if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tt) pcall(TooltipStatus, tt) end)
+elseif GameTooltip and GameTooltip.HookScript then
+  pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", function(tt) pcall(TooltipStatus, tt) end)
+end
