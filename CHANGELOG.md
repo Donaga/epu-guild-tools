@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.26.0
+
+- **Playing together comes first.** **Groups** and **Guildmates** (the Roster, renamed) now sit right under **Home** in the sidebar, instead of being buried under Guild. Guildmates opens on who's online.
+- **New Home dashboard:**
+  - the message of the day, and anything that needs your attention
+  - at a glance: who's online (and how many use EPU), open groups, your requests and the next event
+  - **Right now:** quick groups and help wanted, with role counts
+  - **Coming up:** run requests and events
+  - **Who is where:** online guildmates by zone, with their levels. Click a zone to see them.
+  - **Today in the guild:** joins, level-ups and milestones from the last day, plus new announcements
+  - shortcuts to the bank, news and the getting started checklist
+- **Groups page:** quick groups, run requests and events this week in one list, sorted into Right now, Later today and This week.
+- **Create a group:** one form for everything.
+  - Pick **Dungeon** (from the list), **Raid**, **PvP** or **Other**, then **Quests**, **Loot farming** or **Either**.
+  - Pick when: **Now** posts a quick group for 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From–To time, posts a run request guildmates can tick times on.
+  - Optionally **Tell guild chat**: one line so guildmates without EPU see it too.
+- New commands: `/epu groups`, `/epu lfg` (start a group) and `/epu who` (guildmates online). `/epu who <item>` still asks who can craft an item.
+
 ## 0.25.0
 
 - **STV pages tab on the Bank page.** It shows every Green Hills of Stranglethorn page grouped by chapter: how many the bank has, which bank character holds them, and how many complete sets each chapter could hand out. Pages the bank has none of are greyed out.

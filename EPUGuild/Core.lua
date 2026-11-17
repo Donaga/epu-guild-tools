@@ -378,6 +378,8 @@ local HELP = {
   "|cffffd100/epu sync|r - ask online officers for a full resync",
   "|cffffd100/epu net|r - show EPU's queued messages, throttle counts and cooldown",
   "|cffffd100/epu save|r - save now (a /reload) so the Discord companion sees the latest",
+  "|cffffd100/epu groups|r - see who wants a group; /epu lfg starts one",
+  "|cffffd100/epu who|r - guildmates online and where they are (/epu who <item> asks who can craft it)",
   "|cffffd100/epu link <code>|r - link your characters to Discord with the code from /link there; /epu link off stops",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
@@ -418,7 +420,7 @@ SlashCmdList.EPUGUILD = function(msg)
     local id, qty, note = ns.ParseItemArgs(args)
     if not id then return ns.Print("Usage: /epu request <item link> <qty> [note]") end
     ns.NewRequest(id, qty or 1, note)
-  elseif cmd == "who" then
+  elseif cmd == "who" and (args or ""):match("%S") then
     ns.AskWhoCrafts(args)
   elseif cmd == "shop" then
     ns.ExportAuctionator()
@@ -448,6 +450,10 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.ShowGatheringMarket()
   elseif cmd == "route" then
     ns.GatheringRouteCommand(args)
+  elseif cmd == "groups" or cmd == "lfg" or cmd == "group" then
+    if ns.UI then ns.UI:Show(); ns.UI:SetView("groups"); if cmd ~= "groups" then ns.UI:OpenDetails("groupform", "new") end end
+  elseif cmd == "who" or cmd == "online" or cmd == "guildmates" then
+    if ns.UI then ns.UI:Show(); ns.UI.state.roster.filter = "online"; ns.UI:SetView("roster") end
   elseif cmd == "link" then
     ns.DiscordLinkCommand(args)
   elseif cmd == "sharespots" then

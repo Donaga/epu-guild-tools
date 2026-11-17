@@ -130,6 +130,25 @@ missed guild data; old activity records are removed after 30 days. Starter-kit
 templates are retained until retired, and retirement records are retained to
 prevent old copies reappearing. The Discord companion does not manage these boards.
 
+## Home, Groups and Guildmates (0.26+)
+
+The sidebar starts with the things you do together:
+
+- **Home** shows what's happening:
+  - the message of the day, and anything waiting for you
+  - who's online (and how many use EPU), open groups, your requests and the next event
+  - **Right now:** quick groups and help wanted, with tank, healer and DPS counts
+  - **Coming up:** run requests and events
+  - **Who is where:** online guildmates by zone, with levels. Click a zone to list them.
+  - **Today in the guild:** joins, level-ups, milestones and new announcements
+- **Groups** lists quick groups, run requests and events for the week, grouped into Right now, Later today and This week. Click **Create a group**:
+  1. Pick **Dungeon** (choose it from the list), **Raid**, **PvP** or **Other** (type what it's for). For dungeons and raids, pick **Quests**, **Loot farming** or **Either**.
+  2. Pick when. **Now** posts a quick group that closes after 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From and To time, posts a run request guildmates tick their times on (see Run requests).
+  3. Pick your role, add a note if you like, and tick **Tell guild chat** to post one line in guild chat as well. Then **Post**.
+- **Guildmates** (the old Roster) opens on who's online.
+
+Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildmates online.
+
 ## STV pages (0.25+)
 
 Questing in Stranglethorn? On the **Bank** page, open the **STV pages** tab. It lists the 15 Green Hills of Stranglethorn pages by chapter (I: 1, 4, 6, 8 · II: 10, 11, 14, 16 · III: 18, 20, 21, 24 · IV: 25, 26, 27). For each page you see:

@@ -24,7 +24,7 @@ for c in clients.values():
 tick(2)
 check("roster keeps class, zone, last seen", A.ev('__ns.roster["Tyler Baker"].zone') == "Westfall"
       and A.ev('__ns.roster["Pip Baker"].away') == 40 and A.ev('__ns.roster["Pip Baker"].online') == False)
-A.ex('__ns.UI:Show(); __ns.UI:SetView("roster")')
+A.ex('__ns.UI:Show(); __ns.UI.state.roster.filter="all"; __ns.UI:SetView("roster")')
 check("Roster lists everyone (%d)" % A.ev(shown), A.ev(shown) == 7)
 A.ex('__ns.UI.state.roster.filter = "online"; __ns.UI:Refresh()')
 check("online filter", A.ev(shown) == 5)
