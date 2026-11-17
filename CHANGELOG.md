@@ -19,6 +19,7 @@
   - Pick when: **Now** posts a quick group for 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From–To time, posts a run request guildmates can tick times on.
   - Optionally **Tell guild chat**: one line so guildmates without EPU see it too.
 - New commands: `/epu groups`, `/epu lfg` (start a group) and `/epu who` (guildmates online). `/epu who <item>` still asks who can craft an item.
+- Updating from 0.23.0 or older? Restart WoW once (not just /reload) so the newer fonts and header art load.
 
 ## 0.25.0
 
