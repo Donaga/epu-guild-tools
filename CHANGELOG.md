@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.25.0
+
+- **STV pages tab on the Bank page.** It shows every Green Hills of Stranglethorn page grouped by chapter: how many the bank has, which bank character holds them, and how many complete sets each chapter could hand out. Pages the bank has none of are greyed out.
+- Pages you're missing are highlighted, and pages you already carry are marked. Chapters you've turned in show as Done.
+- Click a chapter to request pages from the bank. The pages you need start ticked, and each page becomes its own request.
+- Officers can set **Keep 3 of each page** in one click. Short pages then appear on Needs and first in the mailbox donate panel, so members can send in the duplicates they loot.
+
 ## 0.24.0
 
 - **Run requests.** Ask the guild "I want to run this dungeon, anyone else?" without scheduling an event. In **Guild activities → Run requests**, click **Request a run**:

@@ -332,3 +332,107 @@ function ns.MailBankItem(target, item, qty)
   Attached(n)
   return n
 end
+
+---------------------------------------------------------------------------
+-- Green Hills of Stranglethorn: the 15 pages the four chapter quests ask
+-- for. Page N is item 2724+N on Classic clients; pages are also recognised
+-- by name in case a client numbers them differently.
+---------------------------------------------------------------------------
+ns.STV_TARGET = 3
+ns.STV_CHAPTERS = {
+  { name = "Chapter I", quest = 339, pages = { 1, 4, 6, 8 } },
+  { name = "Chapter II", quest = 340, pages = { 10, 11, 14, 16 } },
+  { name = "Chapter III", quest = 341, pages = { 18, 20, 21, 24 } },
+  { name = "Chapter IV", quest = 342, pages = { 25, 26, 27 } },
+}
+ns.STV_FINAL_QUEST = 338
+local stvIds = {}
+function ns.StvPageItem(page)
+  if stvIds[page] then return stvIds[page] end
+  local g = ns.G()
+  for alt, s in pairs(g and g.bank or {}) do
+    for id in pairs(type(s.items) == "table" and s.items or {}) do
+      local name = ns.ItemName(tonumber(id) or 0)
+      local n = type(name) == "string" and tonumber(name:match("^Green Hills of Stranglethorn %- Page (%d+)$"))
+      if n == page then stvIds[page] = tonumber(id); return stvIds[page] end
+    end
+  end
+  return 2724 + page
+end
+local function Done(quest)
+  if C_QuestLog and C_QuestLog.IsQuestFlaggedCompleted then
+    local ok, done = pcall(C_QuestLog.IsQuestFlaggedCompleted, quest)
+    if ok then return done == true end
+  end
+  if IsQuestFlaggedCompleted then local ok, done = pcall(IsQuestFlaggedCompleted, quest); return ok and done == true end
+  return false
+end
+local function Carried(id)
+  return (C_Item and C_Item.GetItemCount and C_Item.GetItemCount(id, true)) or (GetItemCount and GetItemCount(id, true)) or 0
+end
+-- Everything the STV tab shows, worked out once per refresh.
+function ns.StvPlan()
+  local g = ns.G()
+  local finished = Done(ns.STV_FINAL_QUEST)
+  local plan = { chapters = {}, finished = finished, target = ns.STV_TARGET, targetsSet = g ~= nil }
+  for _, ch in ipairs(ns.STV_CHAPTERS) do
+    local c = { name = ch.name, quest = ch.quest, done = finished or Done(ch.quest), pages = {}, sets = math.huge, short = {} }
+    for _, n in ipairs(ch.pages) do
+      local id = ns.StvPageItem(n)
+      local held, asked, free = ns.BankRequestStock(id)
+      local holders = {}
+      for alt, s in pairs(g and g.bank or {}) do
+        local k = not s.retired and type(s.items) == "table" and tonumber(s.items[id] or s.items[tostring(id)])
+        if k and k > 0 then holders[#holders + 1] = tostring(alt) .. (k > 1 and (" " .. k) or "") end
+      end
+      table.sort(holders)
+      local mine = Carried(id)
+      local need = g and g.needs and g.needs.list and g.needs.list[id]
+      need = type(need) == "table" and tonumber(need.q) or tonumber(need)
+      if need ~= ns.STV_TARGET then plan.targetsSet = false end
+      local p = { page = n, item = id, held = held, asked = asked, free = free, holders = holders, mine = mine,
+        missing = not c.done and mine == 0, target = need }
+      c.pages[#c.pages + 1] = p
+      c.sets = math.min(c.sets, free)
+      if free == 0 then c.short[#c.short + 1] = n end
+    end
+    c.sets = c.sets == math.huge and 0 or c.sets
+    plan.chapters[#plan.chapters + 1] = c
+  end
+  return plan
+end
+-- Officers: keep a restock minimum of `qty` for every page, in one sync.
+function ns.SetStvTargets(qty)
+  local g = ns.G()
+  if not g then return end
+  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
+  for _, ch in ipairs(ns.STV_CHAPTERS) do
+    for _, n in ipairs(ch.pages) do
+      local id = ns.StvPageItem(n)
+      g.needs.list[id] = (qty and qty > 0) and qty or nil
+    end
+  end
+  g.needs.v = ns.NextVersion(g.needs.v)
+  ns.Send("D", { needs = g.needs })
+  ns.Changed()
+  if ns.Log then ns.Log(qty and qty > 0 and ("Set Green Hills page targets: " .. qty .. " each") or "Removed Green Hills page targets") end
+  ns.Print(qty and qty > 0 and ("The bank now keeps " .. qty .. " of each Green Hills page. Short pages show on Needs and in the donate panel.")
+    or "Green Hills page targets removed.")
+  return true
+end
+-- Ask the bank for pages. Stops at the guild's open-request limit.
+function ns.RequestStvPages(pages, chapter)
+  local made, skipped = 0, {}
+  for _, n in ipairs(pages) do
+    local id = ns.StvPageItem(n)
+    local _, _, free = ns.BankRequestStock(id)
+    if free < 1 then skipped[#skipped + 1] = n
+    elseif ns.NewRequest(id, 1, "Green Hills " .. (chapter or "") .. ", page " .. n) then made = made + 1
+    else skipped[#skipped + 1] = n; break end
+  end
+  if #skipped > 0 then
+    ns.Print("Not requested: page" .. (#skipped > 1 and "s " or " ") .. table.concat(skipped, ", ")
+      .. " (none free in the bank, or you hit the guild's open-request limit).")
+  end
+  return made
+end

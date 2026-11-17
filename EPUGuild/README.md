@@ -130,6 +130,19 @@ missed guild data; old activity records are removed after 30 days. Starter-kit
 templates are retained until retired, and retirement records are retained to
 prevent old copies reappearing. The Discord companion does not manage these boards.
 
+## STV pages (0.25+)
+
+Questing in Stranglethorn? On the **Bank** page, open the **STV pages** tab. It lists the 15 Green Hills of Stranglethorn pages by chapter (I: 1, 4, 6, 8 · II: 10, 11, 14, 16 · III: 18, 20, 21, 24 · IV: 25, 26, 27). For each page you see:
+- how many the bank has, and which bank character holds them
+- whether you already carry it
+- how many are already requested
+
+Each chapter shows how many full sets the bank could hand out and which pages it's short on. Chapters you've turned in show as Done.
+
+Click a chapter, tick the pages you want (the ones you're missing start ticked) and click **Request pages**. Each page becomes its own request, so it counts toward the guild's open-request limit.
+
+Officers can click **Keep 3 of each page** to set a restock minimum for all pages at once. Short pages then show on **Needs** and at the top of the mailbox donate panel. Pages aren't soulbound, so duplicates you loot can go straight to the bank.
+
 ## Run requests (0.24+)
 
 Want to run a dungeon but don't want to schedule an event yet? Open **Guild activities**, choose **Run requests** and click **Request a run**:
