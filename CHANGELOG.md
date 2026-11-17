@@ -3,6 +3,7 @@
 ## 0.26.0
 
 - **Playing together comes first.** **Groups** and **Guildmates** (the Roster, renamed) now sit right under **Home** in the sidebar, instead of being buried under Guild. Guildmates opens on who's online.
+- **Guild activities are now the Groups page.** It opens on **Everything**: quick groups, run requests and events together. The board menu still has Events, Quick quest help, Quick dungeon, Run requests, Available helpers and Starter kits. **Calendar** is on the toolbar. The Guild section keeps News, Projects and Invites.
 - **New Home dashboard:**
   - the message of the day, and anything that needs your attention
   - at a glance: who's online (and how many use EPU), open groups, your requests and the next event
@@ -11,7 +12,7 @@
   - **Who is where:** online guildmates by zone, with their levels. Click a zone to see them.
   - **Today in the guild:** joins, level-ups and milestones from the last day, plus new announcements
   - shortcuts to the bank, news and the getting started checklist
-- **Groups page:** quick groups, run requests and events this week in one list, sorted into Right now, Later today and This week.
+- **Everything board:** quick groups, run requests and events this week in one list, sorted into Right now, Later today and This week. **Mine** shows only yours.
 - **Create a group:** one form for everything.
   - Pick **Dungeon** (from the list), **Raid**, **PvP** or **Other**, then **Quests**, **Loot farming** or **Either**.
   - Pick when: **Now** posts a quick group for 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From–To time, posts a run request guildmates can tick times on.

@@ -141,7 +141,7 @@ The sidebar starts with the things you do together:
   - **Coming up:** run requests and events
   - **Who is where:** online guildmates by zone, with levels. Click a zone to list them.
   - **Today in the guild:** joins, level-ups, milestones and new announcements
-- **Groups** lists quick groups, run requests and events for the week, grouped into Right now, Later today and This week. Click **Create a group**:
+- **Groups** (formerly Guild activities) opens on **Everything**: quick groups, run requests and events for the week, grouped into Right now, Later today and This week. The board menu narrows it to Events, Quick quest help, Quick dungeon, Run requests, Available helpers or Starter kits, and **Calendar** jumps to events by date. Click **Create a group**:
   1. Pick **Dungeon** (choose it from the list), **Raid**, **PvP** or **Other** (type what it's for). For dungeons and raids, pick **Quests**, **Loot farming** or **Either**.
   2. Pick when. **Now** posts a quick group that closes after 1, 2 or 4 hours. **Today**, **Tomorrow** or a weekday, with a From and To time, posts a run request guildmates tick their times on (see Run requests).
   3. Pick your role, add a note if you like, and tick **Tell guild chat** to post one line in guild chat as well. Then **Post**.

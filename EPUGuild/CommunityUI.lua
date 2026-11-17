@@ -270,7 +270,8 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" or kind=="runform" end
 function ns.CommunityNewAction(kind)
-  if kind=="events" then Open("eventform","new")
+  if kind=="all" then Open("groupform","new")
+  elseif kind=="events" then Open("eventform","new")
   elseif kind=="runs" then Open("runform","new")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
@@ -987,7 +988,10 @@ local function WhenOf(s,e)
   if date("%Y-%m-%d",s)==date("%Y-%m-%d",now) then return "today" end
   return "week"
 end
-local function ShowIn(kind,key) return function() UI:SetView("groups"); UI:OpenDetails(kind,key) end end
+function ns.ShowGroups(board)
+  UI.state.activities.kind=board or "all"; UI.search:SetText(""); UI:SetView("activities")
+end
+local function ShowIn(kind,key) return function() ns.ShowGroups(); UI:OpenDetails(kind,key) end end
 function ns.OpenGroups()
   local g=ns.CasualStore(); local out={}
   if not g then return out end
@@ -1024,14 +1028,15 @@ function ns.OpenGroups()
   table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
   return out
 end
-function ns.GroupRows(q)
+function ns.GroupRows(q,st)
   local out={}
   local sections={{"now","Right now","Quick groups and help that expire in a few hours"},{"today","Later today",nil},{"week","This week",nil}}
   local all=ns.OpenGroups()
   for _,sec in ipairs(sections) do
     local first=true
     for _,x in ipairs(all) do
-      if x.when==sec[1] and E.Match(q,x.title,x.sub) then
+      local mine=not (st and st.mine) or x.who==ns.me
+      if x.when==sec[1] and mine and E.Match(q,x.title,x.sub) then
         if first then out[#out+1]={key="cat:"..sec[1],title="|cfff2c14e"..sec[2].."|r",sub=sec[3]}; first=false end
         out[#out+1]={key=x.key,icon=x.icon,title=x.title,sub=x.sub,onClick=x.open}
       end

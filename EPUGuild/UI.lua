@@ -1186,11 +1186,11 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "groups", "roster", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "activities", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
   {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
-  {label="Guild", first="activities", iconView="activities", "activities", "projects", "invites", "news"},
+  {label="Guild", first="news", iconView="news", "news", "projects", "invites"},
   {label="Member tools", first="membertools", iconView="membertools", "membertools", "onboarding"},
 }
 local groupFor = {}
@@ -2239,7 +2239,7 @@ Views.home = {
     Add({ key = "online", title = online .. " online", sub = withEPU .. " with EPU · see who's where", icon = Views.roster.icon, compact = true,
       onClick = Go(function() UI.state.roster.filter = "online"; UI:SetView("roster") end) })
     Add({ key = "groups", title = #groups .. (#groups == 1 and " open group" or " open groups"), sub = #now .. " right now · " .. #soon .. " later",
-      icon = Views.groups.icon, compact = true, onClick = Go(function() UI:SetView("groups") end) })
+      icon = Views.activities.icon, compact = true, onClick = Go(function() ns.ShowGroups() end) })
     Add({ key = "myrequests", title = "My requests", sub = myRequests .. " open", icon = Views.requests.icon, compact = true,
       onClick = Go(function()
         local filters = UI.state.requests
@@ -2261,14 +2261,14 @@ Views.home = {
       Add({ key = "now:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
     end
     if #now == 0 then
-      Add({ key = "nobody", title = "Nobody's looking for a group", sub = "Start one: pick a dungeon and when", icon = Views.groups.icon,
-        onClick = Go(function() UI:SetView("groups"); UI:OpenDetails("groupform", "new") end) })
+      Add({ key = "nobody", title = "Nobody's looking for a group", sub = "Start one: pick a dungeon and when", icon = Views.activities.icon,
+        onClick = Go(function() ns.ShowGroups(); UI:OpenDetails("groupform", "new") end) })
     end
     if #soon > 0 then
       Section("Coming up", "Run requests and events")
       for i, x in ipairs(soon) do
-        if i > 4 then Add({ key = "more", title = "See all groups", sub = (#soon - 4) .. " more", icon = Views.groups.icon,
-          onClick = Go(function() UI:SetView("groups") end) }); break end
+        if i > 4 then Add({ key = "more", title = "See all groups", sub = (#soon - 4) .. " more", icon = Views.activities.icon,
+          onClick = Go(function() ns.ShowGroups() end) }); break end
         Add({ key = "soon:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
       end
     end
@@ -2334,20 +2334,6 @@ Views.home = {
     return rows
   end,
   empty = "Nothing matches your search.",
-}
-Views.groups = {
-  label = "Groups", icon = "Interface\\Icons\\INV_Misc_GroupNeedMore",
-  count = function()
-    local n = 0
-    for _, x in ipairs(ns.OpenGroups and ns.OpenGroups() or {}) do if x.who ~= ns.me then n = n + 1 end end
-    return n, C.goldBg, C.gold
-  end,
-  tools = function(bar)
-    bar:Add(Btn(bar, "Create a group", 110, 22, "accent"), "right", function() UI:OpenDetails("groupform", "new") end,
-      "Ask for a dungeon, raid, PvP or anything else: now or later this week")
-  end,
-  rows = function(g, q) return ns.GroupRows and ns.GroupRows(q) or {} end,
-  empty = "Nobody is looking for a group and nothing is planned this week. Click Create a group.",
 }
 Views.settings = {
   label = "Settings", icon = "Interface\\Icons\\INV_Misc_Gear_01",
@@ -3882,7 +3868,7 @@ do
       b.icon:SetPoint("TOP", 0, -3)
       b.label:SetPoint("TOP", b.icon, "BOTTOM", 0, -2)
     end
-    b.label:SetText(({bank="Stock", activities="Activities", invites="Invites", onboarding="Start here"})[key] or v.label)
+    b.label:SetText(({bank="Stock", invites="Invites", onboarding="Start here"})[key] or v.label)
     b.badge = CreateFrame("Frame", nil, b)
     b.badge:SetSize(22, 14)
     b.badge:SetPoint("RIGHT", -6, 0)
@@ -4028,6 +4014,7 @@ function UI:Layout()
 end
 
 function UI:SetView(key)
+  if key == "groups" then key = "activities"; self.state.activities.kind = "all" end
   if Views[key] and Views[key].officer and not ns.IsTrusted(ns.me) then key = "needs" end
   if not Views[key] then key = "needs" end
   if self.view ~= key then
@@ -4038,7 +4025,7 @@ function UI:SetView(key)
   end
   self.view = key
   local searchHint=({bank="Search items or bank holders",roster="Search guildmates or roles",recipes="Search recipes or crafters",
-    activities="Search events and activities",market="Search materials and crafts",settings="Search settings"})[key]
+    activities="Search groups and events",market="Search materials and crafts",settings="Search settings"})[key]
   self.search.ph:SetText(searchHint or ("Search "..Views[key].label:lower()))
   for k, b in pairs(self.nav) do
     local on = (k == key)

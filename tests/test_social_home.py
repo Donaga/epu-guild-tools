@@ -15,8 +15,13 @@ __fire('GUILD_ROSTER_UPDATE')""")
 # navigation
 order = A.ev('(function() local t={} for _,k in ipairs({"home","groups","roster"}) do t[#t+1]=tostring(__ns.UI.nav[k] and __ns.UI.nav[k]:IsShown()) end return table.concat(t,",") end)()')
 A.ex('__ns.UI:Show(); __ns.UI:SetView("home")')
-check('Home, Groups and Guildmates are top-level in the sidebar',
-      A.ev('__ns.UI.nav.groups:IsShown() and __ns.UI.nav.roster:IsShown()') is True)
+check('Guild activities are now the Groups page, top-level with Guildmates',
+      A.ev('__ns.UI.nav.activities.label:GetText()') == 'Groups' and A.ev('__ns.UI.state.activities.kind') == 'all' and
+      A.ev('__ns.UI.nav.activities:IsShown() and __ns.UI.nav.roster:IsShown()') is True)
+A.ex('__ns.UI:SetView("activities")')
+check('the board menu still reaches events, quick dungeons, run requests, helpers and kits',
+      A.ev('__ns.UI.bars.activities.casualChoose.text:GetText()') == 'Everything' and A.ev('__ns.UI.bars.activities.casualNew.text:GetText()') == 'Create a group')
+A.ex('__ns.UI:SetView("home")')
 check('Roster is now called Guildmates and opens on who is online',
       A.ev('__ns.UI.nav.roster.label:GetText()') == 'Guildmates' and A.ev('__ns.UI.state.roster.filter') == 'online')
 
@@ -62,7 +67,7 @@ check('a partial roster read is not reported as departures', 'left the guild' no
 
 # slash commands
 A.ex('SlashCmdList.EPUGUILD("lfg")')
-check('/epu lfg opens the Create a group form', A.ev('__ns.UI.view') == 'groups' and 'Post' in A.ev('__labels()'))
+check('/epu lfg opens the Create a group form', A.ev('__ns.UI.view') == 'activities' and 'Post' in A.ev('__labels()'))
 A.ex('SlashCmdList.EPUGUILD("who")')
 check('/epu who opens Guildmates online', A.ev('__ns.UI.view') == 'roster')
 check('no runtime errors', all(c.ev('__errors') in (None, 0) for c in (A, B)))

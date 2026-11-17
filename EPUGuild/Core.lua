@@ -451,7 +451,7 @@ SlashCmdList.EPUGUILD = function(msg)
   elseif cmd == "route" then
     ns.GatheringRouteCommand(args)
   elseif cmd == "groups" or cmd == "lfg" or cmd == "group" then
-    if ns.UI then ns.UI:Show(); ns.UI:SetView("groups"); if cmd ~= "groups" then ns.UI:OpenDetails("groupform", "new") end end
+    if ns.UI then ns.UI:Show(); ns.ShowGroups(); if cmd ~= "groups" then ns.UI:OpenDetails("groupform", "new") end end
   elseif cmd == "who" or cmd == "online" or cmd == "guildmates" then
     if ns.UI then ns.UI:Show(); ns.UI.state.roster.filter = "online"; ns.UI:SetView("roster") end
   elseif cmd == "link" then
