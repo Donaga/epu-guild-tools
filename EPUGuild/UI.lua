@@ -1292,11 +1292,11 @@ Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
   clearFilters = function()
     local st=UI.state.bank
-    if st.mode~="sort" then st.cat, st.stock, st.quality=nil,"all",nil end
+    if not st.mode then st.cat, st.stock, st.quality=nil,"all",nil end
   end,
   filtered = function()
     local st=UI.state.bank
-    return st.mode~="sort" and (st.cat or st.stock~="all" or st.quality~=nil)
+    return not st.mode and (st.cat or st.stock~="all" or st.quality~=nil)
   end,
   tools = function(bar)
     UI.bankCatChip = DropChip(bar, 116, "Show one kind of item", function()
@@ -1317,6 +1317,7 @@ Views.bank = {
   end,
   rows = function(g, q)
     if UI.state.bank.mode == 'sort' then return UI.BankSortRows(q) end
+    if UI.state.bank.mode == 'stv' then return UI.StvRows(q) end
     local totals, holders = {}, {}
     for id in pairs(ns.BankCatalog()) do totals[id]=0 end
     for alt, s in pairs(g.bank) do
@@ -1380,6 +1381,9 @@ Views.bank = {
     return out,total,shown
   end,
   footer = function(g)
+    if UI.state.bank.mode == 'stv' then
+      return "Pages for the Green Hills of Stranglethorn quests. Click a chapter to request pages. Duplicates you loot are welcome at the mailbox."
+    end
     if UI.state.bank.mode == 'sort' then
       local src = UI.bankPlan and UI.bankPlan.source
       return (src and ("Prices: " .. (({ledger="AHledger",tsm="TSM",auctionator="Auctionator"})[src] or src) .. ", less the 5% AH cut. ")
@@ -1452,6 +1456,35 @@ local function FindPlanRow(id)
   for _, list in ipairs({ plan.recipes, plan.mats, plan.sell }) do
     for _, r in ipairs(list) do if r.item == id then return r end end
   end
+end
+
+-- Green Hills of Stranglethorn pages ----------------------------------------
+local stvPick = {}
+function UI.StvRows(q)
+  local plan, out = ns.StvPlan(), {}
+  for i, c in ipairs(plan.chapters) do
+    local nums = {}
+    for _, p in ipairs(c.pages) do nums[#nums + 1] = p.page end
+    local status = c.done and "|cff4ade80you've finished this chapter|r"
+      or ((c.sets > 0 and (c.sets .. " full set" .. (c.sets == 1 and "" or "s") .. " in the bank") or "no full set in the bank")
+      .. (#c.short > 0 and ("  ·  short on page" .. (#c.short > 1 and "s " or " ") .. table.concat(c.short, ", ")) or ""))
+    out[#out + 1] = { key = "cat:stv" .. i, title = "|cfff2c14e" .. c.name .. "|r  ·  pages " .. table.concat(nums, ", "), sub = status,
+      right = c.done and "Done" or nil, onClick = function() UI:OpenDetails("stvchapter", i) end }
+    for _, p in ipairs(c.pages) do
+      local name = "Page " .. p.page
+      if Match(q, name, c.name, table.concat(p.holders, ", ")) then
+        local parts = {}
+        parts[#parts + 1] = p.held > 0 and ("Bank: " .. table.concat(p.holders, ", ")) or "None in the bank"
+        if p.asked > 0 then parts[#parts + 1] = p.asked .. " requested" end
+        if p.mine > 0 then parts[#parts + 1] = "|cff4ade80you have " .. p.mine .. "|r"
+        elseif p.missing then parts[#parts + 1] = "|cffffb347you need this|r" end
+        out[#out + 1] = { key = "stv:" .. p.page, item = p.item, icon = ns.ItemIcon(p.item),
+          titleColor = p.held > 0 and QColor(1) or C.muted, title = name, sub = table.concat(parts, "  ·  "),
+          right = tostring(p.free), onClick = function() UI:OpenDetails("stvchapter", i) end }
+      end
+    end
+  end
+  return out
 end
 
 -- Requests --------------------------------------------------------------------
@@ -3395,6 +3428,56 @@ function UI:FillDetails()
       UI:SetView("requests"); UI.itemBox:SetText(ns.ItemLink(key)); UI.qtyBox:SetFocus()
     end } }) end
 
+  elseif kind == "stvchapter" then
+    local plan = ns.StvPlan()
+    local c = plan.chapters[key]
+    if not c then return UI:CloseDetails() end
+    det:Reset("Interface\\Icons\\INV_Misc_Book_09", 1, "Green Hills: " .. c.name,
+      c.done and "You've finished this chapter" or "Turn in to Barnil Stonepot at Nesingwary's camp")
+    local pick = stvPick[key]
+    if not pick then
+      pick = {}
+      for _, p in ipairs(c.pages) do pick[p.page] = p.missing and p.free > 0 end
+      stvPick[key] = pick
+    end
+    det:Section("Pages")
+    for _, p in ipairs(c.pages) do
+      det:Text("Page " .. p.page .. "  ·  bank " .. p.held .. (p.asked > 0 and (" (" .. p.asked .. " requested)") or "")
+        .. (p.mine > 0 and ("  ·  you have " .. p.mine) or (p.missing and "  ·  |cffffb347you need it|r" or ""))
+        .. (#p.holders > 0 and ("\n" .. table.concat(p.holders, ", ")) or ""), p.held > 0 and C.text or C.muted)
+    end
+    if not c.done then
+      det:Section("Request from the bank")
+      local toggles = {}
+      for _, p in ipairs(c.pages) do
+        if p.free > 0 then
+          toggles[#toggles + 1] = { "Page " .. p.page, function() pick[p.page] = not pick[p.page]; UI:FillDetails() end, on = pick[p.page] == true }
+        end
+      end
+      if #toggles == 0 then
+        det:Text("The bank has no free copies of these pages yet.", C.muted)
+      else
+        det:Buttons(toggles)
+        local chosen = {}
+        for _, p in ipairs(c.pages) do if pick[p.page] and p.free > 0 then chosen[#chosen + 1] = p.page end end
+        det:Buttons({ { #chosen > 0 and ("Request page" .. (#chosen > 1 and "s " or " ") .. table.concat(chosen, ", ")) or "Pick pages above",
+          function()
+            if #chosen == 0 then return end
+            if ns.RequestStvPages(chosen, c.name) > 0 then stvPick[key] = nil; UI:FillDetails() end
+          end, accent = #chosen > 0,
+          tip = "One request per page. Pages you already carry start unticked." } })
+      end
+    end
+    if ns.IsTrusted(ns.me) then
+      det:Section("Officers")
+      if plan.targetsSet then
+        det:Text("The bank keeps " .. plan.target .. " of each page. Short pages show on Needs and in the donate panel.", C.muted)
+        det:Buttons({ { "Remove page targets", function() ns.SetStvTargets(0); UI:FillDetails() end } })
+      else
+        det:Buttons({ { "Keep " .. ns.STV_TARGET .. " of each page", function() ns.SetStvTargets(ns.STV_TARGET); UI:FillDetails() end, accent = true,
+          tip = "Sets a restock minimum for all 15 pages in one go." } })
+      end
+    end
   elseif kind == "banksort" or (kind == "professionmail" and officer) then
     local r = FindPlanRow(key)
     if kind == "professionmail" and not r then
@@ -3723,6 +3806,14 @@ UI.bankSort:SetScript("OnClick",function()
   UI:CloseDetails()
   UI:SetView("bank")
 end)
+UI.bankStv=Btn(sectionTabs,"STV pages",70,25)
+UI.bankStv:SetIcon("Interface\\Icons\\INV_Misc_Book_09")
+UI.bankStv.tip="Green Hills of Stranglethorn pages: what the bank has for each chapter, and requests."
+UI.bankStv:SetScript("OnClick",function()
+  UI.state.bank.mode="stv"
+  UI:CloseDetails()
+  UI:SetView("bank")
+end)
 for _, group in ipairs(GROUPS) do
   local button = Btn(side, group.label, SIDEBAR_W - 12, 28)
   local icon = button:CreateTexture(nil,"ARTWORK")
@@ -3894,7 +3985,7 @@ function UI:Refresh()
   local tabs = 0
   for _, key in ipairs(active or {}) do if visibility[key] then tabs = tabs+1 end end
   local inBank=active==groupFor.bank
-  if inBank then tabs=tabs+1 end
+  if inBank then tabs=tabs+2 end
   local tabWidth = math.min(108, math.floor((self:GetWidth()-SIDEBAR_W-16)/math.max(1,tabs)))
   local tabX, subY = 7, -12
   local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 60) / nVisible))
@@ -3934,7 +4025,7 @@ function UI:Refresh()
           b.badge:SetHeight(12)
           b.badge:SetPoint("TOPRIGHT",-2,1)
         end
-        local selected=self.view==key and (key~="bank" or self.state.bank.mode~="sort")
+        local selected=self.view==key and (key~="bank" or not self.state.bank.mode)
         b.bg:SetShown(selected); b.strip:SetShown(selected)
         SetColor(b.label,selected and C.gold or C.muted)
       else
@@ -3976,7 +4067,17 @@ function UI:Refresh()
       self.bankSort:SetSize(tabWidth-4,25)
     end
     self.bankSort:SetOn(self.view=="bank" and self.state.bank.mode=="sort")
+    self.bankStv:ClearAllPoints()
+    if self.wideNav then
+      self.bankStv:SetPoint("TOPLEFT",8,subY-37)
+      self.bankStv:SetSize(SUBNAV_W-16,32)
+    else
+      self.bankStv:SetPoint("TOPLEFT",tabX+tabWidth,-2)
+      self.bankStv:SetSize(tabWidth-4,25)
+    end
+    self.bankStv:SetOn(self.view=="bank" and self.state.bank.mode=="stv")
   end
+  self.bankStv:SetShown(inBank)
   if Views[self.view].officer and not officer then return self:SetView("needs") end
 
   if not g and self.view ~= "market" then
@@ -4020,7 +4121,7 @@ function UI:Refresh()
     if v == Views.requests then self.craftsChip:SetOn(self.state.requests.crafts == true) end
     if v == Views.shopping then bar.export:SetEnabled(ns.HasAuctionator()) end
     if v == Views.bank then
-      local sorting = self.state.bank.mode == 'sort'
+      local sorting = self.state.bank.mode ~= nil
       self.bankCatChip:SetShown(not sorting); self.bankStockChip:SetShown(not sorting); self.bankQualityChip:SetShown(not sorting)
       self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
       self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
