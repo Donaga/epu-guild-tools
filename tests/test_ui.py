@@ -61,14 +61,16 @@ A.ex('__ns.UI:SetView("settings")')
 check("Settings shortcuts have icons",
       A.ev('__ns.UI.rows[1].icon:IsShown() and __ns.UI.rows[3].icon:IsShown()'))
 A.ex('__ns.UI.search:SetText(""); __ns.UI:SetView("home")')
-check("Home starts with personal requests or the attention card",
-      A.ev('__ns.UI.rows[1].data.title=="My requests" or __ns.UI.rows[1].data.featured'))
+check("Home starts with the message of the day, the attention card or the online count",
+      A.ev('__ns.UI.rows[1].data.featured or __ns.UI.rows[1].data.key=="online"'))
 check("Home shortcuts render their destination icons", A.ev("""(function()
   local count=0
   for _, row in ipairs(__ns.UI.rows) do
     if row:IsShown() then
-      if not row.data.icon or not row.icon:IsShown() then return false end
-      count=count+1
+      if not row.data.section then
+        if not row.data.icon or not row.icon:IsShown() then return false end
+        count=count+1
+      end
     end
   end
   return count>=5

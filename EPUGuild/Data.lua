@@ -123,7 +123,10 @@ ns.On("GUILD_ROSTER_UPDATE", function()
   -- Saved so the Discord companion can match /link names to real characters
   -- and give class and rank roles. Never synced: every client sees the roster.
   local g = ns.G()
-  if g then g.members = names; g.memberInfo = info; g.memberInfoAt = ns.Now() end
+  if g then
+    if ns.NoteRosterChanges then pcall(ns.NoteRosterChanges, g, g.memberInfo, info) end
+    g.members = names; g.memberInfo = info; g.memberInfoAt = ns.Now()
+  end
   table.sort(names)
   local signature = table.concat(names, "\031")
   if signature ~= rosterSignature then rosterSignature = signature; ns.recipeIndex = nil end
@@ -1323,4 +1326,32 @@ ns.comm.A = function(sender, a)
     ns.Print(sender .. " can craft " .. tostring(ns.whoResults.label) .. " (" .. tostring(h.prof) .. " " .. tostring(h.rank or "?") .. ")")
   end
   ns.Changed()
+end
+
+-- "Today in the guild": joins, departures and level-ups this client saw in
+-- roster updates. Kept on this computer only, for two days.
+function ns.NoteRosterChanges(g, prev, cur)
+  if type(prev) ~= "table" or not next(prev) then return end
+  local n, before = 0, 0
+  for _ in pairs(cur) do n = n + 1 end
+  for _ in pairs(prev) do before = before + 1 end
+  if n < before * 2 / 3 then return end           -- a partial roster read, not a mass exodus
+  local feed = g.rosterFeed or {}
+  g.rosterFeed = feed
+  local now = ns.Now()
+  local function Add(kind, who, value)
+    for i = #feed, 1, -1 do
+      local e = feed[i]
+      if e.who == who and e.kind == kind then table.remove(feed, i) end
+    end
+    feed[#feed + 1] = { t = now, kind = kind, who = who, v = value }
+  end
+  for name, v in pairs(cur) do
+    local p = prev[name]
+    if not p then Add("joined", name)
+    elseif (tonumber(v.l) or 0) > (tonumber(p.l) or 0) then Add("level", name, v.l) end
+  end
+  for name in pairs(prev) do if not cur[name] then Add("left", name) end end
+  for i = #feed, 1, -1 do if now - (feed[i].t or 0) > 2 * 86400 then table.remove(feed, i) end end
+  while #feed > 60 do table.remove(feed, 1) end
 end

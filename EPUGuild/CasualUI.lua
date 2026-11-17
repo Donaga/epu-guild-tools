@@ -1,7 +1,8 @@
 local ADDON, ns = ...
 local E, UI, C
 local categories={
-  {label="Activities",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
+  {label="Everything",value="all",icon="Interface\\Icons\\INV_Misc_GroupNeedMore"},
+  {label="Events",value="events",icon="Interface\\Icons\\INV_Misc_GroupLooking"},
   {label="Quick quest help",value="help",icon="Interface\\Icons\\INV_Misc_Note_01"},
   {label="Quick dungeon",value="dungeon",icon="Interface\\Icons\\INV_Misc_Key_03"},
   {label="Run requests",value="runs",icon="Interface\\Icons\\INV_Misc_Key_14"},
@@ -23,8 +24,13 @@ function ns.CasualFormKind(kind)
 end
 function ns.InstallCasualViews(views,env)
   E=env; UI=E.UI; C=E.C
-  UI.state.activities={kind="events",mine=false,near=false}
-  views.activities={label="Guild activities",icon="Interface\\Icons\\INV_Misc_GroupLooking",tools=function(bar)
+  UI.state.activities={kind="all",mine=false,near=false}
+  views.activities={label="Groups",icon="Interface\\Icons\\INV_Misc_GroupNeedMore",
+  count=function()
+    local n=0
+    for _,x in ipairs(ns.OpenGroups and ns.OpenGroups() or {}) do if x.who~=ns.me then n=n+1 end end
+    return n,C.goldBg,C.gold
+  end,tools=function(bar)
     local choose=bar:Add(E.Btn(bar,"",142,22),"left")
     choose:SetIcon(categories[1].icon)
     choose:SetLabel(categories[1].label)
@@ -56,7 +62,19 @@ function ns.InstallCasualViews(views,env)
       bar.casualNear:SetScript("OnClick",bar.levelFilterClick)
       bar.casualNear.tip=nil
     end
-    if ns.CommunityRows then local extra=ns.CommunityRows(g,q,st,bar); if extra then return extra end end
+    if st.kind=="all" then
+      if bar then
+        bar.casualNew:SetLabel("Create")
+        bar.casualAvailability:Show(); bar.casualAvailability:SetLabel("Calendar")
+        bar.casualAvailability:SetScript("OnClick",function() SlashCmdList.EPUGUILD("calendar") end)
+      end
+      return ns.GroupRows and ns.GroupRows(q,st) or {}
+    end
+    if ns.CommunityRows then
+      local extra=ns.CommunityRows(g,q,st,bar)
+      if bar and st.kind~="kits" then bar.casualNew:SetLabel("Create") end
+      if extra then return extra end
+    end
     if st.kind=="kits" then
       for id,r in pairs(ns.KitTemplates()) do
         if E.Match(q,r.title,r.note) then
@@ -91,6 +109,7 @@ function ns.InstallCasualViews(views,env)
     return rows
   end,empty="Nothing matches this board. Choose another board, clear the search or turn off Mine / My level.",footer=function()
     local kind=State().kind
+    if kind=="all" then return "Everything people want to do together. Use the board menu for one kind: events, quick dungeons, run requests, quest help, helpers or starter kits." end
     if ns.CommunityFooter then local extra=ns.CommunityFooter(kind); if extra then return extra end end
     if kind=="kits" then return "Reusable templates become tracked Projects. Officers review the recipient and crafters before creating requests." end
     if kind=="helpers" then return "Helpers opt in for 15–240 minutes and appear only while online. No automatic renewal or guild-chat announcements." end
@@ -117,6 +136,7 @@ function ns.FillCasualDetails(kind,key,det)
     local r=g.activityPosts[key]
     local activity=r and r.kind or key
     det:Reset(nil,nil,r and "Edit activity" or (activity=="dungeon" and "Find dungeon company" or "Ask for a hand"),"No guild-chat broadcast or automatic invitations")
+    if not r and activity=="help" and ns.CreateSwitcher then ns.CreateSwitcher(det,"help") end
     local title=det:Field(activity=="dungeon" and "Dungeon" or "Need help",r and r.title or "",160)
     local zone=det:Field("Zone",r and r.zone or (ns.roster[ns.me] or {}).zone or "",160)
     local note=det:Field("Details",r and r.note or "",160)
@@ -167,6 +187,7 @@ function ns.FillCasualDetails(kind,key,det)
   elseif kind=="helperform" then
     local cur=g.helpers[ns.me]; local roles=cur and cur.roles or ""
     det:Reset(nil,nil,"Happy to help","Voluntary, time-limited availability")
+    if ns.CreateSwitcher then ns.CreateSwitcher(det,"helper") end
     local info=det:Text(ns.HelperRoleText(roles),C.gold)
     RoleButtons(det,roles,function(r,self)
       if roles:find(r,1,true) then roles=roles:gsub(r,"") else roles=roles..r end

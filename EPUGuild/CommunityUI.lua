@@ -270,8 +270,11 @@ function ns.ShowActivityDatePicker(initial,chosen,clock)
 end
 function ns.CommunityFormKind(kind) return kind=="eventform" or kind=="questsettings" or kind=="noticeform" or kind=="runform" end
 function ns.CommunityNewAction(kind)
-  if kind=="events" then Open("eventform","new")
-  elseif kind=="runs" then Open("runform","new")
+  if kind=="all" or kind=="dungeon" then ns.OpenCreate("group")
+  elseif kind=="runs" then ns.OpenCreate("group","today")
+  elseif kind=="events" then ns.OpenCreate("event")
+  elseif kind=="help" then ns.OpenCreate("help")
+  elseif kind=="helpers" then ns.OpenCreate("helper")
   elseif kind=="quests" then Open("questsettings","settings")
   elseif kind=="catchup" then Open("catchupreview","review")
   elseif kind=="notifications" then Open("noticeform","all")
@@ -400,6 +403,7 @@ function ns.FillCommunityDetails(kind,key,det)
     if draft then dungeon=draft.dungeon end
     local defaultZone=(GetZoneText and GetZoneText()) or ''
     det:Reset(nil,nil,cur and "Edit guild event" or "New guild event","Dates use your computer's local timezone")
+    if not cur and ns.CreateSwitcher then ns.CreateSwitcher(det,"event") end
     local typeLabel=det:Text("Type: "..ns.EVENT_TYPES[activityType],C.gold)
     local title,zone,note,when,duration,slots,low,high,summary
     local function UpdateLabels()
@@ -972,4 +976,217 @@ function ns.FillRunDetails(kind,key,det)
   if mayManage and active then buttons[#buttons+1]={"Close request",function() ns.CloseRunRequest(key); UI:FillDetails() end} end
   if #buttons>0 then det:Buttons(buttons) end
   return true
+end
+
+---------------------------------------------------------------------------
+-- Groups: one place for everything people want to do together. "Now"
+-- posts are quick dungeon posts (they expire); later days are run
+-- requests; scheduled events show alongside.
+---------------------------------------------------------------------------
+local groupIcons={dungeon="Interface\\Icons\\INV_Misc_Key_03",help="Interface\\Icons\\INV_Misc_Note_01",
+  run=runIcon,event="Interface\\Icons\\INV_Misc_GroupLooking"}
+local function WhenOf(s,e)
+  local now=ns.Now()
+  if s<=now+3600 and (e or s)>now then return "now" end
+  if date("%Y-%m-%d",s)==date("%Y-%m-%d",now) then return "today" end
+  return "week"
+end
+function ns.ShowGroups(board)
+  UI.state.activities.kind=board or "all"; UI.search:SetText(""); UI:SetView("activities")
+end
+local function ShowIn(kind,key) return function() ns.ShowGroups(); UI:OpenDetails(kind,key) end end
+function ns.OpenGroups()
+  local g=ns.CasualStore(); local out={}
+  if not g then return out end
+  local now=ns.Now()
+  for id,r in pairs(g.activityPosts or {}) do
+    if (r.kind=="dungeon" or r.kind=="help") and ns.ActiveActivity(r) then
+      local n=ns.ActivityCounts(id)
+      out[#out+1]={key="activity:"..id,who=r.who,when="now",at=r.created,icon=groupIcons[r.kind],
+        title=(r.kind=="help" and "Help: " or "")..r.title,
+        sub=r.who.." · "..n.ready.."/"..r.slots.." ready · "..n.t.." tank · "..n.h.." healer · "..n.d.." DPS · "..math.max(0,math.ceil((r.expires-now)/60)).." min left",
+        open=ShowIn("activity",id)}
+    end
+  end
+  for id,r in pairs(g.runRequests or {}) do
+    if ns.RunActive(r) then
+      local first
+      for _,w in ipairs(r.windows) do if w.e>now and (not first or w.s<first.s) then first=w end end
+      local best=ns.RunBestTimes(id,1)[1]
+      local n=#ns.RunInterested(id)+1
+      out[#out+1]={key="run:"..id,who=r.who,when=WhenOf(first.s,first.e),at=first.s,icon=runIcon,
+        title=r.dungeon.." · "..ns.RUN_PURPOSES[r.purpose],
+        sub=r.who.." · "..ns.RunRangeText(first.s,first.e).." · "..n.." in"..(best and #best.who>1 and (" · best "..DayLabel(best.s).." "..Clock(best.s)) or ""),
+        open=ShowIn("run",id)}
+    end
+  end
+  for id,e in pairs(g.guildEvents or {}) do
+    if e.status=="scheduled" and e.ends>now and e.starts<now+7*DAY then
+      local n=ns.EventCounts(id)
+      out[#out+1]={key="event:"..id,who=e.who,when=WhenOf(e.starts,e.ends),at=e.starts,icon=eventIcons[e.kind or "other"] or groupIcons.event,
+        title=e.title,sub="Event · "..DayLabel(e.starts).." "..Clock(e.starts).." · "..e.who.." · "..n.going.."/"..e.slots.." going",
+        open=ShowIn("event",id)}
+    end
+  end
+  table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
+  return out
+end
+function ns.GroupRows(q,st)
+  local out={}
+  local sections={{"now","Right now","Quick groups and help that expire in a few hours"},{"today","Later today",nil},{"week","This week",nil}}
+  local all=ns.OpenGroups()
+  for _,sec in ipairs(sections) do
+    local first=true
+    for _,x in ipairs(all) do
+      local mine=not (st and st.mine) or x.who==ns.me
+      if x.when==sec[1] and mine and E.Match(q,x.title,x.sub) then
+        if first then out[#out+1]={key="cat:"..sec[1],title="|cfff2c14e"..sec[2].."|r",sub=sec[3]}; first=false end
+        out[#out+1]={key=x.key,icon=x.icon,title=x.title,sub=x.sub,onClick=x.open}
+      end
+    end
+  end
+  return out
+end
+
+local groupDrafts={}
+local GROUP_TYPES={{"dungeon","Dungeon"},{"raid","Raid"},{"pvp","PvP"},{"other","Other"}}
+local function GroupDraft()
+  local d=groupDrafts.new
+  if not d then
+    local lvl=(ns.roster[ns.me] or {}).level or 1
+    d={type="dungeon",title="",when="now",minutes=120,purpose="e",note="",chat=false,
+      role=(((ns.ProfileOf(ns.me) or {}).roles or "d"):match("[thd]") or "d"),lvl=lvl}
+    groupDrafts.new=d
+  end
+  return d
+end
+local function Announce(d,name)
+  if not d.chat or not SendChatMessage then return end
+  local when=d.when=="now" and "now" or (DayLabel(d.s).." "..Clock(d.s))
+  local why=(d.type=="dungeon" or d.type=="raid") and d.purpose~="e" and (" ("..ns.RUN_PURPOSES[d.purpose]:lower()..")") or ""
+  local msg=("[EPU] "..(ns.me:match("^(%S+)") or ns.me).." wants a group for "..name..why..", "..when..". "
+    ..ns.EVENT_ROLES[d.role].." · type /epu groups to join"):sub(1,250)
+  pcall(SendChatMessage,msg,"GUILD")
+end
+function ns.PostGroup(d)
+  local name=(d.type=="dungeon" and d.dungeon) or d.title or ""
+  name=tostring(name):gsub("[%z\001-\031]",""):sub(1,80):match("^%s*(.-)%s*$")
+  if name=="" then return ns.Print(d.type=="dungeon" and "Choose a dungeon first." or "Say what the group is for.") end
+  local info=dungeons[name]
+  local purposeText=(d.type=="dungeon" or d.type=="raid") and ns.RUN_PURPOSES[d.purpose] or nil
+  local id,kind
+  if d.when=="now" then
+    local lvl=d.lvl or 1
+    id=ns.SaveActivity("dungeon",{title=name,zone=info and info[2] or (ns.roster[ns.me] or {}).zone or "",
+      note=(purposeText and (purposeText..". ") or "")..(d.note or ""),
+      minLevel=info and info[3] or math.max(1,lvl-5),maxLevel=info and info[4] or math.min(60,lvl+5),
+      slots=d.type=="raid" and 10 or 5,minutes=d.minutes})
+    if id then ns.RespondActivity(id,d.role,"ready",""); kind="activity" end
+  else
+    id=ns.SaveRunRequest({dungeon=name,purpose=purposeText and d.purpose or "e",role=d.role,note=d.note,windows={{s=d.s,e=d.e}}})
+    kind="run"
+  end
+  if not id then return end
+  Announce(d,name)
+  groupDrafts.new=nil
+  return kind,id
+end
+local function FillGroupForm(det)
+  local d=GroupDraft()
+  local function Again() det.casualDraft=true; UI:FillDetails() end
+  det:Reset(groupIcons.event,nil,"Create","Pick what you'd like to do")
+  ns.CreateSwitcher(det,"group")
+  local types={}
+  for _,t in ipairs(GROUP_TYPES) do types[#types+1]={t[2],function() d.type=t[1]; Again() end,on=d.type==t[1]} end
+  det:Buttons(types)
+  if d.type=="dungeon" then
+    local info=d.dungeon and dungeons[d.dungeon]
+    det:Buttons({{d.dungeon or "Choose dungeon",function(self) ChooseDungeon(self,d.dungeon,function(name) d.dungeon=name; Again() end) end,accent=not d.dungeon}})
+    if info then det:Text(info[2]..(info[3] and (" · levels "..info[3].."–"..info[4]) or ""),C.muted) end
+  else
+    local title=det:Field(d.type=="raid" and "Raid" or d.type=="pvp" and "Battleground or activity" or "What",d.title,80)
+    title.onChange=function() d.title=title:GetText(); det.casualDraft=true end
+  end
+  if d.type=="dungeon" or d.type=="raid" then
+    local why={}
+    for _,p in ipairs(ns.RUN_PURPOSE_ORDER) do why[#why+1]={ns.RUN_PURPOSES[p],function() d.purpose=p; Again() end,on=d.purpose==p} end
+    det:Buttons(why)
+  end
+  det:Section("When")
+  local whens={{"Now",function() d.when="now"; Again() end,on=d.when=="now"}}
+  for o=0,6 do
+    whens[#whens+1]={o==0 and "Today" or o==1 and "Tomorrow" or date("%a",DayStart(o)),function()
+      d.when=o; local w=DefaultWindow(o); d.s,d.e=w.s,w.e; Again()
+    end,on=d.when==o}
+  end
+  det:Buttons(whens)
+  if d.when=="now" then
+    local spans={}
+    for _,m in ipairs({60,120,240}) do spans[#spans+1]={"For "..(m/60).." h",function() d.minutes=m; Again() end,on=d.minutes==m} end
+    det:Buttons(spans)
+    det:Text("Shows under Right now and closes on its own after that.",C.muted)
+  else
+    if not d.s then local w=DefaultWindow(d.when); d.s,d.e=w.s,w.e end
+    det:Buttons({
+      {"From "..Clock(d.s),function(self) TimeMenu(self,d.when,d.s,nil,d.e,function(t) d.s=t; Again() end) end},
+      {"To "..(d.e==DayStart(d.when+1) and "midnight" or Clock(d.e)),function(self) TimeMenu(self,d.when,d.e,d.s,nil,function(t) d.e=t; Again() end) end},
+    })
+    det:Text("Flexible: guildmates tick the times that suit them, and the best overlap can become an event.",C.muted)
+    det:Buttons({{"Pick one fixed start instead",function() ns.OpenCreate("event") end,
+      tip="Makes a guild event with a set start time, sign-ups and role slots, using what you picked here."}})
+  end
+  det:Section("My role")
+  local roles={}
+  for _,role in ipairs({"t","h","d"}) do roles[#roles+1]={ns.EVENT_ROLES[role],function() d.role=role; Again() end,on=d.role==role} end
+  det:Buttons(roles)
+  local note=det:Field("Note",d.note,120); note.onChange=function() d.note=note:GetText(); det.casualDraft=true end
+  det:Buttons({{(d.chat and "[x] " or "[ ] ").."Tell guild chat",function() d.chat=not d.chat; Again() end,on=d.chat,
+    tip="Also posts one line in guild chat, so guildmates without EPU see it too."}})
+  det:Buttons({{"Post",function()
+    d.note=note:GetText()
+    local kind,id=ns.PostGroup(d)
+    if kind then UI:OpenDetails(kind,id) end
+  end,accent=true},{"Cancel",function() groupDrafts.new=nil; UI:CloseDetails() end}})
+  return true
+end
+local fillCommunity=ns.FillCommunityDetails
+function ns.FillCommunityDetails(kind,key,det)
+  if kind=="groupform" then return FillGroupForm(det) end
+  return fillCommunity(kind,key,det)
+end
+local formKind=ns.CommunityFormKind
+function ns.CommunityFormKind(kind) return kind=="groupform" or formKind(kind) end
+
+-- One Create entry point: the same switcher heads every "new" form, so
+-- groups, events, quest help and helper availability are one click apart.
+local CREATE_KINDS={{"group","Group"},{"event","Event"},{"help","Quest help"},{"helper","I can help"}}
+local function EventDraftFromGroup()
+  local d=groupDrafts.new
+  if not d then return nil end
+  local name=(d.type=="dungeon" and d.dungeon) or (d.title~="" and d.title) or nil
+  local info=name and dungeons[name]
+  local start=d.when~="now" and d.s or ns.Now()+1800
+  local minutes=d.when~="now" and d.e and math.max(30,math.min(360,math.floor((d.e-d.s)/60))) or 90
+  return {kind=(d.type=="dungeon" or d.type=="raid") and "dungeon" or "other",dungeon=info and name or nil,
+    values={name,info and info[2] or nil,d.note~="" and d.note or nil,date("%Y-%m-%d %H:%M",start),tostring(minutes),
+      tostring(d.type=="raid" and 10 or 5),info and info[3] and tostring(info[3]) or nil,info and info[4] and tostring(info[4]) or nil}}
+end
+function ns.OpenCreate(what,when)
+  if what=="event" then
+    UI.details.eventFormDraft=EventDraftFromGroup()
+    return UI:OpenDetails("eventform","new")
+  elseif what=="help" then return UI:OpenDetails("activityform","help")
+  elseif what=="helper" then return UI:OpenDetails("helperform",ns.me) end
+  local d=GroupDraft()
+  if when=="today" and d.when=="now" then d.when=0; local w=DefaultWindow(0); d.s,d.e=w.s,w.e end
+  return UI:OpenDetails("groupform","new")
+end
+function ns.CreateSwitcher(det,current)
+  local specs={}
+  for _,k in ipairs(CREATE_KINDS) do
+    specs[#specs+1]={k[2],function() if k[1]~=current then ns.OpenCreate(k[1]) end end,on=k[1]==current,
+      tip=({group="A group now, or later this week with flexible times",event="A set start time with sign-ups and role slots",
+        help="Ask for a hand with a quest or area",helper="Let guildmates know you're free to help for a while"})[k[1]]}
+  end
+  det:Buttons(specs)
 end

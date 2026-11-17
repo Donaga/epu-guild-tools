@@ -765,24 +765,28 @@ local function ShowRows(data, width, viewIcon)
   local columns = home and width >= 460 and 2 or 1
   local gap, col, y = 10, 0, home and 12 or 0
   local cardWidth = math.floor((width - gap * (columns + 1)) / columns)
+  local lastHeight = 0
   for i, d in ipairs(data) do
     local r = GetRow(i)
     r.data = d
-    local height = home and 64 or ROW_H
-    local rowWidth = home and (d.featured and width - gap * 2 or cardWidth) or width
+    local wide = d.featured or d.section
+    if home and wide and col > 0 then y, col = y + lastHeight + gap, 0 end   -- start a full-width row on its own line
+    local height = home and (d.section and 30 or d.compact and 46 or 64) or ROW_H
+    lastHeight = height
+    local rowWidth = home and (wide and width - gap * 2 or cardWidth) or width
     r:SetSize(rowWidth, height)
     r:ClearAllPoints()
     r:SetPoint("TOPLEFT", home and gap + col * (cardWidth + gap) or 0, -y)
     col = col + 1
-    if col == columns or d.featured or i == #data then
-      y, col = y + height + (home and gap or 0), 0
+    if col == columns or wide or i == #data then
+      y, col = y + height + (home and (d.section and 2 or gap) or 0), 0
     end
-    r.card:SetShown(home)
+    r.card:SetShown(home and not d.section)
     local cardColor = d.featured and C.goldBg or C.panel
     r.card:SetColorTexture(cardColor[1], cardColor[2], cardColor[3], 1)
     r.sep:SetShown(not home)
     r.sub:ClearAllPoints()
-    r.sub:SetPoint("TOPLEFT", 48, home and -35 or -22)
+    r.sub:SetPoint("TOPLEFT", 48, home and (d.compact and -25 or -35) or -22)
 
     -- icon / quality border / online dot
     local icon = d.icon or ((d.onClick or d.dot ~= nil) and viewIcon)
@@ -1164,7 +1168,7 @@ UI.state = {
   bank = { cat = nil, stock = 'all', quality = nil, mode = nil },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
-  roster = { filter = "all", role = nil, review = nil },
+  roster = { filter = "online", role = nil, review = nil },
   sync = { filter = "guild", status = "all", sort = "recent" },
 }
 local SORTS = { { "new", "Newest" }, { "old", "Oldest" }, { "item", "Item" }, { "who", "Requester" } }
@@ -1182,11 +1186,11 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "activities", "roster", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
   {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
-  {label="Guild", first="activities", iconView="activities", "activities", "roster", "projects", "invites", "news"},
+  {label="Guild", first="news", iconView="news", "news", "projects", "invites"},
   {label="Member tools", first="membertools", iconView="membertools", "membertools", "onboarding"},
 }
 local groupFor = {}
@@ -2056,7 +2060,7 @@ local function ClassColor(file)
 end
 
 Views.roster = {
-  label = "Roster", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", stateKey = "roster",
+  label = "Guildmates", icon = "Interface\\Icons\\INV_Misc_Head_Human_01", stateKey = "roster",
   chips = { { "all", "All" }, { "online", "Online" }, { "near", "Near level", "Online and within 3 levels of you" },
     { "layer", "My layer", "Online guildmates on your layer of this zone. Target or mouse over any NPC to detect yours." } },
   tools = function(bar)
@@ -2189,50 +2193,147 @@ Views.home = {
   label = "Home", icon = "Interface\\Icons\\INV_Misc_Map_01",
   rows = function(g, query)
     local rows = {}
-    local function Add(title, sub, icon, click, featured)
-      if Match(query, title, sub) then
-        rows[#rows + 1] = {key=title, title=title, sub=sub, icon=icon, featured=featured, onClick=function()
-          UI.search:SetText("")
-          click()
-        end}
+    local function Add(row)
+      if row.section or Match(query, row.title, row.sub) then rows[#rows + 1] = row end
+    end
+    local function Section(title, sub)
+      -- drop an empty section header left by the previous section
+      if rows[#rows] and rows[#rows].section then rows[#rows] = nil end
+      rows[#rows + 1] = { key = "section:" .. title, section = true, title = "|cfff2c14e" .. title .. "|r", sub = sub }
+    end
+    local function Go(fn) return function() UI.search:SetText(""); fn() end end
+    local c = ns.CasualStore and ns.CasualStore() or {}
+    -- message of the day
+    local motd = g.motd and g.motd.text
+    if motd and motd ~= "" then
+      Add({ key = "motd", title = "Message of the day", sub = motd, icon = Views.news.icon, featured = true, compact = true,
+        onClick = Go(function() UI:SetView("news") end) })
+    end
+    local state = ns.CommunityState()
+    if state and ns.GetBubbleActions then
+      local total = 0
+      for _, items in pairs(ns.GetBubbleActions(g, state)) do total = total + #items end
+      if total > 0 then Add({ key = "attention", title = "Needs your attention", sub = total .. (total == 1 and " action" or " actions"),
+        icon = "Interface\\Icons\\INV_Misc_Note_01", featured = true, onClick = Go(function() UI:OpenDetails("bubbleactions", "all") end) }) end
+    end
+    -- at a glance
+    local online, withEPU, zones = 0, 0, {}
+    for name, r in pairs(ns.roster) do
+      if r.online then
+        online = online + 1
+        local seen = g.syncSeen and g.syncSeen[name]
+        if name == ns.me or (seen and ns.Now() - (seen.t or 0) < 6 * 3600) then withEPU = withEPU + 1 end
+        if name ~= ns.me and r.zone and r.zone ~= "" then
+          zones[r.zone] = zones[r.zone] or {}
+          table.insert(zones[r.zone], name)
+        end
       end
     end
-    local state=ns.CommunityState()
-    if state and ns.GetBubbleActions then
-      local total=0
-      for _, items in pairs(ns.GetBubbleActions(g,state)) do total=total+#items end
-      if total>0 then Add("Needs your attention", total..(total==1 and " action" or " actions"),
-        "Interface\\Icons\\INV_Misc_Note_01", function() UI:OpenDetails("bubbleactions","all") end, true) end
-    end
+    local groups = ns.OpenGroups and ns.OpenGroups() or {}
+    local now, soon = {}, {}
+    for _, x in ipairs(groups) do if x.when == "now" then now[#now + 1] = x else soon[#soon + 1] = x end end
     local myRequests = 0
     for _, r in pairs(g.requests) do
-      if ns.IsActiveRequest(r) and (ns.MainOf(r.who)==ns.MainOf(ns.me) or ns.IAmCrafter(r)) then myRequests=myRequests+1 end
+      if ns.IsActiveRequest(r) and (ns.MainOf(r.who) == ns.MainOf(ns.me) or ns.IAmCrafter(r)) then myRequests = myRequests + 1 end
     end
-    Add("My requests", myRequests.." open", Views.requests.icon, function()
-      local filters=UI.state.requests
-      filters.mine, filters.crafts, filters.filter=true,false,"open"
-      UI:SetView("requests")
-    end)
+    Add({ key = "online", title = online .. " online", sub = withEPU .. " with EPU · see who's where", icon = Views.roster.icon, compact = true,
+      onClick = Go(function() UI.state.roster.filter = "online"; UI:SetView("roster") end) })
+    Add({ key = "groups", title = #groups .. (#groups == 1 and " open group" or " open groups"), sub = #now .. " right now · " .. #soon .. " later",
+      icon = Views.activities.icon, compact = true, onClick = Go(function() ns.ShowGroups() end) })
+    Add({ key = "myrequests", title = "My requests", sub = myRequests .. " open", icon = Views.requests.icon, compact = true,
+      onClick = Go(function()
+        local filters = UI.state.requests
+        filters.mine, filters.crafts, filters.filter = true, false, "open"
+        UI:SetView("requests")
+      end) })
     local nextEvent
-    for _, event in pairs(g.guildEvents or {}) do
-      if event.status=="scheduled" and event.starts>ns.Now() then
-        if not nextEvent or event.starts<nextEvent.starts then nextEvent=event end
+    for _, event in pairs(c.guildEvents or {}) do
+      if event.status == "scheduled" and event.starts > ns.Now() then
+        if not nextEvent or event.starts < nextEvent.starts then nextEvent = event end
       end
     end
-    Add("Next event", nextEvent and (nextEvent.title.." · "..date("%b %d, %H:%M",nextEvent.starts))
-      or "No events scheduled.", Views.activities.icon, function()
-      SlashCmdList.EPUGUILD("calendar")
-    end)
-    Add("Guild bank", "Browse stock and request an item.", Views.bank.icon, function() UI:SetView("bank") end)
-    Add("Guild news", #ns.UnreadNews().." unread announcements", Views.news.icon, function() UI:SetView("news") end)
-    Add("Getting started", "See your guild checklist.", Views.onboarding.icon, function() UI:SetView("onboarding") end)
-    if ns.IsTrusted(ns.me) then
-      Add("Bank fulfillment", "Review approved requests and preview mail.", "Interface\\Icons\\INV_Misc_Bag_08",
-        function() UI:OpenDetails("fulfillment","all") end)
+    Add({ key = "nextevent", title = "Next event", sub = nextEvent and (nextEvent.title .. " · " .. date("%a %H:%M", nextEvent.starts)) or "Nothing scheduled",
+      icon = Views.activities.icon, compact = true, onClick = Go(function() SlashCmdList.EPUGUILD("calendar") end) })
+    -- right now
+    Section("Right now", "Groups and help wanted at the moment")
+    for i, x in ipairs(now) do
+      if i > 4 then break end
+      Add({ key = "now:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
     end
+    if #now == 0 then
+      Add({ key = "nobody", title = "Nobody's looking for a group", sub = "Start one: pick a dungeon and when", icon = Views.activities.icon,
+        onClick = Go(function() ns.ShowGroups(); UI:OpenDetails("groupform", "new") end) })
+    end
+    if #soon > 0 then
+      Section("Coming up", "Run requests and events")
+      for i, x in ipairs(soon) do
+        if i > 4 then Add({ key = "more", title = "See all groups", sub = (#soon - 4) .. " more", icon = Views.activities.icon,
+          onClick = Go(function() ns.ShowGroups() end) }); break end
+        Add({ key = "soon:" .. x.key, title = x.title, sub = x.sub, icon = x.icon, onClick = Go(x.open) })
+      end
+    end
+    -- who is where
+    local zoneList = {}
+    for zone, names in pairs(zones) do zoneList[#zoneList + 1] = { zone = zone, names = names } end
+    table.sort(zoneList, function(a, b) if #a.names ~= #b.names then return #a.names > #b.names end return a.zone < b.zone end)
+    if #zoneList > 0 then
+      Section("Who is where", "Online guildmates by zone")
+      for i, z in ipairs(zoneList) do
+        if i > 6 then break end
+        table.sort(z.names)
+        local first = {}
+        for j, name in ipairs(z.names) do
+          if j > 4 then first[#first + 1] = "+" .. (#z.names - 4); break end
+          local lvl = (ns.roster[name] or {}).level
+          first[#first + 1] = (name:match("^(%S+)") or name) .. (lvl and (" " .. lvl) or "")
+        end
+        Add({ key = "zone:" .. z.zone, title = z.zone .. " (" .. #z.names .. ")", sub = table.concat(first, ", "), compact = true,
+          icon = "Interface\\Icons\\INV_Misc_Map02",
+          onClick = Go(function() UI.state.roster.filter = "online"; UI:SetView("roster"); UI.search:SetText(z.zone) end) })
+      end
+    end
+    -- today in the guild
+    local feed, shared = {}, {}
+    for _, e in ipairs(ns.FeedEntries and ns.FeedEntries(1) or {}) do
+      feed[#feed + 1] = { t = e.t, kind = "shared", sharedKind = e.kind, who = e.who, title = e.text }
+      shared[tostring(e.who)] = true
+    end
+    for _, e in ipairs(g.rosterFeed or {}) do
+      if ns.Now() - e.t < 86400 and not (e.kind == "level" and shared[e.who]) then feed[#feed + 1] = e end
+    end
+    for _, n in ipairs(ns.UnreadNews and ns.UnreadNews() or {}) do
+      if n.t and ns.Now() - n.t < 86400 then feed[#feed + 1] = { t = n.t, kind = "news", who = n.by, title = n.title } end
+    end
+    table.sort(feed, function(a, b) return a.t > b.t end)
+    if #feed > 0 then
+      Section("Today in the guild")
+      for i, e in ipairs(feed) do
+        if i > 6 then break end
+        local ago = math.floor((ns.Now() - e.t) / 60)
+        local agoText = ago < 1 and "just now" or ago < 60 and (ago .. " min ago") or (math.floor(ago / 60) .. " h ago")
+        local text = e.kind == "joined" and (e.who .. " joined the guild") or e.kind == "left" and (e.who .. " left the guild")
+          or e.kind == "level" and (e.who .. " reached level " .. tostring(e.v))
+          or e.kind == "shared" and (tostring(e.who) .. " " .. tostring(e.title)) or ("News: " .. tostring(e.title))
+        local icon = e.kind == "joined" and "Interface\\Icons\\INV_Letter_15" or (e.kind == "level" or e.sharedKind == "level") and "Interface\\Icons\\Spell_Holy_Renew"
+          or e.kind == "shared" and "Interface\\Icons\\Achievement_Level_10"
+          or e.kind == "left" and "Interface\\Icons\\Ability_Rogue_Sprint" or Views.news.icon
+        Add({ key = "feed:" .. i, title = text, sub = agoText, icon = icon, compact = true,
+          onClick = e.kind == "news" and Go(function() UI:SetView("news") end) or nil })
+      end
+    end
+    -- shortcuts
+    Section("Shortcuts")
+    Add({ key = "bank", title = "Guild bank", sub = "Browse stock and request an item.", icon = Views.bank.icon, compact = true, onClick = Go(function() UI:SetView("bank") end) })
+    Add({ key = "news", title = "Guild news", sub = #ns.UnreadNews() .. " unread announcements", icon = Views.news.icon, compact = true, onClick = Go(function() UI:SetView("news") end) })
+    Add({ key = "start", title = "Getting started", sub = "See your guild checklist.", icon = Views.onboarding.icon, compact = true, onClick = Go(function() UI:SetView("onboarding") end) })
+    if ns.IsTrusted(ns.me) then
+      Add({ key = "fulfil", title = "Bank fulfillment", sub = "Review approved requests and preview mail.", icon = "Interface\\Icons\\INV_Misc_Bag_08",
+        compact = true, onClick = Go(function() UI:OpenDetails("fulfillment", "all") end) })
+    end
+    if rows[#rows] and rows[#rows].section then rows[#rows] = nil end
     return rows
   end,
-  empty="No shortcuts match your search.",
+  empty = "Nothing matches your search.",
 }
 Views.settings = {
   label = "Settings", icon = "Interface\\Icons\\INV_Misc_Gear_01",
@@ -3767,7 +3868,7 @@ do
       b.icon:SetPoint("TOP", 0, -3)
       b.label:SetPoint("TOP", b.icon, "BOTTOM", 0, -2)
     end
-    b.label:SetText(({bank="Stock", activities="Activities", invites="Invites", onboarding="Start here"})[key] or v.label)
+    b.label:SetText(({bank="Stock", invites="Invites", onboarding="Start here"})[key] or v.label)
     b.badge = CreateFrame("Frame", nil, b)
     b.badge:SetSize(22, 14)
     b.badge:SetPoint("RIGHT", -6, 0)
@@ -3913,6 +4014,7 @@ function UI:Layout()
 end
 
 function UI:SetView(key)
+  if key == "groups" then key = "activities"; self.state.activities.kind = "all" end
   if Views[key] and Views[key].officer and not ns.IsTrusted(ns.me) then key = "needs" end
   if not Views[key] then key = "needs" end
   if self.view ~= key then
@@ -3923,7 +4025,7 @@ function UI:SetView(key)
   end
   self.view = key
   local searchHint=({bank="Search items or bank holders",roster="Search guildmates or roles",recipes="Search recipes or crafters",
-    activities="Search events and activities",market="Search materials and crafts",settings="Search settings"})[key]
+    activities="Search groups and events",market="Search materials and crafts",settings="Search settings"})[key]
   self.search.ph:SetText(searchHint or ("Search "..Views[key].label:lower()))
   for k, b in pairs(self.nav) do
     local on = (k == key)
