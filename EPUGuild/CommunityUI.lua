@@ -111,7 +111,7 @@ function ns.InstallCommunityViews(views,env)
     label="Chat",
     detailsWide=true,
     icon="Interface\\Icons\\INV_Letter_15",
-    count=function() return ns.ChatUnread and ns.ChatUnread() or 0 end,
+    count=function() return ns.ChatUnread and (ns.ChatUnread()+ns.ChatUnreadGuild()) or 0 end,
     -- open on the latest conversation, like a messenger
     onSelect=function()
       UI.search:SetText("")
@@ -137,9 +137,11 @@ function ns.InstallCommunityViews(views,env)
         if ns.ChatKeep(ch) then
           local log=ns.ChatLog(ch); local e=log[#log]
           if E.Match(q,ns.CHAT_CHANNELS[ch].label,e and e.msg) then
-            out[#out+1]={key="chat:"..ch,title=ns.CHAT_CHANNELS[ch].label,
+            local n=ns.ChatUnreadFor(ch)
+            out[#out+1]={key="chat:"..ch,title=ns.CHAT_CHANNELS[ch].label..(n>0 and (" |cff66a6ff("..n..")|r") or ""),
               icon=ch=="guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03",
-              sub=e and ((ns.Short and ns.Short(e.who) or e.who)..": "..e.msg) or "Nothing yet",right=e and ns.ChatAgo(e.t) or "",
+              sub=e and ((ns.Short and ns.Short(e.who) or e.who)..": "..e.msg) or "Nothing yet",
+              right=e and ((n>0 and ("|cff66a6ff"..n.." new|r · ") or "")..ns.ChatAgo(e.t)) or "",
               onClick=function() Open("chatwith",ch) end}
           end
         end
@@ -148,10 +150,10 @@ function ns.InstallCommunityViews(views,env)
         local e=c.last
         local short=ns.Short and ns.Short(c.who) or c.who
         if E.Match(q,c.who,e.msg) then
-          out[#out+1]={key="chat:w:"..c.who,title=short..(c.unread>0 and (" |cff4ade80("..c.unread.." new)|r") or ""),
+          out[#out+1]={key="chat:w:"..c.who,title=short..(c.unread>0 and (" |cff4ade80("..c.unread..")|r") or ""),
             icon=(ns.roster[short] and ns.ClassIcon(ns.roster[short].classFile)) or "Interface\\Icons\\INV_Letter_15",
             dot=(ns.roster[short] or {}).online,
-            sub=(e.out and "You: " or "")..e.msg,right=ns.ChatAgo(e.t),
+            sub=(e.out and "You: " or "")..e.msg,right=(c.unread>0 and ("|cff4ade80"..c.unread.." new|r · ") or "")..ns.ChatAgo(e.t),
             onClick=function() Open("chatwith","w:"..c.who) end,
             onRightClick=function(self) if ns.GuildmateMenu and ns.roster[short] then ns.GuildmateMenu(self,short) end end}
         end

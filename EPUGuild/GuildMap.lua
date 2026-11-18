@@ -493,8 +493,12 @@ function ns.ChatLog(channel)
 end
 ns.On("CHAT_MSG_WHISPER", function(msg, sender) ns.LogChat("whisper", sender, msg, false) end)
 ns.On("CHAT_MSG_WHISPER_INFORM", function(msg, target) ns.LogChat("whisper", target, msg, true) end)
-ns.On("CHAT_MSG_GUILD", function(msg, sender) ns.LogChat("guild", sender, msg, false) end)
-ns.On("CHAT_MSG_OFFICER", function(msg, sender) ns.LogChat("officer", sender, msg, false) end)
+local function Mine(sender)
+  sender = Plain(sender)
+  return sender ~= nil and ns.Short and ns.Short(sender) == ns.me
+end
+ns.On("CHAT_MSG_GUILD", function(msg, sender) ns.LogChat("guild", sender, msg, Mine(sender)) end)
+ns.On("CHAT_MSG_OFFICER", function(msg, sender) ns.LogChat("officer", sender, msg, Mine(sender)) end)
 
 local function Hex(info)
   local t = ChatTypeInfo and ChatTypeInfo[info]
@@ -566,35 +570,56 @@ function ns.ShowChatHistory(channel)
 end
 ns.CHAT_CHANNELS, ns.CHAT_ORDER = CHANNELS, CHANNEL_ORDER
 ns.ChatDB = ChatDB
-function ns.ChatUnread()
+-- Unread is kept per conversation: "w:<name>", "guild" or "officer".
+local function SeenAt(key)
   local c = ChatDB()
   if not c then return 0 end
-  local seen, n = c.chatSeenAt or 0, 0
-  local log = c.chatlog.whisper
+  c.chatSeen = c.chatSeen or {}
+  return c.chatSeen[key] or c.chatSeenAt or 0
+end
+function ns.ChatUnreadFor(key)
+  local c = ChatDB()
+  if not c then return 0 end
+  local channel = key:sub(1, 2) == "w:" and "whisper" or key
+  if channel ~= "whisper" and not ns.ChatKeep(channel) then return 0 end
+  local who = channel == "whisper" and key:sub(3) or nil
+  local seen, n = SeenAt(key), 0
+  local log = c.chatlog[channel] or {}
   for i = #log, 1, -1 do
     local e = log[i]
     if (e.t or 0) <= seen then break end
-    if not e.out then n = n + 1 end
+    if not e.out and (not who or e.who == who) then n = n + 1 end
   end
   return n
 end
-function ns.MarkChatSeen()
+-- all unread whispers, across people
+function ns.ChatUnread()
+  local n = 0
+  for _, conv in ipairs(ns.ChatConversations()) do n = n + conv.unread end
+  return n
+end
+-- unread guild (and, for officers who keep it, officer) messages
+function ns.ChatUnreadGuild()
+  return ns.ChatUnreadFor("guild") + (CanOfficerChat() and ns.ChatUnreadFor("officer") or 0)
+end
+function ns.MarkChatSeen(key)
   local c = ChatDB()
-  if c then c.chatSeenAt = time() end
+  if not c or not key then return end
+  c.chatSeen = c.chatSeen or {}
+  c.chatSeen[key] = time()
 end
 -- One row per person you whispered with, newest conversation first.
 function ns.ChatConversations()
   local log, seen, out = ns.ChatLog("whisper"), {}, {}
-  local since = (ChatDB() or {}).chatSeenAt or 0
   for i = #log, 1, -1 do
     local e = log[i]
     local c = seen[e.who]
     if not c then
-      c = { who = e.who, last = e, n = 0, unread = 0 }
+      c = { who = e.who, last = e, n = 0, unread = 0, since = SeenAt("w:" .. e.who) }
       seen[e.who] = c; out[#out + 1] = c
     end
     c.n = c.n + 1
-    if not e.out and (e.t or 0) > since then c.unread = c.unread + 1 end
+    if not e.out and (e.t or 0) > c.since then c.unread = c.unread + 1 end
   end
   return out
 end
@@ -636,7 +661,33 @@ local function LineText(channel, e)
   local color = channel == "whisper" and (e.out and "|cffd9b3ff" or "|cffff80ff") or (channel == "guild" and "|cff40ff40" or "|cff40c040")
   return "|cff888888" .. date("%H:%M", e.t) .. "|r  " .. speaker .. "\n" .. color .. e.msg .. "|r"
 end
-ns.ChatThreadKey, ns.ChatThreadLines, ns.ChatLineText, ns.ChatSend = ThreadKey, ThreadLines, LineText, Send
+-- Group a thread (newest first) for display: a gold day header, then the
+-- speaker's name and time once, with their messages under it, the way chat
+-- apps group consecutive messages.
+local function ThreadBlocks(channel, lines)
+  local blocks, lastDay, cur = {}, nil, nil
+  local msgColor = channel == "whisper" and nil or (channel == "guild" and "|cff40ff40" or "|cff40c040")
+  for _, e in ipairs(lines) do
+    local day = date("%A %d %B", e.t)
+    if day ~= lastDay then blocks[#blocks + 1] = { day = "|cfff2c14e" .. day .. "|r" }; lastDay = day; cur = nil end
+    local speaker = e.out and "You" or (ns.Short and ns.Short(e.who) or e.who)
+    if not cur or cur.speaker ~= speaker or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
+      cur = { speaker = speaker, t = e.t, out = e.out, msgs = {} }
+      blocks[#blocks + 1] = cur
+    end
+    local color = msgColor or (e.out and "|cffd9b3ff" or "|cffff80ff")
+    cur.msgs[#cur.msgs + 1] = color .. e.msg .. "|r"
+  end
+  local out = {}
+  for _, b in ipairs(blocks) do
+    if b.day then out[#out + 1] = b.day
+    else
+      out[#out + 1] = (b.out and "|cff9fb4c8You|r" or ("|cffffffff" .. b.speaker .. "|r")) .. "  |cff888888" .. date("%H:%M", b.t) .. "|r\n" .. table.concat(b.msgs, "\n")
+    end
+  end
+  return out
+end
+ns.ChatThreadKey, ns.ChatThreadLines, ns.ChatLineText, ns.ChatSend, ns.ChatThreadBlocks = ThreadKey, ThreadLines, LineText, Send, ThreadBlocks
 local function FillChatWith(det, key)
   local UI = ns.UI
   key = ThreadKey(key)
@@ -666,13 +717,8 @@ local function FillChatWith(det, key)
   det:Buttons(buttons)
   det:Gap(4)
   if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
-  local lastDay
-  for _, e in ipairs(lines) do
-    local day = date("%A %d %B", e.t)
-    if day ~= lastDay then det:Text("|cfff2c14e" .. day .. "|r"); lastDay = day end
-    det:Text(LineText(channel, e))
-  end
-  if channel == "whisper" then ns.MarkChatSeen() end
+  for _, block in ipairs(ThreadBlocks(channel, lines)) do det:Text(block) end
+  ns.MarkChatSeen(key)
   return true
 end
 
@@ -690,7 +736,10 @@ end
 local function ConversationItems()
   local items = {}
   for _, ch in ipairs({ "guild", "officer" }) do
-    if ns.ChatKeep(ch) then items[#items + 1] = { label = CHANNELS[ch].label, value = ch } end
+    if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then
+      local n = ns.ChatUnreadFor(ch)
+      items[#items + 1] = { label = CHANNELS[ch].label .. (n > 0 and (" (" .. n .. " new)") or ""), value = ch }
+    end
   end
   for _, c in ipairs(ns.ChatConversations()) do
     items[#items + 1] = { label = (ns.Short and ns.Short(c.who) or c.who) .. (c.unread > 0 and (" (" .. c.unread .. " new)") or ""), value = "w:" .. c.who }
@@ -732,7 +781,7 @@ local function BuildMessenger()
   local barBg = K.Tex(bar, "BACKGROUND", C.panel2 or C.panel)
   barBg:SetAllPoints()
   f.pick = K.Btn(bar, "", 200, 20)
-  f.pick:SetPoint("LEFT", 4, 0)
+  f.pick:SetPoint("LEFT", 6, 0)
   if K.AddDropdownArrow then K.AddDropdownArrow(f.pick) end
   f.pick.tip = "Switch conversation"
   f.pick:SetScript("OnClick", function(self)
@@ -757,10 +806,10 @@ local function BuildMessenger()
   f.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   f.body:SetPoint("BOTTOMRIGHT")
   f.box = K.Box(f.body, 200, "Type a message, Enter to send")
-  f.box:SetPoint("TOPLEFT", 8, -8)
-  f.box:SetPoint("TOPRIGHT", -62, -8)
+  f.box:SetPoint("TOPLEFT", 10, -8)
+  f.box:SetPoint("TOPRIGHT", -64, -8)
   f.send = K.Btn(f.body, "Send", 50, 22, "accent")
-  f.send:SetPoint("TOPRIGHT", -8, -8)
+  f.send:SetPoint("TOPRIGHT", -10, -8)
   local function Go()
     local key = MState().key
     if key and Send(key, f.box:GetText()) then f.box:SetText("") end
@@ -769,13 +818,14 @@ local function BuildMessenger()
   f.box.onEnter = Go
   f.send:SetScript("OnClick", Go)
   f.scroll = CreateFrame("ScrollFrame", nil, f.body)
-  f.scroll:SetPoint("TOPLEFT", 8, -38)
-  f.scroll:SetPoint("BOTTOMRIGHT", -8, 14)
+  f.scroll:SetPoint("TOPLEFT", 12, -40)
+  f.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
   f.child = CreateFrame("Frame", nil, f.scroll)
   f.child:SetSize(300, 10)
   f.scroll:SetScrollChild(f.child)
   f.text = K.Font(f.child, 12, C.text)
-  f.text:SetPoint("TOPLEFT")
+  f.text:SetPoint("TOPLEFT", 2, 0)
+  if f.text.SetSpacing then f.text:SetSpacing(2) end
   f.text:SetJustifyH("LEFT"); f.text:SetJustifyV("TOP")
   f.text:SetWordWrap(true)
   f.scroll:EnableMouseWheel(true)
@@ -798,7 +848,7 @@ local function BuildMessenger()
   function f:Layout()
     local w = math.max(200, (self:GetWidth() or 340) - 30)
     self.child:SetWidth(w)
-    self.text:SetWidth(w)
+    self.text:SetWidth(w - 6)
     self.pick:SetWidth(math.max(100, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 10))
     self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
   end
@@ -826,15 +876,11 @@ local function BuildMessenger()
     self:Show()
     self.body:Show()
     self:SetHeight(st.h or 400)
-    local out, lastDay = {}, nil
+    local out = {}
     if key then
       local lines, channel = ThreadLines(key, 100)
-      for _, e in ipairs(lines) do
-        local day = date("%A %d %B", e.t)
-        if day ~= lastDay then out[#out + 1] = "|cfff2c14e" .. day .. "|r"; lastDay = day end
-        out[#out + 1] = LineText(channel, e)
-      end
-      if channel == "whisper" then ns.MarkChatSeen() end
+      out = ThreadBlocks(channel, lines)
+      ns.MarkChatSeen(key)
     end
     self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Pick a conversation above, or type to start.|r")
     self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
@@ -882,6 +928,16 @@ function ns.ChatBubble()
   badge.text = ns.InterfaceFont and ns.InterfaceFont(badge, 11, { 0.05, 0.07, 0.09 }) or badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   badge.text:SetPoint("CENTER")
   b.badge = badge
+  -- guild chat counter, bottom-right, in guild green-blue
+  local gbadge = CreateFrame("Frame", nil, b)
+  gbadge:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 5, -3)
+  gbadge:SetSize(18, 16)
+  local gfill = gbadge:CreateTexture(nil, "BACKGROUND")
+  gfill:SetAllPoints()
+  gfill:SetColorTexture(0.25, 0.55, 0.95, 1)
+  gbadge.text = ns.InterfaceFont and ns.InterfaceFont(gbadge, 11, { 1, 1, 1 }) or gbadge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  gbadge.text:SetPoint("CENTER")
+  b.gbadge = gbadge
   b:SetScript("OnDragStart", function(self) self.dragging = true; self:StartMoving() end)
   b:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
@@ -897,8 +953,11 @@ function ns.ChatBubble()
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:SetText("Chat")
-    local n = ns.ChatUnread()
-    GameTooltip:AddLine(n == 0 and "No new whispers" or (n == 1 and "1 new whisper" or (n .. " new whispers")), 1, 1, 1)
+    local n, gn = ns.ChatUnread(), ns.ChatUnreadGuild()
+    GameTooltip:AddLine(n == 0 and "No new whispers" or (n == 1 and "1 new whisper" or (n .. " new whispers")), 0.29, 0.87, 0.50)
+    if ns.ChatKeep("guild") or ns.ChatKeep("officer") then
+      GameTooltip:AddLine(gn == 0 and "No new guild messages" or (gn == 1 and "1 new guild message" or (gn .. " new guild messages")), 0.4, 0.65, 1)
+    end
     local last = ns.ChatLog("whisper")
     last = last[#last]
     if last and not last.out then GameTooltip:AddLine((ns.Short and ns.Short(last.who) or last.who) .. ": " .. last.msg:sub(1, 80), 1, 0.5, 1, true) end
@@ -918,10 +977,11 @@ function ns.ChatBubble()
     end
   end
   function b:Update()
-    local n = ns.ChatUnread()
-    self.badge:SetShown(n > 0)
-    self.badge.text:SetText(n > 99 and "99+" or tostring(n))
-    self.badge:SetWidth(math.max(18, (self.badge.text:GetStringWidth() or 8) + 8))
+    for badge, n in pairs({ [self.badge] = ns.ChatUnread(), [self.gbadge] = ns.ChatUnreadGuild() }) do
+      badge:SetShown(n > 0)
+      badge.text:SetText(n > 99 and "99+" or tostring(n))
+      badge:SetWidth(math.max(18, (badge.text:GetStringWidth() or 8) + 8))
+    end
   end
   b:Hide()
   return b
