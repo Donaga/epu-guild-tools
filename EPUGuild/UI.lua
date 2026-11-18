@@ -2327,7 +2327,8 @@ Views.onboarding = {
   empty="No checklist matches.",footer=function() return "Members complete their own steps; officers confirm Discord, mentors and starter supplies." end,
 }
 
-if ns.InstallCasualViews then ns.InstallCasualViews(Views,{Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI}) end
+ns.UIKit={Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI,Box=Box,Font=Font,Tex=Tex,SetColor=SetColor,AddDropdownArrow=AddDropdownArrow,TextWidth=TextWidth}
+if ns.InstallCasualViews then ns.InstallCasualViews(Views,ns.UIKit) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
 Views.home = {
@@ -4287,7 +4288,9 @@ function UI:Layout()
   listArea:ClearAllPoints()
   listArea:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT")
   local compact = det:IsShown() and mainWidth < 650
-  det.panelWidth = compact and mainWidth or DETAILS_W
+  -- some pages (Chat) give the side panel most of the room
+  local detW = (v and v.detailsWide) and math.max(DETAILS_W, math.min(math.floor(mainWidth * 0.64), mainWidth - 230)) or DETAILS_W
+  det.panelWidth = compact and mainWidth or detW
   det:SetWidth(det.panelWidth)
   det.body:SetWidth(det.panelWidth-6)
   det.title:SetWidth(det.panelWidth-105)
@@ -4295,7 +4298,7 @@ function UI:Layout()
   local showList = v and not v.custom and self.view ~= "market" and not compact
   scroll:SetShown(showList == true)
   if det:IsShown() and not compact then
-    listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT", -DETAILS_W, 0)
+    listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT", -detW, 0)
   else
     listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT")
   end

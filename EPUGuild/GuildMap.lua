@@ -477,6 +477,7 @@ function ns.LogChat(channel, who, msg, out)
     for i = 1, #log - drop do log[i] = log[i + drop] end
     for i = #log, #log - drop + 1, -1 do log[i] = nil end
   end
+  if ns.MessengerChanged then ns.MessengerChanged(channel, who, not out) end
   local UI = ns.UI
   if UI and UI:IsShown() then
     if UI.view == "chat" then ns.Changed() end
@@ -615,39 +616,40 @@ local function Send(key, text)
   else SendChatMessage(text, "WHISPER", nil, key:sub(3)) end
   return true
 end
-local function FillChatWith(det, key)
-  local UI = ns.UI
+local function ThreadKey(key)
   if key ~= "guild" and key ~= "officer" and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
-  if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
+  return key
+end
+-- Lines of a conversation, newest first.
+local function ThreadLines(key, max)
   local channel = key:sub(1, 2) == "w:" and "whisper" or key
   local who = channel == "whisper" and key:sub(3) or nil
+  local log, lines = ns.ChatLog(channel), {}
+  for i = #log, 1, -1 do
+    if not who or log[i].who == who then lines[#lines + 1] = log[i] end
+    if #lines >= (max or 60) then break end
+  end
+  return lines, channel, who
+end
+local function LineText(channel, e)
+  local speaker = e.out and "|cff9fb4c8You|r" or ("|cffffffff" .. (ns.Short and ns.Short(e.who) or e.who) .. "|r")
+  local color = channel == "whisper" and (e.out and "|cffd9b3ff" or "|cffff80ff") or (channel == "guild" and "|cff40ff40" or "|cff40c040")
+  return "|cff888888" .. date("%H:%M", e.t) .. "|r  " .. speaker .. "\n" .. color .. e.msg .. "|r"
+end
+ns.ChatThreadKey, ns.ChatThreadLines, ns.ChatLineText, ns.ChatSend = ThreadKey, ThreadLines, LineText, Send
+local function FillChatWith(det, key)
+  local UI = ns.UI
+  key = ThreadKey(key)
+  if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
+  local lines, channel, who = ThreadLines(key, 60)
   local short = who and (ns.Short and ns.Short(who) or who)
-  local title = who and short or CHANNELS[channel].label
   local member = who and ns.roster[short]
   det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
       or (channel == "guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03"),
-    nil, title, who and (member and ((member.online and "Online" or "Offline") .. (member.zone and member.online and (" · " .. member.zone) or "")
+    nil, who and short or CHANNELS[channel].label, who and (member and ((member.online and "Online" or "Offline") .. (member.zone and member.online and (" · " .. member.zone) or "")
       .. " · level " .. (member.level or "?")) or "Whispers") or "Saved on this PC")
-  if who then
-    det:Buttons({ { "Invite", function() local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit; if invite then invite(who) end end },
-      member and ns.GuildmateMenu and { "More", function(self) ns.GuildmateMenu(self, short) end } or nil })
-  end
-  local log, lines, lastDay = ns.ChatLog(channel), {}, nil
-  for i = #log, 1, -1 do
-    if not who or log[i].who == who then lines[#lines + 1] = log[i] end
-    if #lines >= 60 then break end
-  end
-  if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
-  for i = #lines, 1, -1 do
-    local e = lines[i]
-    local day = date("%A %d %B", e.t)
-    if day ~= lastDay then det:Text("|cfff2c14e" .. day .. "|r"); lastDay = day end
-    local speaker = e.out and "|cff9fb4c8You|r" or ("|cffffffff" .. (ns.Short and ns.Short(e.who) or e.who) .. "|r")
-    local color = channel == "whisper" and (e.out and "|cffd9b3ff" or "|cffff80ff") or (channel == "guild" and "|cff40ff40" or "|cff40c040")
-    det:Text("|cff888888" .. date("%H:%M", e.t) .. "|r  " .. speaker .. "\n" .. color .. e.msg .. "|r")
-  end
-  det:Section(who and ("Reply to " .. short) or ("Say in " .. CHANNELS[channel].label:lower()))
-  local box = det:Field("Message", "", 260)
+  -- reply first, newest messages right under it
+  local box = det:Field(who and "Reply" or "Say", "", math.max(160, det.panelWidth - 110))
   local function Go()
     if Send(key, box:GetText()) then
       box:SetText("")
@@ -655,10 +657,218 @@ local function FillChatWith(det, key)
     end
   end
   box.onEnter = Go
-  det:Buttons({ { "Send", Go, accent = true, tip = "Or press Enter" } })
+  local buttons = { { "Send", Go, accent = true, tip = "Or press Enter" } }
+  if who then
+    buttons[#buttons + 1] = { "Invite", function() local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit; if invite then invite(who) end end }
+    if member and ns.GuildmateMenu then buttons[#buttons + 1] = { "More", function(self) ns.GuildmateMenu(self, short) end } end
+  end
+  buttons[#buttons + 1] = { "Pop out", function() ns.OpenMessenger(key) end, tip = "Open this conversation in a small window you can move and minimize" }
+  det:Buttons(buttons)
+  det:Gap(4)
+  if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
+  local lastDay
+  for _, e in ipairs(lines) do
+    local day = date("%A %d %B", e.t)
+    if day ~= lastDay then det:Text("|cfff2c14e" .. day .. "|r"); lastDay = day end
+    det:Text(LineText(channel, e))
+  end
   if channel == "whisper" then ns.MarkChatSeen() end
   return true
 end
+
+---------------------------------------------------------------------------
+-- Pop-out messenger: a small window of its own that you can move, resize and
+-- minimize to a title bar. Newest messages on top, reply box at the top.
+---------------------------------------------------------------------------
+local Mgr
+local function MState()
+  local c = ChatDB()
+  if not c then return {} end
+  c.messenger = c.messenger or {}
+  return c.messenger
+end
+local function ConversationItems()
+  local items = {}
+  for _, ch in ipairs({ "guild", "officer" }) do
+    if ns.ChatKeep(ch) then items[#items + 1] = { label = CHANNELS[ch].label, value = ch } end
+  end
+  for _, c in ipairs(ns.ChatConversations()) do
+    items[#items + 1] = { label = (ns.Short and ns.Short(c.who) or c.who) .. (c.unread > 0 and (" (" .. c.unread .. " new)") or ""), value = "w:" .. c.who }
+  end
+  return items
+end
+local function BuildMessenger()
+  local K = ns.UIKit
+  if Mgr or not K then return Mgr end
+  local C = K.C
+  local f = CreateFrame("Frame", "EPUGuildMessenger", UIParent)
+  Mgr = f
+  f:SetSize(340, 400)
+  f:SetFrameStrata("MEDIUM")
+  f:SetToplevel(true)
+  f:SetClampedToScreen(true)
+  f:SetMovable(true)
+  f:SetResizable(true)
+  if f.SetResizeBounds then f:SetResizeBounds(260, 200, 700, 900) elseif f.SetMinResize then f:SetMinResize(260, 200) end
+  f:EnableMouse(true)
+  local bg = K.Tex(f, "BACKGROUND", C.bg or C.panel)
+  bg:SetAllPoints()
+  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+    local t = K.Tex(f, "BORDER", C.line)
+    t:SetPoint(side[1]); t:SetPoint(side[2])
+    if side[3] then t:SetHeight(1) else t:SetWidth(1) end
+  end
+  -- title bar: drag to move, click the name to switch conversations
+  local bar = CreateFrame("Frame", nil, f)
+  bar:SetPoint("TOPLEFT"); bar:SetPoint("TOPRIGHT"); bar:SetHeight(28)
+  bar:EnableMouse(true)
+  bar:RegisterForDrag("LeftButton")
+  bar:SetScript("OnDragStart", function() f:StartMoving() end)
+  bar:SetScript("OnDragStop", function()
+    f:StopMovingOrSizing()
+    local p, _, rp, x, y = f:GetPoint()
+    MState().point = { p, rp, x, y }
+  end)
+  local barBg = K.Tex(bar, "BACKGROUND", C.panel2 or C.panel)
+  barBg:SetAllPoints()
+  f.pick = K.Btn(bar, "", 200, 20)
+  f.pick:SetPoint("LEFT", 4, 0)
+  if K.AddDropdownArrow then K.AddDropdownArrow(f.pick) end
+  f.pick.tip = "Switch conversation"
+  f.pick:SetScript("OnClick", function(self)
+    K.OpenMenu(self, ConversationItems(), MState().key, function(v)
+      if v then MState().key = v; f:Update() end
+    end)
+  end)
+  f.close = K.Btn(bar, "x", 22, 20)
+  f.close:SetPoint("RIGHT", -4, 0)
+  f.close.tip = "Close (reopen from Chat > Pop out or /epu messenger)"
+  f.close:SetScript("OnClick", function() ns.CloseMessenger() end)
+  f.min = K.Btn(bar, "-", 22, 20)
+  f.min:SetPoint("RIGHT", f.close, "LEFT", -3, 0)
+  f.min.tip = "Minimize to this bar"
+  f.min:SetScript("OnClick", function() ns.MinimizeMessenger(not MState().min) end)
+  f.full = K.Btn(bar, "Open", 44, 20)
+  f.full:SetPoint("RIGHT", f.min, "LEFT", -3, 0)
+  f.full.tip = "Open the Chat page"
+  f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
+  -- body
+  f.body = CreateFrame("Frame", nil, f)
+  f.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
+  f.body:SetPoint("BOTTOMRIGHT")
+  f.box = K.Box(f.body, 200, "Type a message, Enter to send")
+  f.box:SetPoint("TOPLEFT", 8, -8)
+  f.box:SetPoint("TOPRIGHT", -62, -8)
+  f.send = K.Btn(f.body, "Send", 50, 22, "accent")
+  f.send:SetPoint("TOPRIGHT", -8, -8)
+  local function Go()
+    local key = MState().key
+    if key and Send(key, f.box:GetText()) then f.box:SetText("") end
+    f.box:SetFocus()
+  end
+  f.box.onEnter = Go
+  f.send:SetScript("OnClick", Go)
+  f.scroll = CreateFrame("ScrollFrame", nil, f.body)
+  f.scroll:SetPoint("TOPLEFT", 8, -38)
+  f.scroll:SetPoint("BOTTOMRIGHT", -8, 14)
+  f.child = CreateFrame("Frame", nil, f.scroll)
+  f.child:SetSize(300, 10)
+  f.scroll:SetScrollChild(f.child)
+  f.text = K.Font(f.child, 12, C.text)
+  f.text:SetPoint("TOPLEFT")
+  f.text:SetJustifyH("LEFT"); f.text:SetJustifyV("TOP")
+  f.text:SetWordWrap(true)
+  f.scroll:EnableMouseWheel(true)
+  f.scroll:SetScript("OnMouseWheel", function(self, delta)
+    local max = math.max(0, f.child:GetHeight() - self:GetHeight())
+    self:SetVerticalScroll(math.min(max, math.max(0, self:GetVerticalScroll() - delta * 40)))
+  end)
+  f.grip = CreateFrame("Button", nil, f.body)
+  f.grip:SetSize(14, 14)
+  f.grip:SetPoint("BOTTOMRIGHT", -1, 1)
+  f.grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  f.grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+  f.grip:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
+  f.grip:SetScript("OnMouseUp", function()
+    f:StopMovingOrSizing()
+    local st = MState(); st.w, st.h = math.floor(f:GetWidth()), math.floor(f:GetHeight())
+    f:Update()
+  end)
+  f:SetScript("OnSizeChanged", function() if f.body:IsShown() then f:Layout() end end)
+  function f:Layout()
+    local w = math.max(200, (self:GetWidth() or 340) - 30)
+    self.child:SetWidth(w)
+    self.text:SetWidth(w)
+    self.pick:SetWidth(math.max(100, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 10))
+    self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
+  end
+  function f:Update()
+    local st = MState()
+    if not st.key then
+      local first = ns.ChatConversations()[1]
+      st.key = first and ("w:" .. first.who) or (ns.ChatKeep("guild") and "guild" or nil)
+    end
+    local unread = ns.ChatUnread()
+    local key = st.key
+    local label
+    if not key then label = "Chat"
+    elseif key:sub(1, 2) == "w:" then label = ns.Short and ns.Short(key:sub(3)) or key:sub(3)
+    else label = CHANNELS[key].label end
+    if st.min and unread > 0 then label = label .. "  |cff4ade80(" .. unread .. " new)|r" end
+    self.pick:SetLabel(label)
+    self.body:SetShown(not st.min)
+    self:SetHeight(st.min and 30 or (st.h or 400))
+    if st.min then return end
+    local out, lastDay = {}, nil
+    if key then
+      local lines, channel = ThreadLines(key, 100)
+      for _, e in ipairs(lines) do
+        local day = date("%A %d %B", e.t)
+        if day ~= lastDay then out[#out + 1] = "|cfff2c14e" .. day .. "|r"; lastDay = day end
+        out[#out + 1] = LineText(channel, e)
+      end
+      if channel == "whisper" then ns.MarkChatSeen() end
+    end
+    self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Pick a conversation above, or type to start.|r")
+    self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
+    self:Layout()
+  end
+  return f
+end
+function ns.OpenMessenger(key)
+  local f = BuildMessenger()
+  if not f then return end
+  local st = MState()
+  if key then st.key = ThreadKey(key) end
+  st.open, st.min = true, false
+  f:ClearAllPoints()
+  if st.point then f:SetPoint(st.point[1], UIParent, st.point[2], st.point[3], st.point[4]) else f:SetPoint("RIGHT", UIParent, "RIGHT", -80, 40) end
+  f:SetSize(st.w or 340, st.h or 400)
+  f:Show()
+  f:Update()
+end
+function ns.CloseMessenger()
+  MState().open = false
+  if Mgr then Mgr:Hide() end
+end
+function ns.MinimizeMessenger(on)
+  local st = MState()
+  st.min = on and true or false
+  if Mgr then Mgr:Update() end
+end
+function ns.ToggleMessenger()
+  if Mgr and Mgr:IsShown() then ns.CloseMessenger() else ns.OpenMessenger() end
+end
+function ns.MessengerChanged(channel, who, incoming)
+  if not (Mgr and Mgr:IsShown()) then return end
+  local st = MState()
+  -- a new whisper while nothing is open there: follow it
+  if incoming and channel == "whisper" and not st.key then st.key = "w:" .. who end
+  ns.Debounce("messenger", 0.2, function() if Mgr:IsShown() then Mgr:Update() end end)
+end
+ns.On("PLAYER_LOGIN", function()
+  C_Timer.After(3, function() if MState().open then ns.OpenMessenger() end end)
+end)
 local function FillChatNew(det)
   det:Reset("Interface\\Icons\\INV_Letter_15", nil, "New message", "Whisper a guildmate")
   local online = {}

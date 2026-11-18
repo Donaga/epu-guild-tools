@@ -109,6 +109,7 @@ function ns.InstallCommunityViews(views,env)
   UI.state.chat={}
   views.chat={
     label="Chat",
+    detailsWide=true,
     icon="Interface\\Icons\\INV_Letter_15",
     count=function() return ns.ChatUnread and ns.ChatUnread() or 0 end,
     -- open on the latest conversation, like a messenger
@@ -123,6 +124,10 @@ function ns.InstallCommunityViews(views,env)
     tools=function(bar)
       bar:Add(E.Btn(bar,"New message",100,22,"accent"),"right",function() Open("chatnew","new") end,
         "Start a whisper to a guildmate")
+      bar:Add(E.Btn(bar,"Pop out",64,22),"right",function()
+        local d=UI.details
+        ns.OpenMessenger(d:IsShown() and d.kind=="chatwith" and d.key or nil)
+      end,"Open a small chat window you can move, resize and minimize")
       bar:Add(E.Btn(bar,"Chat settings",100,22),"right",function() Open("chatsettings","all") end,
         "What to keep, showing the last hour after a reload, and clearing saved chat")
     end,

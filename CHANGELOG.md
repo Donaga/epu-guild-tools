@@ -2,7 +2,8 @@
 
 ## 0.27.3
 
-- **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers.
+- **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers. Newest messages are on top with the reply box above them, and the conversation gets most of the page width.
+- **Pop out:** a small chat window of its own (Chat → Pop out, or `/epu messenger`). Drag it anywhere, resize it from the corner, switch conversations from its title, and **minimize** it to just the title bar, which shows how many whispers are new. It stays where you left it, and reopens after a reload if it was open.
 - On a short window the sidebar shows icons only; hover for the name and what each page is for.
 
 ## 0.27.2
