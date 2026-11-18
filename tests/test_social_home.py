@@ -27,6 +27,10 @@ check('Roster is now called Guildmates and opens on who is online',
 
 home = A.ev('__rows()')
 check('Home shows the online count and groups at a glance', 'online |' in home and 'open group' in home)
+import re
+m = re.search(r'online \| (\d+) with EPU', home)
+check('online guildmates whose EPU has been heard count as using EPU', m is not None and int(m.group(1)) == 2)
+check('someone EPU never heard from does not', A.ev('__ns.UsesEPU("Pip Baker")') is False and A.ev('__ns.UsesEPU("Tyler Baker")') is True)
 check('Home has a Right now section with a Start one prompt when nobody is looking', 'Right now' in home and "Nobody's looking for a group" in home)
 check('Home shows who is where', 'Who is where' in home and 'zone:' in home)
 

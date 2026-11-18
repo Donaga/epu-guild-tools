@@ -298,6 +298,33 @@ end
 C_Timer.After(30, Expire)
 function ns.PartialCount() local n=0; for _ in pairs(partial) do n=n+1 end; return n end
 
+-- Who uses EPU: anyone whose EPU has sent us anything (saved per guild on
+-- this PC), plus anyone seen in sync reports.
+local heardAt = {}
+function ns.HeardEPU(name)
+  if type(name) ~= "string" or name == "" then return end
+  local now = GetTime()
+  if heardAt[name] and now - heardAt[name] < 60 then return end
+  heardAt[name] = now
+  local g = ns.G and ns.G()
+  if not g then return end
+  g.epuHeard = g.epuHeard or {}
+  local t = ns.Now()
+  g.epuHeard[name] = t
+  for n, at in pairs(g.epuHeard) do
+    if type(at) ~= "number" or t - at > 60 * 86400 then g.epuHeard[n] = nil end
+  end
+end
+function ns.UsesEPU(name, days)
+  if name == ns.me then return true end
+  local g = ns.G and ns.G()
+  if not g or type(name) ~= "string" then return false end
+  local now, limit = ns.Now(), (days or 30) * 86400
+  local h = g.epuHeard and g.epuHeard[name]
+  local s = g.syncSeen and g.syncSeen[name]
+  return (type(h) == "number" and now - h < limit) or (s and type(s.t) == "number" and now - s.t < limit) or false
+end
+
 function ns.HandleAddonMessage(prefix, msg, channel, sender)
   if not ns.IsReadableString(prefix) or prefix ~= ns.PREFIX
     or not ns.IsReadableString(msg) or #msg > 255 or not ns.IsReadableString(channel) then return end
@@ -307,6 +334,7 @@ function ns.HandleAddonMessage(prefix, msg, channel, sender)
   -- The server already authenticates membership on GUILD/OFFICER. A new member
   -- may speak before our roster refresh; only whispers require a roster match.
   if channel == "WHISPER" and ns.roster and next(ns.roster) and not ns.roster[sender] then return end
+  ns.HeardEPU(sender)
 
   local body
   local t = msg:sub(1, 1)
