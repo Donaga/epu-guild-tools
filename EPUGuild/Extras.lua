@@ -319,7 +319,7 @@ function ns.OnRequestChanged(rid, r, oldStatus)
       end
     elseif not oldStatus and mine[r.crafter] and not mine[r.who] and (r.status == "pending" or r.status == "open") then
       ns.Notify("Craft request", ns.WhoLabel(r.who) .. " asks you to make " .. name .. " x" .. r.qty .. ".", icon)
-    elseif ns.IsTrusted(ns.me) and r.mats == "bank" and r.status == "approved" and oldStatus ~= "approved"
+    elseif ns.IsBankTrusted(ns.me) and r.mats == "bank" and r.status == "approved" and oldStatus ~= "approved"
       and Setting("officerNotices", true) and not mine[r.crafter] then
       ns.Notify("Bank materials needed", short .. " accepted " .. name .. " x" .. r.qty .. " for " .. r.who .. ". The bank sends the materials.", icon)
     end
@@ -337,7 +337,7 @@ function ns.OnRequestChanged(rid, r, oldStatus)
     elseif r.status == "rejected" then
       ns.Notify("Request declined", name .. ((r.reason and r.reason ~= "") and (": " .. r.reason) or ""), icon)
     end
-  elseif not oldStatus and not mine[r.who] and ns.IsTrusted(ns.me) and ns.IsActiveRequest(r)
+  elseif not oldStatus and not mine[r.who] and ns.IsBankTrusted(ns.me) and ns.IsActiveRequest(r)
     and Setting("officerNotices", true) then
     ns.Notify("New guild bank request", ns.WhoLabel(r.who) .. " wants " .. name .. " x" .. r.qty .. ".", icon)
   end

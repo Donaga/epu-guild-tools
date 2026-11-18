@@ -56,7 +56,7 @@ function ns.ScanGuildBank()
   -- No tabs bought and no gold yet: there's no guild bank to show. Clear any
   -- empty entry recorded earlier instead of listing an empty "Guild Bank".
   if n == 0 and money == 0 then
-    if cur and not cur.retired and ns.IsTrusted(ns.me) then
+    if cur and not cur.retired and ns.IsBankTrusted(ns.me) then
       g.bank[GB_KEY] = { v = ns.NextVersion(cur.v), money = 0, items = {}, seen=ns.BankHistory(cur,nil,GB_KEY), retired = true, guild = true }
       ns.Send("D", { bank = { [GB_KEY] = g.bank[GB_KEY] } })
       ns.Changed()
@@ -69,7 +69,7 @@ function ns.ScanGuildBank()
   end
   g.bank[GB_KEY] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, seen=seen, bankTime = ns.Now(), guild = true }
   ns.Changed()
-  if ns.IsTrusted(ns.me) then
+  if ns.IsBankTrusted(ns.me) then
     ns.Debounce("gbBroadcast", 5, function()
       local s = g.bank[GB_KEY]
       if s then ns.Send("D", { bank = { [GB_KEY] = s } }) end
@@ -87,7 +87,7 @@ local function LogTime(y, mo, d, h)
 end
 
 function ns.ParseGuildBankLogs()
-  if not isOpen or not ns.IsTrusted(ns.me) then return end
+  if not isOpen or not ns.IsBankTrusted(ns.me) then return end
   local g = ns.G()
   if not g then return end
 

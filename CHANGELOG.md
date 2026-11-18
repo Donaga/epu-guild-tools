@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.27.2
+
+- **Bank managers.** Officers can now let a rank (or specific characters) run the bank side for the whole guild: publish bank contents, edit needs, approve and mail requests, record donations, and act as a verified sync source. Bank managers can't post announcements, write member notes, manage other people's events or use the Officer tab, and they can't add other bank managers.
+- Set it once under **Officer → Bank managers → Choose**. Unlike the officer ranks setting, it's shared with every guildmate's addon, so nobody has to change their own settings. Adding a character also adds its linked alts.
+- Guildmates need 0.27.2 or newer to treat bank managers as verified.
+
 ## 0.27.1
 
 - **Quests page (new, in the sidebar under Guildmates):** your quest log with how many guildmates are on each quest (and how many are nearby), group quests flagged, and **Questing near you**: guildmates in your zone, most quests in common first. Click a quest to whisper or invite them, or **Ask for help with this** to post a quest help request with the quest filled in.

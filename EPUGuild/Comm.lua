@@ -281,7 +281,7 @@ function ns.HandleAddonMessage(prefix, msg, channel, sender)
       p.bytes = p.bytes + #part
       if p.bytes > 262144 then partial[key]=nil; return end
     end
-    if ns.sync and channel=="GUILD" and ns.IsTrusted(sender) then ns.sync.lastPart=GetTime() end
+    if ns.sync and channel=="GUILD" and ns.IsBankTrusted(sender) then ns.sync.lastPart=GetTime() end
     if p.got < p.n then return end
     partial[key] = nil
     body = table.concat(p.parts)

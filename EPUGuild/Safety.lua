@@ -137,7 +137,7 @@ function ns.MergeNeeds(sender, nd)
 end
 local send = ns.Send
 ns.Send = function(kind, b, channel, target)
-  if kind == "D" and b and b.needs and ns.IsTrusted(ns.me) then
+  if kind == "D" and b and b.needs and ns.IsBankTrusted(ns.me) then
     local g = ns.G()
     local entries = NeedState(g)
     local ids = {}
@@ -211,7 +211,7 @@ ns.Merge = function(sender, b, catchingUp)
     for id,r in pairs(b.req) do
       if type(id) == "string" and #id <= 180 and ns.ValidRequest(r) then
         local g=ns.G(); local limit=tonumber(g.policy.maxOpen) or 0
-        if trusted or r.crafter or g.requests[id] or limit==0 or ns.OpenCountFor(sender)<limit then clean.req[id]=r end
+        if trusted or ns.IsBankTrusted(sender) or r.crafter or g.requests[id] or limit==0 or ns.OpenCountFor(sender)<limit then clean.req[id]=r end
       end
     end
   end
@@ -282,7 +282,7 @@ function ns.AutoFillFor(recipient, items, requestID)
   end
   for id,r in pairs(g.requests) do
     if (not requestID or requestID==id or (type(requestID)=="table" and requestID[id])) and r.status=="approved" and (r.to or r.who)==recipient
-      and ((r.crafter==ns.me) or (not r.crafter and ns.IsTrusted(ns.me))) then rows[#rows+1]={id=id,r=r} end
+      and ((r.crafter==ns.me) or (not r.crafter and ns.IsBankTrusted(ns.me))) then rows[#rows+1]={id=id,r=r} end
   end
   table.sort(rows,function(a,b) if a.r.t~=b.r.t then return (a.r.t or 0)<(b.r.t or 0) end return a.id<b.id end)
   for _,row in ipairs(rows) do
