@@ -1129,9 +1129,15 @@ end
 local FALLBACK = { whisper = { 1, 0.5, 1 }, whisperOut = { 1, 0.5, 1 }, guild = { 0.25, 1, 0.25 },
   officer = { 0.25, 0.75, 0.25 }, party = { 0.67, 0.67, 1 }, raid = { 1, 0.5, 0 } }
 local function ColorKey(channel, out) return (channel == "whisper" and out) and "whisperOut" or channel end
+local MENTION_DEFAULT = { 1, 0.82, 0 }   -- gold: stands out from guild, party, raid and officer colors
 function ns.ChatColorRGB(channel, out, who)
   local key = ColorKey(channel, out)
   local colors = (ChatDB() or {}).chatColors
+  if channel == "mention" then
+    local m = colors and colors.mention
+    if type(m) == "table" and type(m[1]) == "number" then return m[1], m[2], m[3], true end
+    return MENTION_DEFAULT[1], MENTION_DEFAULT[2], MENTION_DEFAULT[3], false
+  end
   -- a color picked for one person wins for their whispers to you
   local person = colors and channel == "whisper" and not out and who and colors["w:" .. who]
   if type(person) == "table" and type(person[1]) == "number" then return person[1], person[2], person[3], true end
@@ -1342,6 +1348,8 @@ local function Opt()
   if o.combat == nil then o.combat = true end           -- tuck chat windows away in combat
   if o.fade == nil then o.fade = false end              -- fade when the mouse is elsewhere
   if o.mentions == nil then o.mentions = true end       -- alert when your name comes up
+  if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
+  if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -1425,6 +1433,7 @@ local function ThreadBlocks(channel, lines, plains)
     end
     if speaker then
       local color = ChatColor(channel, e.out, e.who)
+      if channel ~= "whisper" and not e.out and Opt().mentionColor and ns.ChatMentions(e.msg) then color = ChatColor("mention") end
       local stamp = Opt().lineTimes and ("|cff777777" .. date("%H:%M", e.t) .. "|r  ") or ""
       table.insert(cur.msgs, 1, stamp .. color .. Linkify(e.msg, color) .. "|r")
       table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
@@ -2173,6 +2182,24 @@ function ns.ChatMentions(msg)
   end
   return false
 end
+-- The same color in the game's own chat windows: only the message text
+-- changes; the "[Guild] [Name]:" part keeps its usual color.
+local function MentionFilter(_, _, msg, ...)
+  local o = Opt()
+  if not (o.mentionColor and o.mentionGame) or not ns.IsReadableString(msg) or msg:find("|K", 1, true) then return false end
+  local author = ...
+  if type(author) == "string" and ns.Short and ns.Short(author) == ns.me then return false end
+  if not ns.ChatMentions(msg) then return false end
+  local color = ChatColor("mention")
+  return false, color .. msg:gsub("|r", "|r" .. color) .. "|r", ...
+end
+ns.ChatMentionFilter = MentionFilter
+if ChatFrame_AddMessageEventFilter then
+  for _, ev in ipairs({ "CHAT_MSG_GUILD", "CHAT_MSG_OFFICER", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
+    "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_RAID_WARNING" }) do
+    ChatFrame_AddMessageEventFilter(ev, MentionFilter)
+  end
+end
 function ns.ChatIncoming(channel, sender, msg)
   local o = Opt()
   PlayChatSound(o.sounds[channel], channel)
@@ -2310,6 +2337,11 @@ local function FillChatSettings(det)
         Again()
       end)
     end } })
+  det:Buttons({ { Check(o.mentionColor, "Color those messages"), function() o.mentionColor = not o.mentionColor; ns.ChatColorsChanged(); Again() end,
+      tip = "Messages that mention you stand out in EPU's chat" },
+    { ChatColor("mention") .. "Mention color|r", function() ns.PickChatColor("mention") end, tip = "Pick the color" },
+    { Check(o.mentionGame, "In the game's chat too"), function() o.mentionGame = not o.mentionGame; Again() end,
+      tip = "Also color them in the game's own chat windows" } })
   local words = {}
   for w in pairs(o.words) do words[#words + 1] = w end
   table.sort(words)

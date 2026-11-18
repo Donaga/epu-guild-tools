@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.3
+
+- **Messages that mention you stand out.** In guild, officer, party and raid chat, a message with your name (any of your characters' first names) or one of your alert words is shown in its own color: gold by default, changeable in **Chat settings → Mentions → Mention color**. It works in EPU's chat and in the game's own chat windows (only the message text changes color; turn that part off with "In the game's chat too"). Your own messages are never colored.
+
 ## 0.28.2
 
 - **"with EPU" counts are right.** Home's "N online · M with EPU" (and the EPU mark on Guildmates) only counted guildmates who sent bank or sync reports, so most EPU users were missed. EPU now remembers anyone whose EPU it has heard from in the last 30 days.
