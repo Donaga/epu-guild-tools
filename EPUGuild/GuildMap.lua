@@ -550,8 +550,26 @@ function ns.LogChat(channel, who, msg, out, sys)
   local fromServer
   if (channel == "guild" or channel == "officer") and not sys and session[channel] then
     for id, e in pairs(session[channel]) do
-      if SameAuthorTime(e, { who = who, t = time() }, 3) then fromServer = id; session[channel][id] = nil; break end
+      if SameAuthorTime(e, { who = who, t = time() }, 3) then
+        session[channel][id] = nil
+        if type(id) == "number" then fromServer = id end
+        break
+      end
     end
+  end
+  -- The game sometimes also hands over a hidden copy of a live guild line
+  -- ("|Kw123|k"). It can't be kept, so it's shown this session only, and
+  -- skipped when the readable line is already here.
+  if (channel == "guild" or channel == "officer") and not sys and Protected(text) then
+    local log = LogTable(ChatDB(), channel)
+    for i = #log, math.max(1, #log - 20), -1 do
+      local x = log[i]
+      if not Protected(x.msg) and SameAuthorTime(x, { who = who, t = time() }, 3) then return end
+    end
+    local id = fromServer or ("l" .. tostring(GetTime and GetTime() or time()))
+    session[channel][id] = { t = time(), id = id, who = who, msg = text, out = out and true or nil }
+    if ns.MessengerChanged then ns.MessengerChanged(channel, who, not out) end
+    return
   end
   if (channel == "guild" or channel == "officer") and not sys then
     local short = ns.Short and ns.Short(who) or who
@@ -589,6 +607,17 @@ function ns.ChatLog(channel)
   local c = ChatDB()
   return c and LogTable(c, channel) or {}
 end
+-- Never save hidden server text: it turns into "Unknown" after a reload.
+ns.On("PLAYER_LOGOUT", function()
+  local c = ChatDB()
+  for _, g in pairs(c and c.guilds or {}) do
+    for _, log in pairs(g) do
+      if type(log) == "table" then
+        for i = #log, 1, -1 do if Protected(log[i].msg) then table.remove(log, i) end end
+      end
+    end
+  end
+end)
 ns.On("CHAT_MSG_WHISPER", function(msg, sender) ns.LogChat("whisper", sender, msg, false); if ns.ChatIncoming then ns.ChatIncoming("whisper", sender, msg) end end)
 ns.On("CHAT_MSG_WHISPER_INFORM", function(msg, target) ns.LogChat("whisper", target, msg, true) end)
 local function Mine(sender)
