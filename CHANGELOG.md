@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.27.1
+
+- Fixed "Interface action failed because of an AddOn" in combat. EPU read the guild message of the day when the roster updated mid-fight, which the game blocks. It now waits until combat ends.
+
 ## 0.27.0
 
 - **Cleaner Home.** Your stats sit in a row of four tiles (online, open groups, your requests, next event). Below them are two columns: **Right now** and **Coming up** on the left, **Who is where** and **Today in the guild** on the right. Section titles are gold with a thin line, and card text no longer overlaps.
