@@ -142,7 +142,7 @@ function ns.InstallCommunityViews(views,env)
               icon=ns.CHAT_CHANNELS[ch].icon,
               sub=e and ((ns.Short and ns.Short(e.who) or e.who)..(e.sys and " " or ": ")..e.msg) or "Nothing yet",
               right=e and ((n>0 and ("|cff66a6ff"..n.." new|r · ") or "")..ns.ChatAgo(e.t)) or "",
-              onClick=function() Open("chatwith",ch) end}
+              onClick=function() if ns.ChatFocus then ns.ChatFocus(nil) end; Open("chatwith",ch) end}
           end
         end
       end
@@ -154,8 +154,20 @@ function ns.InstallCommunityViews(views,env)
             icon=(ns.roster[short] and ns.ClassIcon(ns.roster[short].classFile)) or "Interface\\Icons\\INV_Letter_15",
             dot=(ns.roster[short] or {}).online,
             sub=(e.out and "You: " or "")..e.msg,right=(c.unread>0 and ("|cff4ade80"..c.unread.." new|r · ") or "")..ns.ChatAgo(e.t),
-            onClick=function() Open("chatwith","w:"..c.who) end,
+            onClick=function() if ns.ChatFocus then ns.ChatFocus(nil) end; Open("chatwith","w:"..c.who) end,
             onRightClick=function(self) if ns.GuildmateMenu and ns.roster[short] then ns.GuildmateMenu(self,short) end end}
+        end
+      end
+      -- search: every saved message that matches, newest first
+      if q and #q>=2 and ns.SearchChat then
+        local hits=ns.SearchChat(q,100)
+        for i,h in ipairs(hits) do
+          local e=h.e
+          local who=ns.Short and ns.Short(e.who) or e.who
+          local where=h.channel=="whisper" and ("Whisper · "..(e.out and ("You to "..who) or who)) or (ns.CHAT_CHANNELS[h.channel].label.." · "..(e.out and "You" or who))
+          out[#out+1]={key="chatfind:"..i..":"..(e.t or 0),title=where,icon=ns.CHAT_CHANNELS[h.channel].icon or "Interface\\Icons\\INV_Letter_15",
+            sub=e.msg,right=date("%d %b %H:%M",e.t),compact=true,
+            onClick=function() ns.ChatFocus(h.key,e.t,q); Open("chatwith",h.key) end}
         end
       end
       return out

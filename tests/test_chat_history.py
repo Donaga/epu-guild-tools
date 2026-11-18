@@ -270,5 +270,23 @@ __ns.chatSessionHistory.guild[424242]={t=now-1800,id=424242,who="Irthos Ixen",ms
 A.ex('__ns.MessengerChanged("guild", nil, false)')
 gt = A.ev('EPUGuildMessenger.text:GetText()')
 check('a hidden server copy and its Discord line show once', '|Kw77|k' not in gt and 'woot while you were away' in gt)
+# searching saved chat
+A.ex('''local now=time()
+local l=__ns.ChatLog("guild"); l[#l+1]={t=now-86000,who="Irthos Ixen",msg="anyone selling Copper Ore?"}
+l[#l+1]={t=now-85990,who="Gillian Jet",msg="i have some copper"}
+local w=__ns.ChatLog("whisper"); w[#w+1]={t=now-5000,who="Pip Baker",msg="the COPPER is in the bank"}''')
+hits = A.ev('(function() local t={} for _,h in ipairs(__ns.SearchChat("copper")) do t[#t+1]=h.key.."="..h.e.msg end return table.concat(t,"~") end)()')
+check('search finds matching messages in whispers and guild chat, newest first',
+      hits.startswith('w:Pip Baker=the COPPER is in the bank') and 'guild=anyone selling Copper Ore?' in hits and 'guild=i have some copper' in hits)
+check('search also matches who said it', 'guild=i have some copper' in A.ev('(function() local t={} for _,h in ipairs(__ns.SearchChat("gillian")) do t[#t+1]=h.key.."="..h.e.msg end return table.concat(t,"~") end)()'))
+check('one letter is not a search', A.ev('#__ns.SearchChat("c")') == 0)
+A.ex('__ns.UI:Show(); __ns.UI:SetView("chat"); __ns.UI.search:SetText("copper"); __ns.UI:Refresh()')
+rows = A.ev('(function() local t={} for _,r in ipairs(__ns.UI.rows) do if r:IsShown() and r.data then t[#t+1]=(r.data.title or "").." | "..(r.data.sub or "") end end return table.concat(t,"\\n") end)()')
+check('the Chat page lists search results', 'Guild chat · Irthos Ixen | anyone selling Copper Ore?' in rows and 'Whisper · Pip Baker | the COPPER is in the bank' in rows)
+A.ex('for _,r in ipairs(__ns.UI.rows) do if r:IsShown() and r.data and r.data.sub=="anyone selling Copper Ore?" then r.data.onClick() end end')
+txt = A.ev('(function() local t={} for _,f in ipairs(__ns.UI.details.pools.text or {}) do if f:IsShown() then t[#t+1]=f:GetText() end end return table.concat(t,"\\n") end)()')
+check('a result opens that conversation around that message, with the words marked',
+      '|cffffffffCopper|r' in txt and 'an hour either side' in txt)
+A.ex('__ns.ChatFocus(nil)')
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

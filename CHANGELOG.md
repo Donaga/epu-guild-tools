@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.4
+
+- **Search your chat history.** On the Chat page, type in the search box at the top (two letters or more) to find every saved message that matches, in whispers and in the guild, officer, party and raid chat you keep, newest first. It matches what was said and who said it. Click a result to open that conversation at that point: the hour either side of the message, with your search words marked. **Show the latest** goes back to the newest messages.
+
 ## 0.28.3
 
 - **Messages that mention you stand out.** In guild, officer, party and raid chat, a message with your name (any of your characters' first names) or one of your alert words is shown in its own color: gold by default, changeable in **Chat settings → Mentions → Mention color**. It works in EPU's chat and in the game's own chat windows (only the message text changes color; turn that part off with "In the game's chat too"). Your own messages are never colored.

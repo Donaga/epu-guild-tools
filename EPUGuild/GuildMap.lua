@@ -1413,7 +1413,21 @@ function ns.ChatTyping(who)
   local at = typingAt[short]
   return at ~= nil and GetTime() - at < 6
 end
-local function ThreadBlocks(channel, lines, plains)
+-- Search words in a message, marked in a bright color (plain text only, so
+-- links and color codes are never cut).
+local function Highlight(msg, q, color)
+  if type(q) ~= "string" or #q < 2 or msg:find("|", 1, true) then return msg end
+  local low, out, i = msg:lower(), {}, 1
+  while true do
+    local a, b = low:find(q, i, true)
+    if not a then break end
+    out[#out + 1] = msg:sub(i, a - 1) .. "|cffffffff" .. msg:sub(a, b) .. "|r" .. color
+    i = b + 1
+  end
+  if #out == 0 then return msg end
+  return table.concat(out) .. msg:sub(i)
+end
+local function ThreadBlocks(channel, lines, plains, hl)
   local blocks, lastDay, cur = {}, nil, nil
   for _, e in ipairs(lines) do
     local day = date("%A %d %B", e.t)
@@ -1435,7 +1449,9 @@ local function ThreadBlocks(channel, lines, plains)
       local color = ChatColor(channel, e.out, e.who)
       if channel ~= "whisper" and not e.out and Opt().mentionColor and ns.ChatMentions(e.msg) then color = ChatColor("mention") end
       local stamp = Opt().lineTimes and ("|cff777777" .. date("%H:%M", e.t) .. "|r  ") or ""
-      table.insert(cur.msgs, 1, stamp .. color .. Linkify(e.msg, color) .. "|r")
+      local text = Highlight(e.msg, hl, color)
+      if hl and text ~= e.msg then stamp = "|cffffd100>|r " .. stamp end
+      table.insert(cur.msgs, 1, stamp .. color .. Linkify(text, color) .. "|r")
       table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
     end
   end
@@ -1567,6 +1583,36 @@ function ns.ChatLinkClick(owner, link, text, button, openName)
   end
   if SetItemRef then pcall(SetItemRef, link, text, button) end
 end
+-- Search across everything saved: whispers and the guild, officer, party
+-- and raid chat you keep. Newest first.
+local chatFocus = nil
+function ns.SearchChat(q, max)
+  q = type(q) == "string" and q:lower():gsub("^%s+", ""):gsub("%s+$", "") or ""
+  if #q < 2 then return {} end
+  max = max or 100
+  local found = {}
+  local function Scan(channel)
+    for _, e in ipairs(ns.ChatLog(channel)) do
+      if not e.sys and type(e.msg) == "string" and not Protected(e.msg) then
+        local who = ns.Short and ns.Short(e.who or "") or (e.who or "")
+        if PlainText(e.msg):lower():find(q, 1, true) or who:lower():find(q, 1, true) then
+          found[#found + 1] = { channel = channel, key = channel == "whisper" and ("w:" .. e.who) or channel, e = e }
+        end
+      end
+    end
+  end
+  Scan("whisper")
+  for _, ch in ipairs(GROUP_CHANNELS) do
+    if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then Scan(ch) end
+  end
+  table.sort(found, function(a, b) return (a.e.t or 0) > (b.e.t or 0) end)
+  while #found > max do table.remove(found) end
+  return found
+end
+-- open a conversation at a search result (nil: back to the latest)
+function ns.ChatFocus(key, t, q)
+  chatFocus = key and { key = ThreadKey(key), t = t, q = (q or ""):lower() } or nil
+end
 local function FillChatWith(det, key)
   local UI = ns.UI
   key = ThreadKey(key)
@@ -1576,6 +1622,16 @@ local function FillChatWith(det, key)
   end
   if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
   local lines, channel, who = ThreadLines(key, 60)
+  -- opened from a search result: the hour either side of that message
+  local focus = chatFocus
+  if focus and focus.key ~= key then chatFocus, focus = nil, nil end
+  if focus then
+    local all = ThreadLines(key, 2000)
+    lines = {}
+    for _, e in ipairs(all) do
+      if math.abs((e.t or 0) - focus.t) <= 3600 and #lines < 120 then lines[#lines + 1] = e end
+    end
+  end
   local short = who and (ns.Short and ns.Short(who) or who)
   local member = who and ns.roster[short]
   det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
@@ -1598,6 +1654,7 @@ local function FillChatWith(det, key)
   local function Go()
     if Send(key, box:GetText()) then
       box:SetText("")
+      chatFocus = nil
       C_Timer.After(0.3, function() if UI.details.kind == "chatwith" and UI.details.key == key then UI:FillDetails() end end)
     end
   end
@@ -1617,8 +1674,12 @@ local function FillChatWith(det, key)
     tip = "Copy the conversation as plain text, Discord or BBCode. Click a time to copy just those messages." }
   det:Buttons(buttons)
   det:Gap(4)
+  if focus then
+    det:Text("|cffffd100Search:|r \"" .. focus.q .. "\" · messages from an hour either side of " .. date("%a %d %b %H:%M", focus.t), nil)
+    det:Buttons({ { "Show the latest", function() chatFocus = nil; UI:FillDetails() end, tip = "Back to the newest messages" } })
+  end
   if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
-  for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain)) do det:Text(block) end
+  for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain, focus and focus.q)) do det:Text(block) end
   ns.MarkChatSeen(key)
   return true
 end
