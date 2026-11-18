@@ -477,13 +477,15 @@ local function Plain(v)
   if type(v) ~= "string" then return nil end
   return v
 end
-function ns.LogChat(channel, who, msg, out)
+function ns.LogChat(channel, who, msg, out, sys)
   if not ns.ChatKeep(channel) then return end
   who = Plain(who)
   if not who or who == "" then return end
   local text = Plain(msg) or "(the game hid this message)"
   local log = ChatDB().chatlog[channel]
-  log[#log + 1] = { t = time(), who = who, msg = text, out = out or nil }
+  -- sys: "on" / "off" for a guildmate coming online or going offline; these
+  -- never count as unread
+  log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys }
   local cutoff = time() - CHAT_MAX_AGE
   local drop = 0
   while drop < #log and (#log - drop > CHAT_KEEP or (log[drop + 1].t or 0) < cutoff) do drop = drop + 1 end
@@ -521,6 +523,25 @@ end
 ns.On("CHAT_MSG_GUILD", Group("guild"))
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
+-- Guildmates coming online and going offline, shown in Guild chat. The game
+-- announces both as system messages; only guild members are kept.
+local function SystemPattern(fmt)
+  if type(fmt) ~= "string" then return nil end
+  fmt = fmt:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%%%s", "(.-)"):gsub("%%%%d", "%%d+")
+  return "^" .. fmt .. "$"
+end
+ns.On("CHAT_MSG_SYSTEM", function(msg)
+  msg = Plain(msg)
+  if not msg or not ns.ChatKeep("guild") or (ns.ChatOptions and ns.ChatOptions().presence == false) then return end
+  local on = SystemPattern(ERR_FRIEND_ONLINE_SS or "|Hplayer:%s|h[%s]|h has come online.")
+  local off = SystemPattern(ERR_FRIEND_OFFLINE_S or "%s has gone offline.")
+  local name, state = on and msg:match(on), "on"
+  if not name and off then name = msg:match(off); state = "off" end
+  if not name then return end
+  local short = ns.Short and ns.Short(name) or name
+  if not ns.roster[short] or short == ns.me then return end
+  ns.LogChat("guild", short, state == "on" and "came online" or "went offline", true, state)
+end)
 for _, ev in ipairs({ "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_RAID_WARNING" }) do ns.On(ev, Group("raid")) end
 
 local function Hex(info)
@@ -563,7 +584,7 @@ local function FormatLine(channel, e)
   if channel == "whisper" then
     body = e.out and ("To " .. PlayerLink(e.who) .. ": " .. e.msg) or (PlayerLink(e.who) .. " whispers: " .. e.msg)
   else
-    body = "[" .. (CHANNELS[channel].short or channel) .. "] " .. PlayerLink(e.who) .. ": " .. e.msg
+    body = "[" .. (CHANNELS[channel].short or channel) .. "] " .. PlayerLink(e.who) .. (e.sys and " " or ": ") .. e.msg
   end
   return color .. "[" .. stamp .. "] " .. body .. "|r"
 end
@@ -729,6 +750,28 @@ local function Opt()
   return o
 end
 ns.ChatOptions = Opt
+-- Reading font for chat: which font, size and outline (Chat settings > Text).
+ns.CHAT_FONTS = {
+  { label = "EPU (Inter)", value = "epu" },
+  { label = "Game (Friz Quadrata)", value = "friz", path = "Fonts\\FRIZQT__.TTF" },
+  { label = "Chat (Arial Narrow)", value = "arial", path = "Fonts\\ARIALN.TTF" },
+  { label = "Skurri", value = "skurri", path = "Fonts\\skurri.ttf" },
+  { label = "Morpheus", value = "morpheus", path = "Fonts\\MORPHEUS.TTF" },
+}
+function ns.ChatFont()
+  local o = Opt()
+  local path
+  for _, f in ipairs(ns.CHAT_FONTS) do if f.value == (o.font or "epu") then path = f.path end end
+  if not path then path = ns.UIKit and ns.UIKit.FONT or STANDARD_TEXT_FONT end
+  local size = math.max(9, math.min(22, tonumber(o.size) or 12))
+  return path, size, o.outline and "OUTLINE" or ""
+end
+local function ApplyFont(fs, base)
+  local path, size, flags = ns.ChatFont()
+  size = size + (base or 0)
+  if fs:SetFont(path, size, flags) == false then fs:SetFont(ns.UIKit and ns.UIKit.FallbackFont or STANDARD_TEXT_FONT, size, flags) end
+end
+ns.ApplyChatFont = ApplyFont
 -- Strip colors, links and icons for copying.
 local function PlainText(msg)
   msg = tostring(msg or "")
@@ -768,17 +811,28 @@ local function ThreadBlocks(channel, lines, plains)
     local day = date("%A %d %B", e.t)
     if day ~= lastDay then blocks[#blocks + 1] = { day = "|cfff2c14e" .. day .. "|r" }; lastDay = day; cur = nil end
     local speaker = e.out and "You" or (ns.Short and ns.Short(e.who) or e.who)
-    if not cur or cur.speaker ~= speaker or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
+    if e.sys then
+      local who = Display(e.who)
+      blocks[#blocks + 1] = { line = "|cff888888" .. date("%H:%M", e.t) .. "  |r" .. (e.sys == "on" and "|TInterface\\COMMON\\Indicator-Green:12:12|t " or "|TInterface\\COMMON\\Indicator-Gray:12:12|t ")
+        .. "|cffaaaaaa" .. who .. (e.sys == "on" and " came online" or " went offline") .. "|r" }
+      cur = nil
+      speaker = nil
+    end
+    if not speaker then
+    elseif not cur or cur.speaker ~= speaker or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
       cur = { speaker = speaker, who = e.who, t = e.t, out = e.out, msgs = {}, plain = {} }
       blocks[#blocks + 1] = cur
     end
-    local color = ChatColor(channel, e.out, e.who)
-    table.insert(cur.msgs, 1, color .. Linkify(e.msg, color) .. "|r")
-    table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
+    if speaker then
+      local color = ChatColor(channel, e.out, e.who)
+      table.insert(cur.msgs, 1, color .. Linkify(e.msg, color) .. "|r")
+      table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
+    end
   end
   local out = {}
   for _, b in ipairs(blocks) do
     if b.day then out[#out + 1] = b.day
+    elseif b.line then out[#out + 1] = b.line
     else
       local n = 1
       if plains then plains[#plains + 1] = table.concat(b.plain, "\n"); n = #plains end
@@ -798,10 +852,12 @@ function ns.ChatConversationText(key, fmt)
   local out = {}
   for i = #lines, 1, -1 do
     local e = lines[i]
-    local who = e.out and (ns.me or "You") or (ns.Short and ns.Short(e.who) or e.who)
+    local who = (e.out and not e.sys) and (ns.me or "You") or (ns.Short and ns.Short(e.who) or e.who)
     local msg = PlainText(e.msg)
     local stamp = date("%Y-%m-%d %H:%M", e.t)
-    if fmt == "discord" then
+    if e.sys then
+      out[#out + 1] = (fmt == "discord" and ("_" .. who .. " " .. msg .. "_ `" .. date("%H:%M", e.t) .. "`")) or ("[" .. stamp .. "] " .. who .. " " .. msg)
+    elseif fmt == "discord" then
       out[#out + 1] = "**" .. who .. "** `" .. date("%H:%M", e.t) .. "` " .. msg
     elseif fmt == "bbcode" then
       msg = msg:gsub("(https?://%S+)", "[url]%1[/url]")
@@ -912,6 +968,7 @@ local function FillChatWith(det, key)
     end)
   end
   if body then body.blockPlain = {} end
+  det.textFont = { ns.ChatFont() }
   -- reply first, newest messages right under it
   local box = det:Field(who and "Reply" or "Say", "", math.max(160, det.panelWidth - 110))
   local function Go()
@@ -1164,6 +1221,8 @@ local function BuildWindow(id)
       out = ThreadBlocks(channel, lines, self.child.blockPlain)
       ns.MarkChatSeen(key)
     end
+    ApplyFont(self.text)
+    if self.box.SetFont then ApplyFont(self.box) end
     self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Type above to start.|r")
     self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
     self:Layout()
@@ -1554,6 +1613,23 @@ local function FillChatSettings(det)
       tip = "They come back when combat ends" } })
   det:Buttons({ { Check(o.fade, "Fade windows when the mouse is elsewhere"), function() o.fade = not o.fade; Again() end } })
   det:Buttons({ { Check(o.typing, "Show and send \"typing...\" (EPU users)"), function() o.typing = not o.typing; Again() end } })
+  det:Buttons({ { Check(o.presence ~= false, "Show guildmates coming online and going offline in Guild chat"), function()
+    o.presence = o.presence == false; Again() end } })
+  det:Section("Text")
+  local fontLabel = "EPU (Inter)"
+  for _, f in ipairs(ns.CHAT_FONTS) do if f.value == (o.font or "epu") then fontLabel = f.label end end
+  local _, size = ns.ChatFont()
+  det:Buttons({ { "Font: " .. fontLabel, function(self)
+      K.OpenMenu(self, ns.CHAT_FONTS, o.font or "epu", function(v) o.font = v or "epu"; ns.ChatColorsChanged(); Again() end)
+    end, tip = "The font for messages in EPU's chat" },
+    { "A-", function() o.size = math.max(9, size - 1); ns.ChatColorsChanged(); Again() end, tip = "Smaller text" },
+    { "Size " .. size, function() o.size = 12; ns.ChatColorsChanged(); Again() end, tip = "Click to go back to 12" },
+    { "A+", function() o.size = math.min(22, size + 1); ns.ChatColorsChanged(); Again() end, tip = "Bigger text" },
+    { Check(o.outline, "Outline"), function() o.outline = not o.outline; ns.ChatColorsChanged(); Again() end,
+      tip = "A thin dark edge around letters; easier to read on busy backgrounds" } })
+  det.textFont = { ns.ChatFont() }
+  det:Text("|cffffffffSample Name|r  |cff88888822:30|r\n" .. ChatColor("guild", false) .. "This is how messages will look.|r")
+  det.textFont = nil
   det:Section("Chats to keep, colors and sounds")
   for _, k in ipairs(CHANNEL_ORDER) do
     if k ~= "officer" or CanOfficerChat() then

@@ -140,7 +140,7 @@ function ns.InstallCommunityViews(views,env)
             local n=ns.ChatUnreadFor(ch)
             out[#out+1]={key="chat:"..ch,title=ns.CHAT_CHANNELS[ch].label..(n>0 and (" |cff66a6ff("..n..")|r") or ""),
               icon=ns.CHAT_CHANNELS[ch].icon,
-              sub=e and ((ns.Short and ns.Short(e.who) or e.who)..": "..e.msg) or "Nothing yet",
+              sub=e and ((ns.Short and ns.Short(e.who) or e.who)..(e.sys and " " or ": ")..e.msg) or "Nothing yet",
               right=e and ((n>0 and ("|cff66a6ff"..n.." new|r · ") or "")..ns.ChatAgo(e.t)) or "",
               onClick=function() Open("chatwith",ch) end}
           end
@@ -943,6 +943,23 @@ local function DefaultWindow(offset)
   if offset==0 and start>=DayStart(1) then return DefaultWindow(1) end
   return {day=offset,s=start,e=stop}
 end
+-- Quick time ranges for run requests (asked for by guildmates): one click
+-- instead of setting From and To by hand. Today's ranges that are already
+-- over are left out; one that has started begins at the next half hour.
+local DAY_PARTS={{"Morning",8,12},{"Afternoon",12,17},{"Evening",18,22}}
+local function DayPartButtons(day,cur_s,cur_e,apply)
+  local specs={}
+  for _,p in ipairs(DAY_PARTS) do
+    local s0,e0=DayStart(day)+p[2]*3600,DayStart(day)+p[3]*3600
+    if e0>ns.Now()+1800 then
+      local s1=math.max(s0,day==0 and ns.RunSlot(ns.Now(),true) or s0)
+      specs[#specs+1]={p[1],function() apply(s1,e0) end,on=cur_s==s1 and cur_e==e0,
+        tip="Set the time to "..p[1]:lower()..", "..Clock(s1).." to "..Clock(e0)}
+    end
+  end
+  return specs
+end
+ns.RunDayParts=DAY_PARTS
 local function OffsetOf(epoch)
   for i=0,7 do if epoch>=DayStart(i) and epoch<DayStart(i+1) then return i end end
   return 0
@@ -991,6 +1008,8 @@ function ns.FillRunDetails(kind,key,det)
         end},
         #d.windows>1 and {"Remove",function() table.remove(d.windows,i); Again() end} or nil,
       })
+      local parts=DayPartButtons(w.day,w.s,w.e,function(a,b) w.s,w.e=a,b; Again() end)
+      if #parts>0 then det:Buttons(parts) end
     end
     if #d.windows<3 then
       det:Buttons({{"Add another day",function()
@@ -1254,6 +1273,8 @@ local function FillGroupForm(det)
     det:Text("Shows under Right now and closes on its own after that. Pick Today, Tomorrow or a day to request a run instead.",C.muted)
   else
     if not d.s then local w=DefaultWindow(d.when); d.s,d.e=w.s,w.e end
+    local parts=DayPartButtons(d.when,d.s,d.e,function(a,b) d.s,d.e=a,b; Again() end)
+    if #parts>0 then det:Buttons(parts) end
     det:Buttons({
       {"From "..Clock(d.s),function(self) TimeMenu(self,d.when,d.s,nil,d.e,function(t) d.s=t; Again() end) end},
       {"To "..(d.e==DayStart(d.when+1) and "midnight" or Clock(d.e)),function(self) TimeMenu(self,d.when,d.e,d.s,nil,function(t) d.e=t; Again() end) end},

@@ -37,6 +37,12 @@ check('the form offers type, when and role', all(s in lb for s in ('Dungeon', 'R
 check('the Create form switches between group, event, quest help and helper', all(s in lb for s in ('Group or run', 'Scheduled event', 'Ask for quest help', 'Offer to help')))
 B.ex('__click("Today")')
 check('a later group offers a fixed start instead', 'Pick one fixed start instead' in B.ev('__labels()'))
+B.ex('__click("Tomorrow")')
+lb2 = B.ev('__labels()')
+check('run requests offer Morning, Afternoon and Evening', all(x in lb2.split('|') for x in ['Morning', 'Afternoon', 'Evening']))
+B.ex('__click("Morning")')
+check('a day part sets From and To', 'From 8:00 AM' in B.ev('__labels()') and 'To 12:00 PM' in B.ev('__labels()'))
+B.ex('__click("Today")')
 B.ex('__ns.CommunityState(); local d=nil; __click("Pick one fixed start instead")')
 check('switching to an event keeps the dungeon type and day', B.ev('__ns.UI.details.kind') == 'eventform'
       and B.ev('__ns.UI.details.pools.box[4]:GetText()') == B.ev('date("%Y-%m-%d",__ns.RunSlot(__now,true))') + B.ev('__ns.UI.details.pools.box[4]:GetText()')[10:]

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.27.3
+## 0.28.0
 
 - **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers. Newest messages are on top with the reply box above them, and the conversation gets most of the page width.
 - **Pop out:** a small chat window of its own (Chat → Pop out, or `/epu messenger`). Drag it anywhere, resize it from the corner, switch conversations from its title, and **minimize** it to a small round bubble (like the Events bubble) that you can drag anywhere; a green badge counts new whispers and the bubble flashes when one arrives. Click it to open, right-click for the Chat page. It stays where you left it, and reopens after a reload if it was open.
@@ -15,6 +15,10 @@
 - **Combat:** chat windows tuck into the bubble when combat starts and come back after (can be turned off). Optional fade when the mouse is elsewhere.
 - **Alts show their main**, like "Tyler (Laurelin)", wherever EPU knows it.
 - **"typing..."** shows when a guildmate who uses EPU is writing you a whisper (can be turned off).
+- **Readable text:** pick the chat font (EPU, the game's font, Arial Narrow, Skurri or Morpheus), make it bigger or smaller, and add an outline, in Chat settings > Text, with a preview.
+- **Guildmates coming online and going offline** show as short grey lines in Guild chat (when you keep guild chat). They don't count as unread, and can be turned off.
+- **Run requests: Morning, Afternoon and Evening buttons** set the time range in one click (thanks for the idea, Laurelin). They're in Create > Group when you pick a day, and on the run request form.
+- Using WIM too? Both would open a window for each whisper; turn one off for whispers.
 - **Per-person colors:** give anyone's whispers their own color from their conversation, and reset it in Chat settings.
 - Messages are grouped under the sender's name and time, like chat apps, with more padding in the pop-out window.
 - Left-clicking the EPU bubble now also closes the window when it is open.

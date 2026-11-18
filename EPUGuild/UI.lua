@@ -1090,6 +1090,7 @@ det.used = { text = 0, box = 0, btn = 0, label = 0, rule = 0, progress = 0 }
 
 function det:Reset(icon, quality, titleText, subtitle, iconCoords)
   self.casualDraft=nil
+  self.textFont=nil
   for k in pairs(self.used) do
     for i = 1, #self.pools[k] do self.pools[k][i]:Hide() end
     self.used[k] = 0
@@ -1155,6 +1156,15 @@ function det:Text(str, color)
   fs:SetHeight(0)
   fs:SetWordWrap(true); fs:SetNonSpaceWrap(true); fs:SetJustifyV("TOP")
   fs:SetWidth(self.panelWidth - 24)
+  -- a panel can ask for its own reading font (Chat does); others get the default
+  local tf = self.textFont
+  if tf then
+    if fs:SetFont(tf[1], tf[2], tf[3] or "") == false then fs:SetFont(fallbackFont, tf[2], tf[3] or "") end
+    fs.epuCustomFont = true
+  elseif fs.epuCustomFont then
+    if fs:SetFont(FONT, 11, "") == false then fs:SetFont(fallbackFont, 11, "") end
+    fs.epuCustomFont = nil
+  end
   fs:SetText(str)
   SetColor(fs, color or C.text)
   local height=math.max(14,math.ceil(fs:GetStringHeight() or 14))
@@ -2327,7 +2337,7 @@ Views.onboarding = {
   empty="No checklist matches.",footer=function() return "Members complete their own steps; officers confirm Discord, mentors and starter supplies." end,
 }
 
-ns.UIKit={Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI,Box=Box,Font=Font,Tex=Tex,SetColor=SetColor,AddDropdownArrow=AddDropdownArrow,TextWidth=TextWidth}
+ns.UIKit={FONT=FONT,FallbackFont=fallbackFont,Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI,Box=Box,Font=Font,Tex=Tex,SetColor=SetColor,AddDropdownArrow=AddDropdownArrow,TextWidth=TextWidth}
 if ns.InstallCasualViews then ns.InstallCasualViews(Views,ns.UIKit) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
