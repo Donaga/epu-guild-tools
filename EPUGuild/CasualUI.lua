@@ -139,8 +139,9 @@ function ns.FillCasualDetails(kind,key,det)
     local activity=r and r.kind or key
     det:Reset(nil,nil,r and "Edit activity" or (activity=="dungeon" and "Find dungeon company" or "Ask for a hand"),"No guild-chat broadcast or automatic invitations")
     if not r and activity=="help" and ns.CreateSwitcher then ns.CreateSwitcher(det,"help") end
-    local title=det:Field(activity=="dungeon" and "Dungeon" or "Need help",r and r.title or "",160)
-    local zone=det:Field("Zone",r and r.zone or (ns.roster[ns.me] or {}).zone or "",160)
+    local draft=not r and type(ns.helpDraft)=="table" and ns.helpDraft or {}
+    local title=det:Field(activity=="dungeon" and "Dungeon" or "Need help",r and r.title or draft.title or "",160)
+    local zone=det:Field("Zone",r and r.zone or draft.zone or (ns.roster[ns.me] or {}).zone or "",160)
     local note=det:Field("Details",r and r.note or "",160)
     local low=det:Field("Min level",tostring(r and r.minLevel or math.max(1,((ns.roster[ns.me] or {}).level or 1)-5)),60,true)
     local high=det:Field("Max level",tostring(r and r.maxLevel or math.min(100,((ns.roster[ns.me] or {}).level or 1)+5)),60,true)

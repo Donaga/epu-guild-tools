@@ -405,9 +405,215 @@ local function TooltipStatus(tt)
   if not okn or type(n) ~= "string" or (issecretvalue and issecretvalue(n)) then return end
   local s = ns.roster[n] and ns.GuildmateStatus(n)
   if s and s.lf then tt:AddLine("Looking for a partner (EPU)", 0.95, 0.76, 0.31) end
+  if ns.roster[n] and ns.SharedQuestIDs then
+    local shared = ns.SharedQuestIDs(n)
+    if #shared > 0 then tt:AddLine("On " .. #shared .. (#shared == 1 and " of your quests" or " of your quests") .. " (EPU)", 0.29, 0.87, 0.50) end
+  end
 end
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
   TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tt) pcall(TooltipStatus, tt) end)
 elseif GameTooltip and GameTooltip.HookScript then
   pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", function(tt) pcall(TooltipStatus, tt) end)
+end
+
+
+---------------------------------------------------------------------------
+-- Chat history: whispers (and optionally guild and officer chat) saved on
+-- this PC only, so they survive /reload and logging out. Never shared.
+---------------------------------------------------------------------------
+local CHAT_KEEP = 200            -- lines kept per channel
+local CHAT_MAX_AGE = 7 * 86400   -- and nothing older than a week
+local REPLAY_WINDOW = 3600       -- after a reload, show the last hour
+local REPLAY_LINES = 15
+local CHANNELS = {
+  whisper = { label = "Whispers", group = "WHISPER", info = "WHISPER" },
+  guild = { label = "Guild chat", group = "GUILD", info = "GUILD" },
+  officer = { label = "Officer chat", group = "OFFICER", info = "OFFICER" },
+}
+local CHANNEL_ORDER = { "whisper", "guild", "officer" }
+
+local function ChatDB()
+  local c = ns.cdb
+  if not c then return nil end
+  c.chatlog = c.chatlog or {}
+  c.chatkeep = c.chatkeep or { whisper = true, guild = false, officer = false, replay = true }
+  for _, k in ipairs(CHANNEL_ORDER) do c.chatlog[k] = c.chatlog[k] or {} end
+  return c
+end
+local function CanOfficerChat()
+  if C_GuildInfo and C_GuildInfo.CanSpeakInOfficerChat then
+    local ok, v = pcall(C_GuildInfo.CanSpeakInOfficerChat)
+    if ok and v ~= nil then return v and true or false end
+  end
+  return ns.IsTrusted and ns.IsTrusted(ns.me) or false
+end
+ns.CanOfficerChat = CanOfficerChat
+function ns.ChatKeep(channel)
+  local c = ChatDB()
+  if not c then return false end
+  if channel == "officer" and not CanOfficerChat() then return false end
+  return c.chatkeep[channel] == true
+end
+function ns.SetChatKeep(channel, on)
+  local c = ChatDB()
+  if c then c.chatkeep[channel] = on and true or false end
+end
+local function Plain(v)
+  if v == nil or (issecretvalue and issecretvalue(v)) then return nil end
+  if type(v) ~= "string" then return nil end
+  return v
+end
+function ns.LogChat(channel, who, msg, out)
+  if not ns.ChatKeep(channel) then return end
+  who = Plain(who)
+  if not who or who == "" then return end
+  local text = Plain(msg) or "(the game hid this message)"
+  local log = ChatDB().chatlog[channel]
+  log[#log + 1] = { t = time(), who = who, msg = text, out = out or nil }
+  local cutoff = time() - CHAT_MAX_AGE
+  local drop = 0
+  while drop < #log and (#log - drop > CHAT_KEEP or (log[drop + 1].t or 0) < cutoff) do drop = drop + 1 end
+  if drop > 0 then
+    for i = 1, #log - drop do log[i] = log[i + drop] end
+    for i = #log, #log - drop + 1, -1 do log[i] = nil end
+  end
+  if ns.UI and ns.UI.details and ns.UI.details.kind == "chathistory" and ns.UI.details:IsShown() then ns.Changed() end
+end
+function ns.ChatLog(channel)
+  local c = ChatDB()
+  return c and c.chatlog[channel] or {}
+end
+ns.On("CHAT_MSG_WHISPER", function(msg, sender) ns.LogChat("whisper", sender, msg, false) end)
+ns.On("CHAT_MSG_WHISPER_INFORM", function(msg, target) ns.LogChat("whisper", target, msg, true) end)
+ns.On("CHAT_MSG_GUILD", function(msg, sender) ns.LogChat("guild", sender, msg, false) end)
+ns.On("CHAT_MSG_OFFICER", function(msg, sender) ns.LogChat("officer", sender, msg, false) end)
+
+local function Hex(info)
+  local t = ChatTypeInfo and ChatTypeInfo[info]
+  if not t then return "|cffffffff" end
+  return string.format("|cff%02x%02x%02x", (t.r or 1) * 255, (t.g or 1) * 255, (t.b or 1) * 255)
+end
+local function PlayerLink(who)
+  return "|Hplayer:" .. who .. "|h[" .. (ns.Short and ns.Short(who) or who) .. "]|h"
+end
+local function FormatLine(channel, e)
+  local stamp = date("%H:%M", e.t)
+  local color = Hex(CHANNELS[channel].info)
+  local body
+  if channel == "whisper" then
+    body = e.out and ("To " .. PlayerLink(e.who) .. ": " .. e.msg) or (PlayerLink(e.who) .. " whispers: " .. e.msg)
+  else
+    body = "[" .. (channel == "guild" and "Guild" or "Officer") .. "] " .. PlayerLink(e.who) .. ": " .. e.msg
+  end
+  return color .. "[" .. stamp .. "] " .. body .. "|r"
+end
+ns.FormatChatLine = FormatLine
+local function FramesFor(group)
+  local out = {}
+  for i = 1, (NUM_CHAT_WINDOWS or 1) do
+    local f = _G["ChatFrame" .. i]
+    if f and f.AddMessage and ChatFrame_ContainsMessageGroup and ChatFrame_ContainsMessageGroup(f, group) then out[#out + 1] = f end
+  end
+  if #out == 0 and DEFAULT_CHAT_FRAME then out[1] = DEFAULT_CHAT_FRAME end
+  return out
+end
+-- After a reload (or a fresh login) put the last hour back into the chat
+-- windows that show that kind of chat, greyed so it reads as history.
+function ns.ReplayChat()
+  local c = ChatDB()
+  if not c or c.chatkeep.replay == false then return 0 end
+  local since, shown = time() - REPLAY_WINDOW, 0
+  for _, channel in ipairs(CHANNEL_ORDER) do
+    if ns.ChatKeep(channel) then
+      local log, lines = c.chatlog[channel], {}
+      for i = #log, 1, -1 do
+        local e = log[i]
+        if (e.t or 0) < since or #lines >= REPLAY_LINES then break end
+        table.insert(lines, 1, e)
+      end
+      if #lines > 0 then
+        for _, f in ipairs(FramesFor(CHANNELS[channel].group)) do
+          f:AddMessage("|cff888888EPU: " .. CHANNELS[channel].label:lower() .. " from before the reload (/epu chat for more)|r")
+          for _, e in ipairs(lines) do f:AddMessage(FormatLine(channel, e)) end
+        end
+        shown = shown + #lines
+      end
+    end
+  end
+  return shown
+end
+ns.On("PLAYER_ENTERING_WORLD", function(initial, reloading)
+  if not (initial or reloading) or ns.chatReplayed then return end
+  ns.chatReplayed = true
+  if C_Timer and C_Timer.After then C_Timer.After(2, ns.ReplayChat) else ns.ReplayChat() end
+end)
+
+function ns.ShowChatHistory(channel)
+  local UI = ns.UI
+  UI:Show()
+  UI:OpenDetails("chathistory", channel or (UI.details.kind == "chathistory" and UI.details.key) or "whisper")
+end
+local function FillChatHistory(det, channel)
+  if channel == "officer" and not CanOfficerChat() then channel = "whisper" end
+  local c = ChatDB()
+  det:Reset("Interface\\Icons\\INV_Letter_15", nil, "Chat history", "Saved on this PC only and never shared with the guild.")
+  local tabs = {}
+  for _, k in ipairs(CHANNEL_ORDER) do
+    if k ~= "officer" or CanOfficerChat() then
+      tabs[#tabs + 1] = { CHANNELS[k].label, function() ns.ShowChatHistory(k) end, on = k == channel }
+    end
+  end
+  det:Buttons(tabs)
+  local keep = ns.ChatKeep(channel)
+  det:Buttons({ { (keep and "[x] " or "[ ] ") .. "Keep " .. CHANNELS[channel].label:lower(), function()
+      ns.SetChatKeep(channel, not keep); ns.ShowChatHistory(channel)
+    end, tip = "Saves new lines on this PC so they survive a reload or logging out." },
+    { (c.chatkeep.replay ~= false and "[x] " or "[ ] ") .. "Show the last hour after a reload", function()
+      c.chatkeep.replay = c.chatkeep.replay == false; ns.ShowChatHistory(channel)
+    end, tip = "Puts the last hour back into your chat windows after /reload or logging in." } })
+  local log = c.chatlog[channel]
+  if channel == "whisper" then
+    local seen, people = {}, {}
+    for i = #log, 1, -1 do
+      local who = log[i].who
+      if not seen[who] then seen[who] = true; people[#people + 1] = who end
+      if #people >= 6 then break end
+    end
+    if #people > 0 then
+      det:Section("Whisper back")
+      local row = {}
+      for _, who in ipairs(people) do
+        row[#row + 1] = { ns.Short and ns.Short(who) or who, function()
+          if ChatFrame_SendTell then ChatFrame_SendTell(who) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. who .. " ") end
+        end, tip = "Start a whisper to " .. who }
+        if #row == 3 then det:Buttons(row); row = {} end
+      end
+      if #row > 0 then det:Buttons(row) end
+    end
+  end
+  det:Section(#log > 0 and ("Latest " .. CHANNELS[channel].label:lower()) or CHANNELS[channel].label)
+  if #log == 0 then
+    det:Text(keep and "Nothing saved yet. New lines appear here as they come in."
+      or "Not being kept. Tick Keep above to start saving.")
+  end
+  local lastDay
+  for i = #log, math.max(1, #log - 59), -1 do
+    local e = log[i]
+    local day = date("%A %d %B", e.t)
+    if day ~= lastDay then det:Text("|cfff2c14e" .. day .. "|r"); lastDay = day end
+    local line = FormatLine(channel, e):gsub("|Hplayer:[^|]*|h", "")
+    line = line:gsub("|h", "")
+    det:Text(line)
+  end
+  if #log > 0 then
+    det:Buttons({ { "Clear " .. CHANNELS[channel].label:lower(), function()
+      wipe(c.chatlog[channel]); ns.ShowChatHistory(channel)
+    end, tip = "Deletes the saved lines for this channel from this PC." } })
+  end
+  return true
+end
+local fillBefore = ns.FillCommunityDetails
+ns.FillCommunityDetails = function(kind, key, det)
+  if kind == "chathistory" then return FillChatHistory(det, key) end
+  return fillBefore(kind, key, det)
 end

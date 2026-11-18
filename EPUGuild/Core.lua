@@ -477,6 +477,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.UI:Show(); ns.UI:SetView("activities")
   elseif cmd == "map" then
     ns.ShowGuildMapSettings()
+  elseif cmd == "chat" or cmd == "whispers" then
+    ns.ShowChatHistory()
   elseif cmd == "sharelocation" then
     if args~="on" and args~="off" then return ns.Print("Usage: /epu sharelocation on|off") end
     ns.SetLocationSharing(args=="on")

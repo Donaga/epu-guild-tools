@@ -123,6 +123,9 @@ N.ex("__ns.UI:Show(); __ns.UI.nav.membertools:Click()")
 check('member tools shows all four destinations',N.ev('__ns.UI.rows[1].data.key=="guides" and __ns.UI.rows[2].data.key=="quests" and __ns.UI.rows[3].data.key=="catchup" and __ns.UI.rows[4].data.key=="notifications"'))
 for i, tool in enumerate(['guides','quests','catchup','notifications'],1):
     N.ex(f"local row=__ns.UI.rows[{i}]; row:GetScript('OnClick')(row)")
+    if tool=='quests':
+        check('member tools Quests opens the Quests page',N.ev("__ns.UI.view=='quests'"))
+        N.ex("__ns.UI.nav.membertools:Click()"); continue
     check(f'member tools row opens {tool}',N.ev(f"__ns.UI.view=='membertools' and __ns.UI.state.membertools.kind=='{tool}'"))
     N.ex("__ns.UI.bars.membertools.allTools:Click()")
 N.ex("SlashCmdList.EPUGUILD('notifications')")

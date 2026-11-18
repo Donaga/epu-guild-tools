@@ -13,12 +13,14 @@ local eventIcons={
 local memberTools={
   {key="guides", title="Your guides", hint="Find leveling, talent, and profession guides for your character.",
     icon="Interface\\Icons\\INV_Misc_Book_09"},
-  {key="quests", title="Quest matching", hint="Find guildmates working on the same quests.",
-    icon="Interface\\Icons\\INV_Misc_GroupLooking"},
+  {key="quests", title="Quests", hint="Your quests and the guildmates on them (also in the sidebar).",
+    icon="Interface\\Icons\\INV_Misc_Map_01", open=function() ns.OpenMemberTools("quests") end},
   {key="catchup", title="Catch-up", hint="Review missed guild updates and notifications.",
     icon="Interface\\Icons\\INV_Scroll_03"},
   {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours.",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_01"},
+  {key="chat", title="Chat history", hint="Whispers (and, if you choose, guild and officer chat) kept after a reload.",
+    icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
     icon="Interface\\Icons\\INV_Misc_Coin_02", open=function() ns.ShowGatheringMarket() end},
 }
@@ -91,6 +93,7 @@ function ns.OpenMemberTools(kind, guideScope)
   UI:Show()
   UI:CloseDetails()
   UI.search:SetText("")
+  if kind=="quests" then return UI:SetView("quests") end
   UI.state.membertools.kind=kind
   UI.state.membertools.guideScope=guideScope
   UI:SetView("membertools")
@@ -98,6 +101,30 @@ end
 
 function ns.InstallCommunityViews(views,env)
   E=env; UI=E.UI; C=E.C
+  -- Quests: your quest log with the guildmates on each quest, and who is
+  -- questing near you. Sharing which quests you have is on unless turned off.
+  UI.state.quests={}
+  views.quests={
+    label="Quests",
+    icon="Interface\\Icons\\INV_Misc_Map_01",
+    count=function()
+      local n=0
+      for name in pairs(ns.questLists or {}) do if ns.QuestNearby and ns.QuestNearby(name) and #ns.SharedQuestIDs(name)>0 then n=n+1 end end
+      return n
+    end,
+    tools=function(bar)
+      bar.questSharing=bar:Add(E.Btn(bar,"Sharing",80,22),"right",function() Open("questsettings","settings") end,
+        "What guildmates can see about your quests")
+      bar:Add(E.Btn(bar,"Ask for quest help",120,22,"accent"),"right",function() ns.OpenCreate("help") end,
+        "Post a quest help request to the Groups page")
+    end,
+    rows=function(g,q) return ns.QuestPageRows(q) end,
+    empty="Your quest log is empty. Pick up a quest and guildmates on it show up here.",
+    footer=function()
+      return ns.QuestListSharing() and "Sharing which quests you have and your zone with online guildmates. Click Sharing to turn it off."
+        or "Quest sharing is off: guildmates won't see your quests and you won't get Same quest nearby heads-ups."
+    end,
+  }
   UI.state.membertools={kind="all"}
   views.membertools={
     label="Member tools",
@@ -344,13 +371,15 @@ function ns.CommunityRows(g,q,st,bar)
     end
     table.sort(out,function(a,b) if a.at~=b.at then return a.at<b.at end return a.key<b.key end)
   elseif st.kind=="quests" then
-    out[1]={key="questsettings",title="Quest sharing: "..(s.shareQuests and "on" or "off"),sub="Only explicitly selected quests are shared; up to eight. Click to change sharing.",onClick=function() Open("questsettings","settings") end}
+    out[1]={key="questsettings",title="Same quest nearby: "..(ns.QuestListSharing() and "on" or "off").." · Progress sharing: "..(s.shareQuests and "on" or "off"),
+      sub="Guildmates in your zone on the same quest get a heads-up. Click to change what you share.",onClick=function() Open("questsettings","settings") end}
     local quests,reason=ns.CurrentQuests(); local rows={}
     ns.ExpireQuestMatches()
     for id,r in pairs(quests) do
       if E.Match(q,r.title,r.progress) then
         local count=#ns.QuestMatches(id,quests)
-        rows[#rows+1]={key="quest:"..id,title=r.title,sub=r.progress..(s.selectedQuests[id] and " · Selected" or " · Not shared"),right=count.." match(es)",onClick=function() Open("questmatch",id) end}
+        rows[#rows+1]={key="quest:"..id,title=r.title,sub=r.progress..(s.selectedQuests[id] and " · Progress shared" or ""),
+          right=count==0 and "no one yet" or (count==1 and "1 guildmate" or (count.." guildmates")),onClick=function() Open("questmatch",id) end}
       end
     end
     table.sort(rows,function(a,b) return a.title<b.title end)
@@ -660,28 +689,44 @@ function ns.FillCommunityDetails(kind,key,det)
     det:Text('Only that explicit format is imported. Conversation, code examples, quotes and bot messages are ignored. Duplicate active names are suppressed. Editing/deleting an accepted message updates/withdraws its request after another import.')
     det:Text('The companion officer must log in or /reload to load new requests. Online addon users then receive them through guild sync. Only characters with the game’s guild-invite permission receive alerts. Notifications respect quiet hours and personal settings. No automatic invites.',C.muted)
   elseif kind=="questsettings" then
-    det:Reset(nil,nil,"Selected quest sharing",s.shareQuests and "Sharing is on" or "Sharing starts off")
+    det:Reset(nil,nil,"Quest sharing","What guildmates can see about your quests")
+    det:Section("Same quest nearby")
+    det:Text("Shares which quests are in your log and the zone you're in, so a guildmate in the same zone on the same quest gets a heads-up, and so do you. Nothing is saved or sent to Discord.")
+    det:Buttons({{(ns.QuestListSharing() and "[x] " or "[ ] ").."Tell nearby guildmates when we share a quest",function()
+      ns.SetQuestListSharing(not ns.QuestListSharing()); UI:FillDetails() end,accent=true}})
+    det:Text("Heads-ups follow your notification settings (Same quest nearby) and wait until combat ends.",C.muted)
+    det:Section("Progress sharing (optional)")
     local n=0 for _ in pairs(s.selectedQuests) do n=n+1 end
     det:Text(n.." quest(s) selected. Select quests from Quest matching, then enable sharing. Only their IDs, titles and objective progress are sent.")
     det:Text("Other members' progress is kept only in memory and expires after three minutes. No quest history is sent to Discord. Exact IDs match; different phases or chain requirements may still prevent playing together.",C.muted)
-    det:Buttons({{s.shareQuests and "Stop sharing" or "Share selected quests",function() ns.SetQuestSharing(not s.shareQuests); UI:FillDetails() end,accent=true}})
+    det:Buttons({{s.shareQuests and "Stop sharing progress" or "Share progress on selected quests",function() ns.SetQuestSharing(not s.shareQuests); UI:FillDetails() end}})
   elseif kind=="questmatch" then
     local r=ns.CurrentQuests()[tonumber(key)]
     if not r then det:Reset(nil,nil,"Quest unavailable","It may have been completed or abandoned"); return true end
     key=tonumber(key)
-    det:Reset(nil,nil,r.title,r.progress)
+    det:Reset(r.group and "Interface\\Icons\\INV_Misc_GroupNeedMore" or "Interface\\Icons\\INV_Misc_Note_02",nil,r.title,r.progress..(r.group and (" · group quest ("..r.group..")") or ""))
+    local questTitle=r.title
+    det:Buttons({{"Ask for help with this",function() ns.OpenCreate("help",{title=questTitle}) end,accent=r.group~=nil,
+      tip="Posts a quest help request on the Groups page with this quest filled in."}})
     local selected=s.selectedQuests[key]
-    det:Text(selected and (s.shareQuests and "This quest is being shared." or "Selected; sharing is paused.") or "This quest is not selected for sharing.",C.gold)
-    det:Buttons({{selected and "Unselect quest" or "Select to share",function() ns.SelectSharedQuest(key,not selected); UI:FillDetails() end}})
-    if not s.shareQuests then det:Buttons({{"Sharing settings",function() Open("questsettings","settings") end}}) end
+    det:Section("Guildmates on this quest")
     local matches=ns.QuestMatches(key)
-    if #matches==0 then det:Text("No online guildmates are currently sharing this exact quest. Both players need the new addon, and updates may take a short time.",C.muted) end
+    if #matches==0 then det:Text("No online guildmates have this quest right now. They need EPU 0.27.1 or newer, and it can take a minute to show up.",C.muted) end
     for _,match in ipairs(matches) do
       local name=match.who
-      det:Text(name.."\n"..match.quest.progress.." · updated "..math.floor(GetTime()-match.quest.at).."s ago")
-      det:Buttons({{"Whisper",function() Whisper(name) end}})
+      local near=ns.QuestNearby and ns.QuestNearby(name)
+      det:Text(name..(near and " |cff4ade80· nearby|r" or "").."\n"..match.quest.progress.." · updated "..math.floor(GetTime()-match.quest.at).."s ago")
+      det:Buttons({{"Whisper",function() Whisper(name) end},{"Invite",function()
+        local invite=(C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit; if invite then invite(name) end end}})
     end
-    det:Text("Check phases and quest-chain eligibility before travelling. Selecting a quest shares information; it does not accept or share the game quest for another player.",C.muted)
+    det:Section("Share my progress (optional)")
+    det:Text(selected and (s.shareQuests and "Guildmates see your objective progress on this quest." or "Picked, but progress sharing is off.")
+      or "Guildmates see that you have this quest. Pick it to also show your objective progress (up to eight quests).",C.muted)
+    det:Buttons({{selected and "Stop showing progress" or "Show my progress",function()
+      ns.SelectSharedQuest(key,not selected)
+      if not selected and not s.shareQuests then ns.SetQuestSharing(true) end
+      UI:FillDetails() end}})
+    det:Text("Check phases and quest-chain steps before travelling.",C.muted)
   elseif kind=="noticeform" then
     det:Reset(nil,nil,key=="all" and "Personal notifications" or ns.NOTICE_CATEGORIES[key],"Private to this character and guild")
     local value=det:Text("Mode: "..(key=="all" and (s.mode or "instant") or (s.categories[key] or "inherit")),C.gold)
@@ -1325,7 +1370,7 @@ function ns.OpenCreate(what,when)
   if what=="event" then
     UI.details.eventFormDraft=EventDraftFromGroup()
     return UI:OpenDetails("eventform","new")
-  elseif what=="help" then return UI:OpenDetails("activityform","help")
+  elseif what=="help" then ns.helpDraft=when; return UI:OpenDetails("activityform","help")
   elseif what=="helper" then return UI:OpenDetails("helperform",ns.me) end
   local d=GroupDraft()
   if when=="today" and d.when=="now" then d.when=0; local w=DefaultWindow(0); d.s,d.e=w.s,w.e end
@@ -1339,4 +1384,56 @@ function ns.CreateSwitcher(det,current)
         help="Ask for a hand with a quest or area",helper="Let guildmates know you're free to help for a while"})[k[1]]}
   end
   det:Buttons(specs)
+end
+
+-- Rows for the Quests page.
+function ns.QuestPageRows(q)
+  local out={}
+  local own,reason=ns.CurrentQuests()
+  ns.ExpireQuestMatches()
+  local myLevel=(ns.roster[ns.me] or {}).level or 1
+  -- Questing near you: guildmates in your zone, most quests in common first
+  local near={}
+  for name,r in pairs(ns.roster) do
+    if r.online and name~=ns.me and ns.QuestNearby and ns.QuestNearby(name) then
+      local shared=#ns.SharedQuestIDs(name,own)
+      if shared>0 or math.abs((r.level or 0)-myLevel)<=5 then near[#near+1]={name=name,r=r,shared=shared} end
+    end
+  end
+  table.sort(near,function(a,b) if a.shared~=b.shared then return a.shared>b.shared end return a.name<b.name end)
+  if #near>0 then
+    out[#out+1]={key="cat:questnear",header=true,title="|cfff2c14eQuesting near you|r"}
+    for i,x in ipairs(near) do
+      if i>8 then break end
+      if E.Match(q,x.name,x.r.zone) then
+        local st=ns.GuildmateStatus and ns.GuildmateStatus(x.name) or {}
+        out[#out+1]={key="questnear:"..x.name,title=x.name,icon=ns.ClassIcon and ns.ClassIcon(x.r.classFile) or nil,
+          sub="Level "..(x.r.level or "?").." "..(x.r.class or "").." · "..(x.r.zone or "")..(st.lf and " · |cff4ade80looking for a partner|r" or ""),
+          right=x.shared>0 and ("|cff4ade80"..x.shared..(x.shared==1 and " quest" or " quests").." in common|r") or "No shared quests",
+          onClick=function(self) if ns.GuildmateMenu then ns.GuildmateMenu(self,x.name) end end,
+          onRightClick=function(self) if ns.GuildmateMenu then ns.GuildmateMenu(self,x.name) end end}
+      end
+    end
+  end
+  -- Your quests
+  local rows={}
+  for id,r in pairs(own) do
+    if E.Match(q,r.title,r.progress) then
+      local matches=ns.QuestMatches(id,own)
+      local nearby=0
+      for _,m in ipairs(matches) do if ns.QuestNearby and ns.QuestNearby(m.who) then nearby=nearby+1 end end
+      local names={}
+      for i,m in ipairs(matches) do if i>3 then names[#names+1]="+"..(#matches-3); break end names[#names+1]=ns.Short and ns.Short(m.who) or m.who end
+      rows[#rows+1]={key="quest:"..id,title=r.title,n=#matches,
+        icon=r.group and "Interface\\Icons\\INV_Misc_GroupNeedMore" or "Interface\\Icons\\INV_Misc_Note_02",
+        sub=r.progress..(r.group and (" · |cffffb347group quest ("..r.group..")|r") or "")..(#names>0 and (" · "..table.concat(names,", ")) or ""),
+        right=#matches==0 and "No guildmates yet" or ("|cff4ade80"..#matches..(#matches==1 and " guildmate" or " guildmates")..(nearby>0 and (", "..nearby.." nearby") or "").."|r"),
+        onClick=function() Open("questmatch",id) end}
+    end
+  end
+  table.sort(rows,function(a,b) if (a.n>0)~=(b.n>0) then return a.n>0 end return a.title<b.title end)
+  if #rows>0 then out[#out+1]={key="cat:questmine",header=true,title="|cfff2c14eYour quests|r"} end
+  for _,r in ipairs(rows) do out[#out+1]=r end
+  if reason then out[#out+1]={key="questunavailable",title=reason,sub="No quest information is sent while the log is unavailable."} end
+  return out
 end

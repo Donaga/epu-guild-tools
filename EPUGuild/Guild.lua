@@ -217,10 +217,18 @@ function ns.GuildInfoText()
   return nil
 end
 
+-- The game blocks GetGuildRosterMOTD() in combat (and shows "Interface action
+-- failed because of an AddOn"), so roster updates during a fight wait until
+-- combat ends before reading it.
+local motdAfterCombat = false
 function ns.UpdateMotd(text)
   local g = ns.GuildStore()
   if not g then return end
-  if text == nil and GetGuildRosterMOTD then text = GetGuildRosterMOTD() end
+  if text == nil then
+    if InCombatLockdown and InCombatLockdown() then motdAfterCombat = true; return end
+    if GetGuildRosterMOTD then text = GetGuildRosterMOTD() end
+  end
+  if issecretvalue and issecretvalue(text) then return end
   if type(text) ~= "string" then return end
   g.motd = g.motd or {}
   if g.motd.text ~= text then
@@ -231,6 +239,9 @@ end
 ns.On("GUILD_MOTD", function(text) ns.UpdateMotd(text) end)
 ns.On("PLAYER_GUILD_UPDATE", function() ns.UpdateMotd() end)
 ns.On("GUILD_ROSTER_UPDATE", function() ns.UpdateMotd() end)
+ns.On("PLAYER_REGEN_ENABLED", function()
+  if motdAfterCombat then motdAfterCombat = false; ns.UpdateMotd() end
+end)
 
 function ns.UnreadNews()
   local read = (ns.cdb and ns.cdb.newsRead) or {}

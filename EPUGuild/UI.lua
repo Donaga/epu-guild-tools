@@ -1289,7 +1289,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "activities", "roster", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "quests", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
   {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
@@ -2190,6 +2190,7 @@ Views.roster = {
   rows = function(g, q)
     local st, out, officer = UI.state.roster, {}, ns.IsTrusted(ns.me)
     local myLevel = UnitLevel("player") or 1
+    local myQuests = ns.CurrentQuests and ns.CurrentQuests() or {}
     for name, r in pairs(ns.roster) do
       local prof = ns.ProfileOf(name)
       local roles = prof and prof.roles or ""
@@ -2228,6 +2229,9 @@ Views.roster = {
           if rev.inactive then pill = "roster_inactive" elseif rev.promote then pill = "roster_promote" end
         end
         local icon, coords = ns.ClassIcon(r.classFile)
+        local sharedQuests = (r.online and name ~= ns.me and ns.SharedQuestIDs) and #ns.SharedQuestIDs(name, myQuests) or 0
+        if sharedQuests > 0 then parts[#parts + 1] = "|cff4ade80" .. sharedQuests .. (sharedQuests == 1 and " quest" or " quests") .. " in common|r" end
+        if epu then parts[#parts + 1] = "uses EPU" end
         local lvlColor = (r.level and math.abs(r.level - myLevel) <= 5) and C.green or C.text
         out[#out + 1] = {
           key = "member:" .. name, dot = r.online, iconCoords = coords,
@@ -2239,7 +2243,7 @@ Views.roster = {
             { text = zoneText, w = "flex", color = r.online and C.text or C.muted },
             { text = layerText, w = 52 },
             { text = groupText, w = 92 },
-            { text = epu and "EPU" or "", w = 36, color = C.muted },
+            { text = sharedQuests > 0 and tostring(sharedQuests) or "", w = 48, align = "CENTER", color = C.green },
           },
           titleWidth = 170,
           right = ns.RoleText(roles), pill = pill,
@@ -2258,7 +2262,7 @@ Views.roster = {
     if #out > 0 then
       table.insert(out, 1, { key = "cat:rosterheader", header = true, title = "Name", titleWidth = 170,
         columns = { { text = "Lv", w = 34, align = "CENTER" }, { text = "Zone", w = "flex" }, { text = "Layer", w = 52 },
-          { text = "Group", w = 92 }, { text = "", w = 36 } }, right = "Role", rightColor = C.muted })
+          { text = "Group", w = 92 }, { text = "Quests", w = 48, align = "CENTER" } }, right = "Role", rightColor = C.muted })
     end
     return out
   end,
@@ -2436,6 +2440,37 @@ Views.home = {
           onClick = Go(function() UI.state.roster.filter = "online"; UI:SetView("roster"); UI.search:SetText(z.zone) end) })
       end
     end
+    -- same quests as you
+    if ns.SharedQuestIDs then
+      local own, mates = ns.CurrentQuests(), {}
+      for name, r in pairs(ns.roster) do
+        if r.online and name ~= ns.me then
+          local ids = ns.SharedQuestIDs(name, own)
+          if #ids > 0 then mates[#mates + 1] = { name = name, r = r, ids = ids, near = ns.QuestNearby(name) } end
+        end
+      end
+      table.sort(mates, function(a, b)
+        if a.near ~= b.near then return a.near end
+        if #a.ids ~= #b.ids then return #a.ids > #b.ids end
+        return a.name < b.name
+      end)
+      if #mates > 0 then
+        Section("Same quests as you", 2)
+        for i, m in ipairs(mates) do
+          if i > 4 then
+            Add({ key = "questmore", title = "See all on Quests", sub = (#mates - 4) .. " more guildmates", compact = true,
+              icon = Views.quests and Views.quests.icon, onClick = Go(function() UI:SetView("quests") end) })
+            break
+          end
+          local first = own[m.ids[1]] and own[m.ids[1]].title or "a quest"
+          Add({ key = "questmate:" .. m.name, compact = true, icon = ns.ClassIcon(m.r.classFile),
+            title = (m.name:match("^(%S+)") or m.name) .. " · " .. #m.ids .. (#m.ids == 1 and " quest" or " quests"),
+            sub = (m.near and "|cff4ade80nearby|r · " or ((m.r.zone or "") .. " · ")) .. first .. (#m.ids > 1 and (" +" .. (#m.ids - 1)) or ""),
+            onClick = Go(function() UI:SetView("quests") end),
+            onRightClick = function(self) if ns.GuildmateMenu then ns.GuildmateMenu(self, m.name) end end })
+        end
+      end
+    end
     -- today in the guild
     local feed, shared = {}, {}
     for _, e in ipairs(ns.FeedEntries and ns.FeedEntries(1) or {}) do
@@ -2489,6 +2524,8 @@ Views.settings = {
       {key="map", title="Map and sharing", sub="Guild location markers and sharing preferences.",
         icon=Views.home.icon,
         onClick=function() SlashCmdList.EPUGUILD("map") end},
+      {key="chat", title="Chat history", sub="Keep whispers, guild chat and officer chat after a reload.",
+        icon="Interface\\Icons\\INV_Letter_15", onClick=function() ns.ShowChatHistory() end},
       {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
         onClick=function() ns.ShowMinimapButtonSettings() end},
     }
@@ -4019,6 +4056,7 @@ do
       home="Your guild at a glance: who's on, open groups, today's news.",
       activities="Find or start a group, request a dungeon run, see events.",
       roster="Who's online, where they are, their level and layer.",
+      quests="Your quests and which guildmates are on them, plus who is questing near you.",
       bank="Everything the guild bank holds. Click an item to request it.",
       requests="Item requests from guildmates and where each one stands.",
       needs="Items the bank is collecting, with how many are still wanted.",

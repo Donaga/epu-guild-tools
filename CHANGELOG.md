@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.27.1
+
+- **Quests page (new, in the sidebar under Guildmates):** your quest log with how many guildmates are on each quest (and how many are nearby), group quests flagged, and **Questing near you**: guildmates in your zone, most quests in common first. Click a quest to whisper or invite them, or **Ask for help with this** to post a quest help request with the quest filled in.
+- **Same quest nearby heads-up:** when a guildmate in your zone (and not on another layer) is on a quest you have, you both get one notification, after combat if you're fighting. It follows your notification settings (category: Same quest nearby).
+- **Quest sharing is now on by default.** EPU shares which quests are in your log and the zone you're in with online guildmates; nothing is saved or sent to Discord. Turn it off under Quests → Sharing. Sharing objective progress is still optional, per quest.
+- Quests in common also show on **Home** (Same quests as you), in the **Guildmates** table (Quests column) and on guildmates' tooltips.
+- **Chat history.** Your whispers are now saved on your PC, so they survive a /reload or logging out. After a reload, the last hour goes back into your chat windows (greyed header, clickable names). Turn on **guild chat** too if you like, and officers can keep **officer chat**. Open it with `/epu chat`, from Settings or Member tools: tabs for each channel, **Whisper back** buttons for recent people, and **Clear**. It is never shared with the guild. Messages the game hides in combat are saved as a placeholder.
+- Fixed "Interface action failed because of an AddOn" in combat. EPU read the guild message of the day when the roster updated mid-fight, which the game blocks. It now waits until combat ends.
+
 ## 0.27.0
 
 - **Cleaner Home.** Your stats sit in a row of four tiles (online, open groups, your requests, next event). Below them are two columns: **Right now** and **Coming up** on the left, **Who is where** and **Today in the guild** on the right. Section titles are gold with a thin line, and card text no longer overlaps.
