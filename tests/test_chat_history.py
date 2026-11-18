@@ -299,5 +299,34 @@ pt = A.ev('EPUGuildMessenger.text:GetText()')
 check('clicking one opens that conversation around it', A.ev('__ns.ChatDB().messenger.key') == 'w:Pip Baker' and 'an hour either side' in pt and '|cffffffffCOPPER|r' in pt)
 A.ex('EPUGuildMessenger.child:GetScript("OnHyperlinkClick")(EPUGuildMessenger.child, "epufind:latest", "", "LeftButton")')
 check('Show the latest closes the search', A.ev('EPUGuildMessenger.find:IsShown()') is False and A.ev('EPUGuildMessenger.box:IsShown()') is True)
+# hidden server copies under a first name only, and item links in Discord copies, aren't shown twice
+A.ex('''local now=time()
+local l=__ns.ChatLog("guild")
+l[#l+1]={t=now-30,id=(now-30)*1000000+625000,live=true,who="Luna Graceclaw",msg="Herbing getting close.  212"}
+l[#l+1]={t=now-20,id=(now-20)*1000000+873000,live=true,who="Laurelin Feredis",msg="Oh I got this |cnIQ2:|Hitem:4297::::::::37:1485:::::::::|h[Pattern: Barbaric Gloves]|h|r"}
+__ns.chatSessionHistory.guild[(now-30)*1000000+100000]={t=now-30,id=(now-30)*1000000+100000,who="Luna",msg="|Kw500|k"}
+__ns.chatSessionHistory.guild[(now-20)*1000000+2900000]={t=now-18,id=(now-20)*1000000+2900000,who="Laurelin Feredis",msg="|Kw501|k"}
+l[#l+1]={t=now-19,fromDiscord=true,who="Laurelin",msg="Oh I got this [Pattern: Barbaric Gloves]"}''')
+lines = A.ev('(function() local t={} for _,e in ipairs((__ns.ChatThreadLines("guild",40))) do t[#t+1]=e.msg end return table.concat(t,"~") end)()')
+check('a hidden copy under just a first name is not shown twice', 'Kw500' not in lines and lines.count('Herbing getting close') == 1)
+check('a hidden copy a moment apart is not shown twice', 'Kw501' not in lines)
+check('the Discord copy of a line with an item link is not shown twice', lines.count('Barbaric Gloves') == 1)
+check('item link color codes are stripped from plain text', A.ev('__ns.ChatPlainText("a |cnIQ2:|Hitem:1|h[Sword]|h|r b")') == 'a [Sword] b')
+# @mentions
+A.ex('__ns.SetProfile("", "", "Ty"); __ns.GuildStore().profiles["Tyler Baker"]={t=1,nick="Ty"}')
+c = A.ev('(function() local t={} for _,p in ipairs(__ns.MentionCandidates("t")) do t[#t+1]=p.insert.."="..p.name end return table.concat(t,",") end)()')
+check('typing @ and a few letters suggests guildmates, using their Call me name', 'Ty=Tyler Baker' in c)
+check('it matches the Call me name too', 'Ty=Tyler Baker' in A.ev('(function() local t={} for _,p in ipairs(__ns.MentionCandidates("ty")) do t[#t+1]=p.insert.."="..p.name end return table.concat(t,",") end)()'))
+check('your own characters are not suggested', 'Chris' not in A.ev('(function() local t={} for _,p in ipairs(__ns.MentionCandidates("")) do t[#t+1]=p.name end return table.concat(t,",") end)()'))
+A.ex('__ns.UI:Show(); __ns.UI:OpenDetails("chatwith","guild")')
+A.ex('(function() for _,b in ipairs(__ns.UI.details.pools.box or {}) do if b:IsShown() then __mb=b end end end)(); __mb:SetText("hey @ty"); __mb.onChange(__mb)')
+check('suggestions show while typing @', A.ev('EPUGuildMentionPop and EPUGuildMentionPop:IsShown()') is True)
+A.ex('__mb:GetScript("OnTabPressed")(__mb)')
+check('Tab puts in the name', A.ev('__mb:GetText()') == 'hey @Ty ' and A.ev('EPUGuildMentionPop:IsShown()') is False)
+A.ex('__mb:SetText("mail@ty"); __mb.onChange(__mb)')
+check('no suggestions inside a word like an email', A.ev('EPUGuildMentionPop:IsShown()') is False)
+A.ex('__ns.GuildStore().profiles["Chris Baker"]={t=1,nick="Donny"}')
+check('your Call me name counts as a mention of you', A.ev('__ns.ChatMentions("thanks @Donny")') is True)
+__check_end = True
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)
