@@ -680,7 +680,7 @@ end
 -- Pop-out messenger: a small window of its own that you can move, resize and
 -- minimize to a title bar. Newest messages on top, reply box at the top.
 ---------------------------------------------------------------------------
-local Mgr
+local Mgr, Bub
 local function MState()
   local c = ChatDB()
   if not c then return {} end
@@ -746,7 +746,7 @@ local function BuildMessenger()
   f.close:SetScript("OnClick", function() ns.CloseMessenger() end)
   f.min = K.Btn(bar, "-", 22, 20)
   f.min:SetPoint("RIGHT", f.close, "LEFT", -3, 0)
-  f.min.tip = "Minimize to this bar"
+  f.min.tip = "Minimize to a small bubble"
   f.min:SetScript("OnClick", function() ns.MinimizeMessenger(not MState().min) end)
   f.full = K.Btn(bar, "Open", 44, 20)
   f.full:SetPoint("RIGHT", f.min, "LEFT", -3, 0)
@@ -814,11 +814,18 @@ local function BuildMessenger()
     if not key then label = "Chat"
     elseif key:sub(1, 2) == "w:" then label = ns.Short and ns.Short(key:sub(3)) or key:sub(3)
     else label = CHANNELS[key].label end
-    if st.min and unread > 0 then label = label .. "  |cff4ade80(" .. unread .. " new)|r" end
     self.pick:SetLabel(label)
-    self.body:SetShown(not st.min)
-    self:SetHeight(st.min and 30 or (st.h or 400))
-    if st.min then return end
+    local bub = ns.ChatBubble()
+    if st.min then
+      if self:IsShown() then bub:Place() end
+      self:Hide()
+      bub:Show(); bub:Update()
+      return
+    end
+    bub:Hide()
+    self:Show()
+    self.body:Show()
+    self:SetHeight(st.h or 400)
     local out, lastDay = {}, nil
     if key then
       local lines, channel = ThreadLines(key, 100)
@@ -835,12 +842,97 @@ local function BuildMessenger()
   end
   return f
 end
-function ns.OpenMessenger(key)
+-- Minimized, the messenger becomes a round bubble like the Events bubble:
+-- drag it anywhere, click to open, and a badge counts new whispers.
+function ns.ChatBubble()
+  if Bub then return Bub end
+  local b = CreateFrame("Button", "EPUGuildChatBubble", UIParent)
+  Bub = b
+  b:SetSize(38, 38)
+  b:SetFrameStrata("MEDIUM")
+  b:SetClampedToScreen(true)
+  b:SetMovable(true)
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  b:RegisterForDrag("LeftButton")
+  local function Round(tex)
+    if not b.CreateMaskTexture then return end
+    local mask = b:CreateMaskTexture()
+    if mask then
+      mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+      mask:SetAllPoints(tex)
+      tex:AddMaskTexture(mask)
+    end
+  end
+  local ring = b:CreateTexture(nil, "BACKGROUND")
+  ring:SetAllPoints()
+  ring:SetColorTexture(0.82, 0.63, 0.26, 0.95)
+  Round(ring)
+  b.ring = ring
+  local icon = b:CreateTexture(nil, "ARTWORK")
+  icon:SetPoint("TOPLEFT", 3, -3); icon:SetPoint("BOTTOMRIGHT", -3, 3)
+  icon:SetTexture("Interface\\Icons\\INV_Letter_15")
+  Round(icon)
+  b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+  local badge = CreateFrame("Frame", nil, b)
+  badge:SetPoint("TOPRIGHT", b, "TOPRIGHT", 5, 3)
+  badge:SetSize(18, 16)
+  local fill = badge:CreateTexture(nil, "BACKGROUND")
+  fill:SetAllPoints()
+  fill:SetColorTexture(0.29, 0.87, 0.50, 1)
+  badge.text = ns.InterfaceFont and ns.InterfaceFont(badge, 11, { 0.05, 0.07, 0.09 }) or badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  badge.text:SetPoint("CENTER")
+  b.badge = badge
+  b:SetScript("OnDragStart", function(self) self.dragging = true; self:StartMoving() end)
+  b:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local x, y = self:GetCenter()
+    local w, h = UIParent:GetWidth(), UIParent:GetHeight()
+    if x and y and w and h and w > 0 and h > 0 then MState().bubble = { x / w, y / h } end
+    C_Timer.After(0, function() self.dragging = nil end)
+  end)
+  b:SetScript("OnClick", function(self, button)
+    if self.dragging then return end
+    if button == "RightButton" then ns.ShowChatHistory() else ns.MinimizeMessenger(false) end
+  end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:SetText("Chat")
+    local n = ns.ChatUnread()
+    GameTooltip:AddLine(n == 0 and "No new whispers" or (n == 1 and "1 new whisper" or (n .. " new whispers")), 1, 1, 1)
+    local last = ns.ChatLog("whisper")
+    last = last[#last]
+    if last and not last.out then GameTooltip:AddLine((ns.Short and ns.Short(last.who) or last.who) .. ": " .. last.msg:sub(1, 80), 1, 0.5, 1, true) end
+    GameTooltip:AddLine("Click to open. Right-click for the Chat page. Drag to move.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  function b:Place()
+    self:ClearAllPoints()
+    local p = MState().bubble
+    if type(p) == "table" and type(p[1]) == "number" and type(p[2]) == "number" then
+      self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", p[1] * UIParent:GetWidth(), p[2] * UIParent:GetHeight())
+    elseif Mgr and Mgr:GetRight() then
+      self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", Mgr:GetRight() - 20, Mgr:GetTop() - 20)
+    else
+      self:SetPoint("CENTER", UIParent, "CENTER", 320, -40)
+    end
+  end
+  function b:Update()
+    local n = ns.ChatUnread()
+    self.badge:SetShown(n > 0)
+    self.badge.text:SetText(n > 99 and "99+" or tostring(n))
+    self.badge:SetWidth(math.max(18, (self.badge.text:GetStringWidth() or 8) + 8))
+  end
+  b:Hide()
+  return b
+end
+
+function ns.OpenMessenger(key, minimized)
   local f = BuildMessenger()
   if not f then return end
   local st = MState()
   if key then st.key = ThreadKey(key) end
-  st.open, st.min = true, false
+  st.open, st.min = true, minimized and true or false
   f:ClearAllPoints()
   if st.point then f:SetPoint(st.point[1], UIParent, st.point[2], st.point[3], st.point[4]) else f:SetPoint("RIGHT", UIParent, "RIGHT", -80, 40) end
   f:SetSize(st.w or 340, st.h or 400)
@@ -850,6 +942,7 @@ end
 function ns.CloseMessenger()
   MState().open = false
   if Mgr then Mgr:Hide() end
+  if Bub then Bub:Hide() end
 end
 function ns.MinimizeMessenger(on)
   local st = MState()
@@ -857,9 +950,17 @@ function ns.MinimizeMessenger(on)
   if Mgr then Mgr:Update() end
 end
 function ns.ToggleMessenger()
-  if Mgr and Mgr:IsShown() then ns.CloseMessenger() else ns.OpenMessenger() end
+  if (Mgr and Mgr:IsShown()) or (Bub and Bub:IsShown()) then ns.CloseMessenger() else ns.OpenMessenger() end
 end
 function ns.MessengerChanged(channel, who, incoming)
+  if Bub and Bub:IsShown() then
+    Bub:Update()
+    if incoming and channel == "whisper" then
+      MState().key = "w:" .. who   -- open on the newest whisper
+      if UIFrameFlash then pcall(UIFrameFlash, Bub.ring, 0.3, 0.3, 2.4, true, 0, 0) end
+    end
+    return
+  end
   if not (Mgr and Mgr:IsShown()) then return end
   local st = MState()
   -- a new whisper while nothing is open there: follow it
@@ -867,7 +968,7 @@ function ns.MessengerChanged(channel, who, incoming)
   ns.Debounce("messenger", 0.2, function() if Mgr:IsShown() then Mgr:Update() end end)
 end
 ns.On("PLAYER_LOGIN", function()
-  C_Timer.After(3, function() if MState().open then ns.OpenMessenger() end end)
+  C_Timer.After(3, function() local st = MState(); if st.open then ns.OpenMessenger(nil, st.min) end end)
 end)
 local function FillChatNew(det)
   det:Reset("Interface\\Icons\\INV_Letter_15", nil, "New message", "Whisper a guildmate")
