@@ -536,6 +536,19 @@ function ns.LogChat(channel, who, msg, out, sys)
   if not who or who == "" then return end
   local text = Plain(msg) or "(the game hid this message)"
   local log = LogTable(ChatDB(), channel)
+  -- The server copy of a guild message can arrive before the live one: if
+  -- so, this live line is that message, not a new one.
+  if (channel == "guild" or channel == "officer") and not sys then
+    local short = ns.Short and ns.Short(who) or who
+    for i = #log, math.max(1, #log - 40), -1 do
+      local x = log[i]
+      if time() - (x.t or 0) > 180 then break end
+      if x.id and not x.live and x.msg == text and (ns.Short and ns.Short(x.who or "") or x.who) == short then
+        x.live = true
+        return
+      end
+    end
+  end
   -- sys: "on" / "off" for a guildmate coming online or going offline; these
   -- never count as unread
   log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys,
@@ -633,7 +646,7 @@ local function MergeHistory(channel, entries)
         end
       end
       if best then
-        best.id = e.id; best.t = e.t   -- the server's time is the exact one
+        best.id = e.id; best.t = e.t; best.live = true   -- the server's time is the exact one
         if e.id then ids[e.id] = best end
         dup = true
       end
@@ -657,8 +670,8 @@ local function MergeHistory(channel, entries)
 end
 function ns.PullGuildHistory()
   local c = ChatDB()
-  if c and not c.dedupedV2 then
-    c.dedupedV1, c.dedupedV2 = true, true
+  if c and not c.dedupedV3 then
+    c.dedupedV1, c.dedupedV2, c.dedupedV3 = true, true, true
     -- clean up after the first versions: drop "Unknown" placeholders and lines
     -- that were saved twice (once live, once from the server)
     for _, g in pairs(c.guilds or {}) do
@@ -683,6 +696,17 @@ function ns.PullGuildHistory()
           end
           for i = 1, #keep do log[i] = keep[i] end
           for i = #log, #keep + 1, -1 do log[i] = nil end
+        end
+      end
+    end
+  end
+  if c then
+    for _, g in pairs(c.guilds or {}) do
+      for _, log in pairs(g) do
+        if type(log) == "table" then
+          for i = #log, 1, -1 do
+            if log[i].id and (log[i].msg == "Unknown" or log[i].msg == UNKNOWN) then table.remove(log, i) end
+          end
         end
       end
     end
