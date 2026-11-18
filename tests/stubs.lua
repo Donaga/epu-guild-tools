@@ -171,6 +171,12 @@ UISpecialFrames = {}
 tinsert = table.insert
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 StaticPopupDialogs = {}   -- the game always has this table; addons add entries, never replace it
+__chatFilters = {}
+function ChatFrame_AddMessageEventFilter(event, fn) __chatFilters[#__chatFilters + 1] = { event, fn } end
+function __filtered(event, msg)
+  for _, f in ipairs(__chatFilters) do if f[1] == event and f[2](nil, event, msg) then return true end end
+  return false
+end
 -- like the game: run the hook after the original, without changing what it returns
 function hooksecurefunc(a, b, c)
   local tbl, name, fn = _G, a, b

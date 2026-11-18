@@ -884,6 +884,10 @@ function ns.AskGuildChat()
   local newest = 0
   for i = #log, 1, -1 do if not log[i].sys and not log[i].shared then newest = log[i].t or 0; break end end
   local since = math.max(newest, time() - SHARE_HOURS * 3600)
+  -- chat is shared by your characters, so switching alts doesn't need to ask again
+  local c = ChatDB()
+  if c and c.sharedAskAt and time() - c.sharedAskAt < 900 and time() >= c.sharedAskAt then return false end
+  if c then c.sharedAskAt = time() end
   shareAsked = true
   return ns.SendEphemeral("G", { since = since }, 30, nil, "guildchatask")
 end
