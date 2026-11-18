@@ -169,5 +169,13 @@ A.ex('__ns.PullGuildHistory()')
 check('no doubles when live chat has the realm in the name', A.ev('(function() local n=0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="man i love popcorn" then n=n+1 end end return n end)()') == 1)
 A.ex('local l=__ns.ChatLog("guild"); l[#l+1]={t=time(),who="Andu Anakh",msg="man i love popcorn"}; __ns.ChatDedupe(l)')
 check('doubles already saved are cleaned up', A.ev('(function() local n=0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="man i love popcorn" then n=n+1 end end return n end)()') == 1)
+# exact server time stamps keep real repeats
+A.ex('''local now=time()
+__fire("CHAT_MSG_GUILD","nn","Gillian Jet-Forever"); __fire("CHAT_MSG_GUILD","nn","Gillian Jet-Forever")
+C_Club.GetMessagesInRange=function() return {
+  {messageId={epoch=(now-1)*1000000+111},author={name="Gillian Jet"},content="nn"},
+  {messageId={epoch=now*1000000+222},author={name="Gillian Jet"},content="nn"}} end''')
+A.ex('__ns.PullGuildHistory(); __ns.PullGuildHistory()')
+check('a real repeat stays as two lines, each matched to its server message once', A.ev('(function() local n,ids=0,0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="nn" then n=n+1; if e.id then ids=ids+1 end end end return n*10+ids end)()') == 22)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

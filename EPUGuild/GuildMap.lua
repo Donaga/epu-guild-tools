@@ -587,6 +587,7 @@ end
 -- Live chat gives names with the realm ("Name-Realm"), the server history
 -- without, so compare short names.
 local function SameLine(x, e)
+  if x.id and e.id then return x.id == e.id end
   local a = ns.Short and ns.Short(x.who or "") or x.who
   local b = ns.Short and ns.Short(e.who or "") or e.who
   return a == b and x.msg == e.msg and (x.sys or false) == (e.sys or false) and math.abs((x.t or 0) - (e.t or 0)) <= 180
@@ -609,20 +610,41 @@ local function DedupeLog(log)
   return removed
 end
 ns.ChatDedupe = DedupeLog
+-- Every guild message has its own server time stamp (to the microsecond),
+-- kept as e.id. A line EPU saw live gets the id of the matching server
+-- message, so the same line is never added twice and a real repeat ("nn",
+-- "nn") stays as two lines.
 local function MergeHistory(channel, entries)
   if #entries == 0 or not ns.ChatKeep(channel) then return 0 end
   local log = LogTable(ChatDB(), channel)
   local added = 0
+  local ids = {}
+  for _, x in ipairs(log) do if x.id then ids[x.id] = x end end
   for _, e in ipairs(entries) do
-    local dup = false
-    for i = #log, math.max(1, #log - 400), -1 do
-      if SameLine(log[i], e) then dup = true; break end
+    local dup = e.id and ids[e.id] ~= nil
+    if not dup then
+      -- the closest live line without an id that says the same thing
+      local best, bestGap
+      for i = #log, math.max(1, #log - 400), -1 do
+        local x = log[i]
+        if not x.id and SameLine(x, e) then
+          local gap = math.abs((x.t or 0) - e.t)
+          if not best or gap < bestGap then best, bestGap = x, gap end
+        end
+      end
+      if best then
+        best.id = e.id; best.t = e.t   -- the server's time is the exact one
+        if e.id then ids[e.id] = best end
+        dup = true
+      end
     end
-    if not dup and time() - e.t < CHAT_MAX_AGE then log[#log + 1] = e; added = added + 1 end
+    if not dup and time() - e.t < CHAT_MAX_AGE then
+      log[#log + 1] = e; added = added + 1
+      if e.id then ids[e.id] = e end
+    end
   end
   if added > 0 then
     table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
-    DedupeLog(log)
     while #log > CHAT_KEEP do table.remove(log, 1) end
     -- history from before now isn't "new": don't let it flood the unread counts
     local c = ChatDB()
@@ -661,7 +683,7 @@ function ns.PullGuildHistory()
           local epoch = m.messageId and Readable(m.messageId.epoch)
           if type(author) == "string" and type(content) == "string" and content ~= "" and type(epoch) == "number" and not m.destroyed then
             local short = ns.Short and ns.Short(author) or author
-            entries[#entries + 1] = { t = math.floor(epoch / 1000000), who = short, msg = content, out = short == ns.me or nil }
+            entries[#entries + 1] = { t = math.floor(epoch / 1000000), id = epoch, who = short, msg = content, out = short == ns.me or nil }
           end
         end
       end
@@ -679,6 +701,12 @@ function ns.PullGuildHistory()
   end
   return total
 end
+ns.On("CLUB_MESSAGE_ADDED", function(clubId, streamId, messageId)
+  if not (C_Club and C_Club.GetGuildClubId and C_Club.GetMessageInfo) then return end
+  local ok, gid = pcall(C_Club.GetGuildClubId)
+  if not ok or gid ~= clubId then return end
+  ns.Debounce("guildHistory", 1, ns.PullGuildHistory)
+end)
 ns.On("CLUB_MESSAGE_HISTORY_RECEIVED", function() ns.Debounce("guildHistory", 1, ns.PullGuildHistory) end)
 ns.On("PLAYER_LOGIN", function() if C_Timer then C_Timer.After(8, ns.PullGuildHistory) end end)
 ns.On("PLAYER_GUILD_UPDATE", function() ns.Debounce("guildHistory", 5, ns.PullGuildHistory) end)
@@ -985,7 +1013,8 @@ local function ThreadBlocks(channel, lines, plains)
     end
     if speaker then
       local color = ChatColor(channel, e.out, e.who)
-      table.insert(cur.msgs, 1, color .. Linkify(e.msg, color) .. "|r")
+      local stamp = Opt().lineTimes and ("|cff777777" .. date("%H:%M", e.t) .. "|r  ") or ""
+      table.insert(cur.msgs, 1, stamp .. color .. Linkify(e.msg, color) .. "|r")
       table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
     end
   end
@@ -1778,6 +1807,8 @@ local function FillChatSettings(det)
       tip = "They come back when combat ends" } })
   det:Buttons({ { Check(o.fade, "Fade windows when the mouse is elsewhere"), function() o.fade = not o.fade; Again() end } })
   det:Buttons({ { Check(o.typing, "Show and send \"typing...\" (EPU users)"), function() o.typing = not o.typing; Again() end } })
+  det:Buttons({ { Check(o.lineTimes, "Show the time on every message"), function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); Again() end,
+      tip = "Otherwise the time shows once for each group of messages" } })
   det:Buttons({ { Check(o.presence ~= false, "Show guildmates coming online and going offline in Guild chat"), function()
     o.presence = o.presence == false; Again() end } })
   det:Section("Text")
