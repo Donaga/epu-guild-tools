@@ -18,6 +18,7 @@
   "events_channel_id": "",
   "sync_helpers": {},
   "import_days": 30,
+  "ingame_chat_channel": "in-game-chat",
   "post_motd": true,
   "help_post": true,
   "github_repo": "Donaga/epu-guild-tools",

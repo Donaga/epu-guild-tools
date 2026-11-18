@@ -224,5 +224,39 @@ check('a hidden live copy is not saved next to the readable line', 'Kw1004' not 
 check('the readable line keeps the server id', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="got another legacy point :)" then return type(e.id) end end end)()') == 'number')
 A.ex('local l=__ns.ChatLog("guild"); l[#l+1]={t=time(),id=6,who="Old",msg="|Kw2|k"}; __fire("PLAYER_LOGOUT")')
 check('hidden text is cleared before saving at logout', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="|Kw2|k" then return true end end return false end)()') is False)
+# guild chat from the linked Discord channel (written into Inbox.lua by the bot)
+A.ex('''local now=time()
+local l=__ns.ChatLog("guild")
+l[#l+1]={t=now-3000,who="Laurelin Feredis-Forever",msg="Congrats!"}
+l[#l+1]={t=now-2990,who="Nadiya Pureweave",msg="grats"}
+EPUGuildDiscordChat={
+  {id="901",t=now-3001,who="Laurelin Feredis",msg="Congrats!",chars={"Laurelin Feredis","Laurelin Cratebank"},game=true,guild="E Pluribus Unum"},
+  {id="902",t=now-2989,who="NDP",msg="grats",game=true,guild="E Pluribus Unum"},
+  {id="903",t=now-2985,who="Kothar",msg="grats",game=true,guild="E Pluribus Unum"},
+  {id="904",t=now-1800,who="Irthos Ixen",msg="woot while you were away",chars={"Irthos Ixen"},game=true,guild="E Pluribus Unum"},
+  {id="905",t=now-1700,who="Laurelin Feredis",msg="typed in Discord",chars={"Laurelin Feredis"},guild="E Pluribus Unum"},
+  {id="906",t=now-1600,who="Someone",msg="other guild",game=true,guild="Another Guild"},
+  {id="907",t=now-90000,who="Old",msg="too old",game=true,guild="E Pluribus Unum"},
+  {id="908",t=now-1500,who="Bad",msg="|Kw9|k",game=true,guild="E Pluribus Unum"},
+}''')
+n = A.ev('__ns.MergeDiscordChat()')
+def count(m): return A.ev('(function() local n=0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg==%r then n=n+1 end end return n end)()' % m)
+check('Discord chat fills in what EPU missed', count('woot while you were away') == 1 and count('typed in Discord') == 1)
+check('lines EPU already has are not added again', count('Congrats!') == 1)
+check('a second person saying the same thing is kept', count('grats') == 2)
+check('other guilds, old lines and hidden text are skipped', count('other guild') == 0 and count('too old') == 0 and count('|Kw9|k') == 0)
+check('the merge reports what it added', n == 3)
+check('running it again adds nothing', A.ev('__ns.MergeDiscordChat()') == 0)
+check('only lines typed in Discord get the Discord tag', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="woot while you were away" then return tostring(e.discord) end end end)()') == 'nil'
+  and A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="typed in Discord" then return e.discord end end end)()') is True)
+A.ex('__ns.OpenMessenger("guild")')
+gt = A.ev('EPUGuildMessenger.text:GetText()')
+check('filled-in lines show in Guild chat', 'woot while you were away' in gt and gt.count('Congrats!') == 1)
+# a hidden server copy from this session is not shown twice next to its Discord line
+A.ex('''local now=time()
+__ns.chatSessionHistory.guild[424242]={t=now-1800,id=424242,who="Irthos Ixen",msg="|Kw77|k"}''')
+A.ex('__ns.MessengerChanged("guild", nil, false)')
+gt = A.ev('EPUGuildMessenger.text:GetText()')
+check('a hidden server copy and its Discord line show once', '|Kw77|k' not in gt and 'woot while you were away' in gt)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

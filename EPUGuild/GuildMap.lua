@@ -669,7 +669,8 @@ end
 -- without, so compare short names.
 local function SameLine(x, e)
   -- two server copies 2 seconds or more apart are a real repeat
-  if x.id and e.id and math.abs(x.id - e.id) >= 2000000 then return false end
+  if type(x.id) == "number" and type(e.id) == "number" and math.abs(x.id - e.id) >= 2000000 then return false end
+  if ns.ChatDiscordTwin(x, e) or ns.ChatDiscordTwin(e, x) then return true end
   local a = ns.Short and ns.Short(x.who or "") or x.who
   local b = ns.Short and ns.Short(e.who or "") or e.who
   return a == b and x.msg == e.msg and (x.sys or false) == (e.sys or false) and math.abs((x.t or 0) - (e.t or 0)) <= 180
@@ -949,6 +950,76 @@ ns.On("PLAYER_LOGIN", function()
   if C_Timer then C_Timer.After(20, function() ns.AskGuildChat() end) end
 end)
 
+-- Guild chat from the guild's linked Discord channel. The EPU Discord bot
+-- writes the last day of it into Inbox.lua (EPUGuildDiscordChat); at login
+-- EPU adds the lines it missed while you were offline. Discord shows the
+-- person, not the character, so a line names their main (or their Discord
+-- name) and lists their linked characters in `chars` for matching.
+function ns.ChatDiscordTwin(d, o)
+  if type(d) ~= "table" or type(o) ~= "table" or not d.fromDiscord or o.fromDiscord or o.sys then return false end
+  local gap = math.abs((d.t or 0) - (o.t or 0))
+  local s = ns.Short and ns.Short(o.who or "") or o.who
+  local same = s == (ns.Short and ns.Short(d.who or "") or d.who)
+  for _, ch in ipairs(d.chars or {}) do if ch == s then same = true end end
+  if Protected(o.msg) then return gap <= 10 and same end
+  -- unlinked people can only be matched by what they said and when
+  return o.msg == d.msg and gap <= 120 and (same or o.discord or not d.chars)
+end
+local function DiscordGuildOk(g)
+  local key = ns.GuildKey and ns.GuildKey()
+  return type(g) == "string" and key ~= nil and (key == g or key:sub(1, #g + 3) == g .. " - ")
+end
+function ns.MergeDiscordChat(list)
+  list = list or EPUGuildDiscordChat
+  if type(list) ~= "table" or not ns.ChatKeep("guild") then return 0 end
+  local c = ChatDB()
+  if not c then return 0 end
+  c.discordSeen = c.discordSeen or {}
+  local seen, now = c.discordSeen, time()
+  for id, t in pairs(seen) do if type(t) ~= "number" or now - t > 3 * 86400 then seen[id] = nil end end
+  local log = LogTable(c, "guild")
+  local before = #log   -- compare only with what we had, so real repeats in the list stay
+  local claimed, added, newest = {}, 0, 0
+  for i, d in ipairs(list) do
+    if i > 400 then break end
+    local t = type(d) == "table" and tonumber(d.t)
+    if t and type(d.id) == "string" and #d.id <= 32 and not seen[d.id] and type(d.who) == "string" and d.who ~= "" and #d.who <= 48
+      and type(d.msg) == "string" and d.msg ~= "" and #d.msg <= 255 and not Protected(d.msg)
+      and t > now - 86400 and t <= now + 120 and DiscordGuildOk(d.guild) then
+      seen[d.id] = t
+      local chars = {}
+      if type(d.chars) == "table" then
+        for _, ch in ipairs(d.chars) do
+          if type(ch) == "string" and ch ~= "" and #ch <= 48 and #chars < 12 then chars[#chars + 1] = ns.Short and ns.Short(ch) or ch end
+        end
+      end
+      local e = { t = t, who = d.who, msg = d.msg, fromDiscord = true, discord = d.game ~= true or nil, chars = #chars > 0 and chars or nil }
+      local dup = false
+      for j = before, math.max(1, before - 400), -1 do
+        local x = log[j]
+        if not claimed[x] and ns.ChatDiscordTwin(e, x) then claimed[x] = true; dup = true; break end
+      end
+      if not dup then log[#log + 1] = e; added = added + 1; newest = math.max(newest, t) end
+    end
+  end
+  if added > 0 then
+    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    while #log > CHAT_KEEP do table.remove(log, 1) end
+    -- what you missed isn't "new"
+    c.chatSeen = c.chatSeen or {}
+    if (c.chatSeen.guild or 0) < newest then c.chatSeen.guild = newest end
+    if ns.MessengerChanged then ns.MessengerChanged("guild", nil, false) end
+    if ns.UI and ns.UI:IsShown() and ns.UI.view == "chat" then ns.Changed() end
+  end
+  return added
+end
+ns.On("PLAYER_LOGIN", function()
+  if not C_Timer then return end
+  -- the guild name can take a few seconds to arrive
+  C_Timer.After(6, function() pcall(ns.MergeDiscordChat) end)
+  C_Timer.After(30, function() pcall(ns.MergeDiscordChat) end)
+end)
+
 -- /epu chatdebug: the last guild lines as EPU saved them, next to what the
 -- game's server history says, to track down doubled lines.
 function ns.ChatDebug()
@@ -1226,9 +1297,10 @@ local function ThreadLines(key, max)
     log = merged
   end
   local function Twin(a, b)
+    if ns.ChatDiscordTwin(a, b) or ns.ChatDiscordTwin(b, a) then return true end
     -- the same message seen twice (live and from the server); two server
     -- copies with different time stamps are a real repeat
-    if a.id and b.id and math.abs(a.id - b.id) >= 2000000 then return false end
+    if type(a.id) == "number" and type(b.id) == "number" and math.abs(a.id - b.id) >= 2000000 then return false end
     return (a.sys or false) == (b.sys or false) and a.msg == b.msg and math.abs((a.t or 0) - (b.t or 0)) <= 180
       and (ns.Short and ns.Short(a.who or "") or a.who) == (ns.Short and ns.Short(b.who or "") or b.who)
   end

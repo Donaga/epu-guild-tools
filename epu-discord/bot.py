@@ -77,6 +77,8 @@ def load_config() -> dict:
     cfg.setdefault("invite_requests_channel_id", "")
     cfg.setdefault('events_channel_id','')
     cfg.setdefault('sync_helpers',{})
+    cfg.setdefault("ingame_chat_channel", "in-game-chat")  # the channel linked to guild chat in game; "" turns it off
+    cfg.setdefault("ingame_chat_channel_id", "")  # or its ID, if the name differs
     cfg.setdefault("import_days", 30)             # on startup, copy posts from this many days back
     cfg.setdefault("import_officers_only", False) # only copy posts by the officer role (announcement channels are usually locked anyway)
     cfg.setdefault("post_motd", True)             # mirror the in-game guild message of the day to Discord
@@ -98,7 +100,7 @@ def load_config() -> dict:
 cfg = load_config()
 state = core.State(os.path.join(HERE, "state.json"))
 intents = discord.Intents.default()
-if cfg["import_channel_id"] or cfg["invite_requests_channel_id"]:
+if cfg["import_channel_id"] or cfg["invite_requests_channel_id"] or cfg["ingame_chat_channel"] or cfg["ingame_chat_channel_id"]:
     intents.message_content = True   # needed to read the announcements channel (turn it on in the Developer Portal)
 if cfg["members_intent"]:
     intents.members = True           # lets /link_suggestions read the server's member list
@@ -157,7 +159,8 @@ def flush_inbox():
         unsupported={kind for kind,module in bridge.EVENT_MODULES.items() if module not in modules}
         entries=[e for e in entries if e.get('kind') not in unsupported]
         entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
-        core.write_inbox(core.inbox_path(cfg["wow_path"]), entries)
+        chat=core.ingame_chat_list(ingame_chat) if ingame_chat_id else None
+        core.write_inbox(core.inbox_path(cfg["wow_path"]), entries, chat)
     except (OSError,ValueError,KeyError,TypeError) as e:
         log.error("Couldn't write Inbox.lua (%s). Check folder permissions; see README.", e)
 
@@ -873,8 +876,84 @@ async def backfill_announcements():
         log.info("Copied %d existing announcement(s) into the game. They appear after an officer's next /reload.", n)
 
 
+# Guild chat from the Discord channel the game links to guild chat. The last
+# day goes into Inbox.lua; EPU fills gaps in its Guild chat from it at login.
+ingame_chat: dict[str, dict] = {}
+ingame_chat_id: str = ""
+
+
+def find_ingame_chat_channel():
+    cid = str(cfg.get("ingame_chat_channel_id") or "")
+    if cid:
+        return client.get_channel(int(cid))
+    guild = client.get_guild(int(cfg["server_id"]))
+    if not guild or not cfg.get("ingame_chat_channel"):
+        return None
+    for ch in guild.text_channels:
+        if core.channel_matches(ch.name, cfg["ingame_chat_channel"]):
+            return ch
+    return None
+
+
+def from_game(message: discord.Message) -> bool:
+    """Lines typed in game reach Discord through the game's app (the controller icon)."""
+    return getattr(message, "application_id", None) is not None or bool(message.webhook_id)
+
+
+def add_ingame_chat(message: discord.Message) -> bool:
+    # skip only this bot's own posts: the game's relay may come through an app or webhook
+    if message.author == client.user or message.type not in (discord.MessageType.default, discord.MessageType.reply):
+        return False
+    uid = message.author.id
+    chars = state.characters_for(uid)
+    who = None
+    if chars:
+        try:
+            who = lr.main_for(latest, state, uid) if latest else chars[0]
+        except Exception:
+            who = chars[0]
+    line = core.ingame_chat_line(message.id, message.created_at.timestamp(), who or message.author.display_name,
+                                 message.clean_content, chars, from_game(message),
+                                 cfg["guild_key"])
+    if not line:
+        return False
+    ingame_chat[line["id"]] = line
+    return True
+
+
+async def backfill_ingame_chat():
+    global ingame_chat_id
+    ch = find_ingame_chat_channel()
+    if ch is None:
+        if cfg.get("ingame_chat_channel") or cfg.get("ingame_chat_channel_id"):
+            log.info("No #%s channel found, so Discord guild chat won't be added to EPU. Set ingame_chat_channel_id in config.json to use another channel.",
+                     cfg.get("ingame_chat_channel") or cfg.get("ingame_chat_channel_id"))
+        return
+    after = datetime.now(timezone.utc) - timedelta(hours=core.INGAME_CHAT_HOURS)
+    n = game_count = 0
+    try:
+        async for m in ch.history(limit=core.INGAME_CHAT_MAX, after=after, oldest_first=True):
+            if add_ingame_chat(m):
+                n += 1
+                game_count += from_game(m)
+    except discord.Forbidden:
+        log.error("The bot can't read #%s. Give it View Channel and Read Message History there.", ch.name)
+        return
+    ingame_chat_id = str(ch.id)
+    if ingame_chat:
+        last = max(ingame_chat.values(), key=lambda v: v["t"])
+        log.info("Newest #%s line: %s: %s (from the game: %s)", ch.name, last["who"], last["msg"][:60], "yes" if last.get("game") else "no")
+    flush_inbox()
+    log.info("Guild chat from #%s: %d message(s) in the last day (%d sent from the game). EPU adds any it missed at the next login or /reload.",
+             ch.name, n, game_count)
+
+
 @client.event
 async def on_message(message: discord.Message):
+    if ingame_chat_id and str(message.channel.id) == ingame_chat_id:
+        if add_ingame_chat(message):
+            flush_inbox()
+        return
     if cfg.get('invite_requests_channel_id') and str(message.channel.id)==str(cfg['invite_requests_channel_id']):
         await import_invite_message(message); return
     if cfg["import_channel_id"] and str(message.channel.id) == str(cfg["import_channel_id"]):
@@ -903,6 +982,8 @@ async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
 
 @client.event
 async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+    if ingame_chat.pop(str(payload.message_id), None):
+        flush_inbox()
     if cfg.get('invite_requests_channel_id') and str(payload.channel_id)==str(cfg['invite_requests_channel_id']):
         source='m'+str(payload.message_id)
         if source not in state.data.get('invite_sources',{}):source=next((k for k,v in state.data.get('invite_sources',{}).items() if v.get('message_id')==payload.message_id),source)
@@ -1735,6 +1816,7 @@ async def on_ready():
         check_channel(cid)
     await ensure_help_post()
     await backfill_announcements()
+    await backfill_ingame_chat()
     # Bank requests use actual stock history; a full-game download is no longer
     # needed for startup or autocomplete. Legacy item_db settings are harmless.
     if not release_loop.is_running():
@@ -1756,4 +1838,4 @@ if __name__ == "__main__":
                      "Privileged Gateway Intents > turn on SERVER MEMBERS INTENT > Save. Or set members_intent to false.")
         sys.exit("To read announcement/invite-request messages the bot needs the Message Content Intent.\n"
                  "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
-                 "Or leave import_channel_id and invite_requests_channel_id blank to disable message imports.")
+                 "Or leave import_channel_id, invite_requests_channel_id and ingame_chat_channel blank to disable message imports.")

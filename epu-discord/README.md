@@ -1,5 +1,9 @@
 # EPU Discord companion
 
+## Guild chat history for EPU (0.28)
+
+The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into Inbox.lua. At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
+
 ## Linking and class/rank roles (0.23)
 
 - **Linking by code.** `/link` gives each member a private code. They type `/epu link CODE` in game on any character. Every character on that WoW account links itself when it logs in with EPU 0.23+, and confirmed EPU alts (`/epu main` groups) come along. No officer step. The game only sends a scrambled form of code + character name, so guildmates can't tell from addon data which characters share an account. `/link character:` still asks an officer to approve by hand (`/approve_link`) for anyone who can't use the addon.
