@@ -227,6 +227,8 @@ bubble:SetScript('OnClick', function(self, button)
   if button == 'RightButton' then
     SlashCmdList.EPUGUILD('notifications')
     ns.UI:OpenDetails('noticeform', 'all')
+  elseif ns.UI:IsShown() then
+    ns.UI:Hide()   -- a second click closes the window again
   elseif total > 0 then
     ns.UI:Show()
     ns.UI:OpenDetails('bubbleactions', 'all')
