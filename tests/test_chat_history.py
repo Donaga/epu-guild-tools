@@ -173,7 +173,7 @@ check('doubles already saved are cleaned up', A.ev('(function() local n=0 for _,
 A.ex('''local now=time()
 __fire("CHAT_MSG_GUILD","nn","Gillian Jet-Forever"); __fire("CHAT_MSG_GUILD","nn","Gillian Jet-Forever")
 C_Club.GetMessagesInRange=function() return {
-  {messageId={epoch=(now-1)*1000000+111},author={name="Gillian Jet"},content="nn"},
+  {messageId={epoch=(now-4)*1000000+111},author={name="Gillian Jet"},content="nn"},
   {messageId={epoch=now*1000000+222},author={name="Gillian Jet"},content="nn"}} end''')
 A.ex('__ns.PullGuildHistory(); __ns.PullGuildHistory()')
 check('a real repeat stays as two lines, each matched to its server message once', A.ev('(function() local n,ids=0,0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="nn" then n=n+1; if e.id then ids=ids+1 end end end return n*10+ids end)()') == 22)

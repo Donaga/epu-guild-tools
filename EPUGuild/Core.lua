@@ -479,6 +479,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.ShowGuildMapSettings()
   elseif cmd == "chat" or cmd == "whispers" then
     if args:lower() == "pop" then ns.ToggleMessenger() else ns.ShowChatHistory() end
+  elseif cmd == "chatdebug" then
+    if ns.ChatDebug then ns.ChatDebug() end
   elseif cmd == "messenger" or cmd == "msg" then
     ns.ToggleMessenger()
   elseif cmd == "sharelocation" then

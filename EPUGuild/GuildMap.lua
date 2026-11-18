@@ -600,7 +600,8 @@ end
 -- Live chat gives names with the realm ("Name-Realm"), the server history
 -- without, so compare short names.
 local function SameLine(x, e)
-  if x.id and e.id then return x.id == e.id end
+  -- two server copies 2 seconds or more apart are a real repeat
+  if x.id and e.id and math.abs(x.id - e.id) >= 2000000 then return false end
   local a = ns.Short and ns.Short(x.who or "") or x.who
   local b = ns.Short and ns.Short(e.who or "") or e.who
   return a == b and x.msg == e.msg and (x.sys or false) == (e.sys or false) and math.abs((x.t or 0) - (e.t or 0)) <= 180
@@ -636,6 +637,13 @@ local function MergeHistory(channel, entries)
   for _, e in ipairs(entries) do
     local dup = e.id and ids[e.id] ~= nil
     if not dup then
+      -- the same message under a slightly different server stamp
+      for i = #log, math.max(1, #log - 400), -1 do
+        local x = log[i]
+        if x.id and SameLine(x, e) then dup = true; break end
+      end
+    end
+    if not dup then
       -- the closest live line without an id that says the same thing
       local best, bestGap
       for i = #log, math.max(1, #log - 400), -1 do
@@ -670,7 +678,9 @@ local function MergeHistory(channel, entries)
 end
 function ns.PullGuildHistory()
   local c = ChatDB()
+  local cleaned = false
   if c and not c.dedupedV3 then
+    cleaned = true
     c.dedupedV1, c.dedupedV2, c.dedupedV3 = true, true, true
     -- clean up after the first versions: drop "Unknown" placeholders and lines
     -- that were saved twice (once live, once from the server)
@@ -705,7 +715,7 @@ function ns.PullGuildHistory()
       for _, log in pairs(g) do
         if type(log) == "table" then
           for i = #log, 1, -1 do
-            if log[i].id and (log[i].msg == "Unknown" or log[i].msg == UNKNOWN) then table.remove(log, i) end
+            if log[i].msg == "Unknown" or log[i].msg == UNKNOWN then table.remove(log, i); cleaned = true end
           end
         end
       end
@@ -747,7 +757,7 @@ function ns.PullGuildHistory()
     end
   end
   ns.chatHistoryAsked = true
-  if total > 0 then
+  if total > 0 or cleaned then
     if ns.MessengerChanged then ns.MessengerChanged("guild", nil, false) end
     if ns.UI and ns.UI:IsShown() and ns.UI.view == "chat" then ns.Changed() end
   end
@@ -759,6 +769,40 @@ ns.On("CLUB_MESSAGE_ADDED", function(clubId, streamId, messageId)
   if not ok or gid ~= clubId then return end
   ns.Debounce("guildHistory", 1, ns.PullGuildHistory)
 end)
+-- /epu chatdebug: the last guild lines as EPU saved them, next to what the
+-- game's server history says, to track down doubled lines.
+function ns.ChatDebug()
+  local out = { "EPU guild chat, newest last:" }
+  local log = ns.ChatLog("guild")
+  for i = math.max(1, #log - 14), #log do
+    local e = log[i]
+    out[#out + 1] = string.format("%s id=%s live=%s who=%q msg=%q", date("%H:%M:%S", e.t or 0), tostring(e.id), tostring(e.live), tostring(e.who), tostring(e.msg))
+  end
+  out[#out + 1] = ""
+  out[#out + 1] = "Server history, newest last:"
+  if C_Club and C_Club.GetGuildClubId then
+    local ok, clubId = pcall(C_Club.GetGuildClubId)
+    local okS, streams = pcall(C_Club.GetStreams, clubId)
+    for _, st in ipairs(okS and streams or {}) do
+      out[#out + 1] = "stream " .. tostring(st.streamId) .. " type=" .. tostring(st.streamType) .. " name=" .. tostring(st.name)
+      local okR, ranges = pcall(C_Club.GetMessageRanges, clubId, st.streamId)
+      for _, r in ipairs(okR and ranges or {}) do
+        local okM, msgs = pcall(C_Club.GetMessagesInRange, clubId, st.streamId, r.oldestMessageId, r.newestMessageId)
+        msgs = okM and msgs or {}
+        for i = math.max(1, #msgs - 9), #msgs do
+          local m = msgs[i]
+          local epoch = m.messageId and m.messageId.epoch
+          out[#out + 1] = string.format("  %s epoch=%s pos=%s who=%q msg=%q", epoch and date("%H:%M:%S", math.floor(epoch / 1000000)) or "?",
+            tostring(epoch), tostring(m.messageId and m.messageId.position), tostring(m.author and m.author.name), tostring(m.content))
+        end
+      end
+    end
+  else
+    out[#out + 1] = "(no server history on this client)"
+  end
+  out[#out + 1] = "PC clock: " .. date("%H:%M:%S") .. " time()=" .. time()
+  ns.ShowCopy(table.concat(out, "\n"), "Chat debug")
+end
 ns.On("CLUB_MESSAGE_HISTORY_RECEIVED", function() ns.Debounce("guildHistory", 1, ns.PullGuildHistory) end)
 ns.On("PLAYER_LOGIN", function() if C_Timer then C_Timer.After(8, ns.PullGuildHistory) end end)
 ns.On("PLAYER_GUILD_UPDATE", function() ns.Debounce("guildHistory", 5, ns.PullGuildHistory) end)
@@ -958,8 +1002,24 @@ local function ThreadLines(key, max)
   local channel = key:sub(1, 2) == "w:" and "whisper" or key
   local who = channel == "whisper" and key:sub(3) or nil
   local log, lines = ns.ChatLog(channel), {}
+  local group = channel == "guild" or channel == "officer"
+  local function Twin(a, b)
+    -- the same message seen twice (live and from the server); two server
+    -- copies with different time stamps are a real repeat
+    if a.id and b.id and math.abs(a.id - b.id) >= 2000000 then return false end
+    return (a.sys or false) == (b.sys or false) and a.msg == b.msg and math.abs((a.t or 0) - (b.t or 0)) <= 180
+      and (ns.Short and ns.Short(a.who or "") or a.who) == (ns.Short and ns.Short(b.who or "") or b.who)
+  end
   for i = #log, 1, -1 do
-    if not who or log[i].who == who then lines[#lines + 1] = log[i] end
+    local e = log[i]
+    local skip = false
+    if group then
+      for j = #lines, math.max(1, #lines - 30), -1 do
+        if Twin(lines[j], e) then skip = true; break end
+      end
+      if e.msg == "Unknown" or e.msg == UNKNOWN then skip = true end
+    end
+    if not skip and (not who or e.who == who) then lines[#lines + 1] = e end
     if #lines >= (max or 60) then break end
   end
   return lines, channel, who
