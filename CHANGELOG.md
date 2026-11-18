@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.3
+
+- **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers.
+- On a short window the sidebar shows icons only; hover for the name and what each page is for.
+
 ## 0.27.2
 
 - **Bank managers.** Officers can now let a rank (or specific characters) run the bank side for the whole guild: publish bank contents, edit needs, approve and mail requests, record donations, and act as a verified sync source. Bank managers can't post announcements, write member notes, manage other people's events or use the Officer tab, and they can't add other bank managers.

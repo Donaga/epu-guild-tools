@@ -1289,7 +1289,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "activities", "roster", "quests", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
   {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
@@ -4120,6 +4120,7 @@ do
       activities="Find or start a group, request a dungeon run, see events.",
       roster="Who's online, where they are, their level and layer.",
       quests="Your quests and which guildmates are on them, plus who is questing near you.",
+      chat="Your whispers (and guild or officer chat if you keep it), saved so a reload doesn't wipe them.",
       bank="Everything the guild bank holds. Click an item to request it.",
       requests="Item requests from guildmates and where each one stands.",
       needs="Items the bank is collecting, with how many are still wanted.",
@@ -4402,6 +4403,8 @@ function UI:Refresh()
   local tabWidth = math.min(108, math.floor((self:GetWidth()-SIDEBAR_W-16)/math.max(1,tabs)))
   local tabX, subY = 7, -12
   local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 76) / nVisible))
+  -- a short window shows sidebar icons only; hovering still names each page
+  local compact = step < 38
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local group = groupFor[key]
@@ -4415,6 +4418,7 @@ function UI:Refresh()
     if group and group[1] == key then
       local button = group.button
       button:SetHeight(step - 2)
+      button.text:SetShown(not compact)
       button:ClearAllPoints(); button:SetPoint("TOPLEFT", 6, y); y = y - step
       button:SetOn(active == group)
     end
@@ -4428,6 +4432,7 @@ function UI:Refresh()
         b.badge:ClearAllPoints()
         b.icon:SetSize(self.wideNav and 18 or 14,self.wideNav and 18 or 14)
         b.icon:Show()
+        b.label:Show()
         if self.wideNav then
           b:SetSize(SUBNAV_W-16,34)
           b:SetPoint("TOPLEFT",8,subY)
@@ -4450,6 +4455,7 @@ function UI:Refresh()
         SetColor(b.label,selected and C.gold or C.muted)
       else
         b:SetHeight(step-2)
+        b.label:SetShown(not compact)
         b:SetPoint("TOPLEFT",6,y)
         y=y-step
       end

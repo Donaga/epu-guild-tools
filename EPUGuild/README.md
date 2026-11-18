@@ -144,9 +144,9 @@ Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildm
 
 Officers are ranks 0–1 (change under Officer → Officer ranks) plus any rank with "Bank" in its name, and have every tool. **Bank managers** are a second, bank-only level that officers choose once for the whole guild under **Officer → Bank managers**, by rank or by character (linked alts are added too). Bank managers can publish bank contents, edit needs, approve and mail requests, record donations, and other members sync from them as verified. They can't post announcements, write member notes, manage other people's events, use the Officer tab or add other bank managers.
 
-## Chat history (0.27.1+)
+## Chat (0.27.1+, a messenger page since 0.27.3)
 
-WoW clears chat on every /reload. EPU saves your **whispers** (in and out) on your PC so they come back: after a reload the last hour is put back into your chat windows. Open `/epu chat` (or Settings → Chat history, or Member tools) to read the last week, whisper someone back, clear a channel, or turn on **guild chat** and, for officers, **officer chat**. Nothing here is ever sent to the guild. Battle.net whispers aren't kept, and messages the game hides in combat show as a placeholder.
+WoW clears chat on every /reload. EPU saves your **whispers** (in and out) on your PC, and after a reload puts the last hour back into your chat windows. **Chat** in the sidebar works like a messenger: conversations on the left (guild and officer chat pinned on top if you keep them, then one per person, newest first, with unread counts), the open conversation on the right with a reply box. **New message** whispers any guildmate; **Chat settings** turns keeping guild chat or (for officers) officer chat on, clears saved chat and turns the after-reload replay off. Nothing is ever sent to the guild. `/epu chat` opens it. Battle.net whispers aren't kept, and messages the game hides in combat show as a placeholder.
 
 ## STV pages (0.25+)
 

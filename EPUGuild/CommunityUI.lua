@@ -103,6 +103,61 @@ function ns.InstallCommunityViews(views,env)
   E=env; UI=E.UI; C=E.C
   -- Quests: your quest log with the guildmates on each quest, and who is
   -- questing near you. Sharing which quests you have is on unless turned off.
+  -- Chat: a small message center. Conversations on the left (guild and
+  -- officer chat pinned on top when kept, then one per person you whispered),
+  -- the open conversation on the right with a reply box.
+  UI.state.chat={}
+  views.chat={
+    label="Chat",
+    icon="Interface\\Icons\\INV_Letter_15",
+    count=function() return ns.ChatUnread and ns.ChatUnread() or 0 end,
+    -- open on the latest conversation, like a messenger
+    onSelect=function()
+      UI.search:SetText("")
+      UI:SetView("chat")
+      if not (UI.details:IsShown() and (UI.details.kind=="chatwith" or UI.details.kind=="chatnew" or UI.details.kind=="chatsettings")) then
+        local first=ns.ChatConversations()[1]
+        if first then Open("chatwith","w:"..first.who) end
+      end
+    end,
+    tools=function(bar)
+      bar:Add(E.Btn(bar,"New message",100,22,"accent"),"right",function() Open("chatnew","new") end,
+        "Start a whisper to a guildmate")
+      bar:Add(E.Btn(bar,"Chat settings",100,22),"right",function() Open("chatsettings","all") end,
+        "What to keep, showing the last hour after a reload, and clearing saved chat")
+    end,
+    rows=function(g,q)
+      local out={}
+      for _,ch in ipairs({"guild","officer"}) do
+        if ns.ChatKeep(ch) then
+          local log=ns.ChatLog(ch); local e=log[#log]
+          if E.Match(q,ns.CHAT_CHANNELS[ch].label,e and e.msg) then
+            out[#out+1]={key="chat:"..ch,title=ns.CHAT_CHANNELS[ch].label,
+              icon=ch=="guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03",
+              sub=e and ((ns.Short and ns.Short(e.who) or e.who)..": "..e.msg) or "Nothing yet",right=e and ns.ChatAgo(e.t) or "",
+              onClick=function() Open("chatwith",ch) end}
+          end
+        end
+      end
+      for _,c in ipairs(ns.ChatConversations()) do
+        local e=c.last
+        local short=ns.Short and ns.Short(c.who) or c.who
+        if E.Match(q,c.who,e.msg) then
+          out[#out+1]={key="chat:w:"..c.who,title=short..(c.unread>0 and (" |cff4ade80("..c.unread.." new)|r") or ""),
+            icon=(ns.roster[short] and ns.ClassIcon(ns.roster[short].classFile)) or "Interface\\Icons\\INV_Letter_15",
+            dot=(ns.roster[short] or {}).online,
+            sub=(e.out and "You: " or "")..e.msg,right=ns.ChatAgo(e.t),
+            onClick=function() Open("chatwith","w:"..c.who) end,
+            onRightClick=function(self) if ns.GuildmateMenu and ns.roster[short] then ns.GuildmateMenu(self,short) end end}
+        end
+      end
+      return out
+    end,
+    empty="No conversations yet. Whispers show up here as they come in, or click New message.",
+    init=nil,
+    footer=function() return "Saved on this PC only, for this character, and never shared with the guild. Keeps the last week." end,
+  }
+  ns.ChatView=views.chat
   UI.state.quests={}
   views.quests={
     label="Quests",

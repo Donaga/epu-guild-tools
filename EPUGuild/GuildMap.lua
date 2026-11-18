@@ -477,7 +477,14 @@ function ns.LogChat(channel, who, msg, out)
     for i = 1, #log - drop do log[i] = log[i + drop] end
     for i = #log, #log - drop + 1, -1 do log[i] = nil end
   end
-  if ns.UI and ns.UI.details and ns.UI.details.kind == "chathistory" and ns.UI.details:IsShown() then ns.Changed() end
+  local UI = ns.UI
+  if UI and UI:IsShown() then
+    if UI.view == "chat" then ns.Changed() end
+    local d = UI.details
+    if d and d:IsShown() and d.kind == "chatwith" and (d.key == channel or d.key == "w:" .. who) then
+      ns.Debounce("chatThread", 0.2, function() if d.kind == "chatwith" then UI:FillDetails() end end)
+    end
+  end
 end
 function ns.ChatLog(channel)
   local c = ChatDB()
@@ -551,69 +558,155 @@ end)
 function ns.ShowChatHistory(channel)
   local UI = ns.UI
   UI:Show()
-  UI:OpenDetails("chathistory", channel or (UI.details.kind == "chathistory" and UI.details.key) or "whisper")
+  UI:CloseDetails()
+  if channel == "guild" or channel == "officer" then UI:SetView("chat"); return UI:OpenDetails("chatwith", channel) end
+  local v = ns.ChatView
+  if v and v.onSelect then v.onSelect() else UI:SetView("chat") end
 end
-local function FillChatHistory(det, channel)
-  if channel == "officer" and not CanOfficerChat() then channel = "whisper" end
+ns.CHAT_CHANNELS, ns.CHAT_ORDER = CHANNELS, CHANNEL_ORDER
+ns.ChatDB = ChatDB
+function ns.ChatUnread()
   local c = ChatDB()
-  det:Reset("Interface\\Icons\\INV_Letter_15", nil, "Chat history", "Saved on this PC only and never shared with the guild.")
-  local tabs = {}
-  for _, k in ipairs(CHANNEL_ORDER) do
-    if k ~= "officer" or CanOfficerChat() then
-      tabs[#tabs + 1] = { CHANNELS[k].label, function() ns.ShowChatHistory(k) end, on = k == channel }
-    end
-  end
-  det:Buttons(tabs)
-  local keep = ns.ChatKeep(channel)
-  det:Buttons({ { (keep and "[x] " or "[ ] ") .. "Keep " .. CHANNELS[channel].label:lower(), function()
-      ns.SetChatKeep(channel, not keep); ns.ShowChatHistory(channel)
-    end, tip = "Saves new lines on this PC so they survive a reload or logging out." },
-    { (c.chatkeep.replay ~= false and "[x] " or "[ ] ") .. "Show the last hour after a reload", function()
-      c.chatkeep.replay = c.chatkeep.replay == false; ns.ShowChatHistory(channel)
-    end, tip = "Puts the last hour back into your chat windows after /reload or logging in." } })
-  local log = c.chatlog[channel]
-  if channel == "whisper" then
-    local seen, people = {}, {}
-    for i = #log, 1, -1 do
-      local who = log[i].who
-      if not seen[who] then seen[who] = true; people[#people + 1] = who end
-      if #people >= 6 then break end
-    end
-    if #people > 0 then
-      det:Section("Whisper back")
-      local row = {}
-      for _, who in ipairs(people) do
-        row[#row + 1] = { ns.Short and ns.Short(who) or who, function()
-          if ChatFrame_SendTell then ChatFrame_SendTell(who) elseif ChatFrame_OpenChat then ChatFrame_OpenChat("/w " .. who .. " ") end
-        end, tip = "Start a whisper to " .. who }
-        if #row == 3 then det:Buttons(row); row = {} end
-      end
-      if #row > 0 then det:Buttons(row) end
-    end
-  end
-  det:Section(#log > 0 and ("Latest " .. CHANNELS[channel].label:lower()) or CHANNELS[channel].label)
-  if #log == 0 then
-    det:Text(keep and "Nothing saved yet. New lines appear here as they come in."
-      or "Not being kept. Tick Keep above to start saving.")
-  end
-  local lastDay
-  for i = #log, math.max(1, #log - 59), -1 do
+  if not c then return 0 end
+  local seen, n = c.chatSeenAt or 0, 0
+  local log = c.chatlog.whisper
+  for i = #log, 1, -1 do
     local e = log[i]
+    if (e.t or 0) <= seen then break end
+    if not e.out then n = n + 1 end
+  end
+  return n
+end
+function ns.MarkChatSeen()
+  local c = ChatDB()
+  if c then c.chatSeenAt = time() end
+end
+-- One row per person you whispered with, newest conversation first.
+function ns.ChatConversations()
+  local log, seen, out = ns.ChatLog("whisper"), {}, {}
+  local since = (ChatDB() or {}).chatSeenAt or 0
+  for i = #log, 1, -1 do
+    local e = log[i]
+    local c = seen[e.who]
+    if not c then
+      c = { who = e.who, last = e, n = 0, unread = 0 }
+      seen[e.who] = c; out[#out + 1] = c
+    end
+    c.n = c.n + 1
+    if not e.out and (e.t or 0) > since then c.unread = c.unread + 1 end
+  end
+  return out
+end
+local function Ago(t)
+  local d = time() - (t or 0)
+  if d < 60 then return "just now" end
+  if d < 3600 then return math.floor(d / 60) .. "m ago" end
+  if d < 86400 then return math.floor(d / 3600) .. "h ago" end
+  return math.floor(d / 86400) .. "d ago"
+end
+ns.ChatAgo = Ago
+-- One conversation in the side panel: the thread, newest at the bottom, and a
+-- reply box. key is "w:<name>" for whispers, or "guild" / "officer".
+local function Send(key, text)
+  if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
+  text = text:sub(1, 255)
+  if key == "guild" then SendChatMessage(text, "GUILD")
+  elseif key == "officer" then SendChatMessage(text, "OFFICER")
+  else SendChatMessage(text, "WHISPER", nil, key:sub(3)) end
+  return true
+end
+local function FillChatWith(det, key)
+  local UI = ns.UI
+  if key ~= "guild" and key ~= "officer" and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
+  if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
+  local channel = key:sub(1, 2) == "w:" and "whisper" or key
+  local who = channel == "whisper" and key:sub(3) or nil
+  local short = who and (ns.Short and ns.Short(who) or who)
+  local title = who and short or CHANNELS[channel].label
+  local member = who and ns.roster[short]
+  det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
+      or (channel == "guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03"),
+    nil, title, who and (member and ((member.online and "Online" or "Offline") .. (member.zone and member.online and (" · " .. member.zone) or "")
+      .. " · level " .. (member.level or "?")) or "Whispers") or "Saved on this PC")
+  if who then
+    det:Buttons({ { "Invite", function() local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit; if invite then invite(who) end end },
+      member and ns.GuildmateMenu and { "More", function(self) ns.GuildmateMenu(self, short) end } or nil })
+  end
+  local log, lines, lastDay = ns.ChatLog(channel), {}, nil
+  for i = #log, 1, -1 do
+    if not who or log[i].who == who then lines[#lines + 1] = log[i] end
+    if #lines >= 60 then break end
+  end
+  if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
+  for i = #lines, 1, -1 do
+    local e = lines[i]
     local day = date("%A %d %B", e.t)
     if day ~= lastDay then det:Text("|cfff2c14e" .. day .. "|r"); lastDay = day end
-    local line = FormatLine(channel, e):gsub("|Hplayer:[^|]*|h", "")
-    line = line:gsub("|h", "")
-    det:Text(line)
+    local speaker = e.out and "|cff9fb4c8You|r" or ("|cffffffff" .. (ns.Short and ns.Short(e.who) or e.who) .. "|r")
+    local color = channel == "whisper" and (e.out and "|cffd9b3ff" or "|cffff80ff") or (channel == "guild" and "|cff40ff40" or "|cff40c040")
+    det:Text("|cff888888" .. date("%H:%M", e.t) .. "|r  " .. speaker .. "\n" .. color .. e.msg .. "|r")
   end
-  if #log > 0 then
-    det:Buttons({ { "Clear " .. CHANNELS[channel].label:lower(), function()
-      wipe(c.chatlog[channel]); ns.ShowChatHistory(channel)
-    end, tip = "Deletes the saved lines for this channel from this PC." } })
+  det:Section(who and ("Reply to " .. short) or ("Say in " .. CHANNELS[channel].label:lower()))
+  local box = det:Field("Message", "", 260)
+  local function Go()
+    if Send(key, box:GetText()) then
+      box:SetText("")
+      C_Timer.After(0.3, function() if UI.details.kind == "chatwith" and UI.details.key == key then UI:FillDetails() end end)
+    end
   end
+  box.onEnter = Go
+  det:Buttons({ { "Send", Go, accent = true, tip = "Or press Enter" } })
+  if channel == "whisper" then ns.MarkChatSeen() end
+  return true
+end
+local function FillChatNew(det)
+  det:Reset("Interface\\Icons\\INV_Letter_15", nil, "New message", "Whisper a guildmate")
+  local online = {}
+  for name, r in pairs(ns.roster) do if r.online and name ~= ns.me then online[#online + 1] = name end end
+  table.sort(online)
+  local box = det:Field("To", "", 160)
+  local function Start(name)
+    name = ns.Member and ns.Member(name) or name
+    if not name or name == "" then return ns.Print("Type a character name.") end
+    ns.UI:OpenDetails("chatwith", "w:" .. name)
+  end
+  box.onEnter = function() Start(box:GetText()) end
+  det:Buttons({ { "Start", function() Start(box:GetText()) end, accent = true } })
+  if #online > 0 then
+    det:Section("Online guildmates")
+    local row = {}
+    for i, name in ipairs(online) do
+      if i > 30 then break end
+      row[#row + 1] = { ns.Short and ns.Short(name) or name, function() Start(name) end }
+      if #row == 3 then det:Buttons(row); row = {} end
+    end
+    if #row > 0 then det:Buttons(row) end
+  end
+  return true
+end
+local function FillChatSettings(det)
+  local c = ChatDB()
+  local UI = ns.UI
+  det:Reset("Interface\\Icons\\INV_Misc_Gear_01", nil, "Chat settings", "Saved on this PC only and never shared with the guild")
+  for _, k in ipairs(CHANNEL_ORDER) do
+    if k ~= "officer" or CanOfficerChat() then
+      local keep = ns.ChatKeep(k)
+      det:Buttons({ { (keep and "[x] " or "[ ] ") .. "Keep " .. CHANNELS[k].label:lower(), function()
+          ns.SetChatKeep(k, not keep); UI:FillDetails(); UI:Refresh() end },
+        #c.chatlog[k] > 0 and { "Clear", function() wipe(c.chatlog[k]); UI:FillDetails(); UI:Refresh() end,
+          tip = "Delete saved " .. CHANNELS[k].label:lower() .. " from this PC" } or nil })
+    end
+  end
+  det:Buttons({ { (c.chatkeep.replay ~= false and "[x] " or "[ ] ") .. "Show the last hour after a reload", function()
+    c.chatkeep.replay = c.chatkeep.replay == false; UI:FillDetails() end } })
+  det:Text("Whispers are kept by default. Battle.net whispers aren't kept, and messages the game hides in combat are saved as a placeholder.", nil)
   return true
 end
 local fillBefore = ns.FillCommunityDetails
 ns.FillCommunityDetails = function(kind, key, det)
-  if kind == "chathistory" then return FillChatHistory(det, key) end
+  if kind == "chatwith" then return FillChatWith(det, key) end
+  if kind == "chatnew" then return FillChatNew(det) end
+  if kind == "chatsettings" then return FillChatSettings(det) end
+  if kind == "chathistory" then ns.ShowChatHistory(key); return true end
   return fillBefore(kind, key, det)
 end
