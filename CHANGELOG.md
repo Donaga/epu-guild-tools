@@ -2,7 +2,7 @@
 
 ## 0.28.4
 
-- **Search your chat history.** On the Chat page, type in the search box at the top (two letters or more) to find every saved message that matches, in whispers and in the guild, officer, party and raid chat you keep, newest first. It matches what was said and who said it. Click a result to open that conversation at that point: the hour either side of the message, with your search words marked. **Show the latest** goes back to the newest messages.
+- **Search your chat history.** On the Chat page, type in the search box at the top (two letters or more) to find every saved message that matches, in whispers and in the guild, officer, party and raid chat you keep, newest first. It matches what was said and who said it. Click a result to open that conversation at that point: the hour either side of the message, with your search words marked. **Show the latest** goes back to the newest messages. The pop-out chat window has it too: click **Find** in its title bar (in a per-person window it searches that conversation).
 
 ## 0.28.3
 

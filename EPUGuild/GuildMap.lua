@@ -1609,6 +1609,14 @@ function ns.SearchChat(q, max)
   while #found > max do table.remove(found) end
   return found
 end
+-- the hour either side of a moment in a conversation (newest first)
+function ns.ChatLinesAround(key, t)
+  local out = {}
+  for _, e in ipairs(ThreadLines(key, 2000)) do
+    if math.abs((e.t or 0) - t) <= 3600 and #out < 120 then out[#out + 1] = e end
+  end
+  return out
+end
 -- open a conversation at a search result (nil: back to the latest)
 function ns.ChatFocus(key, t, q)
   chatFocus = key and { key = ThreadKey(key), t = t, q = (q or ""):lower() } or nil
@@ -1625,13 +1633,7 @@ local function FillChatWith(det, key)
   -- opened from a search result: the hour either side of that message
   local focus = chatFocus
   if focus and focus.key ~= key then chatFocus, focus = nil, nil end
-  if focus then
-    local all = ThreadLines(key, 2000)
-    lines = {}
-    for _, e in ipairs(all) do
-      if math.abs((e.t or 0) - focus.t) <= 3600 and #lines < 120 then lines[#lines + 1] = e end
-    end
-  end
+  if focus then lines = ns.ChatLinesAround(key, focus.t) end
   local short = who and (ns.Short and ns.Short(who) or who)
   local member = who and ns.roster[short]
   det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
@@ -1775,7 +1777,7 @@ local function BuildWindow(id)
       return
     end
     K.OpenMenu(self, ConversationItems(), MState().key, function(v)
-      if v then MState().key = v; f:Update() end
+      if v then MState().key = v; f.searching, f.focus = false, nil; f:Update() end
     end)
   end)
   f.close = K.Btn(bar, "x", 22, 20)
@@ -1793,8 +1795,16 @@ local function BuildWindow(id)
     local key = f:Key()
     if key then ns.ShowCopy(ns.ChatConversationText(key, "plain"), f.pick.text:GetText(), key) end
   end)
+  f.findBtn = K.Btn(bar, "Find", 40, 20)
+  f.findBtn:SetPoint("RIGHT", f.copy, "LEFT", -3, 0)
+  f.findBtn.tip = single and "Search this conversation" or "Search all your saved chat"
+  f.findBtn:SetScript("OnClick", function()
+    f.searching, f.focus = not f.searching, nil
+    f:Update()
+    if f.searching then f.find:SetFocus() end
+  end)
   f.full = K.Btn(bar, "Open", 44, 20)
-  f.full:SetPoint("RIGHT", f.copy, "LEFT", -3, 0)
+  f.full:SetPoint("RIGHT", f.findBtn, "LEFT", -3, 0)
   f.full.tip = "Open the Chat page"
   f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
   f.body = CreateFrame("Frame", nil, f)
@@ -1820,6 +1830,11 @@ local function BuildWindow(id)
   f.box.onEnter = Go
   f.box.onChange = function(self) local key = f:Key(); if key then ns.ChatTypingPing(key, self:GetText()) end end
   f.send:SetScript("OnClick", Go)
+  f.find = K.Box(f.body, 200, single and "Search this conversation" or "Search chat (2+ letters)")
+  f.find:SetPoint("TOPLEFT", 10, top)
+  f.find:SetPoint("TOPRIGHT", -10, top)
+  f.find:Hide()
+  f.find.onChange = function() f.focus = nil; f:Update() end
   f.scroll = CreateFrame("ScrollFrame", nil, f.body)
   f.scroll:SetPoint("TOPLEFT", 12, top - 32)
   f.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
@@ -1834,6 +1849,20 @@ local function BuildWindow(id)
   if f.child.SetHyperlinksEnabled then
     f.child:SetHyperlinksEnabled(true)
     f.child:SetScript("OnHyperlinkClick", function(self, link, text, button)
+      local find = type(link) == "string" and link:match("^epufind:(%w+)")
+      if find then
+        if find == "back" then f.focus = nil
+        elseif find == "latest" then f.focus, f.searching = nil, false; f.find:SetText("")
+        else
+          local h = f.hits and f.hits[tonumber(find)]
+          if h then
+            f.focus = { key = h.key, t = h.e.t, q = f.query }
+            if not single then MState().key = h.key end
+          end
+        end
+        f.scroll:SetVerticalScroll(0)
+        return f:Update()
+      end
       ns.ChatLinkClick(self, link, text, button, function(name)
         if single then return ns.OpenMessenger("w:" .. name) end
         MState().key = "w:" .. name; f:Update()
@@ -1875,7 +1904,7 @@ local function BuildWindow(id)
     local w = math.max(200, (self:GetWidth() or 340) - 30)
     self.child:SetWidth(w)
     self.text:SetWidth(w - 6)
-    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 44 - 12))
+    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 12))
     self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
   end
   function f:Update()
@@ -1902,15 +1931,44 @@ local function BuildWindow(id)
     self:SetHeight(st.h or (single and 300 or 400))
     local out = {}
     self.child.blockPlain = {}
-    if key then
+    local q = self.searching and (self.find:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "") or ""
+    self.query = q
+    local empty = "|cff888888No messages yet. Type above to start.|r"
+    if self.searching and self.focus then
+      local fkey = self.focus.key
+      local lines, channel = ns.ChatLinesAround(fkey, self.focus.t), ThreadKey(fkey):sub(1, 2) == "w:" and "whisper" or ThreadKey(fkey)
+      out[1] = "|cff888888" .. date("%a %d %b %H:%M", self.focus.t) .. " · an hour either side|r   |cff66b8ff|Hepufind:back|h< Results|h|r   |cff66b8ff|Hepufind:latest|hShow the latest|h|r"
+      for _, b in ipairs(ThreadBlocks(channel, lines, self.child.blockPlain, self.focus.q)) do out[#out + 1] = b end
+    elseif self.searching then
+      self.hits = {}
+      if #q >= 2 then
+        for _, h in ipairs(ns.SearchChat(q, single and 1000 or 80)) do
+          if not single or ThreadKey(h.key) == id then self.hits[#self.hits + 1] = h end
+          if #self.hits >= 80 then break end
+        end
+      end
+      for i, h in ipairs(self.hits) do
+        local e = h.e
+        local who = e.out and "You" or (ns.Short and ns.Short(e.who) or e.who)
+        local where = h.channel == "whisper" and (e.out and ("You to " .. (ns.Short and ns.Short(e.who) or e.who)) or who)
+          or ("[" .. (CHANNELS[h.channel].short or h.channel) .. "] " .. who)
+        local color = ChatColor(h.channel, e.out, e.who)
+        out[#out + 1] = "|cff888888" .. date("%d %b %H:%M", e.t) .. "|r  |Hepufind:" .. i .. "|h|cffffffff" .. where .. ":|r " .. color
+          .. Highlight(PlainText(e.msg), q, color) .. "|r|h"
+      end
+      empty = #q < 2 and "|cff888888Type at least two letters to search" .. (single and " this conversation." or " whispers and the chat you keep.") .. "|r"
+        or "|cff888888Nothing found.|r"
+    elseif key then
       local lines, channel = ThreadLines(key, 100)
       out = ThreadBlocks(channel, lines, self.child.blockPlain)
       ns.MarkChatSeen(key)
     end
     ApplyFont(self.text)
     if self.box.SetFont then ApplyFont(self.box) end
-    self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Type above to start.|r")
-    self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
+    self.text:SetText(#out > 0 and table.concat(out, self.searching and not self.focus and "\n" or "\n\n") or empty)
+    self.box:SetShown(key ~= nil and not self.searching); self.send:SetShown(key ~= nil and not self.searching)
+    self.find:SetShown(self.searching and true or false)
+    self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
@@ -1938,6 +1996,7 @@ local function BuildWindow(id)
       b:SetOn(on and true or false)
       b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key].label .. ": read and reply here")
       b:SetScript("OnClick", function()
+        self.searching, self.focus = false, nil
         if t.key == "tells" then
           local first = ns.ChatConversations()[1]
           st.key = st.lastWhisper or (first and ("w:" .. first.who)) or st.key

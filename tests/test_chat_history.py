@@ -288,5 +288,16 @@ txt = A.ev('(function() local t={} for _,f in ipairs(__ns.UI.details.pools.text 
 check('a result opens that conversation around that message, with the words marked',
       '|cffffffffCopper|r' in txt and 'an hour either side' in txt)
 A.ex('__ns.ChatFocus(nil)')
+# search in the pop-out window
+A.ex('__ns.ChatOptions().windows="tabs"; __ns.OpenMessenger("guild"); EPUGuildMessenger.findBtn:GetScript("OnClick")(EPUGuildMessenger.findBtn)')
+check('the pop-out has a Find box', A.ev('EPUGuildMessenger.find:IsShown()') is True and A.ev('EPUGuildMessenger.box:IsShown()') is False)
+A.ex('EPUGuildMessenger.find:SetText("copper"); EPUGuildMessenger.find.onChange()')
+pt = A.ev('EPUGuildMessenger.text:GetText()')
+check('it lists matches from all saved chat', 'the |cffffffffCOPPER|r' in pt and 'anyone selling |cffffffffCopper|r' in pt and pt.count('|Hepufind:') == 3)
+A.ex('EPUGuildMessenger.child:GetScript("OnHyperlinkClick")(EPUGuildMessenger.child, "epufind:1", "", "LeftButton")')
+pt = A.ev('EPUGuildMessenger.text:GetText()')
+check('clicking one opens that conversation around it', A.ev('__ns.ChatDB().messenger.key') == 'w:Pip Baker' and 'an hour either side' in pt and '|cffffffffCOPPER|r' in pt)
+A.ex('EPUGuildMessenger.child:GetScript("OnHyperlinkClick")(EPUGuildMessenger.child, "epufind:latest", "", "LeftButton")')
+check('Show the latest closes the search', A.ev('EPUGuildMessenger.find:IsShown()') is False and A.ev('EPUGuildMessenger.box:IsShown()') is True)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)
