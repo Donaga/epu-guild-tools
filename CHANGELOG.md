@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.28.5
+
+- **Moving the bank alt's stock into the guild bank isn't counted as donations.** When a bank alt (current or retired) deposits items or gold into the guild bank, EPU no longer logs each stack as a donation, so there are no News shout-outs and no Discord thank-yous for the guild's own stock. Members' deposits still count as before. The officer who opens the bank sees one chat line saying how many deposits were the guild's own stock.
+- The same goes for mail and trades from one bank character to another: they aren't logged as donations.
+- Officers and bank managers need 0.28.5 for this, since they're the ones who turn the guild bank log into donation records.
+
 ## 0.28.4
 
 - **Search your chat history.** On the Chat page, type in the search box at the top (two letters or more) to find every saved message that matches, in whispers and in the guild, officer, party and raid chat you keep, newest first. It matches what was said and who said it. Click a result to open that conversation at that point: the hour either side of the message, with your search words marked. **Show the latest** goes back to the newest messages. The pop-out chat window has it too: click **Find** in its title bar (in a per-person window it searches that conversation).

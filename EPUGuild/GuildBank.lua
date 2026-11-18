@@ -7,6 +7,7 @@ local GB_KEY = "Guild Bank"
 ns.GB_KEY = GB_KEY
 
 local isOpen = false
+local movedNoted = 0   -- bank-character deposits already mentioned since login
 local loaded, pendingTab, queryQueue = {}, nil, {}
 local QueryNext
 local SLOTS = MAX_GUILDBANK_SLOTS_PER_TAB or 98
@@ -81,6 +82,8 @@ end
 -- Deposit log -> donations. Log times are relative ("3 hours ago"), so a
 -- deposit matches an existing record if who/what/how much agree and the
 -- times are within 3 hours of each other.
+-- Deposits by bank characters (Donlock moving the guild's stock in, say) are
+-- the guild's own items changing places, so they are never donations.
 ---------------------------------------------------------------------------
 local function LogTime(y, mo, d, h)
   return ns.Now() - ((y or 0) * 365 + (mo or 0) * 30 + (d or 0)) * 86400 - (h or 0) * 3600
@@ -91,14 +94,16 @@ function ns.ParseGuildBankLogs()
   local g = ns.G()
   if not g then return end
 
-  local entries = {}
+  local entries, moved = {}, 0
   for tab = 1, NumTabs() do
     if Viewable(tab) and GetNumGuildBankTransactions then
       for i = 1, (GetNumGuildBankTransactions(tab) or 0) do
         local kind, who, link, count, _, _, y, mo, d, h = GetGuildBankTransaction(tab, i)
         local id = ns.ItemID(link)
         who = ns.Member(who) or ns.Short(who)
-        if kind == "deposit" and id and who then
+        if kind == "deposit" and id and who and ns.IsBankCharacter(who) then
+          moved = moved + 1
+        elseif kind == "deposit" and id and who then
           entries[#entries + 1] = { who = who, item = id, n = tonumber(count) or 1, money = 0, t = LogTime(y, mo, d, h) }
         end
       end
@@ -108,7 +113,9 @@ function ns.ParseGuildBankLogs()
     for i = 1, (GetNumGuildBankMoneyTransactions() or 0) do
       local kind, who, amount, y, mo, d, h = GetGuildBankMoneyTransaction(i)
       who = ns.Member(who) or ns.Short(who)
-      if kind == "deposit" and who and (tonumber(amount) or 0) > 0 then
+      if kind == "deposit" and who and (tonumber(amount) or 0) > 0 and ns.IsBankCharacter(who) then
+        moved = moved + 1
+      elseif kind == "deposit" and who and (tonumber(amount) or 0) > 0 then
         entries[#entries + 1] = { who = who, n = 0, money = tonumber(amount), t = LogTime(y, mo, d, h) }
       end
     end
@@ -133,6 +140,11 @@ function ns.ParseGuildBankLogs()
   end
   for _, e in ipairs(entries) do
     if not Known(e) then ns.AddDonation(e.who, e.item, e.n, e.money, GB_KEY, e.t) end
+  end
+  if moved > movedNoted then
+    movedNoted = moved
+    ns.Print(moved .. (moved == 1 and " deposit" or " deposits") .. " by bank characters in the guild bank log " .. (moved == 1 and "is" or "are")
+      .. " the guild's own stock, so " .. (moved == 1 and "it isn't" or "they aren't") .. " counted as donations.")
   end
 end
 
