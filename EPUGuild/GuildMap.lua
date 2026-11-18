@@ -935,6 +935,7 @@ local function Opt()
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
   if o.typing == nil then o.typing = true end
+  if o.lineTimes == nil then o.lineTimes = true end     -- time on every message
   return o
 end
 ns.ChatOptions = Opt
