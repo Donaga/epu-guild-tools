@@ -206,6 +206,8 @@ check('action counts include officer bank work and only my craft requests',A.ev(
   local a=__ns.GetBubbleActions(__ns.G(),__ns.CommunityState())
   return #a.fulfill==1 and #a.review==1 and #a.respond==1 and a.respond[1]=='craft'
 end)()"""))
+A.ex('__ns.UI:Show(); EPUGuildEventBubble:Click()')
+check('clicking the floating button again closes the window',not A.ev('__ns.UI:IsShown()'))
 A.ex('EPUGuildEventBubble:Click()')
 check('floating button opens the attention list when work exists',A.ev("__ns.UI.details.kind=='bubbleactions'"))
 A.ex("__click('Open bank fulfillment')")

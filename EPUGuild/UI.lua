@@ -1090,6 +1090,7 @@ det.used = { text = 0, box = 0, btn = 0, label = 0, rule = 0, progress = 0 }
 
 function det:Reset(icon, quality, titleText, subtitle, iconCoords)
   self.casualDraft=nil
+  self.textFont=nil
   for k in pairs(self.used) do
     for i = 1, #self.pools[k] do self.pools[k][i]:Hide() end
     self.used[k] = 0
@@ -1155,6 +1156,15 @@ function det:Text(str, color)
   fs:SetHeight(0)
   fs:SetWordWrap(true); fs:SetNonSpaceWrap(true); fs:SetJustifyV("TOP")
   fs:SetWidth(self.panelWidth - 24)
+  -- a panel can ask for its own reading font (Chat does); others get the default
+  local tf = self.textFont
+  if tf then
+    if fs:SetFont(tf[1], tf[2], tf[3] or "") == false then fs:SetFont(fallbackFont, tf[2], tf[3] or "") end
+    fs.epuCustomFont = true
+  elseif fs.epuCustomFont then
+    if fs:SetFont(FONT, 11, "") == false then fs:SetFont(fallbackFont, 11, "") end
+    fs.epuCustomFont = nil
+  end
   fs:SetText(str)
   SetColor(fs, color or C.text)
   local height=math.max(14,math.ceil(fs:GetStringHeight() or 14))
@@ -1289,7 +1299,7 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "activities", "roster", "quests", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
   {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
@@ -2327,7 +2337,8 @@ Views.onboarding = {
   empty="No checklist matches.",footer=function() return "Members complete their own steps; officers confirm Discord, mentors and starter supplies." end,
 }
 
-if ns.InstallCasualViews then ns.InstallCasualViews(Views,{Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI}) end
+ns.UIKit={FONT=FONT,FallbackFont=fallbackFont,Btn=Btn,Match=Match,C=C,OpenMenu=OpenMenu,UI=UI,Box=Box,Font=Font,Tex=Tex,SetColor=SetColor,AddDropdownArrow=AddDropdownArrow,TextWidth=TextWidth}
+if ns.InstallCasualViews then ns.InstallCasualViews(Views,ns.UIKit) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
 Views.home = {
@@ -4120,6 +4131,7 @@ do
       activities="Find or start a group, request a dungeon run, see events.",
       roster="Who's online, where they are, their level and layer.",
       quests="Your quests and which guildmates are on them, plus who is questing near you.",
+      chat="Your whispers (and guild or officer chat if you keep it), saved so a reload doesn't wipe them.",
       bank="Everything the guild bank holds. Click an item to request it.",
       requests="Item requests from guildmates and where each one stands.",
       needs="Items the bank is collecting, with how many are still wanted.",
@@ -4286,7 +4298,9 @@ function UI:Layout()
   listArea:ClearAllPoints()
   listArea:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT")
   local compact = det:IsShown() and mainWidth < 650
-  det.panelWidth = compact and mainWidth or DETAILS_W
+  -- some pages (Chat) give the side panel most of the room
+  local detW = (v and v.detailsWide) and math.max(DETAILS_W, math.min(math.floor(mainWidth * 0.64), mainWidth - 230)) or DETAILS_W
+  det.panelWidth = compact and mainWidth or detW
   det:SetWidth(det.panelWidth)
   det.body:SetWidth(det.panelWidth-6)
   det.title:SetWidth(det.panelWidth-105)
@@ -4294,7 +4308,7 @@ function UI:Layout()
   local showList = v and not v.custom and self.view ~= "market" and not compact
   scroll:SetShown(showList == true)
   if det:IsShown() and not compact then
-    listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT", -DETAILS_W, 0)
+    listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT", -detW, 0)
   else
     listArea:SetPoint("BOTTOMRIGHT", composer, "TOPRIGHT")
   end
@@ -4402,6 +4416,8 @@ function UI:Refresh()
   local tabWidth = math.min(108, math.floor((self:GetWidth()-SIDEBAR_W-16)/math.max(1,tabs)))
   local tabX, subY = 7, -12
   local step = math.min(51, math.floor((self:GetHeight() - HEADER_H - 76) / nVisible))
+  -- a short window shows sidebar icons only; hovering still names each page
+  local compact = step < 38
   for _, key in ipairs(ORDER) do
     local b, v = self.nav[key], Views[key]
     local group = groupFor[key]
@@ -4415,6 +4431,7 @@ function UI:Refresh()
     if group and group[1] == key then
       local button = group.button
       button:SetHeight(step - 2)
+      button.text:SetShown(not compact)
       button:ClearAllPoints(); button:SetPoint("TOPLEFT", 6, y); y = y - step
       button:SetOn(active == group)
     end
@@ -4428,6 +4445,7 @@ function UI:Refresh()
         b.badge:ClearAllPoints()
         b.icon:SetSize(self.wideNav and 18 or 14,self.wideNav and 18 or 14)
         b.icon:Show()
+        b.label:Show()
         if self.wideNav then
           b:SetSize(SUBNAV_W-16,34)
           b:SetPoint("TOPLEFT",8,subY)
@@ -4450,6 +4468,7 @@ function UI:Refresh()
         SetColor(b.label,selected and C.gold or C.muted)
       else
         b:SetHeight(step-2)
+        b.label:SetShown(not compact)
         b:SetPoint("TOPLEFT",6,y)
         y=y-step
       end

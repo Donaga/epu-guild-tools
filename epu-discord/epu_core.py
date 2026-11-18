@@ -210,11 +210,53 @@ def safe_replace(tmp: str, path: str) -> None:
         raise last
 
 
-def write_inbox(path: str, entries: list) -> None:
+# ---------------------------------------------------------------------------
+# Guild chat from the Discord channel linked to the game (#in-game-chat)
+# ---------------------------------------------------------------------------
+INGAME_CHAT_HOURS = 24
+INGAME_CHAT_MAX = 300
+
+
+def channel_matches(name: str, wanted: str) -> bool:
+    """'🖥️in-game-chat' matches 'in-game-chat' (emoji and symbols ignored)."""
+    clean = lambda x: re.sub(r"[^a-z0-9-]", "", (x or "").lower())
+    return bool(clean(wanted)) and clean(name) == clean(wanted)
+
+
+def ingame_chat_line(msg_id, created: float, who: str, text: str, chars=None, from_game=False, guild=None) -> dict | None:
+    """One Discord message as a guild chat line for the addon, or None if there's no text."""
+    text = " ".join((text or "").split())[:255]
+    who = (who or "").strip()[:48]
+    if not text or not who:
+        return None
+    line = {"id": str(msg_id)[:32], "t": int(created), "who": who, "msg": text}
+    chars = [c for c in (chars or []) if isinstance(c, str) and c][:12]
+    if chars:
+        line["chars"] = chars
+    if from_game:
+        line["game"] = True
+    if guild:
+        line["guild"] = guild
+    return line
+
+
+def ingame_chat_list(lines: dict, now: float | None = None) -> list:
+    """The last day of lines, oldest first; drops older ones from `lines`."""
+    now = time.time() if now is None else now
+    for k in [k for k, v in lines.items() if v["t"] < now - INGAME_CHAT_HOURS * 3600]:
+        del lines[k]
+    out = sorted(lines.values(), key=lambda v: (v["t"], v["id"]))
+    return out[-INGAME_CHAT_MAX:]
+
+
+def write_inbox(path: str, entries: list, chat: list | None = None) -> None:
     lock = os.path.join(os.path.dirname(os.path.dirname(path)), ".EPUGuild-update.lock")
     if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 600:
         raise BlockingIOError("The addon updater is installing EPU; queued actions will retry shortly.")
     text = INBOX_HEADER + "EPUGuildInbox = " + lua_value(entries) + "\n"
+    if chat is not None:
+        text += "-- the last day of the guild's linked Discord chat, added to EPU's Guild chat at login\n"
+        text += "EPUGuildDiscordChat = " + lua_value(chat) + "\n"
     if os.path.exists(path):
         with open(path, encoding="utf-8") as existing:
             if existing.read() == text:

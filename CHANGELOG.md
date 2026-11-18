@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.28.0
+
+- **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers. Newest messages are on top with the reply box above them, and the conversation gets most of the page width.
+- **Pop out:** a small chat window of its own (Chat → Pop out, or `/epu messenger`). Drag it anywhere, resize it from the corner, switch conversations from its title, and **minimize** it to a small round bubble (like the Events bubble) that you can drag anywhere; a green badge counts new whispers and the bubble flashes when one arrives. Click it to open, right-click for the Chat page. It stays where you left it, and reopens after a reload if it was open.
+- **Unread counts per conversation:** each person and guild/officer chat shows how many messages you haven't read, and opening one clears only that one. The chat bubble has two counters: green for whispers, blue for guild messages. The Chat sidebar badge counts both.
+- **Party and raid chat** are kept too (on by default; turn off in Chat settings) and pinned with guild and officer chat. You can read and reply in each.
+- **Tabs in the pop-out window:** Tells, Guild, Officer, Party and Raid, each with its unread count, so you can swap with one click. Tells goes back to the last person you were whispering.
+- **Colors follow the game's chat colors** (so they match your chat windows and any changes you made there). In Chat settings you can pick your own color for any chat, including a separate one for whispers you send, and go back to the game's colors in one click.
+- **Window choices:** tabs in one window, or **one window per person** (each whisper gets its own window; group chats stay tabbed). Optional: open a window when a whisper arrives. Windows can be dragged from anywhere that isn't a button.
+- **Clickable web links:** links in messages are blue; click one and it opens ready to copy (Ctrl+C), since WoW can't open a browser.
+- **Copy:** copy a whole conversation as plain text, Discord format or BBCode, or click a message's time to copy just those messages.
+- **Sounds and mentions:** pick a sound for each chat, and get an alert (with its own sound) when someone says your name, or any word you add, in guild, officer, party or raid chat. Whole words only.
+- **Combat:** chat windows tuck into the bubble when combat starts and come back after (can be turned off). Optional fade when the mouse is elsewhere.
+- **Alts show their main**, like "Tyler (Laurelin)", wherever EPU knows it.
+- **"typing..."** shows when a guildmate who uses EPU is writing you a whisper (can be turned off).
+- **Guild chat from while you were away:** EPU shows the guild (and, for officers, officer) chat history the game keeps on its server, the same history the Guild & Communities window shows. The game only lets addons display those older lines, not save them, so they show for the session you're in; everything said while you're online is saved as usual. Lines are matched by who said them and when, so nothing is doubled and real repeats stay. That history doesn't count as unread. Every message shows its own time (turn it off in Chat settings to show the time once per group). Because of this, keeping guild chat is now on by default (turn it off in Chat settings).
+- **Discord messages in guild chat:** messages from the guild's linked Discord channel (linked in the game's Guild & Communities window) show in EPU's Guild chat with a "Discord" tag.
+- **Guild chat you missed, from Discord (EPU Discord bot):** the bot reads the last day of the channel linked to guild chat (`#in-game-chat` by default; set `ingame_chat_channel` or `ingame_chat_channel_id` in config.json) and passes it to the game through Inbox.lua. At login or `/reload`, EPU adds the lines it didn't already have. Linked members show under their main; others under their Discord name. Lines typed in Discord keep the "Discord" tag. Update the bot too, and turn on **Message Content Intent** for it in the Discord Developer Portal if it isn't on already.
+- **Guild chat you missed, from guildmates:** when you log in, EPU asks guildmates who use it for the guild chat you missed (up to a day) and fills it in, saved like the rest. You answer them the same way. Only guild chat; officer chat is never sent. Turn it off in Chat settings.
+- **Chat is shared by all your characters on this PC:** switch characters and your whispers, party and raid chat, guild chat (per guild) and chat settings are all still there. Whispers that came to another of your characters say which one. Chat you saved per character before is moved in automatically.
+- **Readable text:** pick the chat font (EPU, the game's font, Arial Narrow, Skurri or Morpheus), make it bigger or smaller, and add an outline, in Chat settings > Text, with a preview.
+- **Guildmates coming online and going offline** show as short grey lines in Guild chat (when you keep guild chat). They don't count as unread, and can be turned off.
+- **Run requests: Morning, Afternoon and Evening buttons** set the time range in one click (thanks for the idea, Laurelin). They're in Create > Group when you pick a day, and on the run request form.
+- Using WIM too? Both would open a window for each whisper; turn one off for whispers.
+- **Per-person colors:** give anyone's whispers their own color from their conversation, and reset it in Chat settings.
+- Messages are grouped under the sender's name and time, like chat apps, with more padding in the pop-out window.
+- Left-clicking the EPU bubble now also closes the window when it is open.
+- On a short window the sidebar shows icons only; hover for the name and what each page is for.
+
 ## 0.27.2
 
 - **Bank managers.** Officers can now let a rank (or specific characters) run the bank side for the whole guild: publish bank contents, edit needs, approve and mail requests, record donations, and act as a verified sync source. Bank managers can't post announcements, write member notes, manage other people's events or use the Officer tab, and they can't add other bank managers.
