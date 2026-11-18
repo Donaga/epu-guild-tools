@@ -15,6 +15,7 @@
 - **Combat:** chat windows tuck into the bubble when combat starts and come back after (can be turned off). Optional fade when the mouse is elsewhere.
 - **Alts show their main**, like "Tyler (Laurelin)", wherever EPU knows it.
 - **"typing..."** shows when a guildmate who uses EPU is writing you a whisper (can be turned off).
+- **Chat is shared by all your characters on this PC:** switch characters and your whispers, party and raid chat, guild chat (per guild) and chat settings are all still there. Whispers that came to another of your characters say which one. Chat you saved per character before is moved in automatically.
 - **Readable text:** pick the chat font (EPU, the game's font, Arial Narrow, Skurri or Morpheus), make it bigger or smaller, and add an outline, in Chat settings > Text, with a preview.
 - **Guildmates coming online and going offline** show as short grey lines in Guild chat (when you keep guild chat). They don't count as unread, and can be turned off.
 - **Run requests: Morning, Afternoon and Evening buttons** set the time range in one click (thanks for the idea, Laurelin). They're in Create > Group when you pick a day, and on the run request form.

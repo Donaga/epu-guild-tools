@@ -443,16 +443,59 @@ local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid" }
 local GROUP_CHANNELS = { "guild", "officer", "party", "raid" }
 ns.CHAT_GROUP_CHANNELS = GROUP_CHANNELS
 
+-- Chat is shared by all characters on this account (and still only on this
+-- PC): whispers, party and raid in one place, guild and officer chat per guild.
+local MigrateChat
 local function ChatDB()
-  local c = ns.cdb
-  if not c then return nil end
+  local db = ns.db
+  if not db then return nil end
+  db.chat = db.chat or {}
+  local c = db.chat
   c.chatlog = c.chatlog or {}
+  c.guilds = c.guilds or {}
   c.chatkeep = c.chatkeep or { whisper = true, guild = false, officer = false, replay = true }
   -- party and raid chat are kept unless turned off
   if c.chatkeep.party == nil then c.chatkeep.party = true end
   if c.chatkeep.raid == nil then c.chatkeep.raid = true end
-  for _, k in ipairs(CHANNEL_ORDER) do c.chatlog[k] = c.chatlog[k] or {} end
+  for _, k in ipairs({ "whisper", "party", "raid" }) do c.chatlog[k] = c.chatlog[k] or {} end
+  if ns.cdb and ns.cdb.chatlog and MigrateChat then MigrateChat(c, ns.cdb) end
   return c
+end
+local function LogTable(c, channel)
+  if channel == "guild" or channel == "officer" then
+    local gk = (ns.GuildKey and ns.GuildKey()) or "none"
+    c.guilds[gk] = c.guilds[gk] or {}
+    c.guilds[gk][channel] = c.guilds[gk][channel] or {}
+    return c.guilds[gk][channel]
+  end
+  c.chatlog[channel] = c.chatlog[channel] or {}
+  return c.chatlog[channel]
+end
+-- One-time move of a character's chat from before 0.28 into the shared store.
+MigrateChat = function(c, cdb)
+  if not (ns.GuildKey and ns.GuildKey()) and (next(cdb.chatlog.guild or {}) or next(cdb.chatlog.officer or {})) then return end
+  for ch, lines in pairs(cdb.chatlog) do
+    if type(lines) == "table" and CHANNELS[ch] then
+      local dest = LogTable(c, ch)
+      for _, e in ipairs(lines) do
+        if type(e) == "table" and e.t then
+          e.me = e.me or (ch == "whisper" and ns.me or nil)
+          dest[#dest + 1] = e
+        end
+      end
+      table.sort(dest, function(a, b) return (a.t or 0) < (b.t or 0) end)
+      while #dest > CHAT_KEEP do table.remove(dest, 1) end
+    end
+  end
+  for k, v in pairs(cdb.chatkeep or {}) do if v == true then c.chatkeep[k] = true end end
+  if cdb.chatkeep and cdb.chatkeep.replay == false then c.chatkeep.replay = false end
+  c.chatOpts = c.chatOpts or cdb.chatOpts
+  c.chatColors = c.chatColors or cdb.chatColors
+  c.messenger = c.messenger or cdb.messenger
+  c.chatSeen = c.chatSeen or {}
+  for k, t in pairs(cdb.chatSeen or {}) do if (c.chatSeen[k] or 0) < t then c.chatSeen[k] = t end end
+  c.chatSeenAt = math.max(c.chatSeenAt or 0, cdb.chatSeenAt or 0)
+  cdb.chatlog, cdb.chatkeep, cdb.chatOpts, cdb.chatColors, cdb.messenger, cdb.chatSeen, cdb.chatSeenAt = nil
 end
 local function CanOfficerChat()
   if C_GuildInfo and C_GuildInfo.CanSpeakInOfficerChat then
@@ -482,10 +525,11 @@ function ns.LogChat(channel, who, msg, out, sys)
   who = Plain(who)
   if not who or who == "" then return end
   local text = Plain(msg) or "(the game hid this message)"
-  local log = ChatDB().chatlog[channel]
+  local log = LogTable(ChatDB(), channel)
   -- sys: "on" / "off" for a guildmate coming online or going offline; these
   -- never count as unread
-  log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys }
+  log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys,
+    me = channel == "whisper" and ns.me or nil }
   local cutoff = time() - CHAT_MAX_AGE
   local drop = 0
   while drop < #log and (#log - drop > CHAT_KEEP or (log[drop + 1].t or 0) < cutoff) do drop = drop + 1 end
@@ -505,7 +549,7 @@ function ns.LogChat(channel, who, msg, out, sys)
 end
 function ns.ChatLog(channel)
   local c = ChatDB()
-  return c and c.chatlog[channel] or {}
+  return c and LogTable(c, channel) or {}
 end
 ns.On("CHAT_MSG_WHISPER", function(msg, sender) ns.LogChat("whisper", sender, msg, false); if ns.ChatIncoming then ns.ChatIncoming("whisper", sender, msg) end end)
 ns.On("CHAT_MSG_WHISPER_INFORM", function(msg, target) ns.LogChat("whisper", target, msg, true) end)
@@ -557,7 +601,7 @@ local FALLBACK = { whisper = { 1, 0.5, 1 }, whisperOut = { 1, 0.5, 1 }, guild = 
 local function ColorKey(channel, out) return (channel == "whisper" and out) and "whisperOut" or channel end
 function ns.ChatColorRGB(channel, out, who)
   local key = ColorKey(channel, out)
-  local colors = ns.cdb and ns.cdb.chatColors
+  local colors = (ChatDB() or {}).chatColors
   -- a color picked for one person wins for their whispers to you
   local person = colors and channel == "whisper" and not out and who and colors["w:" .. who]
   if type(person) == "table" and type(person[1]) == "number" then return person[1], person[2], person[3], true end
@@ -606,7 +650,7 @@ function ns.ReplayChat()
   local since, shown = time() - REPLAY_WINDOW, 0
   for _, channel in ipairs(CHANNEL_ORDER) do
     if ns.ChatKeep(channel) then
-      local log, lines = c.chatlog[channel], {}
+      local log, lines = LogTable(c, channel), {}
       for i = #log, 1, -1 do
         local e = log[i]
         if (e.t or 0) < since or #lines >= REPLAY_LINES then break end
@@ -653,7 +697,7 @@ function ns.ChatUnreadFor(key)
   if channel ~= "whisper" and not ns.ChatKeep(channel) then return 0 end
   local who = channel == "whisper" and key:sub(3) or nil
   local seen, n = SeenAt(key), 0
-  local log = c.chatlog[channel] or {}
+  local log = LogTable(c, channel)
   for i = #log, 1, -1 do
     local e = log[i]
     if (e.t or 0) <= seen then break end
@@ -819,8 +863,8 @@ local function ThreadBlocks(channel, lines, plains)
       speaker = nil
     end
     if not speaker then
-    elseif not cur or cur.speaker ~= speaker or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
-      cur = { speaker = speaker, who = e.who, t = e.t, out = e.out, msgs = {}, plain = {} }
+    elseif not cur or cur.speaker ~= speaker or cur.me ~= e.me or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
+      cur = { speaker = speaker, who = e.who, t = e.t, out = e.out, me = e.me, msgs = {}, plain = {} }
       blocks[#blocks + 1] = cur
     end
     if speaker then
@@ -839,7 +883,8 @@ local function ThreadBlocks(channel, lines, plains)
       local name = b.out and "|cff9fb4c8You|r" or ("|cffffffff|Hplayer:" .. b.who .. "|h" .. Display(b.who) .. "|h|r")
       local stamp = plains and ("|cff888888|Hepublock:" .. n .. "|h" .. date("%H:%M", b.t) .. "|h|r") or ("|cff888888" .. date("%H:%M", b.t) .. "|r")
       -- messages inside a block are oldest first, like normal chat; blocks are newest first
-      out[#out + 1] = name .. "  " .. stamp .. "\n" .. table.concat(b.msgs, "\n")
+      local on = (b.me and b.me ~= ns.me) and ("  |cff888888on " .. b.me .. "|r") or ""
+      out[#out + 1] = name .. "  " .. stamp .. on .. "\n" .. table.concat(b.msgs, "\n")
     end
   end
   return out
@@ -1650,8 +1695,8 @@ local function FillChatSettings(det)
           Again()
         end)
       end, tip = "Play a sound when a message arrives in " .. CHANNELS[k].label:lower() }
-      if #c.chatlog[k] > 0 then
-        specs[#specs + 1] = { "Clear", function() wipe(c.chatlog[k]); Again() end,
+      if #ns.ChatLog(k) > 0 then
+        specs[#specs + 1] = { "Clear", function() wipe(ns.ChatLog(k)); Again() end,
           tip = "Delete saved " .. CHANNELS[k].label:lower() .. " from this PC" }
       end
       det:Buttons(specs)
@@ -1661,7 +1706,7 @@ local function FillChatSettings(det)
     c.chatkeep.replay = c.chatkeep.replay == false; Again() end } })
   -- people with their own color
   local people = {}
-  for k2 in pairs(ns.cdb.chatColors or {}) do if k2:sub(1, 2) == "w:" then people[#people + 1] = k2:sub(3) end end
+  for k2 in pairs(c.chatColors or {}) do if k2:sub(1, 2) == "w:" then people[#people + 1] = k2:sub(3) end end
   table.sort(people)
   if #people > 0 then
     det:Text("People with their own color:", nil)
@@ -1712,11 +1757,13 @@ local function FillChatSettings(det)
   return true
 end
 function ns.ClearPersonColor(who)
-  if ns.cdb and ns.cdb.chatColors then ns.cdb.chatColors["w:" .. who] = nil end
+  local c = ChatDB()
+  if c and c.chatColors then c.chatColors["w:" .. who] = nil end
   ns.ChatColorsChanged()
 end
 function ns.HasPersonColor(who)
-  return ns.cdb and ns.cdb.chatColors and ns.cdb.chatColors["w:" .. who] ~= nil
+  local c = ChatDB()
+  return c ~= nil and c.chatColors ~= nil and c.chatColors["w:" .. who] ~= nil
 end
 function ns.ChatColorsChanged()
   local UI = ns.UI
@@ -1732,8 +1779,9 @@ function ns.PickChatColor(channel, out, who)
   local key = who and ("w:" .. who) or ColorKey(channel, out)
   local r, g, b = ns.ChatColorRGB(channel, out, who)
   local function Save(nr, ng, nb)
-    ns.cdb.chatColors = ns.cdb.chatColors or {}
-    ns.cdb.chatColors[key] = { nr, ng, nb }
+    local c = ChatDB()
+    c.chatColors = c.chatColors or {}
+    c.chatColors[key] = { nr, ng, nb }
     ns.ChatColorsChanged()
   end
   local function Current()

@@ -162,7 +162,7 @@ function ns.InstallCommunityViews(views,env)
     end,
     empty="No conversations yet. Whispers show up here as they come in, or click New message.",
     init=nil,
-    footer=function() return "Saved on this PC only, for this character, and never shared with the guild. Keeps the last week." end,
+    footer=function() return "Saved on this PC only, shared by all your characters here, and never sent to the guild. Keeps the last week." end,
   }
   ns.ChatView=views.chat
   UI.state.quests={}
