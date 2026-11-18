@@ -657,10 +657,34 @@ local function MergeHistory(channel, entries)
 end
 function ns.PullGuildHistory()
   local c = ChatDB()
-  if c and not c.dedupedV1 then
-    c.dedupedV1 = true
+  if c and not c.dedupedV2 then
+    c.dedupedV1, c.dedupedV2 = true, true
+    -- clean up after the first versions: drop "Unknown" placeholders and lines
+    -- that were saved twice (once live, once from the server)
     for _, g in pairs(c.guilds or {}) do
-      for _, log in pairs(g) do if type(log) == "table" then DedupeLog(log) end end
+      for _, log in pairs(g) do
+        if type(log) == "table" then
+          for i = #log, 1, -1 do
+            if log[i].id and (log[i].msg == "Unknown" or log[i].msg == UNKNOWN) then table.remove(log, i) end
+          end
+          local keep = {}
+          for _, e in ipairs(log) do
+            local twin
+            for j = #keep, math.max(1, #keep - 60), -1 do
+              local x = keep[j]
+              if (not x.id or not e.id) and (ns.Short and ns.Short(x.who or "") or x.who) == (ns.Short and ns.Short(e.who or "") or e.who)
+                and x.msg == e.msg and (x.sys or false) == (e.sys or false) and math.abs((x.t or 0) - (e.t or 0)) <= 180 then twin = x; break end
+            end
+            if twin then
+              if e.id and not twin.id then twin.id, twin.t = e.id, e.t end
+            else
+              keep[#keep + 1] = e
+            end
+          end
+          for i = 1, #keep do log[i] = keep[i] end
+          for i = #log, #keep + 1, -1 do log[i] = nil end
+        end
+      end
     end
   end
   if not (C_Club and C_Club.GetGuildClubId and C_Club.GetStreams and C_Club.GetMessageRanges and C_Club.GetMessagesInRange) then return 0 end
@@ -681,7 +705,11 @@ function ns.PullGuildHistory()
           local author = m.author and Readable(m.author.name)
           local content = Readable(m.content)
           local epoch = m.messageId and Readable(m.messageId.epoch)
-          if type(author) == "string" and type(content) == "string" and content ~= "" and type(epoch) == "number" and not m.destroyed then
+          -- a message the game hasn't finished loading reads "Unknown"; skip it,
+          -- it's picked up properly on a later pass
+          local placeholder = content == (UNKNOWN or "Unknown") or content == "Unknown" or author == (UNKNOWN or "Unknown")
+            or author == (UNKNOWNOBJECT or "Unknown")
+          if type(author) == "string" and type(content) == "string" and content ~= "" and not placeholder and type(epoch) == "number" and not m.destroyed then
             local short = ns.Short and ns.Short(author) or author
             entries[#entries + 1] = { t = math.floor(epoch / 1000000), id = epoch, who = short, msg = content, out = short == ns.me or nil }
           end

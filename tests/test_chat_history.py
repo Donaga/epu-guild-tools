@@ -177,5 +177,14 @@ C_Club.GetMessagesInRange=function() return {
   {messageId={epoch=now*1000000+222},author={name="Gillian Jet"},content="nn"}} end''')
 A.ex('__ns.PullGuildHistory(); __ns.PullGuildHistory()')
 check('a real repeat stays as two lines, each matched to its server message once', A.ev('(function() local n,ids=0,0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="nn" then n=n+1; if e.id then ids=ids+1 end end end return n*10+ids end)()') == 22)
+# messages the game hasn't loaded yet read "Unknown"
+A.ex('''UNKNOWN="Unknown"; local now=time()
+C_Club.GetMessagesInRange=function() return {{messageId={epoch=now*1000000+999},author={name="Garro Firebrand"},content="Unknown"}} end''')
+A.ex('__ns.PullGuildHistory()')
+check('"Unknown" placeholders are skipped', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="Unknown" then return true end end return false end)()') is False)
+A.ex('''local l=__ns.ChatLog("guild"); local now=time()
+l[#l+1]={t=now-5,who="Luna Swiftbow-Forever",msg="Goodnight"}; l[#l+1]={t=now-4,id=123,who="Luna Swiftbow",msg="Goodnight"}; l[#l+1]={t=now-3,id=124,who="Garro Firebrand",msg="Unknown"}
+__ns.ChatDB().dedupedV2=nil; __ns.PullGuildHistory()''')
+check('earlier doubles and placeholders are cleaned up once', A.ev('(function() local n,u=0,0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="Goodnight" then n=n+1 end if e.msg=="Unknown" then u=u+1 end end return n*10+u end)()') == 10)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)
