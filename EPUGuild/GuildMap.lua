@@ -405,6 +405,10 @@ local function TooltipStatus(tt)
   if not okn or type(n) ~= "string" or (issecretvalue and issecretvalue(n)) then return end
   local s = ns.roster[n] and ns.GuildmateStatus(n)
   if s and s.lf then tt:AddLine("Looking for a partner (EPU)", 0.95, 0.76, 0.31) end
+  if ns.roster[n] and ns.SharedQuestIDs then
+    local shared = ns.SharedQuestIDs(n)
+    if #shared > 0 then tt:AddLine("On " .. #shared .. (#shared == 1 and " of your quests" or " of your quests") .. " (EPU)", 0.29, 0.87, 0.50) end
+  end
 end
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Unit then
   TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tt) pcall(TooltipStatus, tt) end)

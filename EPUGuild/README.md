@@ -43,23 +43,13 @@ per start time, normally 15 minutes before the start; notification preferences
 can suppress it or send it to your digest. No native game-calendar invitations,
 automatic group invites or public guild-chat messages are sent.
 
-### Shared quest matching
+### Quests and same quest nearby (0.27.1+)
 
-Sharing starts **off**. Choose up to eight quests from your current log, then
-open Sharing and enable **Share selected quests**. Selecting alone does not turn
-sharing on. The board matches exact quest IDs against online guildmates and
-shows progress and a Whisper action. Different phases and quest-chain
-requirements can still prevent playing together.
+**Quests** in the sidebar lists your quest log with how many online guildmates are on each quest (and how many are nearby), flags group quests, and shows **Questing near you**: guildmates in your zone, most quests in common first. Click a quest to whisper or invite them, or **Ask for help with this** to post a quest help request with the quest filled in.
 
-Only selected quest IDs, shortened titles, completion state and up to four
-objective counts are sent. Updates are coalesced and paced, yield to existing
-traffic, expire in the send queue, and heartbeat while sharing remains enabled.
-Unselecting, abandoning a quest or stopping sharing withdraws it. Other members'
-progress exists only in memory and expires after three minutes; it is not saved
-in guild data or forwarded to Discord. Your own selected IDs and sharing
-preference are saved privately on this character. Missing/restricted APIs
-produce an unavailable state; the addon does not change your quest selection,
-automatically accept quests or share the game quest itself.
+When a guildmate in your zone (and not on another layer) has a quest you have, you both get one **Same quest nearby** notification, once per guildmate and quest, after combat if you're fighting. It follows your notification settings.
+
+Sharing is **on by default**: EPU sends which quests are in your log (up to 25, not ones ready to turn in) and your zone to online guildmates. It is kept only in memory, expires after five minutes, and is never saved in guild data or sent to Discord. Turn it off under **Quests → Sharing**. Showing your objective progress (for example 3/8) is optional, per quest, up to eight quests. Exact quest IDs are matched; phases and quest-chain steps can still differ.
 
 ### Returning-player catch-up
 

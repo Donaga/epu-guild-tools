@@ -28,8 +28,8 @@ local function ReadQuests()
     local success,q=pcall(function()
       if C_QuestLog and C_QuestLog.GetInfo then return C_QuestLog.GetInfo(i) end
       if GetQuestLogTitle then
-        local title,level,_,header,_,complete,_,id=GetQuestLogTitle(i)
-        return {title=title,level=level,isHeader=header,isComplete=complete==1,questID=id}
+        local title,level,group,header,_,complete,_,id=GetQuestLogTitle(i)
+        return {title=title,level=level,suggestedGroup=tonumber(group),isHeader=header,isComplete=complete==1,questID=id}
       end
     end)
     if success and type(q)=="table" and not q.isHeader and not q.isHidden and SafeNumber(q.questID,1,2147483647) then
@@ -55,7 +55,8 @@ local function ReadQuests()
             pieces[1]=completed.."/"..count.." objectives complete"
           end
         end
-        out[id]={id=id,title=title,progress=done and "Ready to turn in" or (#pieces>0 and table.concat(pieces,"; "):sub(1,48) or "In progress"),done=done}
+        local group=SafeNumber(q.suggestedGroup,2,40) and q.suggestedGroup or nil
+        out[id]={id=id,title=title,progress=done and "Ready to turn in" or (#pieces>0 and table.concat(pieces,"; "):sub(1,48) or "In progress"),done=done,group=group,level=SafeNumber(q.level,1,100) and q.level or nil}
       end
     end
   end
@@ -176,6 +177,11 @@ function ns.QuestMatches(id,own)
   local rows={}
   if not own[id] then return rows end
   for name,quests in pairs(remote) do if quests[id] then rows[#rows+1]={who=name,quest=quests[id]} end end
+  for name,l in pairs(ns.questLists or {}) do
+    if l.ids[id] and not (remote[name] and remote[name][id]) then
+      rows[#rows+1]={who=name,quest={id=id,title=own[id].title,progress="On this quest"..(l.z and (" · "..l.z) or ""),at=l.at}}
+    end
+  end
   table.sort(rows,function(a,b) return a.who<b.who end); return rows
 end
 ns.On("QUEST_LOG_UPDATE",function() logReady=true; ns.Debounce("questUpdate",15,ns.UpdateQuestSharing) end)
@@ -183,4 +189,130 @@ ns.On("PLAYER_GUILD_UPDATE",ResetGuild)
 ns.On("PLAYER_LOGIN",function()
   local function Tick() ns.ExpireQuestMatches(); ns.UpdateQuestSharing(); C_Timer.After(30,Tick) end
   C_Timer.After(35,Tick)
+end)
+
+---------------------------------------------------------------------------
+-- (comm kind "K": kinds are one letter)
+-- Same quest nearby. Everyone sharing (on unless turned off) sends a short
+-- list of the quest IDs in their log plus their zone. When a guildmate in your
+-- zone (and not on another layer) has a quest you have, you get one heads-up
+-- per guildmate and quest. Nothing is saved except which heads-ups you've had.
+---------------------------------------------------------------------------
+local lists={}
+ns.questLists=lists
+local listSent,listAt,nearbyAfterCombat
+local LIST_MAX,LIST_TTL,LIST_BEAT=25,300,120
+local function MyZone()
+  local z=GetZoneText and GetZoneText()
+  if type(z)~="string" or (issecretvalue and issecretvalue(z)) or z=="" then return nil end
+  return z:sub(1,40)
+end
+function ns.QuestListSharing()
+  local s=ns.CommunityState()
+  return s==nil or s.shareQuestList~=false
+end
+function ns.SendQuestList(force)
+  ResetGuild()
+  if not guild or not IsInGuild() then return end
+  local on=ns.QuestListSharing()
+  if not on then
+    if listSent then ns.SendEphemeral("K",{ids={}},30,nil,"questlist"); listSent=nil end
+    return
+  end
+  local quests,reason=ns.CurrentQuests()
+  if reason then return end
+  local ids={}
+  for id,q in pairs(quests) do if not q.done then ids[#ids+1]=id end end
+  table.sort(ids)
+  while #ids>LIST_MAX do table.remove(ids) end
+  local z=MyZone()
+  local signature=table.concat(ids,",").."|"..(z or "")
+  local heartbeat=listAt and GetTime()-listAt>=LIST_BEAT
+  if not force and signature==listSent and not heartbeat then return end
+  if #ids==0 and not listSent then return end
+  local payload={ids=ids,z=z}
+  while #ns.Serialize(payload)>220 and #ids>0 do table.remove(ids) end
+  local key=guild
+  if ns.SendEphemeral("K",payload,30,function() return ns.GuildKey()==key and ns.QuestListSharing() end,"questlist") then
+    listSent=#ids>0 and signature or nil; listAt=GetTime()
+  end
+end
+function ns.SetQuestListSharing(on)
+  local s=ns.CommunityState(); if not s then return end
+  s.shareQuestList=on and true or false
+  ns.SendQuestList(true); Changed()
+end
+ns.comm.K=function(sender,d,channel)
+  ResetGuild()
+  if not guild or channel~="GUILD" or sender==ns.me or type(d)~="table" or not ns.Member(sender)
+    or not (ns.roster[sender] or {}).online or type(d.ids)~="table" or #d.ids>LIST_MAX then return end
+  local set,n={},0
+  for _,id in ipairs(d.ids) do if SafeNumber(id,1,2147483647) then set[id]=true; n=n+1 end end
+  local z=type(d.z)=="string" and #d.z<=40 and d.z~="" and d.z or nil
+  if n==0 then lists[sender]=nil else lists[sender]={ids=set,z=z,at=GetTime()} end
+  Changed()
+  ns.Debounce("questNearby",2,ns.CheckNearbyQuests)
+end
+function ns.GuildmateQuestZone(name)
+  local l=lists[name]
+  return (l and l.z) or (ns.roster[name] or {}).zone
+end
+function ns.SharedQuestIDs(name,own)
+  own=own or ns.CurrentQuests()
+  local out,seen={},{}
+  local l=lists[name]
+  if l and GetTime()-l.at<LIST_TTL then for id in pairs(l.ids) do if own[id] then out[#out+1]=id; seen[id]=true end end end
+  for id in pairs(remote[name] or {}) do if own[id] and not seen[id] then out[#out+1]=id end end
+  table.sort(out)
+  return out
+end
+local function Nearby(name)
+  local mine=MyZone()
+  if not mine or ns.GuildmateQuestZone(name)~=mine then return false end
+  if ns.LayerOf and ns.LayerOf(name)=="other" then return false end
+  return true
+end
+ns.QuestNearby=Nearby
+function ns.CheckNearbyQuests()
+  if not ns.QuestListSharing() then return end
+  if InCombatLockdown and InCombatLockdown() then nearbyAfterCombat=true; return end
+  local own,reason=ns.CurrentQuests()
+  if reason or not ns.cdb then return end
+  local seen=ns.cdb.questAlerted or {}
+  ns.cdb.questAlerted=seen
+  local now=time()
+  for k,t in pairs(seen) do if now-t>12*3600 then seen[k]=nil end end
+  for name,l in pairs(lists) do
+    if GetTime()-l.at<LIST_TTL and (ns.roster[name] or {}).online and Nearby(name) then
+      local fresh={}
+      for _,id in ipairs(ns.SharedQuestIDs(name,own)) do
+        local k=name.."\030"..id
+        if own[id] and not own[id].done and not seen[k] then fresh[#fresh+1]=id; seen[k]=now end
+      end
+      if #fresh>0 then
+        local who=ns.Short and ns.Short(name) or name
+        local title=own[fresh[1]].title
+        ns.Notify("Same quest nearby",
+          who.." is in "..(MyZone() or "your zone").." and also on "..title..(#fresh>1 and (" and "..(#fresh-1).." more") or "")..". Click to whisper or invite.",
+          "Interface\\Icons\\INV_Misc_GroupLooking",
+          {category="quests",kind="questmatch",key=tostring(fresh[1]),revision=name..":"..table.concat(fresh,",")})
+      end
+    end
+  end
+end
+local function ExpireLists()
+  for name,l in pairs(lists) do
+    if GetTime()-l.at>=LIST_TTL or not (ns.roster[name] or {}).online then lists[name]=nil end
+  end
+end
+ns.On("QUEST_ACCEPTED",function() ns.Debounce("questList",5,function() ns.SendQuestList(); ns.CheckNearbyQuests() end) end)
+ns.On("QUEST_LOG_UPDATE",function() ns.Debounce("questList",10,function() ns.SendQuestList(); ns.CheckNearbyQuests() end) end)
+ns.On("ZONE_CHANGED_NEW_AREA",function() ns.Debounce("questList",3,function() ns.SendQuestList(); ns.CheckNearbyQuests() end) end)
+ns.On("GUILD_ROSTER_UPDATE",function() ns.Debounce("questNearby",5,ns.CheckNearbyQuests) end)
+ns.On("PLAYER_REGEN_ENABLED",function()
+  if nearbyAfterCombat then nearbyAfterCombat=false; ns.Debounce("questNearby",3,ns.CheckNearbyQuests) end
+end)
+ns.On("PLAYER_LOGIN",function()
+  local function Beat() ExpireLists(); ns.SendQuestList(); C_Timer.After(30,Beat) end
+  C_Timer.After(40,Beat)
 end)
