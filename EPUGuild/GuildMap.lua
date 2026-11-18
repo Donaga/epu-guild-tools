@@ -815,6 +815,87 @@ ns.On("CLUB_MESSAGE_ADDED", function(clubId, streamId, messageId)
   if not ok or gid ~= clubId then return end
   ns.Debounce("guildHistory", 1, ns.PullGuildHistory)
 end)
+---------------------------------------------------------------------------
+-- Guild chat shared between EPU users. The game won't let addons read the
+-- older history, but everyone running EPU saves what they see live. When you
+-- log in, EPU asks guildmates who use it for the guild chat you missed
+-- (up to a day) and fills it in. Only guild chat; officer chat is never sent.
+---------------------------------------------------------------------------
+local SHARE_HOURS, SHARE_MAX = 24, 150
+local shareAsked, shareAnswered = false, {}
+local function ShareOn() local o = ns.ChatOptions and ns.ChatOptions() or {}; return o.shareGuild ~= false and ns.ChatKeep("guild") end
+function ns.AskGuildChat()
+  if not ShareOn() or not IsInGuild or not IsInGuild() or not ns.SendEphemeral then return false end
+  local log = ns.ChatLog("guild")
+  local newest = 0
+  for i = #log, 1, -1 do if not log[i].sys and not log[i].shared then newest = log[i].t or 0; break end end
+  local since = math.max(newest, time() - SHARE_HOURS * 3600)
+  shareAsked = true
+  return ns.SendEphemeral("G", { since = since }, 30, nil, "guildchatask")
+end
+ns.comm.G = function(sender, d, channel)
+  if channel ~= "GUILD" or type(d) ~= "table" or sender == ns.me or not ShareOn() or not ns.roster[sender] then return end
+  local since = tonumber(d.since)
+  if not since then return end
+  since = math.max(since, time() - SHARE_HOURS * 3600)
+  if shareAnswered[sender] and GetTime() - shareAnswered[sender] < 300 then return end
+  local log = ns.ChatLog("guild")
+  local out = {}
+  for i = #log, 1, -1 do
+    local e = log[i]
+    if (e.t or 0) <= since then break end
+    if not e.sys and type(e.msg) == "string" and not Protected(e.msg) and e.msg ~= "Unknown" then
+      table.insert(out, 1, { t = e.t, w = ns.Short and ns.Short(e.who) or e.who, m = e.msg:sub(1, 255) })
+      if #out >= SHARE_MAX then break end
+    end
+  end
+  if #out == 0 then return end
+  shareAnswered[sender] = GetTime()
+  -- a short random wait so not everyone answers at once
+  C_Timer.After(1 + math.random() * 4, function()
+    if ns.roster[sender] and ns.roster[sender].online then ns.Send("J", { lines = out }, "WHISPER", sender) end
+  end)
+end
+function ns.MergeSharedGuildChat(from, lines)
+  if not ShareOn() or type(lines) ~= "table" then return 0 end
+  local log = ns.ChatLog("guild")
+  local added, newest = 0, 0
+  local cutoff = time() - SHARE_HOURS * 3600
+  local before = #log   -- compare only with what we had, so real repeats in the batch stay
+  for i, l in ipairs(lines) do
+    if i > SHARE_MAX then break end
+    local t, w, m = tonumber(l.t), l.w, l.m
+    if t and type(w) == "string" and #w <= 48 and type(m) == "string" and #m <= 255 and m ~= "" and not Protected(m)
+      and t >= cutoff and t <= time() + 60 then
+      local e = { t = t, who = w, msg = m, shared = from }
+      local dup = false
+      for j = before, math.max(1, before - 400), -1 do
+        local x = log[j]
+        if x.msg == m and (ns.Short and ns.Short(x.who or "") or x.who) == w and math.abs((x.t or 0) - t) <= 180 then dup = true; break end
+      end
+      if not dup then log[#log + 1] = e; added = added + 1; newest = math.max(newest, t) end
+    end
+  end
+  if added > 0 then
+    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    while #log > CHAT_KEEP do table.remove(log, 1) end
+    -- what you missed isn't "new"
+    local c = ChatDB()
+    c.chatSeen = c.chatSeen or {}
+    if (c.chatSeen.guild or 0) < newest then c.chatSeen.guild = newest end
+    if ns.MessengerChanged then ns.MessengerChanged("guild", nil, false) end
+    if ns.UI and ns.UI:IsShown() and ns.UI.view == "chat" then ns.Changed() end
+  end
+  return added
+end
+ns.comm.J = function(sender, d, channel)
+  if channel ~= "WHISPER" or type(d) ~= "table" or not shareAsked then return end
+  ns.MergeSharedGuildChat(sender, d.lines)
+end
+ns.On("PLAYER_LOGIN", function()
+  if C_Timer then C_Timer.After(20, function() ns.AskGuildChat() end) end
+end)
+
 -- /epu chatdebug: the last guild lines as EPU saved them, next to what the
 -- game's server history says, to track down doubled lines.
 function ns.ChatDebug()
@@ -2020,6 +2101,9 @@ local function FillChatSettings(det)
   det:Buttons({ { Check(o.typing, "Show and send \"typing...\" (EPU users)"), function() o.typing = not o.typing; Again() end } })
   det:Buttons({ { Check(o.lineTimes, "Show the time on every message"), function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); Again() end,
       tip = "Otherwise the time shows once for each group of messages" } })
+  det:Buttons({ { Check(o.shareGuild ~= false, "Fill in guild chat I missed from guildmates who use EPU"), function()
+      o.shareGuild = o.shareGuild == false; Again() end,
+    tip = "When you log in, EPU asks guildmates who use it for the guild chat you missed (up to a day), and answers them the same way. Only guild chat; officer chat is never shared." } })
   det:Buttons({ { Check(o.presence ~= false, "Show guildmates coming online and going offline in Guild chat"), function()
     o.presence = o.presence == false; Again() end } })
   det:Section("Text")

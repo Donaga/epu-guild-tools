@@ -1,0 +1,22 @@
+"""Guild chat you missed, filled in from guildmates who use EPU."""
+from simcore import *
+for n in ['Chris Baker','Tyler Baker','Pip Baker']: clients[n]=Client(n)
+tick(60)
+A,B,P=(clients[n] for n in ['Chris Baker','Tyler Baker','Pip Baker'])
+for c in (A,B,P): c.ex('__ns.SetChatKeep("guild", true)')
+# A was online for this; B was not
+A.ex('''__fire("CHAT_MSG_GUILD","texas is big","Irthos Ixen-Forever"); __fire("CHAT_MSG_GUILD","nn","Gillian Jet"); __fire("CHAT_MSG_GUILD","nn","Gillian Jet")
+__ns.ChatLog("guild")[1].t=time()-600; __ns.ChatLog("guild")[2].t=time()-300; __ns.ChatLog("guild")[3].t=time()-295''')
+A.ex('__fire("CHAT_MSG_OFFICER","promo list","Pip Baker")')
+B.ex('__ns.AskGuildChat()')
+check('a guildmate fills in the guild chat you missed', tick_until(lambda: B.ev('#__ns.ChatLog("guild")') == 3, 30))
+check('real repeats come across too', B.ev('(function() local n=0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="nn" then n=n+1 end end return n end)()') == 2)
+check('it is marked as shared, and not counted as unread', B.ev('__ns.ChatLog("guild")[1].shared') is not None and B.ev('__ns.ChatUnreadFor("guild")') == 0)
+check('officer chat is never shared', B.ev('#__ns.ChatLog("officer")') == 0)
+B.ex('__ns.AskGuildChat()'); tick(10)
+check('asking again adds nothing twice', B.ev('#__ns.ChatLog("guild")') == 3)
+A.ex('__ns.ChatOptions().shareGuild=false'); P.ex('__ns.ChatOptions().shareGuild=false')
+B.ex('wipe(__ns.ChatLog("guild")); __ns.AskGuildChat()'); tick(10)
+check('turning sharing off stops answering', B.ev('#__ns.ChatLog("guild")') == 0)
+print('Chat share tests:', check.failed, 'failed')
+sys.exit(1 if check.failed else 0)
