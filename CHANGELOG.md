@@ -8,6 +8,14 @@
 - **Party and raid chat** are kept too (on by default; turn off in Chat settings) and pinned with guild and officer chat. You can read and reply in each.
 - **Tabs in the pop-out window:** Tells, Guild, Officer, Party and Raid, each with its unread count, so you can swap with one click. Tells goes back to the last person you were whispering.
 - **Colors follow the game's chat colors** (so they match your chat windows and any changes you made there). In Chat settings you can pick your own color for any chat, including a separate one for whispers you send, and go back to the game's colors in one click.
+- **Window choices:** tabs in one window, or **one window per person** (each whisper gets its own window; group chats stay tabbed). Optional: open a window when a whisper arrives. Windows can be dragged from anywhere that isn't a button.
+- **Clickable web links:** links in messages are blue; click one and it opens ready to copy (Ctrl+C), since WoW can't open a browser.
+- **Copy:** copy a whole conversation as plain text, Discord format or BBCode, or click a message's time to copy just those messages.
+- **Sounds and mentions:** pick a sound for each chat, and get an alert (with its own sound) when someone says your name, or any word you add, in guild, officer, party or raid chat. Whole words only.
+- **Combat:** chat windows tuck into the bubble when combat starts and come back after (can be turned off). Optional fade when the mouse is elsewhere.
+- **Alts show their main**, like "Tyler (Laurelin)", wherever EPU knows it.
+- **"typing..."** shows when a guildmate who uses EPU is writing you a whisper (can be turned off).
+- **Per-person colors:** give anyone's whispers their own color from their conversation, and reset it in Chat settings.
 - Messages are grouped under the sender's name and time, like chat apps, with more padding in the pop-out window.
 - Left-clicking the EPU bubble now also closes the window when it is open.
 - On a short window the sidebar shows icons only; hover for the name and what each page is for.

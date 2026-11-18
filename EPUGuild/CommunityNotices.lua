@@ -1,6 +1,6 @@
 -- Personal routing: instant, digest or off, with local quiet hours and mutes.
 local ADDON,ns=...
-ns.NOTICE_CATEGORIES={catchup="Returning-player hint",requests="Bank requests",crafts="Craft requests",news="Guild news",milestones="Milestones",activities="Followed activities",projects="Followed projects",events="Followed events",reminders="Event reminders",invites="Guild invite requests",quests="Same quest nearby"}
+ns.NOTICE_CATEGORIES={catchup="Returning-player hint",requests="Bank requests",crafts="Craft requests",news="Guild news",milestones="Milestones",activities="Followed activities",projects="Followed projects",events="Followed events",reminders="Event reminders",invites="Guild invite requests",quests="Same quest nearby",mentions="Mentions in chat"}
 local function Clock(value)
   local h,m=tostring(value or ""):match("^(%d%d):(%d%d)$")
   h,m=tonumber(h),tonumber(m)
@@ -63,7 +63,7 @@ end
 function ns.OpenPersonalNotice(c)
   if not c or not c.kind or not c.key or not ns.UI then return false end
   if c.kind=='guildinvite' and not ns.CanInviteGuild() then return false end
-  local view=({event="activities",activity="activities",run="activities",guildinvite="invites",project="projects",request="requests",news="news",questmatch="quests"})[c.kind]
+  local view=({event="activities",activity="activities",run="activities",guildinvite="invites",project="projects",request="requests",news="news",questmatch="quests",chatwith="chat"})[c.kind]
   if not view then return false end
   ns.UI:Show()
   if c.kind=="guildinvite" then ns.UI.search:SetText("")
