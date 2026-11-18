@@ -429,14 +429,28 @@ local CHANNELS = {
   whisper = { label = "Whispers", group = "WHISPER", info = "WHISPER" },
   guild = { label = "Guild chat", group = "GUILD", info = "GUILD" },
   officer = { label = "Officer chat", group = "OFFICER", info = "OFFICER" },
+  party = { label = "Party chat", group = "PARTY", info = "PARTY", short = "Party", send = "PARTY", color = "|cffaaaaff",
+    icon = "Interface\\Icons\\INV_Misc_GroupNeedMore" },
+  raid = { label = "Raid chat", group = "RAID", info = "RAID", short = "Raid", send = "RAID", color = "|cffff7f00",
+    icon = "Interface\\Icons\\INV_Misc_Head_Dragon_01" },
 }
-local CHANNEL_ORDER = { "whisper", "guild", "officer" }
+CHANNELS.guild.short, CHANNELS.guild.send, CHANNELS.guild.color = "Guild", "GUILD", "|cff40ff40"
+CHANNELS.guild.icon = "Interface\\Icons\\INV_Shirt_GuildTabard_01"
+CHANNELS.officer.short, CHANNELS.officer.send, CHANNELS.officer.color = "Officer", "OFFICER", "|cff40c040"
+CHANNELS.officer.icon = "Interface\\Icons\\INV_Misc_Key_03"
+local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid" }
+-- the group chats, shown pinned above whispers
+local GROUP_CHANNELS = { "guild", "officer", "party", "raid" }
+ns.CHAT_GROUP_CHANNELS = GROUP_CHANNELS
 
 local function ChatDB()
   local c = ns.cdb
   if not c then return nil end
   c.chatlog = c.chatlog or {}
   c.chatkeep = c.chatkeep or { whisper = true, guild = false, officer = false, replay = true }
+  -- party and raid chat are kept unless turned off
+  if c.chatkeep.party == nil then c.chatkeep.party = true end
+  if c.chatkeep.raid == nil then c.chatkeep.raid = true end
   for _, k in ipairs(CHANNEL_ORDER) do c.chatlog[k] = c.chatlog[k] or {} end
   return c
 end
@@ -499,23 +513,50 @@ local function Mine(sender)
 end
 ns.On("CHAT_MSG_GUILD", function(msg, sender) ns.LogChat("guild", sender, msg, Mine(sender)) end)
 ns.On("CHAT_MSG_OFFICER", function(msg, sender) ns.LogChat("officer", sender, msg, Mine(sender)) end)
+for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do
+  ns.On(ev, function(msg, sender) ns.LogChat("party", sender, msg, Mine(sender)) end)
+end
+for _, ev in ipairs({ "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_RAID_WARNING" }) do
+  ns.On(ev, function(msg, sender) ns.LogChat("raid", sender, msg, Mine(sender)) end)
+end
 
 local function Hex(info)
   local t = ChatTypeInfo and ChatTypeInfo[info]
   if not t then return "|cffffffff" end
   return string.format("|cff%02x%02x%02x", (t.r or 1) * 255, (t.g or 1) * 255, (t.b or 1) * 255)
 end
+-- Colors follow the game's own chat colors (Chat settings in the game), unless
+-- you pick your own for a chat in EPU's Chat settings. Sent whispers use the
+-- game's "whisper sent" color.
+local FALLBACK = { whisper = { 1, 0.5, 1 }, whisperOut = { 1, 0.5, 1 }, guild = { 0.25, 1, 0.25 },
+  officer = { 0.25, 0.75, 0.25 }, party = { 0.67, 0.67, 1 }, raid = { 1, 0.5, 0 } }
+local function ColorKey(channel, out) return (channel == "whisper" and out) and "whisperOut" or channel end
+function ns.ChatColorRGB(channel, out)
+  local key = ColorKey(channel, out)
+  local c = ns.cdb and ns.cdb.chatColors and ns.cdb.chatColors[key]
+  if type(c) == "table" and type(c[1]) == "number" then return c[1], c[2], c[3], true end
+  local info = key == "whisperOut" and "WHISPER_INFORM" or CHANNELS[channel].info
+  local t = ChatTypeInfo and ChatTypeInfo[info]
+  if t and t.r then return t.r, t.g, t.b, false end
+  local f = FALLBACK[key] or { 1, 1, 1 }
+  return f[1], f[2], f[3], false
+end
+local function ChatColor(channel, out)
+  local r, g, b = ns.ChatColorRGB(channel, out)
+  return string.format("|cff%02x%02x%02x", math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+end
+ns.ChatColor = ChatColor
 local function PlayerLink(who)
   return "|Hplayer:" .. who .. "|h[" .. (ns.Short and ns.Short(who) or who) .. "]|h"
 end
 local function FormatLine(channel, e)
   local stamp = date("%H:%M", e.t)
-  local color = Hex(CHANNELS[channel].info)
+  local color = ChatColor(channel, e.out)
   local body
   if channel == "whisper" then
     body = e.out and ("To " .. PlayerLink(e.who) .. ": " .. e.msg) or (PlayerLink(e.who) .. " whispers: " .. e.msg)
   else
-    body = "[" .. (channel == "guild" and "Guild" or "Officer") .. "] " .. PlayerLink(e.who) .. ": " .. e.msg
+    body = "[" .. (CHANNELS[channel].short or channel) .. "] " .. PlayerLink(e.who) .. ": " .. e.msg
   end
   return color .. "[" .. stamp .. "] " .. body .. "|r"
 end
@@ -636,13 +677,12 @@ ns.ChatAgo = Ago
 local function Send(key, text)
   if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
   text = text:sub(1, 255)
-  if key == "guild" then SendChatMessage(text, "GUILD")
-  elseif key == "officer" then SendChatMessage(text, "OFFICER")
+  if CHANNELS[key] and CHANNELS[key].send then SendChatMessage(text, CHANNELS[key].send)
   else SendChatMessage(text, "WHISPER", nil, key:sub(3)) end
   return true
 end
 local function ThreadKey(key)
-  if key ~= "guild" and key ~= "officer" and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
+  if not (CHANNELS[key] and key ~= "whisper") and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
   return key
 end
 -- Lines of a conversation, newest first.
@@ -658,7 +698,7 @@ local function ThreadLines(key, max)
 end
 local function LineText(channel, e)
   local speaker = e.out and "|cff9fb4c8You|r" or ("|cffffffff" .. (ns.Short and ns.Short(e.who) or e.who) .. "|r")
-  local color = channel == "whisper" and (e.out and "|cffd9b3ff" or "|cffff80ff") or (channel == "guild" and "|cff40ff40" or "|cff40c040")
+  local color = ChatColor(channel, e.out)
   return "|cff888888" .. date("%H:%M", e.t) .. "|r  " .. speaker .. "\n" .. color .. e.msg .. "|r"
 end
 -- Group a thread (newest first) for display: a gold day header, then the
@@ -666,7 +706,6 @@ end
 -- apps group consecutive messages.
 local function ThreadBlocks(channel, lines)
   local blocks, lastDay, cur = {}, nil, nil
-  local msgColor = channel == "whisper" and nil or (channel == "guild" and "|cff40ff40" or "|cff40c040")
   for _, e in ipairs(lines) do
     local day = date("%A %d %B", e.t)
     if day ~= lastDay then blocks[#blocks + 1] = { day = "|cfff2c14e" .. day .. "|r" }; lastDay = day; cur = nil end
@@ -675,7 +714,7 @@ local function ThreadBlocks(channel, lines)
       cur = { speaker = speaker, t = e.t, out = e.out, msgs = {} }
       blocks[#blocks + 1] = cur
     end
-    local color = msgColor or (e.out and "|cffd9b3ff" or "|cffff80ff")
+    local color = ChatColor(channel, e.out)
     cur.msgs[#cur.msgs + 1] = color .. e.msg .. "|r"
   end
   local out = {}
@@ -696,7 +735,7 @@ local function FillChatWith(det, key)
   local short = who and (ns.Short and ns.Short(who) or who)
   local member = who and ns.roster[short]
   det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
-      or (channel == "guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03"),
+      or CHANNELS[channel].icon,
     nil, who and short or CHANNELS[channel].label, who and (member and ((member.online and "Online" or "Offline") .. (member.zone and member.online and (" · " .. member.zone) or "")
       .. " · level " .. (member.level or "?")) or "Whispers") or "Saved on this PC")
   -- reply first, newest messages right under it
@@ -735,7 +774,7 @@ local function MState()
 end
 local function ConversationItems()
   local items = {}
-  for _, ch in ipairs({ "guild", "officer" }) do
+  for _, ch in ipairs(GROUP_CHANNELS) do
     if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then
       local n = ns.ChatUnreadFor(ch)
       items[#items + 1] = { label = CHANNELS[ch].label .. (n > 0 and (" (" .. n .. " new)") or ""), value = ch }
@@ -805,11 +844,13 @@ local function BuildMessenger()
   f.body = CreateFrame("Frame", nil, f)
   f.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   f.body:SetPoint("BOTTOMRIGHT")
+  -- tabs: Tells, then each kept group chat, with unread counts
+  f.tabs = {}
   f.box = K.Box(f.body, 200, "Type a message, Enter to send")
-  f.box:SetPoint("TOPLEFT", 10, -8)
-  f.box:SetPoint("TOPRIGHT", -64, -8)
+  f.box:SetPoint("TOPLEFT", 10, -34)
+  f.box:SetPoint("TOPRIGHT", -64, -34)
   f.send = K.Btn(f.body, "Send", 50, 22, "accent")
-  f.send:SetPoint("TOPRIGHT", -10, -8)
+  f.send:SetPoint("TOPRIGHT", -10, -34)
   local function Go()
     local key = MState().key
     if key and Send(key, f.box:GetText()) then f.box:SetText("") end
@@ -818,7 +859,7 @@ local function BuildMessenger()
   f.box.onEnter = Go
   f.send:SetScript("OnClick", Go)
   f.scroll = CreateFrame("ScrollFrame", nil, f.body)
-  f.scroll:SetPoint("TOPLEFT", 12, -40)
+  f.scroll:SetPoint("TOPLEFT", 12, -66)
   f.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
   f.child = CreateFrame("Frame", nil, f.scroll)
   f.child:SetSize(300, 10)
@@ -885,6 +926,42 @@ local function BuildMessenger()
     self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Pick a conversation above, or type to start.|r")
     self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
     self:Layout()
+    self:Tabs()
+  end
+  function f:Tabs()
+    local st = MState()
+    if st.key and st.key:sub(1, 2) == "w:" then st.lastWhisper = st.key end
+    local list = { { key = "tells", label = "Tells", n = ns.ChatUnread() } }
+    for _, ch in ipairs(GROUP_CHANNELS) do
+      if ns.ChatKeep(ch) then list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) } end
+    end
+    local width = (self:GetWidth() or 340) - 20
+    local w = math.floor((width - (#list - 1) * 3) / #list)
+    for i, t in ipairs(list) do
+      local b = self.tabs[i]
+      if not b then
+        b = K.Btn(self.body, "", 60, 20)
+        self.tabs[i] = b
+      end
+      b:ClearAllPoints()
+      b:SetPoint("TOPLEFT", 10 + (i - 1) * (w + 3), -7)
+      b:SetWidth(w)
+      b:SetLabel(t.label .. (t.n > 0 and (" |cff4ade80" .. t.n .. "|r") or ""))
+      local on = (t.key == "tells" and st.key and st.key:sub(1, 2) == "w:") or st.key == t.key
+      b:SetOn(on and true or false)
+      b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key].label .. ": read and reply here")
+      b:SetScript("OnClick", function()
+        if t.key == "tells" then
+          local first = ns.ChatConversations()[1]
+          st.key = st.lastWhisper or (first and ("w:" .. first.who)) or st.key
+        else
+          st.key = t.key
+        end
+        self:Update()
+      end)
+      b:Show()
+    end
+    for i = #list + 1, #self.tabs do self.tabs[i]:Hide() end
   end
   return f
 end
@@ -1062,16 +1139,64 @@ local function FillChatSettings(det)
   for _, k in ipairs(CHANNEL_ORDER) do
     if k ~= "officer" or CanOfficerChat() then
       local keep = ns.ChatKeep(k)
-      det:Buttons({ { (keep and "[x] " or "[ ] ") .. "Keep " .. CHANNELS[k].label:lower(), function()
-          ns.SetChatKeep(k, not keep); UI:FillDetails(); UI:Refresh() end },
-        #c.chatlog[k] > 0 and { "Clear", function() wipe(c.chatlog[k]); UI:FillDetails(); UI:Refresh() end,
-          tip = "Delete saved " .. CHANNELS[k].label:lower() .. " from this PC" } or nil })
+      local specs = { { (keep and "[x] " or "[ ] ") .. "Keep " .. CHANNELS[k].label:lower(), function()
+          ns.SetChatKeep(k, not keep); UI:FillDetails(); UI:Refresh() end } }
+      specs[#specs + 1] = { ChatColor(k, false) .. "Color|r", function() ns.PickChatColor(k, false) end,
+        tip = "Pick a color for " .. CHANNELS[k].label:lower() .. " in EPU. Right now: " .. (select(4, ns.ChatColorRGB(k, false)) and "your own color" or "the game's chat color") }
+      if k == "whisper" then
+        specs[#specs + 1] = { ChatColor(k, true) .. "Sent|r", function() ns.PickChatColor(k, true) end, tip = "Color for whispers you send" }
+      end
+      if #c.chatlog[k] > 0 then
+        specs[#specs + 1] = { "Clear", function() wipe(c.chatlog[k]); UI:FillDetails(); UI:Refresh() end,
+          tip = "Delete saved " .. CHANNELS[k].label:lower() .. " from this PC" }
+      end
+      det:Buttons(specs)
     end
   end
   det:Buttons({ { (c.chatkeep.replay ~= false and "[x] " or "[ ] ") .. "Show the last hour after a reload", function()
     c.chatkeep.replay = c.chatkeep.replay == false; UI:FillDetails() end } })
+  if c.chatColors and next(c.chatColors) then
+    det:Buttons({ { "Use the game's chat colors", function() c.chatColors = nil; ns.ChatColorsChanged() end,
+      tip = "Forget the colors picked here and follow the game's chat colors again" } })
+  end
+  det:Text("Colors follow the game's chat colors unless you pick your own here.", nil)
   det:Text("Whispers are kept by default. Battle.net whispers aren't kept, and messages the game hides in combat are saved as a placeholder.", nil)
   return true
+end
+function ns.ChatColorsChanged()
+  local UI = ns.UI
+  if UI and UI:IsShown() then
+    if UI.details:IsShown() and (UI.details.kind == "chatsettings" or UI.details.kind == "chatwith") then UI:FillDetails() end
+    UI:Refresh()
+  end
+  if Mgr and Mgr:IsShown() then Mgr:Update() end
+end
+function ns.PickChatColor(channel, out)
+  if not ColorPickerFrame then return ns.Print("This game client has no color picker.") end
+  local key = ColorKey(channel, out)
+  local r, g, b = ns.ChatColorRGB(channel, out)
+  local function Save(nr, ng, nb)
+    ns.cdb.chatColors = ns.cdb.chatColors or {}
+    ns.cdb.chatColors[key] = { nr, ng, nb }
+    ns.ChatColorsChanged()
+  end
+  local function Current()
+    local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+    Save(nr, ng, nb)
+  end
+  local function Cancel(prev)
+    if type(prev) == "table" and prev.r then Save(prev.r, prev.g, prev.b) else Save(r, g, b) end
+  end
+  if ColorPickerFrame.SetupColorPickerAndShow then
+    ColorPickerFrame:SetupColorPickerAndShow({ r = r, g = g, b = b, hasOpacity = false,
+      swatchFunc = Current, cancelFunc = function() Save(r, g, b) end })
+  else
+    ColorPickerFrame.hasOpacity = false
+    ColorPickerFrame.previousValues = { r = r, g = g, b = b }
+    ColorPickerFrame.func, ColorPickerFrame.cancelFunc = Current, Cancel
+    ColorPickerFrame:SetColorRGB(r, g, b)
+    ColorPickerFrame:Hide(); ColorPickerFrame:Show()
+  end
 end
 local fillBefore = ns.FillCommunityDetails
 ns.FillCommunityDetails = function(kind, key, det)

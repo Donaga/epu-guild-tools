@@ -133,13 +133,13 @@ function ns.InstallCommunityViews(views,env)
     end,
     rows=function(g,q)
       local out={}
-      for _,ch in ipairs({"guild","officer"}) do
+      for _,ch in ipairs(ns.CHAT_GROUP_CHANNELS) do
         if ns.ChatKeep(ch) then
           local log=ns.ChatLog(ch); local e=log[#log]
           if E.Match(q,ns.CHAT_CHANNELS[ch].label,e and e.msg) then
             local n=ns.ChatUnreadFor(ch)
             out[#out+1]={key="chat:"..ch,title=ns.CHAT_CHANNELS[ch].label..(n>0 and (" |cff66a6ff("..n..")|r") or ""),
-              icon=ch=="guild" and "Interface\\Icons\\INV_Shirt_GuildTabard_01" or "Interface\\Icons\\INV_Misc_Key_03",
+              icon=ns.CHAT_CHANNELS[ch].icon,
               sub=e and ((ns.Short and ns.Short(e.who) or e.who)..": "..e.msg) or "Nothing yet",
               right=e and ((n>0 and ("|cff66a6ff"..n.." new|r · ") or "")..ns.ChatAgo(e.t)) or "",
               onClick=function() Open("chatwith",ch) end}
