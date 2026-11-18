@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.28.4
+
+- **Search your chat history.** On the Chat page, type in the search box at the top (two letters or more) to find every saved message that matches, in whispers and in the guild, officer, party and raid chat you keep, newest first. It matches what was said and who said it. Click a result to open that conversation at that point: the hour either side of the message, with your search words marked. **Show the latest** goes back to the newest messages. The pop-out chat window has it too: click **Find** in its title bar (in a per-person window it searches that conversation).
+- **@mentions.** In EPU's chat boxes, type **@** and the start of a name to pick a guildmate (online first); click one or press **Tab**. It puts in their "Call me" name if they set one, otherwise their main's first name, so it counts as a mention for them.
+- **"Call me" name** in My profile: a short name like "Laur" or "Ty". Guildmates see it when they type @, and it counts as a mention of you.
+- **Fewer doubled guild lines:** a hidden server copy that came with only a first name ("Luna" for "Luna Graceclaw") or a moment off, and Discord copies of lines with item links, no longer show twice.
+
 ## 0.28.3
 
 - **Messages that mention you stand out.** In guild, officer, party and raid chat, a message with your name (any of your characters' first names) or one of your alert words is shown in its own color: gold by default, changeable in **Chat settings → Mentions → Mention color**. It works in EPU's chat and in the game's own chat windows (only the message text changes color; turn that part off with "In the game's chat too"). Your own messages are never colored.

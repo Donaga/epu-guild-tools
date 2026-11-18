@@ -535,9 +535,17 @@ local function Protected(msg) return type(msg) == "string" and msg:find("|K", 1,
 ns.ChatProtected = Protected
 local session = { guild = {}, officer = {} }
 ns.chatSessionHistory = session
+-- The same person: "Luna Graceclaw", "Luna Graceclaw-Forever" and "Luna"
+-- (the server sometimes gives only the first name).
+local function SameWho(a, b)
+  a = ns.Short and ns.Short(a or "") or (a or "")
+  b = ns.Short and ns.Short(b or "") or (b or "")
+  if a == "" or b == "" then return false end
+  return a == b or a == b:match("^(%S+)") or b == a:match("^(%S+)")
+end
+ns.ChatSameWho = SameWho
 local function SameAuthorTime(x, e, secs)
-  return (ns.Short and ns.Short(x.who or "") or x.who) == (ns.Short and ns.Short(e.who or "") or e.who)
-    and math.abs((x.t or 0) - (e.t or 0)) <= (secs or 3) and not x.sys
+  return SameWho(x.who, e.who) and math.abs((x.t or 0) - (e.t or 0)) <= (secs or 3) and not x.sys
 end
 function ns.LogChat(channel, who, msg, out, sys)
   if not ns.ChatKeep(channel) then return end
@@ -707,7 +715,7 @@ local function MergeProtected(channel, e)
   local log = LogTable(ChatDB(), channel)
   for i = #log, math.max(1, #log - 200), -1 do
     local x = log[i]
-    if (not x.id or x.id == e.id) and not Protected(x.msg) and SameAuthorTime(x, e) then
+    if (not x.id or x.id == e.id or (type(x.id) == "number" and type(e.id) == "number" and math.abs(x.id - e.id) < 3000000)) and not Protected(x.msg) and SameAuthorTime(x, e) then
       x.id = e.id; x.live = true
       session[channel][e.id] = nil
       return false
@@ -929,7 +937,7 @@ function ns.MergeSharedGuildChat(from, lines)
       local dup = false
       for j = before, math.max(1, before - 400), -1 do
         local x = log[j]
-        if x.msg == m and (ns.Short and ns.Short(x.who or "") or x.who) == w and math.abs((x.t or 0) - t) <= 180 then dup = true; break end
+        if ns.ChatSameText(x.msg, m) and SameWho(x.who, w) and math.abs((x.t or 0) - t) <= 180 then dup = true; break end
       end
       if not dup then log[#log + 1] = e; added = added + 1; newest = math.max(newest, t) end
     end
@@ -963,11 +971,11 @@ function ns.ChatDiscordTwin(d, o)
   if type(d) ~= "table" or type(o) ~= "table" or not d.fromDiscord or o.fromDiscord or o.sys then return false end
   local gap = math.abs((d.t or 0) - (o.t or 0))
   local s = ns.Short and ns.Short(o.who or "") or o.who
-  local same = s == (ns.Short and ns.Short(d.who or "") or d.who)
+  local same = SameWho(o.who, d.who)
   for _, ch in ipairs(d.chars or {}) do if ch == s then same = true end end
   if Protected(o.msg) then return gap <= 10 and same end
   -- unlinked people can only be matched by what they said and when
-  return o.msg == d.msg and gap <= 120 and (same or o.discord or not d.chars)
+  return ns.ChatSameText(o.msg, d.msg) and gap <= 120 and (same or o.discord or not d.chars)
 end
 local function DiscordGuildOk(g)
   local key = ns.GuildKey and ns.GuildKey()
@@ -1308,18 +1316,24 @@ local function ThreadLines(key, max)
   end
   local function Twin(a, b)
     if ns.ChatDiscordTwin(a, b) or ns.ChatDiscordTwin(b, a) then return true end
+    -- a hidden server copy next to the readable line: same person, same moment
+    if Protected(a.msg) ~= Protected(b.msg) and not a.sys and not b.sys and SameAuthorTime(a, b, 3) then return true end
     -- the same message seen twice (live and from the server); two server
     -- copies with different time stamps are a real repeat
     if type(a.id) == "number" and type(b.id) == "number" and math.abs(a.id - b.id) >= 2000000 then return false end
-    return (a.sys or false) == (b.sys or false) and a.msg == b.msg and math.abs((a.t or 0) - (b.t or 0)) <= 180
-      and (ns.Short and ns.Short(a.who or "") or a.who) == (ns.Short and ns.Short(b.who or "") or b.who)
+    return (a.sys or false) == (b.sys or false) and ns.ChatSameText(a.msg, b.msg) and math.abs((a.t or 0) - (b.t or 0)) <= 180
+      and SameWho(a.who, b.who)
   end
   for i = #log, 1, -1 do
     local e = log[i]
     local skip = false
     if group then
       for j = #lines, math.max(1, #lines - 30), -1 do
-        if Twin(lines[j], e) then skip = true; break end
+        if Twin(lines[j], e) then
+          -- keep the readable copy over a hidden one
+          if Protected(lines[j].msg) and not Protected(e.msg) then lines[j] = e end
+          skip = true; break
+        end
       end
       if e.msg == "Unknown" or e.msg == UNKNOWN then skip = true end
       if Protected(e.msg) and not session[channel][e.id or 0] then skip = true end   -- an old saved token
@@ -1383,11 +1397,18 @@ ns.ApplyChatFont = ApplyFont
 -- Strip colors, links and icons for copying.
 local function PlainText(msg)
   msg = tostring(msg or "")
-  msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+  msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
   msg = msg:gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("|K.-|k", "(the game doesn't let addons copy this line)"):gsub("||", "|")
   return msg
 end
 ns.ChatPlainText = PlainText
+-- the same words, whatever the links, colors and spacing
+function ns.ChatSameText(a, b)
+  if a == b then return true end
+  if type(a) ~= "string" or type(b) ~= "string" then return false end
+  local function N(m) return (PlainText(m):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""):lower()) end
+  return N(a) == N(b)
+end
 -- Web addresses become clickable links (click to copy).
 local function Linkify(msg, color)
   local function L(url) return "|cff66b8ff|Hepuurl:" .. url .. "|h" .. url .. "|h|r" .. (color or "") end
@@ -1413,7 +1434,21 @@ function ns.ChatTyping(who)
   local at = typingAt[short]
   return at ~= nil and GetTime() - at < 6
 end
-local function ThreadBlocks(channel, lines, plains)
+-- Search words in a message, marked in a bright color (plain text only, so
+-- links and color codes are never cut).
+local function Highlight(msg, q, color)
+  if type(q) ~= "string" or #q < 2 or msg:find("|", 1, true) then return msg end
+  local low, out, i = msg:lower(), {}, 1
+  while true do
+    local a, b = low:find(q, i, true)
+    if not a then break end
+    out[#out + 1] = msg:sub(i, a - 1) .. "|cffffffff" .. msg:sub(a, b) .. "|r" .. color
+    i = b + 1
+  end
+  if #out == 0 then return msg end
+  return table.concat(out) .. msg:sub(i)
+end
+local function ThreadBlocks(channel, lines, plains, hl)
   local blocks, lastDay, cur = {}, nil, nil
   for _, e in ipairs(lines) do
     local day = date("%A %d %B", e.t)
@@ -1435,7 +1470,9 @@ local function ThreadBlocks(channel, lines, plains)
       local color = ChatColor(channel, e.out, e.who)
       if channel ~= "whisper" and not e.out and Opt().mentionColor and ns.ChatMentions(e.msg) then color = ChatColor("mention") end
       local stamp = Opt().lineTimes and ("|cff777777" .. date("%H:%M", e.t) .. "|r  ") or ""
-      table.insert(cur.msgs, 1, stamp .. color .. Linkify(e.msg, color) .. "|r")
+      local text = Highlight(e.msg, hl, color)
+      if hl and text ~= e.msg then stamp = "|cffffd100>|r " .. stamp end
+      table.insert(cur.msgs, 1, stamp .. color .. Linkify(text, color) .. "|r")
       table.insert(cur.plain, 1, "[" .. date("%H:%M", e.t) .. "] " .. (e.out and (ns.me or "You") or speaker) .. ": " .. PlainText(e.msg))
     end
   end
@@ -1567,6 +1604,44 @@ function ns.ChatLinkClick(owner, link, text, button, openName)
   end
   if SetItemRef then pcall(SetItemRef, link, text, button) end
 end
+-- Search across everything saved: whispers and the guild, officer, party
+-- and raid chat you keep. Newest first.
+local chatFocus = nil
+function ns.SearchChat(q, max)
+  q = type(q) == "string" and q:lower():gsub("^%s+", ""):gsub("%s+$", "") or ""
+  if #q < 2 then return {} end
+  max = max or 100
+  local found = {}
+  local function Scan(channel)
+    for _, e in ipairs(ns.ChatLog(channel)) do
+      if not e.sys and type(e.msg) == "string" and not Protected(e.msg) then
+        local who = ns.Short and ns.Short(e.who or "") or (e.who or "")
+        if PlainText(e.msg):lower():find(q, 1, true) or who:lower():find(q, 1, true) then
+          found[#found + 1] = { channel = channel, key = channel == "whisper" and ("w:" .. e.who) or channel, e = e }
+        end
+      end
+    end
+  end
+  Scan("whisper")
+  for _, ch in ipairs(GROUP_CHANNELS) do
+    if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then Scan(ch) end
+  end
+  table.sort(found, function(a, b) return (a.e.t or 0) > (b.e.t or 0) end)
+  while #found > max do table.remove(found) end
+  return found
+end
+-- the hour either side of a moment in a conversation (newest first)
+function ns.ChatLinesAround(key, t)
+  local out = {}
+  for _, e in ipairs(ThreadLines(key, 2000)) do
+    if math.abs((e.t or 0) - t) <= 3600 and #out < 120 then out[#out + 1] = e end
+  end
+  return out
+end
+-- open a conversation at a search result (nil: back to the latest)
+function ns.ChatFocus(key, t, q)
+  chatFocus = key and { key = ThreadKey(key), t = t, q = (q or ""):lower() } or nil
+end
 local function FillChatWith(det, key)
   local UI = ns.UI
   key = ThreadKey(key)
@@ -1576,6 +1651,10 @@ local function FillChatWith(det, key)
   end
   if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
   local lines, channel, who = ThreadLines(key, 60)
+  -- opened from a search result: the hour either side of that message
+  local focus = chatFocus
+  if focus and focus.key ~= key then chatFocus, focus = nil, nil end
+  if focus then lines = ns.ChatLinesAround(key, focus.t) end
   local short = who and (ns.Short and ns.Short(who) or who)
   local member = who and ns.roster[short]
   det:Reset(channel == "whisper" and ((member and ns.ClassIcon(member.classFile)) or "Interface\\Icons\\INV_Letter_15")
@@ -1598,12 +1677,13 @@ local function FillChatWith(det, key)
   local function Go()
     if Send(key, box:GetText()) then
       box:SetText("")
+      chatFocus = nil
       C_Timer.After(0.3, function() if UI.details.kind == "chatwith" and UI.details.key == key then UI:FillDetails() end end)
     end
   end
   box.onEnter = Go
-  box.onChange = function(self) ns.ChatTypingPing(key, self:GetText()) end
-  local buttons = { { "Send", Go, accent = true, tip = "Or press Enter" } }
+  box.onChange = function(self) ns.ChatTypingPing(key, self:GetText()); ns.MentionSuggest(self) end
+  local buttons = { { "Send", Go, accent = true, tip = "Or press Enter. Type @ to mention someone." } }
   if who then
     buttons[#buttons + 1] = { "Invite", function() local invite = (C_PartyInfo and C_PartyInfo.InviteUnit) or InviteUnit; if invite then invite(who) end end }
     if member and ns.GuildmateMenu then buttons[#buttons + 1] = { "More", function(self) ns.GuildmateMenu(self, short) end } end
@@ -1617,8 +1697,12 @@ local function FillChatWith(det, key)
     tip = "Copy the conversation as plain text, Discord or BBCode. Click a time to copy just those messages." }
   det:Buttons(buttons)
   det:Gap(4)
+  if focus then
+    det:Text("|cffffd100Search:|r \"" .. focus.q .. "\" · messages from an hour either side of " .. date("%a %d %b %H:%M", focus.t), nil)
+    det:Buttons({ { "Show the latest", function() chatFocus = nil; UI:FillDetails() end, tip = "Back to the newest messages" } })
+  end
   if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
-  for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain)) do det:Text(block) end
+  for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain, focus and focus.q)) do det:Text(block) end
   ns.MarkChatSeen(key)
   return true
 end
@@ -1714,7 +1798,7 @@ local function BuildWindow(id)
       return
     end
     K.OpenMenu(self, ConversationItems(), MState().key, function(v)
-      if v then MState().key = v; f:Update() end
+      if v then MState().key = v; f.searching, f.focus = false, nil; f:Update() end
     end)
   end)
   f.close = K.Btn(bar, "x", 22, 20)
@@ -1732,8 +1816,16 @@ local function BuildWindow(id)
     local key = f:Key()
     if key then ns.ShowCopy(ns.ChatConversationText(key, "plain"), f.pick.text:GetText(), key) end
   end)
+  f.findBtn = K.Btn(bar, "Find", 40, 20)
+  f.findBtn:SetPoint("RIGHT", f.copy, "LEFT", -3, 0)
+  f.findBtn.tip = single and "Search this conversation" or "Search all your saved chat"
+  f.findBtn:SetScript("OnClick", function()
+    f.searching, f.focus = not f.searching, nil
+    f:Update()
+    if f.searching then f.find:SetFocus() end
+  end)
   f.full = K.Btn(bar, "Open", 44, 20)
-  f.full:SetPoint("RIGHT", f.copy, "LEFT", -3, 0)
+  f.full:SetPoint("RIGHT", f.findBtn, "LEFT", -3, 0)
   f.full.tip = "Open the Chat page"
   f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
   f.body = CreateFrame("Frame", nil, f)
@@ -1757,8 +1849,13 @@ local function BuildWindow(id)
     f.box:SetFocus()
   end
   f.box.onEnter = Go
-  f.box.onChange = function(self) local key = f:Key(); if key then ns.ChatTypingPing(key, self:GetText()) end end
+  f.box.onChange = function(self) local key = f:Key(); if key then ns.ChatTypingPing(key, self:GetText()) end; ns.MentionSuggest(self) end
   f.send:SetScript("OnClick", Go)
+  f.find = K.Box(f.body, 200, single and "Search this conversation" or "Search chat (2+ letters)")
+  f.find:SetPoint("TOPLEFT", 10, top)
+  f.find:SetPoint("TOPRIGHT", -10, top)
+  f.find:Hide()
+  f.find.onChange = function() f.focus = nil; f:Update() end
   f.scroll = CreateFrame("ScrollFrame", nil, f.body)
   f.scroll:SetPoint("TOPLEFT", 12, top - 32)
   f.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
@@ -1773,6 +1870,20 @@ local function BuildWindow(id)
   if f.child.SetHyperlinksEnabled then
     f.child:SetHyperlinksEnabled(true)
     f.child:SetScript("OnHyperlinkClick", function(self, link, text, button)
+      local find = type(link) == "string" and link:match("^epufind:(%w+)")
+      if find then
+        if find == "back" then f.focus = nil
+        elseif find == "latest" then f.focus, f.searching = nil, false; f.find:SetText("")
+        else
+          local h = f.hits and f.hits[tonumber(find)]
+          if h then
+            f.focus = { key = h.key, t = h.e.t, q = f.query }
+            if not single then MState().key = h.key end
+          end
+        end
+        f.scroll:SetVerticalScroll(0)
+        return f:Update()
+      end
       ns.ChatLinkClick(self, link, text, button, function(name)
         if single then return ns.OpenMessenger("w:" .. name) end
         MState().key = "w:" .. name; f:Update()
@@ -1814,7 +1925,7 @@ local function BuildWindow(id)
     local w = math.max(200, (self:GetWidth() or 340) - 30)
     self.child:SetWidth(w)
     self.text:SetWidth(w - 6)
-    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 44 - 12))
+    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 12))
     self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
   end
   function f:Update()
@@ -1841,15 +1952,44 @@ local function BuildWindow(id)
     self:SetHeight(st.h or (single and 300 or 400))
     local out = {}
     self.child.blockPlain = {}
-    if key then
+    local q = self.searching and (self.find:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "") or ""
+    self.query = q
+    local empty = "|cff888888No messages yet. Type above to start.|r"
+    if self.searching and self.focus then
+      local fkey = self.focus.key
+      local lines, channel = ns.ChatLinesAround(fkey, self.focus.t), ThreadKey(fkey):sub(1, 2) == "w:" and "whisper" or ThreadKey(fkey)
+      out[1] = "|cff888888" .. date("%a %d %b %H:%M", self.focus.t) .. " · an hour either side|r   |cff66b8ff|Hepufind:back|h< Results|h|r   |cff66b8ff|Hepufind:latest|hShow the latest|h|r"
+      for _, b in ipairs(ThreadBlocks(channel, lines, self.child.blockPlain, self.focus.q)) do out[#out + 1] = b end
+    elseif self.searching then
+      self.hits = {}
+      if #q >= 2 then
+        for _, h in ipairs(ns.SearchChat(q, single and 1000 or 80)) do
+          if not single or ThreadKey(h.key) == id then self.hits[#self.hits + 1] = h end
+          if #self.hits >= 80 then break end
+        end
+      end
+      for i, h in ipairs(self.hits) do
+        local e = h.e
+        local who = e.out and "You" or (ns.Short and ns.Short(e.who) or e.who)
+        local where = h.channel == "whisper" and (e.out and ("You to " .. (ns.Short and ns.Short(e.who) or e.who)) or who)
+          or ("[" .. (CHANNELS[h.channel].short or h.channel) .. "] " .. who)
+        local color = ChatColor(h.channel, e.out, e.who)
+        out[#out + 1] = "|cff888888" .. date("%d %b %H:%M", e.t) .. "|r  |Hepufind:" .. i .. "|h|cffffffff" .. where .. ":|r " .. color
+          .. Highlight(PlainText(e.msg), q, color) .. "|r|h"
+      end
+      empty = #q < 2 and "|cff888888Type at least two letters to search" .. (single and " this conversation." or " whispers and the chat you keep.") .. "|r"
+        or "|cff888888Nothing found.|r"
+    elseif key then
       local lines, channel = ThreadLines(key, 100)
       out = ThreadBlocks(channel, lines, self.child.blockPlain)
       ns.MarkChatSeen(key)
     end
     ApplyFont(self.text)
     if self.box.SetFont then ApplyFont(self.box) end
-    self.text:SetText(#out > 0 and table.concat(out, "\n\n") or "|cff888888No messages yet. Type above to start.|r")
-    self.box:SetShown(key ~= nil); self.send:SetShown(key ~= nil)
+    self.text:SetText(#out > 0 and table.concat(out, self.searching and not self.focus and "\n" or "\n\n") or empty)
+    self.box:SetShown(key ~= nil and not self.searching); self.send:SetShown(key ~= nil and not self.searching)
+    self.find:SetShown(self.searching and true or false)
+    self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
@@ -1877,6 +2017,7 @@ local function BuildWindow(id)
       b:SetOn(on and true or false)
       b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key].label .. ": read and reply here")
       b:SetScript("OnClick", function()
+        self.searching, self.focus = false, nil
         if t.key == "tells" then
           local first = ns.ChatConversations()[1]
           st.key = st.lastWhisper or (first and ("w:" .. first.who)) or st.key
@@ -2170,7 +2311,112 @@ local function MentionWords()
     if first and #first >= 3 then words[#words + 1] = first:lower() end
   end
   for w in pairs(o.words) do words[#words + 1] = w end
+  local prof = ns.ProfileOf and ns.ProfileOf(ns.me)
+  if prof and type(prof.nick) == "string" and #prof.nick >= 2 then words[#words + 1] = prof.nick:lower() end
   return words
+end
+
+-- @mentions: type @ and the start of a name (or someone's "Call me" name)
+-- in an EPU chat box to pick a guildmate. Tab takes the first suggestion.
+local function MentionName(name)
+  local main = ns.MainOf and ns.MainOf(name) or name
+  local prof = ns.ProfileOf and ns.ProfileOf(main)
+  local nick = prof and type(prof.nick) == "string" and #prof.nick >= 2 and prof.nick
+  return nick or (main:match("^(%S+)") or main), nick
+end
+function ns.MentionCandidates(partial, max)
+  partial = (partial or ""):lower()
+  max = max or 6
+  local people = {}
+  for name, r in pairs(ns.roster or {}) do
+    if name ~= ns.me and not (ns.IsMine and ns.IsMine(name)) then
+      local main = ns.MainOf and ns.MainOf(name) or name
+      local insert, nick = MentionName(name)
+      local ok = partial == ""
+      if not ok then
+        for _, w in ipairs({ name, name:match("^(%S+)") or name, main, main:match("^(%S+)") or main, nick or "" }) do
+          if w ~= "" and w:lower():sub(1, #partial) == partial then ok = true; break end
+        end
+      end
+      local p = people[main]
+      if ok and (not p or (r.online and not p.online)) then
+        people[main] = { name = name, main = main, insert = insert, nick = nick, online = r.online and true or false }
+      end
+    end
+  end
+  local list = {}
+  for _, p in pairs(people) do list[#list + 1] = p end
+  table.sort(list, function(a, b)
+    if a.online ~= b.online then return a.online end
+    return a.main < b.main
+  end)
+  while #list > max do table.remove(list) end
+  return list
+end
+local MentionPop
+local function MentionToken(box)
+  local text = box:GetText() or ""
+  local before, partial = text:match("^(.-)@([%w%-_]*)$")
+  if not before or (before ~= "" and not before:match("%s$")) then return nil end
+  return before, partial
+end
+function ns.MentionPick(box, p)
+  local before = MentionToken(box)
+  if not before or not p then return false end
+  box:SetText(before .. "@" .. p.insert .. " ")
+  if box.SetCursorPosition then box:SetCursorPosition(#box:GetText()) end
+  if MentionPop then MentionPop:Hide() end
+  return true
+end
+function ns.MentionSuggest(box)
+  local K = ns.UIKit
+  local before, partial = MentionToken(box)
+  local list = before and ns.MentionCandidates(partial, 6) or {}
+  if #list == 0 or not K then if MentionPop then MentionPop:Hide() end; return list end
+  if not MentionPop then
+    local C = K.C
+    MentionPop = CreateFrame("Frame", "EPUGuildMentionPop", UIParent)
+    MentionPop:SetFrameStrata("DIALOG")
+    MentionPop:SetToplevel(true)
+    local bg = K.Tex(MentionPop, "BACKGROUND", C.panel2 or C.panel); bg:SetAllPoints()
+    local edge = K.Tex(MentionPop, "BORDER", C.gold); edge:SetPoint("TOPLEFT"); edge:SetPoint("TOPRIGHT"); edge:SetHeight(1)
+    MentionPop.rows = {}
+  end
+  local pop = MentionPop
+  pop.box, pop.list = box, list
+  for i, p in ipairs(list) do
+    local b = pop.rows[i]
+    if not b then
+      b = K.Btn(pop, "", 200, 20)
+      pop.rows[i] = b
+    end
+    b:ClearAllPoints()
+    b:SetPoint("TOPLEFT", 3, -3 - (i - 1) * 22)
+    b:SetPoint("TOPRIGHT", -3, -3 - (i - 1) * 22)
+    local short = ns.Short and ns.Short(p.name) or p.name
+    b:SetLabel((p.online and "|cff4ade80•|r " or "|cff666666•|r ") .. "@" .. p.insert .. "  |cff888888" .. (short ~= p.insert and short or "")
+      .. (p.main ~= short and (" (" .. p.main .. ")") or "") .. "|r")
+    b.tip = i == 1 and "Click, or press Tab" or nil
+    b:SetScript("OnClick", function() ns.MentionPick(box, p); box:SetFocus() end)
+    b:Show()
+  end
+  for i = #list + 1, #pop.rows do pop.rows[i]:Hide() end
+  pop:SetSize(math.max(180, (box:GetWidth() or 200)), #list * 22 + 6)
+  pop:ClearAllPoints()
+  pop:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 0, 2)
+  pop:Show()
+  if not box.epuMentionHooked then
+    box.epuMentionHooked = true
+    box:HookScript("OnTabPressed", function(self)
+      if MentionPop and MentionPop:IsShown() and MentionPop.box == self and MentionPop.list[1] then ns.MentionPick(self, MentionPop.list[1]) end
+    end)
+    box:HookScript("OnEditFocusLost", function(self)
+      if C_Timer then C_Timer.After(0.25, function()
+        if MentionPop and MentionPop.box == self and not self:HasFocus() then MentionPop:Hide() end
+      end) end
+    end)
+  end
+  return list
 end
 function ns.ChatMentions(msg)
   msg = Plain(msg)

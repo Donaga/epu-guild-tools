@@ -3464,7 +3464,7 @@ function UI:FillDetails()
     local prof = (ns.GuildStore() or {}).profiles and ns.GuildStore().profiles[ns.me]
     det.prof = det.prof or {}
     if det.prof.loaded ~= ns.me then
-      det.prof = { loaded = ns.me, roles = prof and prof.roles or "", lf = prof and prof.lf or "" }
+      det.prof = { loaded = ns.me, roles = prof and prof.roles or "", lf = prof and prof.lf or "", nick = prof and prof.nick or "" }
     end
     local P = det.prof
     det:Text("What do you play? (pick any)", C.muted)
@@ -3480,7 +3480,10 @@ function UI:FillDetails()
     local lf = det:Field("Looking for", P.lf, 160)
     lf.onChange = function(b) P.lf = b:GetText() end
     det:Text("e.g. \"LF Deadmines\", \"leveling buddy\", \"selling Linen Bags\"", C.muted)
-    det:Buttons({ { "Save", function() ns.SetProfile(P.roles, P.lf); ns.Print("Profile saved.") end, accent = true } })
+    local nick = det:Field("Call me", P.nick, 120)
+    nick.onChange = function(b) P.nick = b:GetText() end
+    det:Text("A short name for @mentions in chat, e.g. \"Laur\" or \"Ty\". Guildmates who type @ see it, and it counts as a mention of you.", C.muted)
+    det:Buttons({ { "Save", function() ns.SetProfile(P.roles, P.lf, P.nick); ns.Print("Profile saved.") end, accent = true } })
     det:Text("Applies to this character. Alts without their own profile show your main's.", C.muted)
 
   elseif kind == "news" then

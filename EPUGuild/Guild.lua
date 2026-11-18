@@ -61,7 +61,14 @@ end
 ---------------------------------------------------------------------------
 -- Profiles
 ---------------------------------------------------------------------------
-function ns.SetProfile(roles, lf)
+-- A short name guildmates can @mention you by ("Laur", "Ty"): letters,
+-- numbers, - and _, up to 16.
+function ns.CleanNick(n)
+  if type(n) ~= "string" then return nil end
+  n = n:gsub("[^%w%-_]", ""):sub(1, 16)
+  return #n >= 2 and n or nil
+end
+function ns.SetProfile(roles, lf, nick)
   local g = ns.GuildStore()
   if not g then return end
   local cur = g.profiles[ns.me]
@@ -69,7 +76,7 @@ function ns.SetProfile(roles, lf)
   for r in (roles or ""):gmatch("[thd]") do set[r] = true end
   local norm = (set.t and "t" or "") .. (set.h and "h" or "") .. (set.d and "d" or "")
   g.profiles[ns.me] = { t = ns.NextVersion(cur and cur.t), roles = norm ~= "" and norm or nil,
-    lf = (lf and lf ~= "") and lf:sub(1, 60) or nil }
+    lf = (lf and lf ~= "") and lf:sub(1, 60) or nil, nick = ns.CleanNick(nick) }
   ns.Send("D", { profiles = { [ns.me] = g.profiles[ns.me] } })
   ns.Changed()
 end
@@ -423,7 +430,7 @@ function ns.MergeGuild(sender, b, trusted, catchingUp)
         if not cur or ns.Newer(p, cur, "t") then
           ns.Confirm(g, "profiles", who)
           g.profiles[who] = { t = p.t, roles = type(p.roles) == "string" and p.roles:sub(1, 3) or nil,
-            lf = type(p.lf) == "string" and p.lf:sub(1, 60) or nil }
+            lf = type(p.lf) == "string" and p.lf:sub(1, 60) or nil, nick = ns.CleanNick(p.nick) }
           changed = true
         end
       end
