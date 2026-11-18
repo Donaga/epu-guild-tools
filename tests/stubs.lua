@@ -286,7 +286,7 @@ __gblog = { {}, {} }
 __gbmoneylog = {}
 function GetNumGuildBankTabs() return __numTabs or 2 end
 function GetGuildBankTabInfo(tab) return "Tab" .. tab, "icon", true end
-function GetCurrentGuildBankTab() return 1 end
+function GetCurrentGuildBankTab() return __gbTab or 1 end
 function GetGuildBankItemLink(tab, slot) local x = __gb[tab][slot]; if x then return __link(x[1]) end end
 function GetGuildBankItemInfo(tab, slot) local x = __gb[tab][slot]; if x then return "icon", x[2] end end
 function GetGuildBankMoney() return __gbMoneyOverride or 5000000 end
@@ -327,7 +327,25 @@ MailFrame = NewMock(); MailFrame._shown = false
 SendMailFrame = NewMock(); SendMailFrame._shown = true
 SendMailNameEditBox = NewMock(); SendMailSubjectEditBox = NewMock()
 __cursor = nil
-C_Container.PickupContainerItem = function(b, s) local x = __bags[b][s]; __cursor = {x[1], x[2]}; __cursor_origin={b,s}; __bags[b][s] = nil end
+C_Container.PickupContainerItem = function(b, s)
+  __bags[b] = __bags[b] or {}
+  local x = __bags[b][s]
+  if __cursor and not x then __bags[b][s] = {__cursor[1], __cursor[2]}; __cursor, __cursor_origin = nil, nil; __fire("BAG_UPDATE", b); return end
+  __cursor = {x[1], x[2]}; __cursor_origin={b,s}; __bags[b][s] = nil
+end
+-- guild bank moves: pick up a whole stack or split one onto the cursor
+function PickupGuildBankItem(tab, slot)
+  local x = __gb[tab][slot]
+  if __cursor then __gb[tab][slot] = {__cursor[1], __cursor[2]}; __cursor = nil
+  elseif x then __cursor = {x[1], x[2]}; __cursor_origin = nil; __gb[tab][slot] = nil end
+end
+function SplitGuildBankItem(tab, slot, n)
+  local x = __gb[tab][slot]
+  if not x or n >= x[2] then return end
+  x[2] = x[2] - n; __cursor = {x[1], n}; __cursor_origin = nil
+end
+__gbTab = 1
+function SetCurrentGuildBankTab(t) __gbTab = t end
 C_Container.SplitContainerItem = function(b, s, n) local x = __bags[b][s]; x[2] = x[2] - n; __cursor = {x[1], n}; __cursor_origin={b,s} end
 function ClickSendMailItemButton(i) local old=__mailSlots[i]; __mailSlots[i]=__cursor; __cursor=old; __fire("MAIL_SEND_INFO_UPDATE") end
 function GuildControlGetNumRanks() return 5 end

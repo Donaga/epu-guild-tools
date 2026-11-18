@@ -2,6 +2,7 @@
 
 ## 0.28.6
 
+- **Pull for request.** At the guild bank, officers and bank managers can take exactly what an approved request still needs out of the guild bank in one click: **Pull for request** in the request's details (or the bag icon on its row while the guild bank is open). EPU moves whole stacks where they fit and splits one for the rest, one move at a time, into empty bag slots. Then take it to a mailbox and click **Mail it** as usual. It checks your bag space and today's guild bank withdrawal limit first, and if the guild bank has less than is owed it takes what there is and says so. Pulling doesn't mark the request filled; sending the mail does.
 - **Taking a requested item out of the guild bank fills the request.** When a member with an approved request withdraws that item from the real guild bank (on any of their characters), the officer or bank manager who next opens the bank credits it to their oldest matching request, as if it had been mailed: delivered goes up, and the request turns Filled once it's all there. Each withdrawal counts once, even when several officers open the bank. Withdrawals made before the request was asked for don't count, and neither do bank alts moving stock out or an officer taking something out for someone else (mailing or trading it to them fills the request, as before).
 ## 0.28.5
 

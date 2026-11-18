@@ -1701,6 +1701,9 @@ Views.requests = {
           }
         elseif officer and r.status == "approved" then
           buttons = { { "Interface\\Icons\\INV_Letter_15", "Mail it (open a mailbox first)", function() ns.MailRequest(rid) end } }
+          if r.item and ns.GuildBankIsOpen() then
+            table.insert(buttons, 1, { "Interface\\Icons\\INV_Misc_Bag_10", "Pull for request: take what's owed out of the guild bank", function() ns.PullForRequest(rid) end })
+          end
         end
         out[#out + 1] = {
           key = "req:" .. rid, item = r.item,
@@ -3737,6 +3740,11 @@ function UI:FillDetails()
             det:Buttons({{"Fill mail for this member",function()
               if RecipientSaved() then UI:OpenDetails("membermail", det.toChoice) end
             end}})
+          end
+          local gb = g.bank[ns.GB_KEY]
+          if r.item and ((gb and not gb.retired) or ns.GuildBankIsOpen()) then
+            det:Buttons({ { "Pull for request", function() ns.PullForRequest(key) end,
+              tip = "With the guild bank open: moves the " .. ns.Remaining(r) .. " still owed from the guild bank into your bags, ready for Mail it." } })
           end
           det:Buttons({ { "Mail it", function() if RecipientSaved() then ns.MailRequest(key) end end, accent = true,
             tip = "With a mailbox open: fills in " .. (r.to or r.who) .. " and attaches " .. r.qty .. " from your bags. You click Send." } })

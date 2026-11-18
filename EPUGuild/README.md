@@ -223,7 +223,7 @@ Open it with `/epu` or the minimap bag. It has a sidebar on the left with counts
 - Donations: officers can void one that was logged by mistake.
 - Bank and shopping items: request them, or add them as a need.
 
-**Mail it.** With a mailbox open, an officer clicks the mail icon on an approved request (or **Mail it** in its details). The addon fills in the recipient and subject and attaches the right number of the item from your bags, splitting a stack if needed. Check it and press Send; the request turns Filled when the mail goes.
+**Mail it.** With a mailbox open, an officer clicks the mail icon on an approved request (or **Mail it** in its details). The addon fills in the recipient and subject and attaches the right number of the item from your bags, splitting a stack if needed. Check it and press Send; the request turns Filled when the mail goes. If the items are in the real guild bank, open it first and click **Pull for request** in the request's details: EPU moves exactly the quantity still owed into your bags, ready for Mail it.
 
 **Crafters and recipes**
 - **Crafters** lists everyone's professions and skill. Officers can mark **guild crafters** (for example, our Tailor) from a crafter's details. Guild crafters get a star and are listed first everywhere.
