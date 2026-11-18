@@ -405,7 +405,7 @@ end
 function ns.SetStvTargets(qty)
   local g = ns.G()
   if not g then return end
-  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
+  if not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
   for _, ch in ipairs(ns.STV_CHAPTERS) do
     for _, n in ipairs(ch.pages) do
       local id = ns.StvPageItem(n)

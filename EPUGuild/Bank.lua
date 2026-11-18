@@ -118,9 +118,9 @@ function ns.SnapshotBank()
   g.bank[ns.me] = { v = ns.NextVersion(cur and cur.v), money = money, items = items, seen=seen, bankTime = cdb.bankTime }
   ns.Changed()
 
-  if not ns.IsTrusted(ns.me) and not warnedTrust then
+  if not ns.IsBankTrusted(ns.me) and not warnedTrust then
     warnedTrust = true
-    ns.Print("This bank alt isn't an officer or a rank with 'Bank' in its name, so other members will ignore its updates. Ask the GM to promote it, or use /epu officerrank.")
+    ns.Print("This bank alt isn't an officer or a bank manager, so other members will ignore its updates. Ask an officer to add it under Officer > Bank managers.")
   end
   ns.Debounce("bankBroadcast", 5, function()
     local s = g.bank[ns.me]
@@ -320,7 +320,7 @@ ns.On("MAIL_CLOSED", function() outgoing, attached, ns.mailRequestID, ns.mailReq
 
 local tradeSnap
 ns.On("TRADE_ACCEPT_UPDATE", function()
-  local bankAlt, officer = ns.IsBankAlt(), ns.IsTrusted(ns.me)
+  local bankAlt, officer = ns.IsBankAlt(), ns.IsBankTrusted(ns.me)
   local crafting = false   -- handing over something we were asked to craft?
   local g = ns.G()
   for _, r in pairs((g and g.requests) or {}) do
@@ -387,7 +387,7 @@ function ns.MailRequest(rid)
   local r = g and g.requests[rid]
   if not r then return end
   local crafter = r.crafter and r.crafter == ns.me
-  if not crafter and not ns.IsTrusted(ns.me) then return ns.Print("Only officers and the bank character send requested items.") end
+  if not crafter and not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers and the bank character send requested items.") end
   if not r.item then return ns.Print("That's an enchant, so there's nothing to mail. Meet up and use the trade window, then mark it made.") end
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail it again.") end
   if r.status ~= "approved" then return ns.Print(r.crafter and "Accept the request before mailing it." or "Approve the request before mailing it.") end
@@ -417,7 +417,7 @@ function ns.MailCraftMats(rid)
   local r = g and g.requests[rid]
   if not r or not r.crafter then return end
   local mine = r.who == ns.me
-  if not mine and not ns.IsTrusted(ns.me) then return ns.Print("Only the requester or an officer sends the materials.") end
+  if not mine and not ns.IsBankTrusted(ns.me) then return ns.Print("Only the requester or an officer sends the materials.") end
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first, then click Mail materials again.") end
   local mats = ns.MatsFor(r.key)
   if #mats == 0 then return ns.Print("The materials for this recipe haven't been shared yet. Ask " .. r.crafter .. " what they need.") end

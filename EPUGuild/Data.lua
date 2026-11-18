@@ -45,7 +45,7 @@ function ns.Changed()
   if ns.UI and ns.UI:IsShown() then
     ns.Debounce("ui", 0.3, function() ns.UI:Refresh() end)
   end
-  if ns.CloseMetGoals and ns.db and ns.IsTrusted(ns.me) then
+  if ns.CloseMetGoals and ns.db and ns.IsBankTrusted(ns.me) then
     ns.Debounce("goals", 3, ns.CloseMetGoals)
   end
   if ns.RefreshBagMarkers then ns.Debounce("bagmarkers", 1, ns.RefreshBagMarkers) end
@@ -156,6 +156,44 @@ function ns.IsTrusted(name)
   return false
 end
 
+-- Bank managers: ranks or characters the officers allow to run the bank side
+-- only (bank contents, needs, requests, donations and serving verified sync).
+-- Officers set this once for the whole guild; it travels in the officer
+-- settings (policy), which only officers can change.
+function ns.IsBankTrusted(name)
+  if ns.IsTrusted(name) then return true end
+  local g = ns.G()
+  local pol = g and g.policy
+  if not pol or not name then return false end
+  name = ns.Short(name)
+  if type(pol.bankChars) == "table" and pol.bankChars[name] then return true end
+  if type(pol.bankRanks) ~= "table" or not next(pol.bankRanks) then return false end
+  local rankName
+  if name == ns.me then
+    local _, rn = GetGuildInfo("player")
+    rankName = rn
+  else
+    local r = ns.roster[name]
+    rankName = r and r.rankName
+  end
+  if type(rankName) ~= "string" or (issecretvalue and issecretvalue(rankName)) then return false end
+  return pol.bankRanks[rankName:lower()] == true
+end
+function ns.BankManagerLabel(name)
+  if ns.IsTrusted(name) then return "officer" end
+  if ns.IsBankTrusted(name) then return "bank manager" end
+  return nil
+end
+function ns.SetBankManagers(ranks, chars)
+  local g = ns.G()
+  if not g or not ns.IsTrusted(ns.me) then return ns.Print("Only officers can choose bank managers.") end
+  g.policy.bankRanks, g.policy.bankChars = ranks or {}, chars or {}
+  g.policy.v = ns.NextVersion(g.policy.v)
+  ns.Send("D", { policy = g.policy })
+  ns.Changed()
+  if ns.Log then ns.Log("Changed bank managers") end
+end
+
 ---------------------------------------------------------------------------
 -- Unconfirmed records: data a fellow member relayed to us before any officer
 -- was online. It fills empty pages, but it never overrides real data, is
@@ -225,16 +263,19 @@ function ns.Merge(sender, b, catchingUp)
   local g = ns.G()
   if not g or type(b) ~= "table" then return false end
   local trusted = ns.IsTrusted(sender)
+  -- Bank managers (and officers) may publish the bank side: needs, bank
+  -- contents, request decisions and donations. Everything else is officers'.
+  local bankTrusted = trusted or ns.IsBankTrusted(sender)
   local changed = false
 
   local nd = b.needs
-  if trusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" then
+  if bankTrusted and type(nd) == "table" and type(nd.v) == "number" and type(nd.list) == "table" then
     ns.MergeNeeds(sender, nd)
     Confirm(g, "needs", "list")
     changed = true
   end
 
-  if trusted and type(b.bank) == "table" then
+  if bankTrusted and type(b.bank) == "table" then
     for alt, snap in pairs(b.bank) do
       if type(snap) == "table" and type(snap.v) == "number" then
         local cur = Real(g, "bank", alt, g.bank[alt])
@@ -258,7 +299,7 @@ function ns.Merge(sender, b, catchingUp)
       -- Members may only create or cancel their own requests; approving,
       -- rejecting and filling come from officers.
       if type(r) == "table" and type(r.u) == "number" and (r.item or r.spell)
-        and (trusted or ns.MemberMayUpdate(sender, Real(g, "req", id, g.requests[id]), r) or ns.CrafterMayUpdate(sender, Real(g, "req", id, g.requests[id]), r)) then
+        and (bankTrusted or ns.MemberMayUpdate(sender, Real(g, "req", id, g.requests[id]), r) or ns.CrafterMayUpdate(sender, Real(g, "req", id, g.requests[id]), r)) then
         local cur = Real(g, "req", id, g.requests[id])
         if not cur or ns.Newer(r, cur, "u") then
           local oldStatus = cur and cur.status
@@ -277,7 +318,7 @@ function ns.Merge(sender, b, catchingUp)
     end
   end
 
-  if trusted and type(b.don) == "table" then
+  if bankTrusted and type(b.don) == "table" then
     for id, d in pairs(b.don) do
       local cur = Real(g, "don", id, g.donations[id])
       if type(d) == "table" and (not cur or (tonumber(d.u) or 0) > (tonumber(cur.u) or 0)) then
@@ -300,8 +341,18 @@ function ns.Merge(sender, b, catchingUp)
         end
       end
     end
+    local function NameSet(t, max)
+      local out, n = {}, 0
+      if type(t) == "table" then
+        for k, v in pairs(t) do
+          if v == true and type(k) == "string" and #k > 0 and #k <= 48 and n < max then out[k] = true; n = n + 1 end
+        end
+      end
+      return out
+    end
     g.policy = { v = pol.v, maxOpen = tonumber(pol.maxOpen) or 0, designated = designated,
-      promoDays = tonumber(pol.promoDays) or 0, promoLevel = tonumber(pol.promoLevel) or 0 }
+      promoDays = tonumber(pol.promoDays) or 0, promoLevel = tonumber(pol.promoLevel) or 0,
+      bankRanks = NameSet(pol.bankRanks, 10), bankChars = NameSet(pol.bankChars, 40) }
     changed = true
   end
 
@@ -428,7 +479,7 @@ end
 function ns.SetNeed(id, qty, kind)
   local g = ns.G()
   if not g then return ns.Print("You are not in a guild.") end
-  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
+  if not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
   if qty and qty > 0 then
     g.needs.list[id] = (kind == "goal") and { q = qty, k = "g" } or qty
   else
@@ -469,7 +520,7 @@ end
 -- Officers' clients retire goals once the bank holds enough.
 function ns.CloseMetGoals()
   local g = ns.G()
-  if not g or not ns.IsTrusted(ns.me) then return end
+  if not g or not ns.IsBankTrusted(ns.me) then return end
   local done = {}
   for id, v in pairs(g.needs.list) do
     local q, kind = ns.NeedEntry(v)
@@ -580,7 +631,7 @@ function ns.NewRequest(id, qty, note, to, forWho)
   if not ns.CanBankRequest(id) then ns.Print('Choose an item from Bank. Weapons and armor must be in stock; other supplies can be requested from stock history. Sync with an officer if stock data is missing.'); return nil end
   qty=qty or 1
   if not ns.PositiveInt(qty,1000) then ns.Print('Choose a whole quantity from 1 to 1000.'); return nil end
-  local officer = ns.IsTrusted(ns.me)
+  local officer = ns.IsBankTrusted(ns.me)
   -- officers can file a request in another member's name
   if forWho and forWho ~= ns.me then
     if not officer then return ns.Print("Only officers can make requests for other members.") end
@@ -657,7 +708,7 @@ function ns.SetRequestStatus(rid, status, reason, by)
   local g = ns.G()
   local r = g and g.requests[rid]
   if not r then return end
-  local officer = ns.IsTrusted(ns.me)
+  local officer = ns.IsBankTrusted(ns.me)
   local crafter = r.crafter == ns.me and CRAFTER_STATES[status]
   if not officer and not crafter and not (r.who == ns.me and status == "cancelled") then
     return ns.Print("Only officers can approve, reject or fill requests.")
@@ -683,7 +734,7 @@ function ns.EditRequest(rid, changes)
   local g = ns.G()
   local r = g and g.requests[rid]
   if not r then return false end
-  local officer = ns.IsTrusted(ns.me)
+  local officer = ns.IsBankTrusted(ns.me)
   local own = (r.who == ns.me)
   local pending = (r.status == "pending" or r.status == "open")
   if not officer and r.crafter == ns.me and not own then
@@ -723,7 +774,7 @@ end
 -- Officers: hide finished (filled, rejected, cancelled) requests from the default views.
 function ns.ArchiveFinished()
   local g = ns.G()
-  if not g or not ns.IsTrusted(ns.me) then return 0 end
+  if not g or not ns.IsBankTrusted(ns.me) then return 0 end
   local batch, n = {}, 0
   for rid, r in pairs(g.requests) do
     if not ns.IsActiveRequest(r) and not r.archived then
@@ -741,7 +792,7 @@ end
 function ns.VoidDonation(id, void)
   local g = ns.G()
   local d = g and g.donations[id]
-  if not d or not ns.IsTrusted(ns.me) then return end
+  if not d or not ns.IsBankTrusted(ns.me) then return end
   d.void = (void ~= false) or nil
   d.u = ns.NextVersion(math.max(d.u or 0, d.t or 0))
   ns.Send("D", { don = { [id] = d } })
@@ -778,7 +829,7 @@ end
 function ns.AutoFillFor(recipient, items)
   local g = ns.G()
   if not g then return end
-  local officer = ns.IsTrusted(ns.me)
+  local officer = ns.IsBankTrusted(ns.me)
   recipient = ns.Member(recipient) or ns.Short(recipient)
   if not recipient then return end
   local sent = {}
@@ -1080,7 +1131,7 @@ end
 -- Officers: make sure the bank keeps enough materials for `crafts` crafts.
 function ns.StockMatsFor(key, crafts)
   local g = ns.G()
-  if not g or not ns.IsTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
+  if not g or not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers can change the needs list.") end
   local mats = ns.MatsFor(key)
   if #mats == 0 then return ns.Print("The materials for that recipe haven't been shared yet.") end
   crafts = math.max(1, tonumber(crafts) or 5)

@@ -1615,7 +1615,7 @@ Views.requests = {
   composer = "request",
   count = function(g)
     local n = 0
-    local officer = ns.IsTrusted(ns.me)
+    local officer = ns.IsBankTrusted(ns.me)
     for _, r in pairs(g.requests) do
       local pending = (r.status == "pending" or r.status == "open")
       if r.crafter and ns.IAmCrafter(r) and (pending or r.status == "approved") then n = n + 1     -- work for me to do
@@ -1653,7 +1653,7 @@ Views.requests = {
     end, function() return UI.state.requests.sort end, function(v) UI.state.requests.sort = v end, "right")
   end,
   rows = function(g, q)
-    local st, officer, out = UI.state.requests, ns.IsTrusted(ns.me), {}
+    local st, officer, out = UI.state.requests, ns.IsBankTrusted(ns.me), {}
     for rid, r in pairs(g.requests) do
       local name = ns.RequestName(r, true)
       if RequestMatchesFilter(r, st.filter) and RequestMatchesScope(r,q) then
@@ -1790,7 +1790,7 @@ local function SyncMemberStatus(r)
     return "Last report "..Ago(r.t)..source, r.kind=="relay" and "sync_unconf" or "sync_ok"
   end
   if r.asked then return "Last requested "..Ago(r.asked), "sync_none" end
-  if r.name==ns.me and ns.IsTrusted(ns.me) then return "Holds this guild's copy", "sync_host" end
+  if r.name==ns.me and ns.IsBankTrusted(ns.me) then return "Holds this guild's copy", "sync_host" end
   return "Waiting for guild data", "sync_none"
 end
 local syncFilters = {
@@ -2505,7 +2505,7 @@ Views.home = {
     Add({ key = "bank", title = "Guild bank", sub = "Browse stock and request an item.", icon = Views.bank.icon, compact = true, onClick = Go(function() UI:SetView("bank") end) })
     Add({ key = "news", title = "Guild news", sub = #ns.UnreadNews() .. " unread announcements", icon = Views.news.icon, compact = true, onClick = Go(function() UI:SetView("news") end) })
     Add({ key = "start", title = "Getting started", sub = "See your guild checklist.", icon = Views.onboarding.icon, compact = true, onClick = Go(function() UI:SetView("onboarding") end) })
-    if ns.IsTrusted(ns.me) then
+    if ns.IsBankTrusted(ns.me) then
       Add({ key = "fulfil", title = "Bank fulfillment", sub = "Review approved requests and preview mail.", icon = "Interface\\Icons\\INV_Misc_Bag_08",
         compact = true, onClick = Go(function() UI:OpenDetails("fulfillment", "all") end) })
     end
@@ -2996,8 +2996,8 @@ do
   local _, h1 = Row("Trusted ranks",nil,Views.officer.icon)
   UI.rankBtn = Btn(officerPage, "", 230, 22)
   UI.rankBtn:SetPoint("TOPRIGHT", -14, lineY)
-  UI.rankBtn.tip = "Members at these ranks (and any rank with \"Bank\" in its name) can change needs, approve requests and publish bank contents. Each officer's addon uses its own setting, so keep them the same."
-  h1:SetText("Who can manage the bank")
+  UI.rankBtn.tip = "Officers: members at these ranks (and any rank with \"Bank\" in its name) have every officer tool. Each officer's addon uses its own setting, so keep them the same."
+  h1:SetText("Officer ranks (all officer tools)")
   UI.rankBtn:SetScript("OnClick", function()
     local g = ns.G()
     if not g then return end
@@ -3005,6 +3005,14 @@ do
     g.officerRank = ((g.officerRank or 1) + 1) % math.max(1, n - 1)
     UI:Refresh()
   end)
+
+  lineY=y
+  local _, hb = Row("Bank managers",nil,Views.bank.icon)
+  UI.bankMgrHint = hb
+  UI.bankMgrBtn = Btn(officerPage, "Choose", 80, 22)
+  UI.bankMgrBtn:SetPoint("TOPRIGHT", -14, lineY)
+  UI.bankMgrBtn.tip = "Ranks or characters that may run the bank side for the whole guild: bank contents, needs, requests, donations and verified sync. No announcements, notes or Officer tab."
+  UI.bankMgrBtn:SetScript("OnClick", function() UI:OpenDetails("bankmanagers", "guild") end)
 
   lineY=y
   local _, h2 = Row("This character is a bank",nil,Views.bank.icon)
@@ -3102,6 +3110,15 @@ local function RefreshOfficerPage(g)
     names[#names + 1] = nm or ("rank " .. i)
   end
   UI.rankBtn:SetLabel("Ranks 0-" .. (g.officerRank or 1) .. ": " .. table.concat(names, ", "))
+  do
+    local bits = {}
+    for r in pairs(g.policy.bankRanks or {}) do bits[#bits + 1] = r end
+    local nChars = 0
+    for _ in pairs(g.policy.bankChars or {}) do nChars = nChars + 1 end
+    table.sort(bits)
+    if nChars > 0 then bits[#bits + 1] = nChars .. (nChars == 1 and " character" or " characters") end
+    UI.bankMgrHint:SetText(#bits > 0 and ("Bank side only, guild-wide: " .. table.concat(bits, ", ")) or "Bank side only, guild-wide. None chosen yet.")
+  end
   UI.bankToggle:SetLabel(ns.IsBankAlt() and "On" or "Off")
   UI.bankToggle:SetOn(ns.IsBankAlt())
   if not UI.limitBox:HasFocus() then UI.limitBox:SetText(tostring(g.policy.maxOpen or 0)) end
@@ -3178,6 +3195,7 @@ function UI:FillDetails()
   if not det:IsShown() or not g then return end
   local kind, key = det.kind, det.key
   local officer = ns.IsTrusted(ns.me)
+  local bankOfficer = ns.IsBankTrusted(ns.me)
 
 
   if ns.FillCasualDetails and ns.FillCasualDetails(kind,key,det) then
@@ -3204,7 +3222,7 @@ function UI:FillDetails()
     det:Text(key.text or label)
   elseif kind=="bubbleactions" then
     ns.FillBubbleActions(det)
-  elseif kind=="fulfillment" and officer then
+  elseif kind=="fulfillment" and bankOfficer then
     det:Reset(nil,nil,"Bank fulfillment","Stock estimates use the latest bank snapshots")
     local queue = ns.BankFulfillmentQueue()
     for _, section in ipairs({{"Ready to fill",queue.ready},{"Pull from bank",queue.pull},{"Waiting for stock",queue.restock}}) do
@@ -3232,7 +3250,7 @@ function UI:FillDetails()
         ..((shortage[line.item] or 0)>0 and (" · "..shortage[line.item].." short in recorded stock") or ""))
     end
     det:Text("Combines approved bank requests for this exact recipient. Uses items in your bags, up to the game's attachment limit. Missing quantities stay open. Sending is manual.",C.muted)
-    if officer then det:Buttons({{"Fill mail",function() ns.MailMemberRequests(key) end,accent=true}}) end
+    if bankOfficer then det:Buttons({{"Fill mail",function() ns.MailMemberRequests(key) end,accent=true}}) end
   elseif kind=="newproject" then
     det:Reset(nil,1,"New crafting project","Officers coordinate shared crafting goals")
     local title=det:Field("Title","",160)
@@ -3344,7 +3362,7 @@ function UI:FillDetails()
         det:Buttons(specs)
       end
     end
-    if ns.IsActiveRequest(r) and ((own and r.mats == "me") or (officer and r.mats == "bank")) then
+    if ns.IsActiveRequest(r) and ((own and r.mats == "me") or (bankOfficer and r.mats == "bank")) then
       det:Buttons({ { "Mail materials to " .. (r.crafter:match("^(%S+)") or r.crafter), function() ns.MailCraftMats(key) end,
         tip = "With a mailbox open: attaches the materials for " .. r.qty .. " from your bags." } })
     end
@@ -3396,7 +3414,7 @@ function UI:FillDetails()
       end }
     end
     det:Buttons(specs)
-    if officer and #ns.MemberMailPlan(key)>0 then
+    if bankOfficer and #ns.MemberMailPlan(key)>0 then
       det:Buttons({{"Fill member mail",function() UI:OpenDetails("membermail",key) end}})
     end
     if officer and key ~= ns.me then
@@ -3496,6 +3514,51 @@ function UI:FillDetails()
       if id then UI:OpenDetails("news", id) end
     end, accent = true }, { "Cancel", function() UI:CloseDetails() end } })
 
+  elseif kind == "bankmanagers" then
+    local pol = g.policy
+    local ranks, chars = {}, {}
+    for k in pairs(pol.bankRanks or {}) do ranks[k] = true end
+    for k in pairs(pol.bankChars or {}) do chars[k] = true end
+    det:Reset(Views.bank.icon, nil, "Bank managers", "Run the bank side for the whole guild")
+    det:Text("Bank managers can publish bank contents, edit needs, approve and mail requests, record donations, and other members sync from them as verified. They can't post announcements, write member notes, manage events or use the Officer tab.")
+    local canEdit = officer
+    if not canEdit then det:Text("Only officers can change this.", C.muted) end
+    det:Section("By rank")
+    local n = (GuildControlGetNumRanks and GuildControlGetNumRanks()) or 0
+    local row = {}
+    for i = (g.officerRank or 1) + 2, n do
+      local nm = GuildControlGetRankName and GuildControlGetRankName(i)
+      if type(nm) == "string" and nm ~= "" then
+        local key = nm:lower()
+        row[#row + 1] = { (ranks[key] and "[x] " or "[ ] ") .. nm, function()
+          if not canEdit then return end
+          ranks[key] = not ranks[key] or nil
+          ns.SetBankManagers(ranks, chars); UI:FillDetails()
+        end, on = ranks[key] == true }
+        if #row == 2 then det:Buttons(row); row = {} end
+      end
+    end
+    if #row > 0 then det:Buttons(row) end
+    det:Section("By character")
+    local list = {}
+    for name in pairs(chars) do list[#list + 1] = name end
+    table.sort(list)
+    if #list == 0 then det:Text("No characters added.", C.muted) end
+    for _, name in ipairs(list) do
+      det:Buttons({ { name, function() end, tip = "Bank manager" },
+        canEdit and { "Remove", function() chars[name] = nil; ns.SetBankManagers(ranks, chars); UI:FillDetails() end } or nil })
+    end
+    if canEdit then
+      local box = det:Field("Character", "", 150)
+      det:Buttons({ { "Add", function()
+        local name = ns.Member(box:GetText()) or ns.Short(box:GetText())
+        if not name or name == "" then return ns.Print("Type a guild member's character name.") end
+        chars[name] = true
+        for _, alt in ipairs(ns.AltsOf and ns.AltsOf(name) or {}) do chars[alt] = true end
+        ns.SetBankManagers(ranks, chars); UI:FillDetails()
+      end, accent = true, tip = "Adds the character (and its linked alts)." } })
+    end
+    det:Text("Ranks with \"Bank\" in their name are full officers, as before.", C.muted)
   elseif kind == "log" then
     det:Reset("Interface\\Icons\\INV_Misc_Note_01", 1, "Officer log", "What officers changed, newest first (90 days)")
     local list = ns.LogEntries()
@@ -3608,7 +3671,7 @@ function UI:FillDetails()
     if waiting>0 then det:Text('Awaiting restock: '..waiting..' of the remaining '..ns.Remaining(r)..'. Stock is based on the latest shared bank snapshot.',C.gold) end
     det:Gap()
     local own, pending = (r.who == ns.me), (r.status == "pending" or r.status == "open")
-    local canEdit = officer or (own and pending)
+    local canEdit = bankOfficer or (own and pending)
     if canEdit then
       local qty = det:Field("Quantity", tostring(r.qty), 60, true)
       local note = det:Field("Note", r.note or "", 160)
@@ -3637,7 +3700,7 @@ function UI:FillDetails()
           end)
         end, tip = "Choose the delivery character, then click Save changes." } })
       end
-      local reason = officer and det:Field("Reason", r.reason or "", 160) or nil
+      local reason = bankOfficer and det:Field("Reason", r.reason or "", 160) or nil
       det:Buttons({ { "Save changes", function()
         if ns.EditRequest(key, { qty = qty:GetText(), note = note:GetText(), to = det.toChoice,
           reason = reason and reason:GetText() or nil }) then
@@ -3645,7 +3708,7 @@ function UI:FillDetails()
           ns.Print("Request updated.")
         end
       end, accent = true } })
-      if officer then
+      if bankOfficer then
         det:Text("Set status", C.muted)
         local function Set(s) return function()
           ns.EditRequest(key, { status = s, reason = reason and reason:GetText() or nil })
@@ -3696,7 +3759,7 @@ function UI:FillDetails()
         tip = "Opens the recipe so you can send a craft request." } })
     end
     det:Gap()
-    if officer then
+    if bankOfficer then
       local t = det:Field("Target", tostring(target), 60, true)
       local choice = nkind
       det:Buttons({ { (choice == "goal") and "One-time goal" or "Restock", function(self)
@@ -3750,7 +3813,7 @@ function UI:FillDetails()
           tip = "One request per page. Pages you already carry start unticked." } })
       end
     end
-    if ns.IsTrusted(ns.me) then
+    if ns.IsBankTrusted(ns.me) then
       det:Section("Officers")
       if plan.targetsSet then
         det:Text("The bank keeps " .. plan.target .. " of each page. Short pages show on Needs and in the donate panel.", C.muted)
@@ -3760,7 +3823,7 @@ function UI:FillDetails()
           tip = "Sets a restock minimum for all 15 pages in one go." } })
       end
     end
-  elseif kind == "banksort" or (kind == "professionmail" and officer) then
+  elseif kind == "banksort" or (kind == "professionmail" and bankOfficer) then
     local r = FindPlanRow(key)
     if kind == "professionmail" and not r then
       r = {count = ns.BankCount(key), quality = Quality(key)}
@@ -4217,7 +4280,7 @@ function UI:Layout()
   toolbar:SetShown(showTools == true)
   local filterHeight = self.view=="sync" and self.state.sync.filter~="mine" and 28 or 0
   toolbar:SetHeight(showTools and TOOLBAR_H+filterHeight or 0.01)
-  local showComposer = v and not v.custom and v.composer ~= nil and (v.composer ~= "need" or ns.IsTrusted(ns.me))
+  local showComposer = v and not v.custom and v.composer ~= nil and (v.composer ~= "need" or ns.IsBankTrusted(ns.me))
   composer:SetShown(showComposer)
   composer:SetHeight(showComposer and COMPOSER_H or 0.01)
   listArea:ClearAllPoints()
@@ -4239,7 +4302,7 @@ function UI:Layout()
   if showComposer then
     local need = (v.composer == "need")
     self.composerMode = v.composer
-    local officerFor = (not need) and ns.IsTrusted(ns.me)
+    local officerFor = (not need) and ns.IsBankTrusted(ns.me)
     local wantFor = (not need) and (officerFor or #ns.MyChars() > 1)
     local width = (composer:GetWidth() or 500)
     self.noteBox:SetShown(not need)
@@ -4595,7 +4658,7 @@ function UI:Refresh()
     elseif filtersOn then
       emptyText = "|cffffffffNothing matches these filters|r\nClear the filters to see more results."
       label,action="Clear filters",ClearFilters
-    elseif not g.syncedAt and not ns.IsTrusted(ns.me) then
+    elseif not g.syncedAt and not ns.IsBankTrusted(ns.me) then
       emptyText = "|cffffffffWaiting for guild data|r\nThis page will fill in after a guildmate shares data."
       label,action="Sync now",function() ns.FullSync() end
     end

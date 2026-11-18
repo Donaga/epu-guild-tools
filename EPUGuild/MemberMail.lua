@@ -69,7 +69,7 @@ function ns.BankFulfillmentQueue()
 end
 
 function ns.MailMemberRequests(target)
-  if not ns.IsTrusted(ns.me) then return ns.Print("Only officers and trusted bank characters can prepare bank request mail.") end
+  if not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers and trusted bank characters can prepare bank request mail.") end
   target=ns.Member(target)
   if not target then return ns.Print("Choose a current guild member.") end
   if not ns.MailboxOpen() then return ns.Print("Open a mailbox first. Requested items must be in this character's bags.") end

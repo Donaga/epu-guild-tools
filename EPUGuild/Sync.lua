@@ -411,7 +411,7 @@ function ns.SyncReports()
   local me = { name = ns.me, ver = ns.VERSION, asked = S.helloAt and ns.Now() - math.floor(GetTime() - S.helloAt) or nil }
   if S.officerAt then me.t, me.from, me.kind, me.what = S.officerAt, S.officer, "officer", S.lastWhat
   elseif S.relayAt then me.t, me.from, me.kind, me.what = S.relayAt, S.relayFrom, "relay", S.lastWhat end
-  if ns.IsTrusted(ns.me) and not me.t then me.from = "Officer: holds the guild's copy"; me.asked = nil end
+  if ns.IsBankTrusted(ns.me) and not me.t then me.from = (ns.IsTrusted(ns.me) and "Officer" or "Bank manager") .. ": holds the guild's copy"; me.asked = nil end
   list[#list + 1] = me
   return list
 end
@@ -496,8 +496,8 @@ ns.comm.H = function(sender, d)
   ns.SeenSync(sender, { asked = ns.Now(), ver = type(d.ver) == "string" and d.ver or nil })
   local g = ns.G()
   -- an officer just logged in: if we're missing anything, now's the time to ask
-  if ns.IsTrusted(sender) then ns.MaybeHello(false) end
-  if ns.IsTrusted(ns.me) then
+  if ns.IsBankTrusted(sender) then ns.MaybeHello(false) end
+  if ns.IsBankTrusted(ns.me) then
     ns.pendingHello[sender] = d
     C_Timer.After(1 + math.random() * 5, function()
       local dd = ns.pendingHello[sender]
@@ -505,10 +505,10 @@ ns.comm.H = function(sender, d)
       if not dd then return end          -- another officer already answered
       ns.RunSliced(function()
         SendAnswer(sender, dd)
-        if ns.IsTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
+        if ns.IsBankTrusted(sender) and ns.SendOfficerDelta then ns.SendOfficerDelta(tonumber(dd.since) or 0) end
       end)
     end)
-  elseif g and g.syncedAt and not ns.IsTrusted(sender) and (tonumber(d.since) or 0) < g.syncedAt - 60 then
+  elseif g and g.syncedAt and not ns.IsBankTrusted(sender) and (tonumber(d.since) or 0) < g.syncedAt - 60 then
     -- We have officer-confirmed data they lack. Give officers first go.
     ns.pendingRelay[sender] = d
     C_Timer.After(9 + math.random() * 9, function()
@@ -566,7 +566,7 @@ ns.comm.D = function(sender, b, channel)
   if type(b) ~= "table" then return end
   if Hold("D", sender, b, channel) then return end
   if b.ver then ns.NoteVersion(sender, b.ver) end
-  local trusted = ns.IsTrusted(sender)
+  local trusted = ns.IsBankTrusted(sender)
 
   if b.sync then
     -- someone answered this hello: relayers always stand down, officers only for another officer
@@ -577,7 +577,7 @@ ns.comm.D = function(sender, b, channel)
   if b.relay then
     -- relayed data is only for the member who asked, and only until an officer answers
     -- (officers hold the master copy, so they never take relayed data)
-    if b.sync ~= ns.me or channel ~= "GUILD" or ns.IsTrusted(ns.me) then return end
+    if b.sync ~= ns.me or channel ~= "GUILD" or ns.IsBankTrusted(ns.me) then return end
     if S.officerAt and S.officerHs and S.officerHs >= (tonumber(b.hs) or 0) then return end
     ns.MergeRelay(sender, b)
     local done, counts = Complete("relay:" .. sender, b)
@@ -707,7 +707,7 @@ function ns.WatchOfficers(roster)
   for name, r in pairs(roster) do
     if name ~= ns.me then
       local on = r.online and true or false
-      if not first and on and wasOnline[name] == false and ns.IsTrusted(name) then cameOnline = true end
+      if not first and on and wasOnline[name] == false and ns.IsBankTrusted(name) then cameOnline = true end
       wasOnline[name] = on
     end
   end
@@ -744,8 +744,8 @@ function ns.SyncStatus()
   if S.officerAt then
     return "Synced " .. Ago(S.officerAt), "green", "Up to date with " .. tostring(S.officer or "an officer") .. ". Checks again automatically."
   end
-  if ns.IsTrusted(ns.me) then
-    return "Officer copy", "green", "You hold the guild's copy, so members sync from you. No other officer has synced with you since you logged in"
+  if ns.IsBankTrusted(ns.me) then
+    return ns.IsTrusted(ns.me) and "Officer copy" or "Bank manager copy", "green", "You hold the guild's copy, so members sync from you. No other officer has synced with you since you logged in"
       .. (g.syncedAt and (" (last time: " .. Ago(g.syncedAt) .. ").") or ".")
   end
   if g.syncedAt then

@@ -140,6 +140,10 @@ The sidebar has three blocks: **Home, Groups, Guildmates** (playing together), *
 
 Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildmates online. Key bindings for opening the addon, Groups, Create a group and Guildmates are under **Options → Keybindings → AddOns** (restart WoW once after updating to 0.27 so they appear).
 
+## Bank managers (0.27.2+)
+
+Officers are ranks 0–1 (change under Officer → Officer ranks) plus any rank with "Bank" in its name, and have every tool. **Bank managers** are a second, bank-only level that officers choose once for the whole guild under **Officer → Bank managers**, by rank or by character (linked alts are added too). Bank managers can publish bank contents, edit needs, approve and mail requests, record donations, and other members sync from them as verified. They can't post announcements, write member notes, manage other people's events, use the Officer tab or add other bank managers.
+
 ## Chat history (0.27.1+)
 
 WoW clears chat on every /reload. EPU saves your **whispers** (in and out) on your PC so they come back: after a reload the last hour is put back into your chat windows. Open `/epu chat` (or Settings → Chat history, or Member tools) to read the last week, whisper someone back, clear a channel, or turn on **guild chat** and, for officers, **officer chat**. Nothing here is ever sent to the guild. Battle.net whispers aren't kept, and messages the game hides in combat show as a placeholder.
