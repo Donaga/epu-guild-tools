@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.1
+
+- **No more "No player named … is currently playing." walls.** When someone logged in, EPU sent them the guild chat they missed in several pieces. If they logged off before it all arrived (a quick bank-alt visit, say), every guildmate who was answering saw that line once per piece. Now EPU stops sending to anyone who has logged off and hides those lines. The message still shows for whispers you typed yourself.
+- Switching characters no longer asks guildmates for missed guild chat again within 15 minutes, since your characters already share it.
+
 ## 0.28.0
 
 - **Chat is now its own page, like a messenger.** It sits in the sidebar under Quests. Conversations are listed on the left (guild and officer chat pinned on top when you keep them, then one row per person you've whispered, newest first, with unread counts). The open conversation shows on the right with both sides, and a box to **reply** right there (Enter or Send). **New message** starts a whisper to any guildmate, and **Chat settings** has keep, clear and show-after-reload options. Opening Chat jumps to your latest conversation, and the sidebar badge counts unread whispers. Newest messages are on top with the reply box above them, and the conversation gets most of the page width.

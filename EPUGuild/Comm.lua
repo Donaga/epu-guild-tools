@@ -121,6 +121,57 @@ ns.On("CHAT_MSG_SYSTEM",function(msg)
   end
 end)
 
+-- An addon whisper to someone who has just logged off makes the game print
+-- "No player named 'X' is currently playing." for every piece EPU sends.
+-- When that happens, drop what's still queued for them and hide those lines,
+-- unless you typed a whisper to them yourself just now.
+local addonWhisperAt, typedWhisperAt = {}, {}
+local function NameKey(n)
+  if type(n) ~= "string" then return "" end
+  return (n:gsub("%-.*$", "")):lower()
+end
+local notFoundPattern
+local function NotFoundName(msg)
+  if not ns.IsReadableString(msg) then return nil end
+  if not notFoundPattern then
+    local fmt = ns.IsReadableString(ERR_CHAT_PLAYER_NOT_FOUND_S) and ERR_CHAT_PLAYER_NOT_FOUND_S
+      or "No player named '%s' is currently playing."
+    notFoundPattern = "^" .. fmt:gsub("([%%%(%)%.%+%-%*%?%[%]%^%$])", "%%%1"):gsub("%%%%s", "(.+)") .. "$"
+  end
+  return msg:match(notFoundPattern)
+end
+local function OurWhisperFailed(msg)
+  local name = NotFoundName(msg)
+  local key = name and NameKey(name)
+  local t = key and addonWhisperAt[key]
+  return t and GetTime() - t < 120 and key or nil
+end
+function ns.DropWhispersTo(name)
+  local key, n = NameKey(name), 0
+  for i = #queue, 1, -1 do
+    if queue[i][2] == "WHISPER" and NameKey(queue[i][3]) == key then table.remove(queue, i); n = n + 1 end
+  end
+  return n
+end
+ns.On("CHAT_MSG_SYSTEM", function(msg)
+  local key = OurWhisperFailed(msg)
+  if key then ns.DropWhispersTo(key) end
+end)
+if ChatFrame_AddMessageEventFilter then
+  ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
+    local key = OurWhisperFailed(msg)
+    if key and not (typedWhisperAt[key] and GetTime() - typedWhisperAt[key] < 10) then return true end
+    return false
+  end)
+end
+local function TypedWhisper(_, chatType, _, target)
+  if chatType == "WHISPER" and type(target) == "string" then typedWhisperAt[NameKey(target)] = GetTime() end
+end
+if hooksecurefunc then
+  if type(SendChatMessage) == "function" then hooksecurefunc("SendChatMessage", TypedWhisper) end
+  if C_ChatInfo and type(C_ChatInfo.SendChatMessage) == "function" then hooksecurefunc(C_ChatInfo, "SendChatMessage", TypedWhisper) end
+end
+
 local THROTTLED = {}
 if Enum and Enum.SendAddonMessageResult then
   local R = Enum.SendAddonMessageResult
@@ -152,6 +203,7 @@ local function pump()
   end
   lastAttempt=now
   net.attempts=net.attempts+1
+  if m[2]=="WHISPER" then addonWhisperAt[NameKey(m[3])]=now end
   local chat=m[4]=="CHAT"
   local ok,result
   if chat then ok,result=pcall(SendChatMessage,m[1],"GUILD")
