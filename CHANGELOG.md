@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.2
+
+- **"with EPU" counts are right.** Home's "N online · M with EPU" (and the EPU mark on Guildmates) only counted guildmates who sent bank or sync reports, so most EPU users were missed. EPU now remembers anyone whose EPU it has heard from in the last 30 days.
+
 ## 0.28.1
 
 - **No more "No player named … is currently playing." walls.** When someone logged in, EPU sent them the guild chat they missed in several pieces. If they logged off before it all arrived (a quick bank-alt visit, say), every guildmate who was answering saw that line once per piece. Now EPU stops sending to anyone who has logged off and hides those lines. The message still shows for whispers you typed yourself.

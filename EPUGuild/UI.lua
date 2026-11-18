@@ -2218,8 +2218,7 @@ Views.roster = {
       end
       if ok and Match(q, name, r.zone, r.class, ns.MainOf(name), prof and prof.lf, ns.RoleText(roles)) then
         local where = r.online and name ~= ns.me and ns.LayerOf and ns.LayerOf(name)
-        local seen = g.syncSeen and g.syncSeen[name]
-        local epu = name == ns.me or (seen and ns.Now() - (seen.t or 0) < 30 * 86400)
+        local epu = ns.UsesEPU(name, 30)
         local zoneText = r.online and (r.zone or "")
           or (r.away and (r.away < 1 and "seen today" or ("seen " .. math.floor(r.away) .. "d ago")) or "offline")
         local groupText = ""
@@ -2377,8 +2376,7 @@ Views.home = {
     for name, r in pairs(ns.roster) do
       if r.online then
         online = online + 1
-        local seen = g.syncSeen and g.syncSeen[name]
-        if name == ns.me or (seen and ns.Now() - (seen.t or 0) < 6 * 3600) then withEPU = withEPU + 1 end
+        if ns.UsesEPU(name, 30) then withEPU = withEPU + 1 end
         if name ~= ns.me and r.zone and r.zone ~= "" then
           zones[r.zone] = zones[r.zone] or {}
           table.insert(zones[r.zone], name)
