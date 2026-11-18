@@ -12,7 +12,8 @@ A.ex('__fire("CHAT_MSG_WHISPER_INFORM","sure, 10 min","Tyler Baker-Forever")')
 A.ex('__fire("CHAT_MSG_WHISPER","linen?","Pip Baker")')
 A.ex('__fire("CHAT_MSG_GUILD","anyone selling linen?","Pip Baker")')
 check('whispers are kept by default', A.ev('#__ns.ChatLog("whisper")') == 3)
-check('guild chat is off until you turn it on', A.ev('#__ns.ChatLog("guild")') == 0)
+check('guild chat is kept by default', A.ev('__ns.ChatKeep("guild")') is True)
+A.ex('__ns.SetChatKeep("guild", false); wipe(__ns.ChatLog("guild"))')
 A.ex('__ns.SetChatKeep("guild", true); __fire("CHAT_MSG_GUILD","anyone selling linen?","Pip Baker")')
 check('guild chat is kept once turned on', A.ev('#__ns.ChatLog("guild")') == 1)
 A.ex('__ns.IsTrusted=function() return false end; __ns.SetChatKeep("officer", true); __fire("CHAT_MSG_OFFICER","promo list","Pip Baker")')
@@ -141,5 +142,24 @@ check('/epu chat opens the Chat page', A.ev('__ns.UI.view') == 'chat')
 A.ex('__ns.cdb.chatlog={whisper={{t=time()-100,who="Old Friend",msg="from my alt days"}},guild={{t=time()-90,who="Pip Baker",msg="old guild line"}}}; __ns.cdb.chatkeep={guild=true}')
 check('older per-character chat moves into the shared history', 'from my alt days' in A.ev('(function() local t={} for _,e in ipairs(__ns.ChatLog("whisper")) do t[#t+1]=e.msg end return table.concat(t,"|") end)()') and A.ev('__ns.cdb.chatlog') is None)
 check('chat lives in the account-wide data', A.ev('__ns.db.chat ~= nil and #__ns.db.chat.chatlog.whisper > 0'))
+# guild chat history from the game's server (Guild & Communities)
+A.ex('''Enum=Enum or {}; Enum.ClubStreamType={Guild=1,Officer=2}
+local now=time()
+C_Club={GetGuildClubId=function() return 77 end,
+  GetStreams=function() return {{streamId=1,streamType=1,name="Guild"}} end,
+  GetMessageRanges=function() return {{oldestMessageId={epoch=0},newestMessageId={epoch=0}}} end,
+  GetMessagesInRange=function() return {
+    {messageId={epoch=(now-3600)*1000000},author={name="Gargone Stouthammer"},content="yes please"},
+    {messageId={epoch=(now-3500)*1000000},author={name="Luna Swiftbow"},content="Popping in bacon grease"},
+    {messageId={epoch=(now-90)*1000000},author={name="Pip Baker"},content="anyone selling linen?"}} end,
+  RequestMoreMessagesBefore=function() end}''')
+n0 = A.ev('#__ns.ChatLog("guild")')
+A.ex('__ns.SetChatKeep("guild", true)')
+gl = A.ev('(function() local t={} for _,e in ipairs(__ns.ChatLog("guild")) do t[#t+1]=e.who..":"..e.msg end return table.concat(t,"|") end)()')
+check('guild chat from before you logged in is pulled from the server', 'Gargone Stouthammer:yes please' in gl and 'Luna Swiftbow:Popping in bacon grease' in gl)
+check('lines EPU already had are not doubled', gl.count('anyone selling linen?') == 1)
+check('history is in time order', gl.index('yes please') < gl.index('Popping in bacon'))
+A.ex('__ns.PullGuildHistory()')
+check('pulling again adds nothing new', A.ev('__ns.PullGuildHistory()') == 0)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

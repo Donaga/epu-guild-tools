@@ -458,6 +458,12 @@ local function ChatDB()
   if c.chatkeep.party == nil then c.chatkeep.party = true end
   if c.chatkeep.raid == nil then c.chatkeep.raid = true end
   for _, k in ipairs({ "whisper", "party", "raid" }) do c.chatlog[k] = c.chatlog[k] or {} end
+  -- Guild chat is kept by default since 0.28 (the game keeps it on its server
+  -- anyway); only a choice someone made themselves is left alone.
+  if not c.guildKeepDefault then
+    c.guildKeepDefault = true
+    if not c.guildKeepChosen then c.chatkeep.guild = true end
+  end
   if ns.cdb and ns.cdb.chatlog and MigrateChat then MigrateChat(c, ns.cdb) end
   return c
 end
@@ -513,7 +519,11 @@ function ns.ChatKeep(channel)
 end
 function ns.SetChatKeep(channel, on)
   local c = ChatDB()
-  if c then c.chatkeep[channel] = on and true or false end
+  if c then
+    c.chatkeep[channel] = on and true or false
+    if channel == "guild" then c.guildKeepChosen = true end
+    if on and (channel == "guild" or channel == "officer") and ns.PullGuildHistory then ns.PullGuildHistory() end
+  end
 end
 local function Plain(v)
   if v == nil or (issecretvalue and issecretvalue(v)) then return nil end
@@ -567,6 +577,80 @@ end
 ns.On("CHAT_MSG_GUILD", Group("guild"))
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
+-- Guild chat history from the game's server. The Guild & Communities window
+-- keeps guild (and officer) chat from before you logged in; EPU reads the same
+-- history so its Guild chat has it too. Lines it already has are skipped.
+local function Readable(v)
+  if v == nil or (issecretvalue and issecretvalue(v)) then return nil end
+  return v
+end
+local function MergeHistory(channel, entries)
+  if #entries == 0 or not ns.ChatKeep(channel) then return 0 end
+  local log = LogTable(ChatDB(), channel)
+  local added = 0
+  for _, e in ipairs(entries) do
+    local dup = false
+    for i = #log, math.max(1, #log - 400), -1 do
+      local x = log[i]
+      if x.who == e.who and x.msg == e.msg and math.abs((x.t or 0) - e.t) <= 180 then dup = true; break end
+    end
+    if not dup and time() - e.t < CHAT_MAX_AGE then log[#log + 1] = e; added = added + 1 end
+  end
+  if added > 0 then
+    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    while #log > CHAT_KEEP do table.remove(log, 1) end
+    -- history from before now isn't "new": don't let it flood the unread counts
+    local c = ChatDB()
+    c.chatSeen = c.chatSeen or {}
+    local newest = 0
+    for _, e in ipairs(entries) do newest = math.max(newest, e.t) end
+    if (c.chatSeen[channel] or 0) == 0 then c.chatSeen[channel] = newest end
+  end
+  return added
+end
+function ns.PullGuildHistory()
+  if not (C_Club and C_Club.GetGuildClubId and C_Club.GetStreams and C_Club.GetMessageRanges and C_Club.GetMessagesInRange) then return 0 end
+  local ok, clubId = pcall(C_Club.GetGuildClubId)
+  if not ok or not clubId then return 0 end
+  local okS, streams = pcall(C_Club.GetStreams, clubId)
+  if not okS or type(streams) ~= "table" then return 0 end
+  local total = 0
+  for _, st in ipairs(streams) do
+    local kind = Enum and Enum.ClubStreamType and ((st.streamType == Enum.ClubStreamType.Guild and "guild") or (st.streamType == Enum.ClubStreamType.Officer and "officer")) or nil
+    if not kind and type(st.name) == "string" then kind = (st.name == (GUILD or "Guild") and "guild") or (st.name == (OFFICER or "Officer") and "officer") or nil end
+    if kind and (kind ~= "officer" or CanOfficerChat()) and ns.ChatKeep(kind) then
+      local entries = {}
+      local okR, ranges = pcall(C_Club.GetMessageRanges, clubId, st.streamId)
+      for _, r in ipairs(okR and type(ranges) == "table" and ranges or {}) do
+        local okM, msgs = pcall(C_Club.GetMessagesInRange, clubId, st.streamId, r.oldestMessageId, r.newestMessageId)
+        for _, m in ipairs(okM and type(msgs) == "table" and msgs or {}) do
+          local author = m.author and Readable(m.author.name)
+          local content = Readable(m.content)
+          local epoch = m.messageId and Readable(m.messageId.epoch)
+          if type(author) == "string" and type(content) == "string" and content ~= "" and type(epoch) == "number" and not m.destroyed then
+            local short = ns.Short and ns.Short(author) or author
+            entries[#entries + 1] = { t = math.floor(epoch / 1000000), who = short, msg = content, out = short == ns.me or nil }
+          end
+        end
+      end
+      total = total + MergeHistory(kind, entries)
+      -- ask the server for a bit more history the first time
+      if C_Club.RequestMoreMessagesBefore and not ns.chatHistoryAsked then
+        pcall(C_Club.RequestMoreMessagesBefore, clubId, st.streamId, nil, 50)
+      end
+    end
+  end
+  ns.chatHistoryAsked = true
+  if total > 0 then
+    if ns.MessengerChanged then ns.MessengerChanged("guild", nil, false) end
+    if ns.UI and ns.UI:IsShown() and ns.UI.view == "chat" then ns.Changed() end
+  end
+  return total
+end
+ns.On("CLUB_MESSAGE_HISTORY_RECEIVED", function() ns.Debounce("guildHistory", 1, ns.PullGuildHistory) end)
+ns.On("PLAYER_LOGIN", function() if C_Timer then C_Timer.After(8, ns.PullGuildHistory) end end)
+ns.On("PLAYER_GUILD_UPDATE", function() ns.Debounce("guildHistory", 5, ns.PullGuildHistory) end)
+
 -- Guildmates coming online and going offline, shown in Guild chat. The game
 -- announces both as system messages; only guild members are kept.
 local function SystemPattern(fmt)
@@ -995,6 +1079,10 @@ end
 local function FillChatWith(det, key)
   local UI = ns.UI
   key = ThreadKey(key)
+  if (key == "guild" or key == "officer") and not det.epuHistoryPulled then
+    det.epuHistoryPulled = true
+    ns.PullGuildHistory()
+  end
   if key == "officer" and not CanOfficerChat() then UI:CloseDetails(); return true end
   local lines, channel, who = ThreadLines(key, 60)
   local short = who and (ns.Short and ns.Short(who) or who)
