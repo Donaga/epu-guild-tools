@@ -584,6 +584,31 @@ local function Readable(v)
   if v == nil or (issecretvalue and issecretvalue(v)) then return nil end
   return v
 end
+-- Live chat gives names with the realm ("Name-Realm"), the server history
+-- without, so compare short names.
+local function SameLine(x, e)
+  local a = ns.Short and ns.Short(x.who or "") or x.who
+  local b = ns.Short and ns.Short(e.who or "") or e.who
+  return a == b and x.msg == e.msg and (x.sys or false) == (e.sys or false) and math.abs((x.t or 0) - (e.t or 0)) <= 180
+end
+-- Remove repeats of the same line from the same person a moment apart.
+local function DedupeLog(log)
+  local out, removed = {}, 0
+  for _, e in ipairs(log) do
+    local dup = false
+    for i = #out, math.max(1, #out - 60), -1 do
+      if SameLine(out[i], e) then dup = true; break end
+      if (e.t or 0) - (out[i].t or 0) > 180 then break end
+    end
+    if dup then removed = removed + 1 else out[#out + 1] = e end
+  end
+  if removed > 0 then
+    for i = 1, #out do log[i] = out[i] end
+    for i = #log, #out + 1, -1 do log[i] = nil end
+  end
+  return removed
+end
+ns.ChatDedupe = DedupeLog
 local function MergeHistory(channel, entries)
   if #entries == 0 or not ns.ChatKeep(channel) then return 0 end
   local log = LogTable(ChatDB(), channel)
@@ -591,13 +616,13 @@ local function MergeHistory(channel, entries)
   for _, e in ipairs(entries) do
     local dup = false
     for i = #log, math.max(1, #log - 400), -1 do
-      local x = log[i]
-      if x.who == e.who and x.msg == e.msg and math.abs((x.t or 0) - e.t) <= 180 then dup = true; break end
+      if SameLine(log[i], e) then dup = true; break end
     end
     if not dup and time() - e.t < CHAT_MAX_AGE then log[#log + 1] = e; added = added + 1 end
   end
   if added > 0 then
     table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    DedupeLog(log)
     while #log > CHAT_KEEP do table.remove(log, 1) end
     -- history from before now isn't "new": don't let it flood the unread counts
     local c = ChatDB()
@@ -609,6 +634,13 @@ local function MergeHistory(channel, entries)
   return added
 end
 function ns.PullGuildHistory()
+  local c = ChatDB()
+  if c and not c.dedupedV1 then
+    c.dedupedV1 = true
+    for _, g in pairs(c.guilds or {}) do
+      for _, log in pairs(g) do if type(log) == "table" then DedupeLog(log) end end
+    end
+  end
   if not (C_Club and C_Club.GetGuildClubId and C_Club.GetStreams and C_Club.GetMessageRanges and C_Club.GetMessagesInRange) then return 0 end
   local ok, clubId = pcall(C_Club.GetGuildClubId)
   if not ok or not clubId then return 0 end
