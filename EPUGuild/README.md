@@ -150,6 +150,10 @@ The sidebar has three blocks: **Home, Groups, Guildmates** (playing together), *
 
 Shortcuts: `/epu groups`, `/epu lfg` to start a group, and `/epu who` for guildmates online. Key bindings for opening the addon, Groups, Create a group and Guildmates are under **Options → Keybindings → AddOns** (restart WoW once after updating to 0.27 so they appear).
 
+## Chat history (0.27.1+)
+
+WoW clears chat on every /reload. EPU saves your **whispers** (in and out) on your PC so they come back: after a reload the last hour is put back into your chat windows. Open `/epu chat` (or Settings → Chat history, or Member tools) to read the last week, whisper someone back, clear a channel, or turn on **guild chat** and, for officers, **officer chat**. Nothing here is ever sent to the guild. Battle.net whispers aren't kept, and messages the game hides in combat show as a placeholder.
+
 ## STV pages (0.25+)
 
 Questing in Stranglethorn? On the **Bank** page, open the **STV pages** tab. It lists the 15 Green Hills of Stranglethorn pages by chapter (I: 1, 4, 6, 8 · II: 10, 11, 14, 16 · III: 18, 20, 21, 24 · IV: 25, 26, 27). For each page you see:

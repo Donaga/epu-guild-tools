@@ -19,6 +19,8 @@ local memberTools={
     icon="Interface\\Icons\\INV_Scroll_03"},
   {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours.",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_01"},
+  {key="chat", title="Chat history", hint="Whispers (and, if you choose, guild and officer chat) kept after a reload.",
+    icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
     icon="Interface\\Icons\\INV_Misc_Coin_02", open=function() ns.ShowGatheringMarket() end},
 }

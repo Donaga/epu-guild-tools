@@ -2489,6 +2489,8 @@ Views.settings = {
       {key="map", title="Map and sharing", sub="Guild location markers and sharing preferences.",
         icon=Views.home.icon,
         onClick=function() SlashCmdList.EPUGUILD("map") end},
+      {key="chat", title="Chat history", sub="Keep whispers, guild chat and officer chat after a reload.",
+        icon="Interface\\Icons\\INV_Letter_15", onClick=function() ns.ShowChatHistory() end},
       {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
         onClick=function() ns.ShowMinimapButtonSettings() end},
     }

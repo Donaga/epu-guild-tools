@@ -2,6 +2,7 @@
 
 ## 0.27.1
 
+- **Chat history.** Your whispers are now saved on your PC, so they survive a /reload or logging out. After a reload, the last hour goes back into your chat windows (greyed header, clickable names). Turn on **guild chat** too if you like, and officers can keep **officer chat**. Open it with `/epu chat`, from Settings or Member tools: tabs for each channel, **Whisper back** buttons for recent people, and **Clear**. It is never shared with the guild. Messages the game hides in combat are saved as a placeholder.
 - Fixed "Interface action failed because of an AddOn" in combat. EPU read the guild message of the day when the roster updated mid-fight, which the game blocks. It now waits until combat ends.
 
 ## 0.27.0
