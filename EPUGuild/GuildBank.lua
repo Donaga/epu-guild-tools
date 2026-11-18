@@ -94,7 +94,7 @@ function ns.ParseGuildBankLogs()
   local g = ns.G()
   if not g then return end
 
-  local entries, moved = {}, 0
+  local entries, moved, withdrawals = {}, 0, {}
   for tab = 1, NumTabs() do
     if Viewable(tab) and GetNumGuildBankTransactions then
       for i = 1, (GetNumGuildBankTransactions(tab) or 0) do
@@ -105,6 +105,8 @@ function ns.ParseGuildBankLogs()
           moved = moved + 1
         elseif kind == "deposit" and id and who then
           entries[#entries + 1] = { who = who, item = id, n = tonumber(count) or 1, money = 0, t = LogTime(y, mo, d, h) }
+        elseif kind == "withdraw" and id and who and not ns.IsBankCharacter(who) then
+          withdrawals[#withdrawals + 1] = { who = who, item = id, n = tonumber(count) or 1, t = LogTime(y, mo, d, h) }
         end
       end
     end
@@ -141,10 +143,94 @@ function ns.ParseGuildBankLogs()
   for _, e in ipairs(entries) do
     if not Known(e) then ns.AddDonation(e.who, e.item, e.n, e.money, GB_KEY, e.t) end
   end
+  ns.CreditWithdrawals(withdrawals)
   if moved > movedNoted then
     movedNoted = moved
     ns.Print(moved .. (moved == 1 and " deposit" or " deposits") .. " by bank characters in the guild bank log " .. (moved == 1 and "is" or "are")
       .. " the guild's own stock, so " .. (moved == 1 and "it isn't" or "they aren't") .. " counted as donations.")
+  end
+end
+
+---------------------------------------------------------------------------
+-- Withdrawal log -> request deliveries. A member who takes an item they asked
+-- for straight out of the guild bank has received it, so the oldest approved
+-- request of theirs (any of their characters) for that item is credited, as
+-- if it had been mailed. Withdrawals by bank characters are stock moving, and
+-- an officer taking something out for someone else is credited when they mail
+-- or trade it, so neither counts here.
+-- Each credited withdrawal is remembered on the delivery it made (from, wn,
+-- wt), which travels with the request, so no client credits it twice. Only
+-- withdrawals made after the request was created (or reopened) count, so an
+-- old one still in the log can't fill a new request.
+---------------------------------------------------------------------------
+local WINDOW = 3 * 3600
+
+local function SamePlayer(a, b)
+  return a == b or (a ~= nil and b ~= nil and ns.MainOf(a) == ns.MainOf(b))
+end
+
+function ns.CreditWithdrawals(list)
+  local g = ns.G()
+  if not g or not list or #list == 0 or not ns.IsBankTrusted(ns.me) then return end
+  -- withdrawals already credited, by anyone (one withdrawal may have made
+  -- deliveries on several requests; it counts once)
+  local credited, seen = {}, {}
+  for _, r in pairs(g.requests) do
+    for _, d in ipairs(r.deliveries or {}) do
+      if d.from and d.wt and r.item then
+        local key = d.from .. ":" .. r.item .. ":" .. tostring(d.wn) .. ":" .. d.wt
+        if not seen[key] then
+          seen[key] = true
+          credited[#credited + 1] = { who = d.from, item = r.item, n = d.wn, t = d.wt }
+        end
+      end
+    end
+  end
+  local used = {}
+  local function Known(e)
+    for i, c in ipairs(credited) do
+      if not used[i] and c.who == e.who and c.item == e.item and c.n == e.n and math.abs(c.t - e.t) <= WINDOW then
+        used[i] = true
+        return true
+      end
+    end
+    return false
+  end
+  table.sort(list, function(a, b) return a.t < b.t end)
+  local batch, any = {}, false
+  for _, e in ipairs(list) do
+    if not Known(e) then
+      local rows = {}
+      for rid, r in pairs(g.requests) do
+        if r.status == "approved" and not r.crafter and r.item == e.item and SamePlayer(r.to or r.who, e.who)
+          and ns.Remaining(r) > 0 and e.t >= math.max(r.t or 0, r.reopenedAt or 0) - 3600 then
+          rows[#rows + 1] = { id = rid, r = r }
+        end
+      end
+      table.sort(rows, function(a, b) if (a.r.t or 0) ~= (b.r.t or 0) then return (a.r.t or 0) < (b.r.t or 0) end return a.id < b.id end)
+      local left = e.n
+      for _, row in ipairs(rows) do
+        if left <= 0 then break end
+        local r = row.r
+        local n = math.min(left, ns.Remaining(r))
+        left = left - n
+        r.delivered = (r.delivered or 0) + n
+        r.deliveries = r.deliveries or {}
+        r.deliveries[#r.deliveries + 1] = { t = ns.Now(), by = ns.me, n = n, from = e.who, wn = e.n, wt = e.t }
+        if #r.deliveries > 50 then table.remove(r.deliveries, 1) end
+        if ns.Remaining(r) == 0 then r.status = "filled" end
+        r.by = ns.me
+        r.u = ns.NextVersion(r.u)
+        batch[row.id] = r
+        any = true
+        ns.Print(e.who .. " took " .. ns.ItemLink(r.item) .. " x" .. n .. " from the guild bank for their request; "
+          .. ns.Remaining(r) .. " remaining.")
+      end
+    end
+  end
+  if any then
+    ns.Send("D", { req = batch })
+    ns.Changed()
   end
 end
 

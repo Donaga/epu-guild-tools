@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.28.6
+
+- **Taking a requested item out of the guild bank fills the request.** When a member with an approved request withdraws that item from the real guild bank (on any of their characters), the officer or bank manager who next opens the bank credits it to their oldest matching request, as if it had been mailed: delivered goes up, and the request turns Filled once it's all there. Each withdrawal counts once, even when several officers open the bank. Withdrawals made before the request was asked for don't count, and neither do bank alts moving stock out or an officer taking something out for someone else (mailing or trading it to them fills the request, as before).
 ## 0.28.5
 
 - **Moving the bank alt's stock into the guild bank isn't counted as donations.** When a bank alt (current or retired) deposits items or gold into the guild bank, EPU no longer logs each stack as a donation, so there are no News shout-outs and no Discord thank-yous for the guild's own stock. Members' deposits still count as before. The officer who opens the bank sees one chat line saying how many deposits were the guild's own stock.

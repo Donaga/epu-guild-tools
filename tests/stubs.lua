@@ -296,7 +296,7 @@ function QueryGuildBankTab(tab)
 end
 function QueryGuildBankLog() end
 function GetNumGuildBankTransactions(tab) return #__gblog[tab] end
-function GetGuildBankTransaction(tab, i) local e = __gblog[tab][i]; return "deposit", e[1], __link(e[2]), e[3], nil, nil, 0, 0, 0, e[4] end
+function GetGuildBankTransaction(tab, i) local e = __gblog[tab][i]; return e[5] or "deposit", e[1], __link(e[2]), e[3], nil, nil, 0, 0, 0, e[4] end
 function GetNumGuildBankMoneyTransactions() return #__gbmoneylog end
 function GetGuildBankMoneyTransaction(i) local e = __gbmoneylog[i]; return "deposit", e[1], e[2], 0, 0, 0, e[3] end
 function ReloadUI() end
