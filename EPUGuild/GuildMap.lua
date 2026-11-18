@@ -603,6 +603,30 @@ local function Group(channel)
   end
 end
 ns.On("CHAT_MSG_GUILD", Group("guild"))
+-- Messages from the guild's linked Discord channel come in as community-channel
+-- chat on the guild's club. Readable ones are saved like guild chat and marked
+-- "Discord"; protected ones are shown for this session only.
+ns.On("CHAT_MSG_COMMUNITIES_CHANNEL", function(msg, sender, _, channelName, _, _, _, _, channelBase, _, lineID)
+  if not ns.ChatKeep("guild") or not (C_Club and C_Club.GetGuildClubId) then return end
+  local ok, gid = pcall(C_Club.GetGuildClubId)
+  if not ok or not gid then return end
+  local tag = Plain(channelName) or Plain(channelBase) or ""
+  local club = tonumber(tag:match("Community:(%d+)") or "")
+  if club ~= gid then return end
+  local who = Plain(sender)
+  local text = Plain(msg)
+  if not who or who == "" then who = "Discord" end
+  if text and not Protected(text) then
+    ns.LogChat("guild", who, text, false)
+    local log = LogTable(ChatDB(), "guild")
+    if log[#log] and log[#log].msg == text then log[#log].discord = true end
+    if ns.ChatIncoming then ns.ChatIncoming("guild", who, text) end
+  elseif msg ~= nil then
+    local id = "d" .. tostring(lineID or GetTime())
+    session.guild[id] = { t = time(), id = id, who = who, msg = msg, discord = true }
+    if ns.MessengerChanged then ns.MessengerChanged("guild", nil, false) end
+  end
+end)
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
 -- Guild chat history from the game's server. The Guild & Communities window
@@ -1291,7 +1315,7 @@ local function ThreadBlocks(channel, lines, plains)
     end
     if not speaker then
     elseif not cur or cur.speaker ~= speaker or cur.me ~= e.me or math.abs((cur.t or 0) - (e.t or 0)) > 600 then
-      cur = { speaker = speaker, who = e.who, t = e.t, out = e.out, me = e.me, msgs = {}, plain = {} }
+      cur = { speaker = speaker, who = e.who, t = e.t, out = e.out, me = e.me, discord = e.discord, msgs = {}, plain = {} }
       blocks[#blocks + 1] = cur
     end
     if speaker then
@@ -1312,6 +1336,7 @@ local function ThreadBlocks(channel, lines, plains)
       local stamp = plains and ("|cff888888|Hepublock:" .. n .. "|h" .. date("%H:%M", b.t) .. "|h|r") or ("|cff888888" .. date("%H:%M", b.t) .. "|r")
       -- messages inside a block are oldest first, like normal chat; blocks are newest first
       local on = (b.me and b.me ~= ns.me) and ("  |cff888888on " .. b.me .. "|r") or ""
+      if b.discord then on = on .. "  |cff8a9cffDiscord|r" end
       out[#out + 1] = name .. "  " .. stamp .. on .. "\n" .. table.concat(b.msgs, "\n")
     end
   end
