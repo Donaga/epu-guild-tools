@@ -860,6 +860,30 @@ function ns.ChatDebug()
   for line in text:gmatch("[^\n]+") do if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff4fc3f7EPU debug|r " .. (line:gsub("|", "||"))) end end
   ns.ShowCopy(text, "Chat debug")
 end
+-- The protected copies only stay readable for a few minutes, so while guild
+-- or officer chat is on screen, fetch fresh ones every minute.
+local function GuildChatOnScreen()
+  for _, w in pairs(ns.ChatWindows or {}) do
+    local k = w:IsShown() and w.Key and w:Key()
+    if k == "guild" or k == "officer" then return true end
+  end
+  local d = ns.UI and ns.UI.details
+  return d and d:IsShown() and d.kind == "chatwith" and (d.key == "guild" or d.key == "officer") or false
+end
+local function RefreshTicker()
+  if C_Timer and C_Timer.After then
+    C_Timer.After(60, function()
+      if next(session.guild) or next(session.officer) then
+        if GuildChatOnScreen() then ns.PullGuildHistory(); ns.MessengerChanged("guild", nil, false)
+          local d = ns.UI and ns.UI.details
+          if d and d:IsShown() and d.kind == "chatwith" then ns.UI:FillDetails() end
+        end
+      end
+      RefreshTicker()
+    end)
+  end
+end
+ns.On("PLAYER_LOGIN", RefreshTicker)
 ns.On("CLUB_MESSAGE_HISTORY_RECEIVED", function() ns.Debounce("guildHistory", 1, ns.PullGuildHistory) end)
 ns.On("PLAYER_LOGIN", function() if C_Timer then C_Timer.After(8, ns.PullGuildHistory) end end)
 ns.On("PLAYER_GUILD_UPDATE", function() ns.Debounce("guildHistory", 5, ns.PullGuildHistory) end)
@@ -1406,6 +1430,7 @@ end
 -- Windows: "main" is the tabbed messenger; "w:<name>" are per-person windows
 -- (Chat settings > Windows: one per person).
 local Windows = {}
+ns.ChatWindows = Windows
 local function WState(id)
   local m = MState()
   if id == "main" then return m end
