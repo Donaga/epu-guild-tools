@@ -193,5 +193,20 @@ A.ex('__ns.PullGuildHistory(); __fire("CHAT_MSG_GUILD","mountaineers are dead","
 check('server first, live second: still one line', A.ev('(function() local n=0 for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="mountaineers are dead" then n=n+1 end end return n end)()') == 1)
 A.ex('local l=__ns.ChatLog("guild"); l[#l+1]={t=time(),id=987,who="Garro Firebrand",msg="Unknown"}; __ns.PullGuildHistory()')
 check('leftover Unknown lines are removed on every pass', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="Unknown" then return true end end return false end)()') is False)
+# the server gives protected text ("|Kw..|k"): show it this session, never save it
+A.ex('''local now=time()
+__fire("CHAT_MSG_GUILD","ok finished nelf starter zone","Ian Swiftbow-Forever")
+C_Club.GetMessagesInRange=function() return {
+  {messageId={epoch=(now-600)*1000000+1},author={name="Sham Glorious"},content="|Kw55|k"},
+  {messageId={epoch=now*1000000+2},author={name="Ian Swiftbow"},content="|Kw56|k"}} end''')
+A.ex('__ns.PullGuildHistory(); __ns.PullGuildHistory()')
+saved = A.ev('(function() local t={} for _,e in ipairs(__ns.ChatLog("guild")) do t[#t+1]=e.msg end return table.concat(t,"|") end)()')
+check('protected server text is never saved', '|K' not in saved.replace('||','') and 'ok finished nelf starter zone' in saved)
+check('a live line takes the id of its protected server copy', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="ok finished nelf starter zone" then return e.id end end end)()') is not None)
+A.ex('__ns.OpenMessenger("guild")')
+gt = A.ev('EPUGuildMessenger.text:GetText()')
+check('lines from before you logged in still show this session', '|Kw55|k' in gt and gt.count('ok finished nelf starter zone') == 1 and '|Kw56|k' not in gt)
+A.ex('local l=__ns.ChatLog("guild"); l[#l+1]={t=time()-50,id=5,who="Old",msg="|Kw1|k"}; __ns.PullGuildHistory()')
+check('old saved protected lines are cleaned out', A.ev('(function() for _,e in ipairs(__ns.ChatLog("guild")) do if e.msg=="|Kw1|k" then return true end end return false end)()') is False)
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

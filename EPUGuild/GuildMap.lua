@@ -530,6 +530,15 @@ local function Plain(v)
   if type(v) ~= "string" then return nil end
   return v
 end
+-- protected server text and this session's copy of it (see MergeHistory)
+local function Protected(msg) return type(msg) == "string" and msg:find("|K", 1, true) ~= nil end
+ns.ChatProtected = Protected
+local session = { guild = {}, officer = {} }
+ns.chatSessionHistory = session
+local function SameAuthorTime(x, e, secs)
+  return (ns.Short and ns.Short(x.who or "") or x.who) == (ns.Short and ns.Short(e.who or "") or e.who)
+    and math.abs((x.t or 0) - (e.t or 0)) <= (secs or 3) and not x.sys
+end
 function ns.LogChat(channel, who, msg, out, sys)
   if not ns.ChatKeep(channel) then return end
   who = Plain(who)
@@ -538,6 +547,12 @@ function ns.LogChat(channel, who, msg, out, sys)
   local log = LogTable(ChatDB(), channel)
   -- The server copy of a guild message can arrive before the live one: if
   -- so, this live line is that message, not a new one.
+  local fromServer
+  if (channel == "guild" or channel == "officer") and not sys and session[channel] then
+    for id, e in pairs(session[channel]) do
+      if SameAuthorTime(e, { who = who, t = time() }, 3) then fromServer = id; session[channel][id] = nil; break end
+    end
+  end
   if (channel == "guild" or channel == "officer") and not sys then
     local short = ns.Short and ns.Short(who) or who
     for i = #log, math.max(1, #log - 40), -1 do
@@ -552,7 +567,7 @@ function ns.LogChat(channel, who, msg, out, sys)
   -- sys: "on" / "off" for a guildmate coming online or going offline; these
   -- never count as unread
   log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys,
-    me = channel == "whisper" and ns.me or nil }
+    me = channel == "whisper" and ns.me or nil, id = fromServer, live = fromServer and true or nil }
   local cutoff = time() - CHAT_MAX_AGE
   local drop = 0
   while drop < #log and (#log - drop > CHAT_KEEP or (log[drop + 1].t or 0) < cutoff) do drop = drop + 1 end
@@ -628,8 +643,39 @@ ns.ChatDedupe = DedupeLog
 -- kept as e.id. A line EPU saw live gets the id of the matching server
 -- message, so the same line is never added twice and a real repeat ("nn",
 -- "nn") stays as two lines.
+-- The game hands addons the server's guild history as protected text
+-- ("|Kw123|k"): it shows the real words on screen during this session but
+-- can't be read or kept, and turns into "Unknown" after a reload. So those
+-- lines are only shown, never saved: a line EPU also saw live is matched by
+-- who said it and when (within 3 seconds); the rest stay in this session's
+-- memory so you can still read what was said before you logged in.
+local function MergeProtected(channel, e)
+  local log = LogTable(ChatDB(), channel)
+  for i = #log, math.max(1, #log - 200), -1 do
+    local x = log[i]
+    if (not x.id or x.id == e.id) and not Protected(x.msg) and SameAuthorTime(x, e) then
+      x.id = e.id; x.live = true
+      session[channel][e.id] = nil
+      return false
+    end
+  end
+  if not session[channel][e.id] then session[channel][e.id] = e; return true end
+  session[channel][e.id].msg = e.msg   -- a fresh token for the same message
+  return false
+end
 local function MergeHistory(channel, entries)
   if #entries == 0 or not ns.ChatKeep(channel) then return 0 end
+  local shown = 0
+  local plain = {}
+  for _, e in ipairs(entries) do
+    if Protected(e.msg) then
+      if MergeProtected(channel, e) then shown = shown + 1 end
+    else
+      plain[#plain + 1] = e
+    end
+  end
+  entries = plain
+  if #entries == 0 then return shown end
   local log = LogTable(ChatDB(), channel)
   local added = 0
   local ids = {}
@@ -674,7 +720,7 @@ local function MergeHistory(channel, entries)
     for _, e in ipairs(entries) do newest = math.max(newest, e.t) end
     if (c.chatSeen[channel] or 0) == 0 then c.chatSeen[channel] = newest end
   end
-  return added
+  return added + shown
 end
 function ns.PullGuildHistory()
   local c = ChatDB()
@@ -715,7 +761,7 @@ function ns.PullGuildHistory()
       for _, log in pairs(g) do
         if type(log) == "table" then
           for i = #log, 1, -1 do
-            if log[i].msg == "Unknown" or log[i].msg == UNKNOWN then table.remove(log, i); cleaned = true end
+            if log[i].msg == "Unknown" or log[i].msg == UNKNOWN or Protected(log[i].msg) then table.remove(log, i); cleaned = true end
           end
         end
       end
@@ -1014,6 +1060,13 @@ local function ThreadLines(key, max)
   local who = channel == "whisper" and key:sub(3) or nil
   local log, lines = ns.ChatLog(channel), {}
   local group = channel == "guild" or channel == "officer"
+  if group and session[channel] and next(session[channel]) then
+    local merged = {}
+    for _, e in ipairs(log) do merged[#merged + 1] = e end
+    for _, e in pairs(session[channel]) do merged[#merged + 1] = e end
+    table.sort(merged, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    log = merged
+  end
   local function Twin(a, b)
     -- the same message seen twice (live and from the server); two server
     -- copies with different time stamps are a real repeat
@@ -1029,6 +1082,7 @@ local function ThreadLines(key, max)
         if Twin(lines[j], e) then skip = true; break end
       end
       if e.msg == "Unknown" or e.msg == UNKNOWN then skip = true end
+      if Protected(e.msg) and not session[channel][e.id or 0] then skip = true end   -- an old saved token
     end
     if not skip and (not who or e.who == who) then lines[#lines + 1] = e end
     if #lines >= (max or 60) then break end
@@ -1088,7 +1142,7 @@ ns.ApplyChatFont = ApplyFont
 local function PlainText(msg)
   msg = tostring(msg or "")
   msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-  msg = msg:gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("||", "|")
+  msg = msg:gsub("|H.-|h(.-)|h", "%1"):gsub("|T.-|t", ""):gsub("|K.-|k", "(the game doesn't let addons copy this line)"):gsub("||", "|")
   return msg
 end
 ns.ChatPlainText = PlainText
