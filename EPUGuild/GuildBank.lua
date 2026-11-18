@@ -89,6 +89,19 @@ local function LogTime(y, mo, d, h)
   return ns.Now() - ((y or 0) * 365 + (mo or 0) * 30 + (d or 0)) * 86400 - (h or 0) * 3600
 end
 
+-- When the donation list is full: a log time at or before which a deposit
+-- can't be new (the oldest donation kept, plus the log-time slack).
+function ns.DonationsAgedOutBefore(g)
+  local n, oldest = 0, nil
+  for _, d in pairs(g.donations) do
+    n = n + 1
+    local t = d.t or 0
+    if not oldest or t < oldest then oldest = t end
+  end
+  if n < ns.DONATION_CAP or not oldest then return nil end
+  return oldest + 3 * 3600
+end
+
 function ns.ParseGuildBankLogs()
   if not isOpen or not ns.IsBankTrusted(ns.me) then return end
   local g = ns.G()
@@ -140,8 +153,13 @@ function ns.ParseGuildBankLogs()
     end
     return false
   end
+  -- Once the donation list is full, a deposit older than the oldest one kept
+  -- is one that was already logged and has since been pruned (a quiet tab's
+  -- log still shows it). Logging it again would thank the donor a second
+  -- time, and Prune would drop it straight away, so leave it.
+  local agedOut = ns.DonationsAgedOutBefore(g)
   for _, e in ipairs(entries) do
-    if not Known(e) then ns.AddDonation(e.who, e.item, e.n, e.money, GB_KEY, e.t) end
+    if not Known(e) and not (agedOut and e.t <= agedOut) then ns.AddDonation(e.who, e.item, e.n, e.money, GB_KEY, e.t) end
   end
   ns.CreditWithdrawals(withdrawals)
   if moved > movedNoted then
