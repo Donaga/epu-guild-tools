@@ -801,7 +801,18 @@ function ns.ChatDebug()
     out[#out + 1] = "(no server history on this client)"
   end
   out[#out + 1] = "PC clock: " .. date("%H:%M:%S") .. " time()=" .. time()
-  ns.ShowCopy(table.concat(out, "\n"), "Chat debug")
+  out[#out + 1] = "UNKNOWN=" .. string.format("%q", tostring(UNKNOWN)) .. " secret=" .. tostring(issecretvalue ~= nil)
+  for i = math.max(1, #log - 14), #log do
+    local m = log[i].msg
+    if type(m) == "string" and m:lower():find("unknown") then
+      local b = {}
+      for k = 1, math.min(#m, 24) do b[#b + 1] = m:byte(k) end
+      out[#out + 1] = "odd line " .. i .. " len=" .. #m .. " bytes=" .. table.concat(b, ",") .. " id=" .. tostring(log[i].id)
+    end
+  end
+  local text = table.concat(out, "\n")
+  for line in text:gmatch("[^\n]+") do if DEFAULT_CHAT_FRAME then DEFAULT_CHAT_FRAME:AddMessage("|cff4fc3f7EPU debug|r " .. (line:gsub("|", "||"))) end end
+  ns.ShowCopy(text, "Chat debug")
 end
 ns.On("CLUB_MESSAGE_HISTORY_RECEIVED", function() ns.Debounce("guildHistory", 1, ns.PullGuildHistory) end)
 ns.On("PLAYER_LOGIN", function() if C_Timer then C_Timer.After(8, ns.PullGuildHistory) end end)
@@ -1208,6 +1219,10 @@ function ns.ShowCopy(text, title, key)
     Copy.edit:SetAutoFocus(true)
     Copy.edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
     Copy.edit:SetWidth(430)
+    Copy.edit:SetHeight(200)            -- a multi-line box shows nothing without a height
+    if Copy.edit.SetMaxLetters then Copy.edit:SetMaxLetters(0) end
+    if Copy.edit.SetTextInsets then Copy.edit:SetTextInsets(2, 2, 2, 2) end
+    Copy.edit:SetTextColor(1, 1, 1)
     Copy.edit:SetScript("OnEscapePressed", function() Copy:Hide() end)
     Copy.scroll:SetScrollChild(Copy.edit)
     Copy.scroll:EnableMouseWheel(true)
@@ -1229,6 +1244,10 @@ function ns.ShowCopy(text, title, key)
   Copy.title:SetText(title or "Copy")
   for _, b in ipairs(Copy.formats) do b:SetShown(key ~= nil); b:SetOn((Copy.fmt or "plain") == b.fmt) end
   Copy.edit:SetText(text or "")
+  -- grow the box with the text so it all scrolls
+  local lines = 1
+  for _ in tostring(text or ""):gmatch("\n") do lines = lines + 1 end
+  Copy.edit:SetHeight(math.max(200, lines * 15 + 20))
   Copy:Show()
   Copy.edit:SetFocus()
   Copy.edit:HighlightText()
