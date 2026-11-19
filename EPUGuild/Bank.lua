@@ -9,6 +9,19 @@ function ns.IsBankAlt()
   return ns.cdb and ns.cdb.bankAlt == true
 end
 
+-- A character that holds (or held) the guild's stock: this character while it's
+-- a bank alt, or anyone with a bank snapshot, retired ones included. What such a
+-- character hands to the guild bank or another bank character is the guild's
+-- own stock moving, not a donation.
+function ns.IsBankCharacter(name)
+  name = ns.Short(name)
+  if not name or name == ns.GB_KEY then return false end
+  if name == ns.me and ns.IsBankAlt() then return true end
+  local g = ns.G()
+  local s = g and g.bank and g.bank[name]
+  return s ~= nil and not s.guild
+end
+
 ---------------------------------------------------------------------------
 -- Container helpers (support both C_Container and the older globals)
 ---------------------------------------------------------------------------
@@ -236,6 +249,7 @@ local function GuildSender(m)
   local sender = ns.Member(m.sender)
   if not sender then return nil end                             -- AH, NPCs, non-guild mail
   if m.cod and m.cod > 0 then return nil end                    -- COD is a purchase, not a gift
+  if ns.IsBankCharacter(sender) then return nil end             -- guild stock moving between bank characters
   return sender
 end
 
@@ -350,7 +364,7 @@ ns.On("UI_INFO_MESSAGE", function(a, b)
   if not tradeSnap or msg ~= ERR_TRADE_COMPLETE then return end
   local s = tradeSnap
   tradeSnap = nil
-  if s.bankAlt then
+  if s.bankAlt and not ns.IsBankCharacter(s.who) then
     for _, it in ipairs(s.items) do ns.AddDonation(s.who, it[1], it[2], 0) end
     if s.money > 0 then ns.AddDonation(s.who, nil, 0, s.money) end
   end
