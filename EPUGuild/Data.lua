@@ -234,6 +234,9 @@ local Confirm = ns.Confirm
 ---------------------------------------------------------------------------
 -- Merge incoming data. Every record carries a version stamp; newer wins.
 ---------------------------------------------------------------------------
+-- Donations kept: the newest this many (older ones are pruned).
+ns.DONATION_CAP = 500
+
 function ns.Prune(g)
   local now = ns.Now()
   for id, r in pairs(g.requests) do
@@ -252,9 +255,9 @@ function ns.Prune(g)
   if ns.PruneGuild then ns.PruneGuild(g) end
   local ids = {}
   for id in pairs(g.donations) do ids[#ids + 1] = id end
-  if #ids > 500 then
+  if #ids > ns.DONATION_CAP then
     table.sort(ids, function(a, b) return (g.donations[a].t or 0) > (g.donations[b].t or 0) end)
-    for i = 501, #ids do g.donations[ids[i]] = nil end
+    for i = ns.DONATION_CAP + 1, #ids do g.donations[ids[i]] = nil end
   end
 end
 
