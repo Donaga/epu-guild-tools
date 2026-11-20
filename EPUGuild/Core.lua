@@ -383,6 +383,8 @@ local HELP = {
   "|cffffd100/epu link <code>|r - link your characters to Discord with the code from /link there; /epu link off stops",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
+  "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
+  "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
   "|cffffd100/epu sharespots on|off|r - share the gathering spots you record with the guild (on by default)",
@@ -470,6 +472,14 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("invites")
   elseif cmd == "guides" or cmd == "quests" or cmd == "catchup" or cmd == "notifications" then
     ns.OpenMemberTools(cmd)
+  elseif cmd == "zone" or cmd == "zones" or cmd == "zoneguide" then
+    if ns.OpenZoneGuide then ns.OpenZoneGuide(args) end
+  elseif cmd == "leveling" or cmd == "advisor" then
+    if ns.OpenLevelingTools then ns.OpenLevelingTools("advisor") end
+  elseif cmd == "dungeons" or cmd == "ready" or cmd == "xpguard" then
+    if ns.OpenLevelingTools then ns.OpenLevelingTools("dungeons") end
+  elseif cmd == "writs" or cmd == "crates" or cmd == "waylaid" then
+    if ns.OpenLevelingTools then ns.OpenLevelingTools("writs") end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

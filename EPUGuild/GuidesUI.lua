@@ -34,7 +34,11 @@ ns.CommunityRows=function(g,q,state,bar)
   if state.kind~="guides" then return rows(g,q,state,bar) end
   local s=ns.GuideState(); local list,p=ns.GuideChoices(s.savedOnly)
   local professions=state.guideScope=="profession"
-  local out={{key="guide:profile",title=professions and "Your professions" or p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",
+  local out={{key="guide:zones",title="Zone Visitor's Guide",sub="Level ranges, vendors, recipes, trainers, fishing, flight paths & quests by zone.",right="Open",
+    onClick=function() if ns.OpenZoneGuide then ns.OpenZoneGuide() end end},
+    {key="guide:leveling",title="Leveling, Dungeons & Writs",sub="Leveling advisor, Forever dungeon keys/quests, 12-level XP guard & Waylaid Crates.",right="Open",
+    onClick=function() if ns.OpenLevelingTools then ns.OpenLevelingTools("advisor") end end},
+    {key="guide:profile",title=professions and "Your professions" or p.class and ('Guides for your '..(p.className or p.class)) or "Waiting for your character information",
     sub=professions and "Choose a learned profession to see advice for your current skill." or "What would you like help with? Choose a topic below."}}
   for _,choice in ipairs(list) do
     local matches=E.Match(q,choice.title,choice.hint)
