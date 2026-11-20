@@ -482,6 +482,109 @@ local function Render()
     if shownD == 0 then
       flow:Paragraph("No dungeons matched this level/role filter. Click 'Show All' above to browse all dungeons.", col.muted)
     end
+
+  elseif state.tab == "runs" then
+    if not (ns.IsTrusted and ns.IsTrusted(ns.me)) then
+      flow:Section("Officer Only")
+      flow:Paragraph("Guild Dungeon Run tracking & attendance stats are currently restricted to officers.", col.muted)
+    else
+      local party = ns.GetCurrentPartyGuildStatus and ns.GetCurrentPartyGuildStatus() or { members = {}, nonGuild = {} }
+      local selected
+      for _, d in ipairs(ns.DUNGEON_READINESS or {}) do
+        if d.id == state.dungeonId then selected = d; break end
+      end
+      selected = selected or ns.DUNGEON_READINESS[1]
+      local targetDungeon = party.instance or selected.name
+      local targetId = party.instance and nil or selected.id
+
+      flow:Section("Log Guild Dungeon Run (Officer Only)")
+      local pTitle = party.fullGuild and string.format("Full Guild Party Ready (%d guildmates)", #party.members)
+        or string.format("Current Party: %d guildmate(s), %d non-guild", #party.members, #party.nonGuild)
+      flow:Card({
+        title = pTitle,
+        titleColor = party.fullGuild and col.green or col.gold,
+        bg = party.fullGuild and col.greenBg or col.panel,
+        sub = "Target Dungeon: " .. targetDungeon .. "  (change in Dungeon Readiness tab or enter instance)",
+        note = "Members: " .. table.concat(party.members, ", "),
+        actionText = "Log Run",
+        actionWidth = 96,
+        onAction = function()
+          ns.LogGuildDungeonRun(targetDungeon, targetId, party.members, party.fullGuild, "")
+          Render()
+        end,
+      })
+
+      local stats = ns.GetGuildDungeonStats()
+      local gh = stats.guildHealth
+      flow:Section("Guild Health & Roster Stats")
+      flow:Card({
+        title = string.format("Members: %d  ·  Online: %d  ·  Using EPU: %d", gh.totalMembers, gh.onlineCount, gh.epuUsers),
+        titleColor = col.blue,
+        sub = string.format("Levels — 1–19: %d  |  20–39: %d  |  40–59: %d  |  60: %d",
+          gh.brackets.low, gh.brackets.mid, gh.brackets.high, gh.brackets.cap),
+        note = string.format("Profile Roles — Tanks: %d  ·  Healers: %d  ·  DPS: %d",
+          gh.roles.tank, gh.roles.healer, gh.roles.dps),
+      })
+
+      flow:Section("Dungeon Completion Matrix (Full Guild Clears)")
+      for _, d in ipairs(ns.DUNGEON_READINESS or {}) do
+        local ds = stats.byDungeon[d.id] or stats.byDungeon[d.name]
+        local fullCount = ds and ds.full or 0
+        local totCount = ds and ds.total or 0
+        local lastStr = (ds and ds.lastT > 0) and date("%Y-%m-%d", ds.lastT) or "Never"
+        flow:Card({
+          title = string.format("%s  (Lv %d–%d)", d.name, d.levelRange[1], d.levelRange[2]),
+          titleColor = fullCount > 0 and col.green or col.gold,
+          sub = string.format("Full Guild Clears: %d  ·  Total Guild Runs: %d  ·  Last: %s", fullCount, totCount, lastStr),
+        })
+      end
+
+      flow:Section("Attendance Leaderboard (Last 30 Days & All-Time)")
+      if #stats.attendance == 0 then
+        flow:Paragraph("No guild dungeon runs logged yet. Form a guild group and click 'Log Run' above!", col.muted)
+      else
+        for i = 1, math.min(15, #stats.attendance) do
+          local m = stats.attendance[i]
+          flow:Card({
+            title = string.format("#%d  %s", i, m.name),
+            titleColor = col.white,
+            sub = string.format("30d Runs: %d  ·  Full Guild: %d  ·  Total: %d  ·  Unique Dungeons: %d",
+              m.recent30, m.full, m.total, m.uniqueDungeons),
+          })
+        end
+      end
+
+      flow:Section("Needs a Guild Run (Active Lv 13+, 0 Runs in 30d)")
+      if #stats.zeroRunMembers == 0 then
+        flow:Paragraph("Everyone active has been in a logged guild run in the last 30 days!", col.green)
+      else
+        local names = {}
+        for i = 1, math.min(20, #stats.zeroRunMembers) do
+          local zm = stats.zeroRunMembers[i]
+          names[#names + 1] = string.format("%s (Lv %d%s)", zm.name, zm.level, zm.online and ", On" or "")
+        end
+        flow:Card({
+          title = #stats.zeroRunMembers .. " guildmate(s) without a recent guild run",
+          titleColor = col.gold,
+          note = table.concat(names, "  ·  "),
+        })
+      end
+
+      flow:Section("Recent Logged Runs (" .. #stats.runs .. ")")
+      for i = 1, math.min(12, #stats.runs) do
+        local r = stats.runs[i]
+        local rId = r.id
+        flow:Card({
+          title = string.format("%s  (%s)", r.dungeon, r.fullGuild and "Full Guild" or "Partial Guild"),
+          titleColor = r.fullGuild and col.green or col.white,
+          sub = string.format("%s  ·  Logged by %s  ·  %d member(s)", date("%Y-%m-%d %H:%M", r.t or 0), r.by or "?", #(r.members or {})),
+          note = table.concat(r.members or {}, ", "),
+          actionText = "Void",
+          actionWidth = 68,
+          onAction = function() ns.VoidGuildDungeonRun(rId); Render() end,
+        })
+      end
+    end
   end
 
   flow:Finish()
@@ -498,12 +601,15 @@ local function BuildWindow()
 
   win.tabs = {}
   local tabDefs = {
-    { "advisor", "Leveling Advisor", 122 },
-    { "dungeons", "Dungeon Readiness", 136 },
-    { "gear", "Dungeon Gear", 108 },
-    { "writs", "Crates & Writs", 112 },
-    { "camping", "T3 Camping Drops", 128 },
+    { "advisor", "Advisor", 86 },
+    { "dungeons", "Readiness & XP", 122 },
+    { "gear", "Dungeon Gear", 104 },
+    { "writs", "Crates & Writs", 106 },
+    { "camping", "T3 Camping", 96 },
   }
+  if ns.IsTrusted and ns.IsTrusted(ns.me) then
+    tabDefs[#tabDefs + 1] = { "runs", "Guild Runs (Officer)", 134 }
+  end
   local tx = 14
   for _, def in ipairs(tabDefs) do
     local tb = CreateFrame("Button", nil, win)
@@ -557,7 +663,7 @@ end
 function ns.OpenLevelingTools(tab)
   BuildWindow()
   if ns.SyncMyKeys then ns.SyncMyKeys() end
-  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" or tab == "gear" then
+  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" or tab == "gear" or tab == "runs" then
     state.tab = tab
   end
   win.scroll:SetVerticalScroll(0)

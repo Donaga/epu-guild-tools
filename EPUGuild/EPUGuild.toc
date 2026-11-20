@@ -34,6 +34,7 @@ ZoneData.lua
 ZoneGuide.lua
 ZoneGuideUI.lua
 LevelingTools.lua
+GuildRuns.lua
 LevelingToolsUI.lua
 GatheringMarket.lua
 GatheringSpots.lua
