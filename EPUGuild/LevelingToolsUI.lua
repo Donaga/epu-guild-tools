@@ -6,6 +6,7 @@ local win
 local state = {
   tab = "advisor",
   dungeonId = "hall_of_thanes",
+  campTier = 3,
 }
 
 local function C() return ns.InterfaceColors end
@@ -388,6 +389,37 @@ local function Render()
     if activeCD == 0 then
       flow:Paragraph("No active Craftsman's Writ cooldowns recorded on this character.", col.muted)
     end
+
+  elseif state.tab == "camping" then
+    flow:Section("Camping Blueprints (Tier " .. (state.campTier == 0 and "2 & 3" or tostring(state.campTier)) .. ")")
+    flow:Paragraph("Tier 1 camp items are learned from trainers (~Skill 20). Tier 2 (Skill 140) and Tier 3 (Skill 300) Blueprints drop from dungeon bosses.", col.muted)
+
+    local myProfs = (ns.GuidePlayer and ns.GuidePlayer().professions) or {}
+    local profNames = {}
+    for _, pinfo in pairs(myProfs) do
+      if pinfo.name then profNames[pinfo.name:lower()] = true end
+    end
+
+    for _, bp in ipairs(ns.CAMPING_BLUEPRINTS or {}) do
+      if state.campTier == 0 or bp.tier == state.campTier then
+        local knowsProf = profNames[bp.profession:lower()]
+        local dId = bp.dungeonId
+        flow:Card({
+          title = string.format("[T%d · %s %d] %s%s", bp.tier, bp.profession, bp.skill, bp.name, knowsProf and "  (Your Prof)" or ""),
+          titleColor = knowsProf and col.green or (bp.tier == 3 and col.gold or col.white),
+          sub = "Drop / Source: " .. bp.source,
+          note = bp.effect,
+          actionText = dId and "Check Dungeon" or nil,
+          actionWidth = 114,
+          onAction = dId and function()
+            state.dungeonId = dId
+            state.tab = "dungeons"
+            win.scroll:SetVerticalScroll(0)
+            Render()
+          end or nil,
+        })
+      end
+    end
   end
 
   flow:Finish()
@@ -404,9 +436,10 @@ local function BuildWindow()
 
   win.tabs = {}
   local tabDefs = {
-    { "advisor", "Leveling Advisor", 136 },
-    { "dungeons", "Dungeon Readiness & XP Guard", 210 },
-    { "writs", "Waylaid Crates & Writs", 174 },
+    { "advisor", "Leveling Advisor", 130 },
+    { "dungeons", "Dungeon Readiness & XP", 174 },
+    { "writs", "Crates & Writs", 118 },
+    { "camping", "T3 Camping Drops", 136 },
   }
   local tx = 14
   for _, def in ipairs(tabDefs) do
@@ -461,7 +494,7 @@ end
 function ns.OpenLevelingTools(tab)
   BuildWindow()
   if ns.SyncMyKeys then ns.SyncMyKeys() end
-  if tab == "dungeons" or tab == "writs" or tab == "advisor" then
+  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" then
     state.tab = tab
   end
   win.scroll:SetVerticalScroll(0)

@@ -480,6 +480,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("dungeons") end
   elseif cmd == "writs" or cmd == "crates" or cmd == "waylaid" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("writs") end
+  elseif cmd == "camping" or cmd == "camp" then
+    if ns.OpenLevelingTools then ns.OpenLevelingTools("camping") end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
