@@ -486,6 +486,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("gear") end
   elseif cmd == "runs" or cmd == "attendance" or cmd == "guildstats" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("runs") end
+  elseif cmd == "raid" or cmd == "raids" or cmd == "raidprep" then
+    if ns.OpenLevelingTools then ns.OpenLevelingTools("raid") end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

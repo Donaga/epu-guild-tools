@@ -156,14 +156,15 @@ function ns.CheckTrivialXP(targetMinLevel, targetMaxLevel)
     if m.level < lo.level then lo = m end
   end
 
+  local gap = ns.FOREVER_PARTY_TRIVIAL_GAP or 12
   local warnings = {}
-  if targetMaxLevel and (hi.level - targetMaxLevel) >= 12 then
+  if targetMaxLevel and (hi.level - targetMaxLevel) >= gap then
     warnings[#warnings + 1] = string.format(
       "%s (Lv %d) is %d+ levels above this dungeon's max level (%d) — kills may grant ZERO XP to the party!",
       hi.name, hi.level, hi.level - targetMaxLevel, targetMaxLevel
     )
   end
-  if #members > 1 and (hi.level - lo.level) >= 12 then
+  if #members > 1 and (hi.level - lo.level) >= gap then
     warnings[#warnings + 1] = string.format(
       "Party spread is %d levels (%s Lv %d vs %s Lv %d) — mobs on-level for %s will be trivial (0 XP)!",
       hi.level - lo.level, hi.name, hi.level, lo.name, lo.level, lo.name
@@ -394,6 +395,34 @@ function ns.GetGuildReadiness(dungeon)
   return completed, needed
 end
 
+function ns.ToggleMyCampingStation(bpName)
+  local store = ReadinessStore()
+  if not store or not ns.me or not bpName then return end
+  store[ns.me] = store[ns.me] or { done = {}, camp = {}, t = 0 }
+  store[ns.me].camp = store[ns.me].camp or {}
+  store[ns.me].camp[bpName] = not store[ns.me].camp[bpName] and true or nil
+  store[ns.me].t = ns.Now and ns.Now() or time()
+  if ns.Send then
+    ns.Send("L", { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
+  end
+end
+
+function ns.GetGuildCampingCoverage(bpName)
+  local store = ReadinessStore() or {}
+  local owners = {}
+  for who, entry in pairs(store) do
+    if entry.camp and entry.camp[bpName] then
+      local r = ns.roster and ns.roster[who]
+      owners[#owners + 1] = { name = who, online = r and r.online }
+    end
+  end
+  table.sort(owners, function(a, b)
+    if (a.online and true or false) ~= (b.online and true or false) then return a.online end
+    return a.name < b.name
+  end)
+  return owners
+end
+
 ns.comm.L = function(sender, payload)
   if type(payload) ~= "table" or type(payload.done) ~= "table" then return end
   local who = ns.Member and ns.Member(payload.who or sender) or sender
@@ -402,11 +431,16 @@ ns.comm.L = function(sender, payload)
   if not store then return end
   local cur = store[who]
   if cur and (cur.t or 0) >= (payload.t or 0) then return end
-  local clean = {}
+  local clean, cleanCamp = {}, {}
   for k, v in pairs(payload.done) do
     if type(k) == "string" and v == true then clean[k] = true end
   end
-  store[who] = { done = clean, t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
+  if type(payload.camp) == "table" then
+    for k, v in pairs(payload.camp) do
+      if type(k) == "string" and v == true then cleanCamp[k] = true end
+    end
+  end
+  store[who] = { done = clean, camp = cleanCamp, t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
 end
 
 function ns.AddLevelingNeed(itemID, qty, itemName)

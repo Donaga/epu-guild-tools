@@ -31,10 +31,12 @@ GuideCatalog.lua
 Guides.lua
 GuidesUI.lua
 ZoneData.lua
+ForeverRules.lua
 ZoneGuide.lua
 ZoneGuideUI.lua
 LevelingTools.lua
 GuildRuns.lua
+RaidPrep.lua
 LevelingToolsUI.lua
 GatheringMarket.lua
 GatheringSpots.lua

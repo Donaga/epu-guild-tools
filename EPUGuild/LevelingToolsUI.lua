@@ -9,6 +9,7 @@ local state = {
   campTier = 3,
   gearRole = "Auto",
   gearAllLevels = false,
+  raidSize = 10,
 }
 
 local function C() return ns.InterfaceColors end
@@ -405,20 +406,25 @@ local function Render()
     for _, bp in ipairs(ns.CAMPING_BLUEPRINTS or {}) do
       if state.campTier == 0 or bp.tier == state.campTier then
         local knowsProf = profNames[bp.profession:lower()]
-        local dId = bp.dungeonId
+        local owners = ns.GetGuildCampingCoverage and ns.GetGuildCampingCoverage(bp.name) or {}
+        local iHave = false
+        local ownerNames = {}
+        for _, o in ipairs(owners) do
+          if o.name == ns.me then iHave = true end
+          ownerNames[#ownerNames + 1] = o.name .. (o.online and " (On)" or "")
+        end
+        local bpName = bp.name
         flow:Card({
           title = string.format("[T%d · %s %d] %s%s", bp.tier, bp.profession, bp.skill, bp.name, knowsProf and "  (Your Prof)" or ""),
-          titleColor = knowsProf and col.green or (bp.tier == 3 and col.gold or col.white),
+          titleColor = iHave and col.green or (knowsProf and col.blue or (bp.tier == 3 and col.gold or col.white)),
           sub = "Drop / Source: " .. bp.source,
-          note = bp.effect,
-          actionText = dId and "Check Dungeon" or nil,
-          actionWidth = 114,
-          onAction = dId and function()
-            state.dungeonId = dId
-            state.tab = "dungeons"
-            win.scroll:SetVerticalScroll(0)
+          note = bp.effect .. "\nGuildmates with station: " .. (#ownerNames > 0 and table.concat(ownerNames, ", ") or "None reported yet"),
+          actionText = iHave and "Have It" or "Mark Learned",
+          actionWidth = 108,
+          onAction = function()
+            if ns.ToggleMyCampingStation then ns.ToggleMyCampingStation(bpName) end
             Render()
-          end or nil,
+          end,
         })
       end
     end
@@ -578,12 +584,91 @@ local function Render()
           title = string.format("%s  (%s)", r.dungeon, r.fullGuild and "Full Guild" or "Partial Guild"),
           titleColor = r.fullGuild and col.green or col.white,
           sub = string.format("%s  ·  Logged by %s  ·  %d member(s)", date("%Y-%m-%d %H:%M", r.t or 0), r.by or "?", #(r.members or {})),
-          note = table.concat(r.members or {}, ", "),
+          note = (r.note and r.note ~= "" and (r.note .. "\n") or "") .. table.concat(r.members or {}, ", "),
           actionText = "Void",
           actionWidth = 68,
           onAction = function() ns.VoidGuildDungeonRun(rId); Render() end,
         })
       end
+    end
+
+  elseif state.tab == "raid" then
+    local myRaid = ns.GetMyRaidStatus and ns.GetMyRaidStatus() or { amulet = false, fireRes = 0, role = "DPS" }
+    flow:Section("Dec 9 Raid Launch: Your Readiness")
+    flow:Card({
+      title = string.format("Drakefire Amulet (Onyxia): %s  ·  Fire Resistance: %d  ·  Role: %s",
+        myRaid.amulet and "READY" or "MISSING", myRaid.fireRes or 0, myRaid.role or "DPS"),
+      titleColor = myRaid.amulet and col.green or col.gold,
+      sub = "Broadcasts your amulet, Fire Resistance, and role to the guild.",
+      actionText = "Sync Status",
+      actionWidth = 104,
+      onAction = function()
+        if ns.SyncMyRaidStatus then ns.SyncMyRaidStatus() end
+        ns.Print("Synced your Raid Readiness status.")
+        Render()
+      end,
+    })
+
+    flow:Section("Forever Dec 9 Raids (No Classic World Buffs Inside)")
+    for _, r in ipairs(ns.FOREVER_RAIDS or {}) do
+      flow:Card({
+        title = string.format("%s  (%d-Player · %d Bosses)", r.name, r.size, r.bosses),
+        titleColor = col.gold,
+        sub = "Attunement: " .. r.attunement .. "  ·  " .. r.location,
+        note = r.notes,
+      })
+    end
+
+    local nextSize = ({ [10] = 20, [20] = 40, [40] = 10 })[state.raidSize] or 10
+    local squads, poolCount = ns.BuildRaidSquads and ns.BuildRaidSquads(state.raidSize) or {}, 0
+    flow:Section(string.format("Squad Builder (%d-Man Teams · %d Guildmates Lv 58+)", state.raidSize, poolCount))
+    flow:Card({
+      title = "Team Size: " .. state.raidSize .. "-Player (" .. #squads .. " squad(s))",
+      sub = "Auto-balances Tanks, Healers, and DPS from guild profiles & synced raid status.",
+      actionText = "Switch: " .. nextSize .. "m",
+      actionWidth = 106,
+      onAction = function() state.raidSize = nextSize; Render() end,
+    })
+    for _, sq in ipairs(squads) do
+      local names = {}
+      for _, m in ipairs(sq.members) do
+        names[#names + 1] = string.format("%s (%s%s)", m.name, m.role:sub(1, 1), m.amulet and ", Ony" or "")
+      end
+      flow:Card({
+        title = string.format("Squad %d (%d/%d) — Tanks: %d · Healers: %d · DPS: %d",
+          sq.index, #sq.members, state.raidSize, #sq.tanks, #sq.healers, #sq.dps),
+        titleColor = #sq.members >= state.raidSize and col.green or col.white,
+        note = #names > 0 and table.concat(names, "  ·  ") or "No level 58+ members in roster yet.",
+      })
+    end
+
+    flow:Section("Raid Consumables & Bank Prep")
+    local isTrusted = ns.IsTrusted and ns.IsTrusted(ns.me)
+    for _, rc in ipairs(ns.RAID_CONSUMABLES or {}) do
+      local bankQty, crafters = ns.CheckGuildStockAndCrafters(rc.name, rc.itemID)
+      local cText = #crafters > 0 and (crafters[1].name .. (crafters[1].online and " (On)" or "")) or "No crafter synced"
+      local itemID, itemName = rc.itemID, rc.name
+      flow:Card({
+        title = rc.name,
+        sub = string.format("Guild Bank: %d  ·  Crafter: %s", bankQty, cText),
+        subColor = bankQty > 0 and col.green or col.muted,
+        note = rc.use,
+        actionText = isTrusted and "Add Need +20" or nil,
+        actionWidth = 112,
+        onAction = isTrusted and function() ns.AddLevelingNeed(itemID, 20, itemName); Render() end or nil,
+      })
+    end
+    if isTrusted then
+      flow:Card({
+        title = "Create Dec 9 Raid Consumables Project",
+        titleColor = col.gold,
+        sub = "Spin up a Guild Project in Guild -> Projects for Flasks & Protection Potions.",
+        actionText = "Create Project",
+        actionWidth = 116,
+        onAction = function()
+          ns.CreateLevelingProject("Dec 9 Raid Consumables", "Flasks, Greater Fire/Nature/Shadow Protection Potions, and Mongoose/Arcane Elixirs.")
+        end,
+      })
     end
   end
 
@@ -601,14 +686,15 @@ local function BuildWindow()
 
   win.tabs = {}
   local tabDefs = {
-    { "advisor", "Advisor", 86 },
-    { "dungeons", "Readiness & XP", 122 },
-    { "gear", "Dungeon Gear", 104 },
-    { "writs", "Crates & Writs", 106 },
-    { "camping", "T3 Camping", 96 },
+    { "advisor", "Advisor", 76 },
+    { "dungeons", "Readiness", 90 },
+    { "gear", "Gear", 64 },
+    { "writs", "Writs", 68 },
+    { "camping", "Camping", 80 },
+    { "raid", "Dec 9 Raids", 98 },
   }
   if ns.IsTrusted and ns.IsTrusted(ns.me) then
-    tabDefs[#tabDefs + 1] = { "runs", "Guild Runs (Officer)", 134 }
+    tabDefs[#tabDefs + 1] = { "runs", "Guild Runs", 96 }
   end
   local tx = 14
   for _, def in ipairs(tabDefs) do
@@ -663,7 +749,7 @@ end
 function ns.OpenLevelingTools(tab)
   BuildWindow()
   if ns.SyncMyKeys then ns.SyncMyKeys() end
-  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" or tab == "gear" or tab == "runs" then
+  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" or tab == "gear" or tab == "runs" or tab == "raid" then
     state.tab = tab
   end
   win.scroll:SetVerticalScroll(0)

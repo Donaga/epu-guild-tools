@@ -206,3 +206,31 @@ function ns.GetGuildDungeonStats()
     },
   }
 end
+
+-- Auto-log guild dungeon/raid runs on boss kill (ENCOUNTER_END) for officers
+local sessionRunIds = {}
+if ns.On then
+  ns.On("ENCOUNTER_END", function(encounterID, encounterName, difficultyID, groupSize, success)
+    if success ~= 1 then return end
+    if not (ns.IsTrusted and ns.IsTrusted(ns.me)) then return end
+    local party = ns.GetCurrentPartyGuildStatus()
+    if not party.instance or #party.members < 2 then return end
+
+    local store = Store()
+    if not store then return end
+    local existingId = sessionRunIds[party.instance]
+    local existing = existingId and store[existingId]
+    local boss = encounterName or ("Boss #" .. tostring(encounterID or "?"))
+
+    if existing and not existing.voided then
+      if existing.note == "" then existing.note = "Bosses: " .. boss
+      elseif not existing.note:find(boss, 1, true) then existing.note = (existing.note .. ", " .. boss):sub(1, 160) end
+      existing.t = ns.Now and ns.Now() or time()
+      if ns.Send then ns.Send("R", existing, "OFFICER") end
+      if ns.Changed then ns.Changed() end
+    else
+      local id = ns.LogGuildDungeonRun(party.instance, nil, party.members, party.fullGuild, "Auto-logged (" .. boss .. ")")
+      if id then sessionRunIds[party.instance] = id end
+    end
+  end)
+end
