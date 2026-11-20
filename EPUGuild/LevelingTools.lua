@@ -500,3 +500,151 @@ ns.CAMPING_BLUEPRINTS = {
     source = "Relic Guardian (Excavation Site: Wetlands)", dungeonId = "excavation_site",
     effect = "Tier 2 Mining camp node." },
 }
+
+-- =========================================================================
+-- Dungeon Gear Guide by Level, Class & Spec/Role
+-- =========================================================================
+local SPEC_TO_ROLE = {
+  Protection = "Tank",
+  Feral = "Melee",
+  Restoration = "Healer",
+  Holy = "Healer",
+  Discipline = "Healer",
+  Shadow = "Caster",
+  Balance = "Caster",
+  Elemental = "Caster",
+  Enhancement = "Melee",
+  Retribution = "Melee",
+  Arms = "Melee",
+  Fury = "Melee",
+  Combat = "Melee",
+  Assassination = "Melee",
+  Subtlety = "Melee",
+  ["Beast Mastery"] = "Melee",
+  Marksmanship = "Melee",
+  Survival = "Melee",
+  Arcane = "Caster",
+  Fire = "Caster",
+  Frost = "Caster",
+  Affliction = "Caster",
+  Demonology = "Caster",
+  Destruction = "Caster",
+}
+
+local CLASS_DEFAULT_ROLE = {
+  WARRIOR = "Melee",
+  ROGUE = "Melee",
+  HUNTER = "Melee",
+  MAGE = "Caster",
+  WARLOCK = "Caster",
+  PRIEST = "Healer",
+  PALADIN = "Healer",
+  SHAMAN = "Healer",
+  DRUID = "Melee",
+}
+
+function ns.PlayerGearRole()
+  local p = ns.GuidePlayer and ns.GuidePlayer() or {}
+  local role = (p.focus and SPEC_TO_ROLE[p.focus]) or (p.class and CLASS_DEFAULT_ROLE[p.class]) or "Melee"
+  return role, p.className or p.class or "Adventurer", p.focus
+end
+
+ns.DUNGEON_GEAR = {
+  { id = "hall_of_thanes", name = "Hall of Thanes (Forever)", levelRange = {13, 18}, faction = "Alliance",
+    items = {
+      { name = "Early Alliance dungeon blues & greens", role = "All", slot = "Weapons / Armor", source = "Ironforge Vault Bosses" },
+    }},
+  { id = "ruins_of_lordaeron", name = "Ruins of Lordaeron (Forever)", levelRange = {15, 20}, faction = "Horde",
+    items = {
+      { name = "Early Horde dungeon blues & greens", role = "All", slot = "Weapons / Armor", source = "Ruins Bosses" },
+    }},
+  { id = "deadmines", name = "The Deadmines", levelRange = {17, 26}, faction = "Alliance",
+    items = {
+      { name = "Cruel Barb", role = "Melee", slot = "1H Sword (+12 AP)", source = "Edwin VanCleef" },
+      { name = "Smite's Mighty Hammer", role = "Melee", slot = "2H Mace (11 Str)", source = "Mr. Smite" },
+      { name = "Thief's Blade", role = "Melee", slot = "1H Sword", source = "Sneed's Shredder" },
+      { name = "Blackened Defias Armor", role = "Melee", slot = "Leather Chest", source = "Edwin VanCleef" },
+      { name = "Emberstone Staff", role = "Caster", slot = "Staff (Int/Spi)", source = "Captain Greenskin" },
+      { name = "Cookie's Stirring Rod", role = "Caster", slot = "Wand", source = "Cookie" },
+      { name = "Corsair's Overshirt", role = "Healer", slot = "Cloth Chest", source = "Captain Greenskin" },
+      { name = "Gold-flecked Gloves", role = "Tank", slot = "Mail Hands", source = "Rhahk'Zor" },
+    }},
+  { id = "wailing_caverns", name = "Wailing Caverns", levelRange = {17, 24}, faction = "Neutral",
+    items = {
+      { name = "Wingblade / Crescent Staff", role = "Melee", slot = "Quest Rewards (Leaders of the Fang)", source = "Wailing Caverns Quest" },
+      { name = "Armor of the Fang (Set)", role = "Melee", slot = "Leather Set", source = "Druids of the Fang" },
+      { name = "Cobrahn's Grasp", role = "Tank", slot = "Mail Belt", source = "Lord Cobrahn" },
+      { name = "Living Root", role = "Healer", slot = "Staff (Spi/Sta)", source = "Verdan the Everliving" },
+      { name = "Robe of the Moccasin", role = "Caster", slot = "Cloth Chest", source = "Skum" },
+    }},
+  { id = "shadowfang_keep", name = "Shadowfang Keep", levelRange = {22, 30}, faction = "Neutral",
+    items = {
+      { name = "Meteor Shard", role = "Melee", slot = "1H Dagger", source = "Archmage Arugal" },
+      { name = "Butcher's Cleaver", role = "Melee", slot = "1H Axe", source = "Razorclaw the Butcher" },
+      { name = "Robes of Arugal", role = "Caster", slot = "Cloth Chest (9 Int/10 Spi)", source = "Archmage Arugal" },
+      { name = "Belt of Arugal", role = "Healer", slot = "Cloth Waist", source = "Archmage Arugal" },
+      { name = "Baron's Scepter", role = "Tank", slot = "1H Mace", source = "Baron Silverlaine" },
+    }},
+  { id = "excavation_site", name = "Excavation Site (Forever)", levelRange = {24, 29}, faction = "Neutral",
+    items = {
+      { name = "Mid-20s Forever dungeon drops", role = "All", slot = "Weapons / Armor", source = "Excavation Bosses" },
+    }},
+  { id = "city_of_dalaran", name = "City of Dalaran (Forever)", levelRange = {28, 33}, faction = "Neutral",
+    items = {
+      { name = "Arcane-themed 28-33 Forever drops", role = "All", slot = "Weapons / Armor", source = "Dalaran Bosses (requires attunement)" },
+    }},
+  { id = "gnomeregan", name = "Gnomeregan", levelRange = {29, 38}, faction = "Neutral",
+    items = {
+      { name = "Triprunner Dungarees", role = "Melee", slot = "Leather Legs (18 Agi!)", source = "Quest: Rig Wars / Save Techbot" },
+      { name = "Manual Crowd Pummeler", role = "Melee", slot = "2H Mace (Feral BiS!)", source = "Crowd Pummeler 9-60" },
+      { name = "Thermaplugg's Left Arm", role = "Tank", slot = "1H Axe", source = "Mekgineer Thermaplugg" },
+      { name = "Electromagnetic Gigaflux Reactivator", role = "Caster", slot = "Cloth Helm", source = "Mekgineer Thermaplugg" },
+      { name = "Civinad Robes", role = "Healer", slot = "Cloth Chest", source = "Viscous Fallout" },
+    }},
+  { id = "scarlet_monastery", name = "Scarlet Monastery", levelRange = {29, 44}, faction = "Neutral",
+    items = {
+      { name = "Ravager / Whirlwind-tier 2H", role = "Melee", slot = "2H Axe (AoE proc)", source = "Herod (Armory)" },
+      { name = "Herod's Shoulder & Scarlet Leggings", role = "Melee", slot = "Mail", source = "Herod (Armory)" },
+      { name = "Illusionary Rod", role = "Caster", slot = "Staff (15 Int/10 Spi)", source = "Arcanist Doan (Library)" },
+      { name = "Hypnotic Blade", role = "Caster", slot = "1H Dagger (8 Int/9 SP)", source = "Arcanist Doan (Library)" },
+      { name = "Whitemane's Chapeau", role = "Healer", slot = "Cloth Helm (14 Int/14 Spi/33 Heal)", source = "High Inquisitor Whitemane" },
+      { name = "Aegis of the Scarlet Commander", role = "Tank", slot = "Shield", source = "Scarlet Commander Mograine" },
+    }},
+  { id = "drowned_city", name = "The Drowned City (Forever)", levelRange = {35, 40}, faction = "Neutral",
+    items = {
+      { name = "Naga & Pirate 35-40 Forever drops", role = "All", slot = "Weapons / Armor", source = "Drowned City Bosses" },
+    }},
+  { id = "kroldok_stronghold", name = "Krol'dok Stronghold (Forever)", levelRange = {40, 45}, faction = "Neutral",
+    items = {
+      { name = "Level 40-45 Forever dungeon drops", role = "All", slot = "Weapons / Armor", source = "Krol'dok Bosses" },
+    }},
+  { id = "zulfarrak", name = "Zul'Farrak", levelRange = {44, 54}, faction = "Neutral",
+    items = {
+      { name = "Sul'thraze the Lasher", role = "Melee", slot = "Epic 2H Sword (Jang'thraze + Sang'thraze)", source = "Chief Ukorz / Antu'sul" },
+      { name = "Big Bad Pauldrons", role = "Tank", slot = "Plate Shoulders", source = "Chief Ukorz Sandscalp" },
+      { name = "Bad Mojo Mask", role = "Caster", slot = "Cloth Helm (22 Int/14 SP)", source = "Shadowpriest Sezz'ziz" },
+      { name = "Gahz'rilla Scale Armor", role = "Melee", slot = "Mail Chest", source = "Gahz'rilla" },
+      { name = "Mason's Fraternity Ring", role = "Healer", slot = "Ring", source = "Quest: Gahz'rilla / Divino-matic" },
+    }},
+  { id = "alcaz_prison", name = "Alcaz Prison (Forever)", levelRange = {48, 53}, faction = "Neutral",
+    items = {
+      { name = "Level 48-53 Forever dungeon drops", role = "All", slot = "Weapons / Armor", source = "Alcaz Prison Bosses" },
+    }},
+  { id = "blackrock_depths", name = "Blackrock Depths", levelRange = {52, 60}, faction = "Neutral",
+    items = {
+      { name = "Hand of Justice", role = "Melee", slot = "Trinket (2% Extra Attack)", source = "General Angerforge" },
+      { name = "Savage Gladiator Chain", role = "Melee", slot = "Mail Chest (2% Crit)", source = "Gorosh the Dervish (Arena)" },
+      { name = "Ironfoe", role = "Tank", slot = "Epic 1H Mace", source = "Emperor Dagran Thaurissan" },
+      { name = "Force of Will", role = "Tank", slot = "Trinket", source = "Emperor Dagran Thaurissan" },
+      { name = "Ban'thok Sash", role = "Caster", slot = "Cloth Waist (1% Hit + SP)", source = "Ok'thor the Breaker (Arena)" },
+      { name = "Second Wind", role = "Healer", slot = "Trinket (+22 Healing)", source = "Golem Lord Argelmach" },
+    }},
+  { id = "blackmaw_hold", name = "Blackmaw Hold (Forever)", levelRange = {55, 60}, faction = "Neutral",
+    items = {
+      { name = "Endgame 55-60 Forever Furbolg drops", role = "All", slot = "Weapons / Armor", source = "Blackmaw Hold Bosses" },
+    }},
+  { id = "shapers_terrace", name = "Shaper's Terrace (Forever)", levelRange = {58, 60}, faction = "Neutral",
+    items = {
+      { name = "Endgame 58-60 Forever Titan drops", role = "All", slot = "Weapons / Armor", source = "Shaper's Terrace Bosses" },
+    }},
+}

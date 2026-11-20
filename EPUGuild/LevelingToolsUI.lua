@@ -7,6 +7,8 @@ local state = {
   tab = "advisor",
   dungeonId = "hall_of_thanes",
   campTier = 3,
+  gearRole = "Auto",
+  gearAllLevels = false,
 }
 
 local function C() return ns.InterfaceColors end
@@ -420,6 +422,66 @@ local function Render()
         })
       end
     end
+
+  elseif state.tab == "gear" then
+    local autoRole, className, specName = ns.PlayerGearRole()
+    local activeRole = state.gearRole == "Auto" and autoRole or state.gearRole
+    local pLevel = ns.GetPlayerLevel and ns.GetPlayerLevel() or 1
+    flow:Section(string.format("Dungeon Gear Guide (%s%s · Role: %s · Lv %d)",
+      className, specName and (" - " .. specName) or "", activeRole, pLevel))
+
+    -- Role & Level controls as quick cards
+    local nextRole = ({ Auto = "Tank", Tank = "Healer", Healer = "Melee", Melee = "Caster", Caster = "All", All = "Auto" })[state.gearRole] or "Auto"
+    flow:Card({
+      title = "Filter: Role = " .. state.gearRole .. (state.gearRole == "Auto" and (" (" .. autoRole .. ")") or ""),
+      sub = "Click to cycle: Auto -> Tank -> Healer -> Melee -> Caster -> All",
+      actionText = "Switch: " .. nextRole,
+      actionWidth = 114,
+      onAction = function() state.gearRole = nextRole; Render() end,
+    })
+    flow:Card({
+      title = state.gearAllLevels and "Showing: All Dungeon Levels" or ("Showing: Dungeons Near Level " .. pLevel),
+      actionText = state.gearAllLevels and "Near My Level" or "Show All",
+      actionWidth = 114,
+      onAction = function() state.gearAllLevels = not state.gearAllLevels; Render() end,
+    })
+
+    local shownD = 0
+    for _, dg in ipairs(ns.DUNGEON_GEAR or {}) do
+      local lr = dg.levelRange
+      local inLevel = state.gearAllLevels or (pLevel >= (lr[1] - 4) and pLevel <= (lr[2] + 4))
+      if inLevel then
+        local matches = {}
+        for _, it in ipairs(dg.items or {}) do
+          if activeRole == "All" or it.role == "All" or it.role == activeRole then
+            matches[#matches + 1] = it
+          end
+        end
+        if #matches > 0 then
+          shownD = shownD + 1
+          local dId = dg.id
+          flow:Section(string.format("%s (Levels %d–%d)", dg.name, lr[1], lr[2]))
+          for _, it in ipairs(matches) do
+            flow:Card({
+              title = it.name,
+              titleColor = col.gold,
+              sub = string.format("%s  ·  %s  ·  Drop: %s", it.role, it.slot, it.source),
+              actionText = "Check Ready",
+              actionWidth = 104,
+              onAction = function()
+                state.dungeonId = dId
+                state.tab = "dungeons"
+                win.scroll:SetVerticalScroll(0)
+                Render()
+              end,
+            })
+          end
+        end
+      end
+    end
+    if shownD == 0 then
+      flow:Paragraph("No dungeons matched this level/role filter. Click 'Show All' above to browse all dungeons.", col.muted)
+    end
   end
 
   flow:Finish()
@@ -436,10 +498,11 @@ local function BuildWindow()
 
   win.tabs = {}
   local tabDefs = {
-    { "advisor", "Leveling Advisor", 130 },
-    { "dungeons", "Dungeon Readiness & XP", 174 },
-    { "writs", "Crates & Writs", 118 },
-    { "camping", "T3 Camping Drops", 136 },
+    { "advisor", "Leveling Advisor", 122 },
+    { "dungeons", "Dungeon Readiness", 136 },
+    { "gear", "Dungeon Gear", 108 },
+    { "writs", "Crates & Writs", 112 },
+    { "camping", "T3 Camping Drops", 128 },
   }
   local tx = 14
   for _, def in ipairs(tabDefs) do
@@ -494,7 +557,7 @@ end
 function ns.OpenLevelingTools(tab)
   BuildWindow()
   if ns.SyncMyKeys then ns.SyncMyKeys() end
-  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" then
+  if tab == "dungeons" or tab == "writs" or tab == "advisor" or tab == "camping" or tab == "gear" then
     state.tab = tab
   end
   win.scroll:SetVerticalScroll(0)
