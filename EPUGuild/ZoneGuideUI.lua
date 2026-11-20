@@ -650,3 +650,56 @@ function ns.OpenZoneGuide(query)
   RenderContent()
   win:Show()
 end
+
+-- World Map integration: add a "Visitor's Guide" button on WorldMapFrame
+-- and auto-update the guide when clicking into a zone on the World Map.
+local mapHooked = false
+local function AttachToWorldMap()
+  if mapHooked or not WorldMapFrame then return end
+  mapHooked = true
+
+  local anchor = WorldMapFrame.BorderFrame or WorldMapFrame
+  local btn = Btn(anchor, "Visitor's Guide", 112, 22)
+  btn:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -64, -30)
+  btn:SetFrameStrata("HIGH")
+  btn:SetScript("OnEnter", function(self)
+    if GameTooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+      GameTooltip:SetText("EPU Zone Visitor's Guide", 1, 1, 1)
+      GameTooltip:AddLine("Open the Visitor's Guide for the currently viewed map zone.", 0.85, 0.85, 0.85, true)
+      GameTooltip:AddLine("While open, clicking any zone on the World Map updates the guide.", 0.65, 0.85, 1.0, true)
+      GameTooltip:Show()
+    end
+  end)
+  btn:SetScript("OnLeave", function() if GameTooltip_Hide then GameTooltip_Hide() end end)
+  btn:SetScript("OnClick", function()
+    local mapID = WorldMapFrame.GetMapID and WorldMapFrame:GetMapID()
+    local z = mapID and ns.GetZoneByMapID and ns.GetZoneByMapID(mapID)
+    if z then
+      ns.OpenZoneGuide(z.id)
+    else
+      ns.OpenZoneGuide()
+    end
+  end)
+
+  if hooksecurefunc and WorldMapFrame.SetMapID then
+    hooksecurefunc(WorldMapFrame, "SetMapID", function(_, mapID)
+      if win and win:IsShown() and mapID and ns.GetZoneByMapID then
+        local z = ns.GetZoneByMapID(mapID)
+        if z and state.zoneId ~= z.id then
+          state.zoneId = z.id
+          win.contentScroll:SetVerticalScroll(0)
+          RenderZoneList()
+          RenderContent()
+        end
+      end
+    end)
+  end
+end
+
+if ns.On then
+  ns.On("PLAYER_LOGIN", AttachToWorldMap)
+  ns.On("ADDON_LOADED", function(addon)
+    if addon == "Blizzard_WorldMap" then AttachToWorldMap() end
+  end)
+end

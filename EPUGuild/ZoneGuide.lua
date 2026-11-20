@@ -19,6 +19,11 @@ function ns.GetZoneById(id)
   return id and byId[id] or nil
 end
 
+function ns.GetZoneByMapID(mapID)
+  EnsureIndex()
+  return mapID and byMap[mapID] or nil
+end
+
 function ns.FindZone(query)
   EnsureIndex()
   if not query or query == "" then return nil end
