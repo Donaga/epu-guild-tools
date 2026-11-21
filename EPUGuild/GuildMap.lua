@@ -2702,12 +2702,23 @@ function ns.OpenPopoutChatSettings()
 
       Heading("Window & Behavior")
       Row({
+        { "Tabs in one window", 186, function() o.windows = "tabs"; SyncUI() end },
+        { "One window per person", 186, function() o.windows = "separate"; SyncUI() end },
+      })
+      Row({
         { Check(o.pop, "Open on whisper"), 186, function() o.pop = not o.pop; SyncUI() end },
         { Check(o.combat, "Tuck in combat"), 186, function() o.combat = not o.combat; SyncUI() end },
       })
       Row({
         { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
+        { Check(o.typing, "Show/send typing..."), 186, function() o.typing = not o.typing; SyncUI() end },
+      })
+      Row({
         { Check(o.lineTimes, "Time on every line"), 186, function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); SyncUI() end },
+        { Check(o.presence ~= false, "Guild online/offline"), 186, function() o.presence = o.presence == false; SyncUI() end },
+      })
+      Row({
+        { Check(o.shareGuild ~= false, "Fill in missed guild chat from guildmates"), 378, function() o.shareGuild = o.shareGuild == false; SyncUI() end },
       })
       Row({
         { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; SyncUI() end },
@@ -2729,29 +2740,83 @@ function ns.OpenPopoutChatSettings()
         { Check(o.outline, "Outline"), 120, function() o.outline = not o.outline; ns.ChatColorsChanged(); SyncUI() end },
       })
 
-      Heading("Channels (Keep & Pop-out Tabs)")
+      Heading("Channels (Keep, Pop-out, Color, Sound, Clear)")
       for _, k in ipairs(CHANNEL_ORDER) do
         if k ~= "officer" or CanOfficerChat() then
           local keep = ns.ChatKeep(k)
           local lbl = CHANNELS[k].short or "Whispers"
+          local sndLbl = "Sound: Off"
+          for _, snd in ipairs(ns.CHAT_SOUNDS or {}) do if snd.value == (o.sounds[k] or false) then sndLbl = "Snd: " .. snd.label end end
+          local btns = {
+            { Check(keep, lbl), 120, function() ns.SetChatKeep(k, not keep); SyncUI() end },
+            { ChatColor(k, false) .. "Color|r", 54, function() ns.PickChatColor(k, false) end },
+          }
           if k == "whisper" then
-            Row({ { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end } })
-          else
+            btns[#btns + 1] = { ChatColor(k, true) .. "Sent|r", 50, function() ns.PickChatColor(k, true) end }
+          elseif keep then
             local inPop = o.popTabs[k] ~= false
-            local btns = {
-              { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end },
-            }
-            if keep then
-              btns[#btns + 1] = { Check(inPop, "Pop-out tab"), 140, function() o.popTabs[k] = not inPop; SyncUI() end }
-            end
-            Row(btns)
+            btns[#btns + 1] = { Check(inPop, "Pop"), 74, function() o.popTabs[k] = not inPop; SyncUI() end }
           end
+          btns[#btns + 1] = { sndLbl, 84, function(self)
+            K.OpenMenu(self, ns.CHAT_SOUNDS, o.sounds[k] or false, function(v)
+              o.sounds[k] = v or nil
+              if v and PlaySound then pcall(PlaySound, v, "Master") end
+              SyncUI()
+            end)
+          end }
+          if #ns.ChatLog(k) > 0 then
+            btns[#btns + 1] = { "Clr", 34, function() wipe(ns.ChatLog(k)); SyncUI() end }
+          end
+          Row(btns)
         end
+      end
+      if c and c.chatColors and next(c.chatColors) then
+        Row({ { "Use the game's chat colors", 220, function() c.chatColors = nil; ns.ChatColorsChanged(); SyncUI() end } })
       end
       if c and c.chatkeep then
         Row({ { Check(c.chatkeep.replay ~= false, "Replay last hour after /reload"), 260, function()
           c.chatkeep.replay = c.chatkeep.replay == false; SyncUI()
         end } })
+      end
+
+      Heading("Mentions")
+      local mSndLbl = "Sound: Off"
+      for _, snd in ipairs(ns.CHAT_SOUNDS or {}) do if snd.value == (o.sounds.mention or false) then mSndLbl = "Sound: " .. snd.label end end
+      Row({
+        { Check(o.mentions, "Alert when mentioned"), 196, function() o.mentions = not o.mentions; SyncUI() end },
+        { mSndLbl, 150, function(self)
+          K.OpenMenu(self, ns.CHAT_SOUNDS, o.sounds.mention or false, function(v)
+            o.sounds.mention = v or false
+            if v and PlaySound then pcall(PlaySound, v, "Master") end
+            SyncUI()
+          end)
+        end },
+      })
+      Row({
+        { Check(o.mentionColor, "Color mentions"), 140, function() o.mentionColor = not o.mentionColor; ns.ChatColorsChanged(); SyncUI() end },
+        { ChatColor("mention") .. "Color|r", 64, function() ns.PickChatColor("mention") end },
+        { Check(o.mentionGame, "In game chat too"), 154, function() o.mentionGame = not o.mentionGame; SyncUI() end },
+      })
+      local wordBox = Track(ns.InterfaceInput(self.child, 230, "Add mention word..."))
+      wordBox:SetPoint("TOPLEFT", 4, y)
+      local addWordBtn = Track(ns.InterfaceButton(self.child, "+ Add Word", 110, 22))
+      addWordBtn:SetPoint("LEFT", wordBox, "RIGHT", 6, 0)
+      addWordBtn:SetScript("OnClick", function()
+        local w = (wordBox:GetText() or ""):lower():match("^%s*(.-)%s*$")
+        if w ~= "" then o.words = o.words or {}; o.words[w] = true; SyncUI() end
+      end)
+      y = y - 28
+      local wList = {}
+      for w in pairs(o.words or {}) do wList[#wList + 1] = w end
+      table.sort(wList)
+      if #wList > 0 then
+        local wBtns = {}
+        for _, w in ipairs(wList) do
+          local wc = w
+          wBtns[#wBtns + 1] = { wc .. " x", 90, function() o.words[wc] = nil; SyncUI() end }
+          if #wBtns == 4 then Row(wBtns); wBtns = {} end
+        end
+        if #wBtns > 0 then Row(wBtns) end
       end
 
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
