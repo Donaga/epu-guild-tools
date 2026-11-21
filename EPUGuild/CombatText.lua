@@ -468,13 +468,32 @@ end
 -- Show/Hide movable/resizable scroll area overlays with sample numbers
 local showingAreas = false
 local sampleTicker
+local areaToolbar
 function ns.ToggleSCTScrollAreas(force)
   if force == nil then showingAreas = not showingAreas else showingAreas = force and true or false end
   local s = DB()
   local C = ns.InterfaceColors
   for _, af in pairs(areaFrames) do af:Hide() end
+  if areaToolbar then areaToolbar:Hide() end
   if sampleTicker and sampleTicker.Cancel then sampleTicker:Cancel(); sampleTicker = nil end
   if not showingAreas then return end
+
+  if not areaToolbar then
+    areaToolbar = ns.InterfaceWindow("EPUGuildSCTAreaBar", UIParent, "Scroll Areas Unlocked — Drag to move, corner to resize", 420, 74)
+    areaToolbar:ClearAllPoints()
+    areaToolbar:SetPoint("TOP", UIParent, "TOP", 0, -40)
+    local testBtn = ns.InterfaceButton(areaToolbar, "Test", 90, 22)
+    testBtn:SetPoint("BOTTOMLEFT", 16, 10)
+    testBtn:SetScript("OnClick", function()
+      for _, a in ipairs(DB().areas) do
+        SpawnDisplay({ text = FormatNumber(math.random(350, 2400), DB().numFormat) .. "!", colorKey = 4, isCrit = true, route = a.id })
+      end
+    end)
+    local doneBtn = ns.InterfaceButton(areaToolbar, "Done", 90, 22)
+    doneBtn:SetPoint("BOTTOMRIGHT", -16, 10)
+    doneBtn:SetScript("OnClick", function() ns.ToggleSCTScrollAreas(false); if sctWin and sctWin:IsShown() then sctWin:Refresh() end end)
+  end
+  areaToolbar:Show()
 
   for _, a in ipairs(s.areas) do
     local f = areaFrames[a.id]
@@ -488,8 +507,14 @@ function ns.ToggleSCTScrollAreas(force)
       local bg = f:CreateTexture(nil, "BACKGROUND")
       bg:SetColorTexture(C.panel2[1], C.panel2[2], C.panel2[3], 0.55)
       bg:SetAllPoints()
+      for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+        local t = f:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(C.gold[1], C.gold[2], C.gold[3], 0.85)
+        t:SetPoint(side[1]); t:SetPoint(side[2])
+        if side[3] then t:SetHeight(1) else t:SetWidth(1) end
+      end
       f.lbl = ns.InterfaceFont(f, 12, C.gold)
-      f.lbl:SetPoint("CENTER")
+      f.lbl:SetPoint("TOP", 0, -8)
       local grip = CreateFrame("Button", nil, f)
       grip:SetSize(14, 14)
       grip:SetPoint("BOTTOMRIGHT", -2, 2)
