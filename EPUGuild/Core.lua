@@ -488,6 +488,13 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("runs") end
   elseif cmd == "raid" or cmd == "raids" or cmd == "raidprep" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("raid") end
+  elseif cmd == "logs" or cmd == "combatlog" then
+    local sub = (args or ""):lower()
+    if sub == "combat" or sub == "xp" or sub == "system" then
+      if ns.ToggleLogWindow then ns.ToggleLogWindow(sub) end
+    elseif ns.OpenPopoutChatSettings then
+      ns.OpenPopoutChatSettings()
+    end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

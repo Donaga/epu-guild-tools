@@ -2677,6 +2677,15 @@ function ns.OpenPopoutChatSettings()
         end } })
       end
 
+      if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
+        Heading("Customizable Log Windows")
+        Row({
+          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 124, function() ns.ToggleLogWindow("combat"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 118, function() ns.ToggleLogWindow("xp"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 134, function() ns.ToggleLogWindow("system"); SyncUI() end },
+        })
+      end
+
       self.child:SetHeight(math.max(200, -y + 12))
       local maxV = math.max(0, self.child:GetHeight() - self.scroll:GetHeight())
       self.scroll:SetVerticalScroll(math.min(curScroll, maxV))
