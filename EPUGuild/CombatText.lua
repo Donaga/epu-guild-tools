@@ -165,12 +165,14 @@ local function AnchorForGUID(destGUID)
     local ok, plates = pcall(C_NamePlate.GetNamePlates)
     if ok and type(plates) == "table" then
       for _, plate in ipairs(plates) do
-        local u = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
-        if u and UnitGUID and UnitGUID(u) == destGUID and plate.GetCenter then
-          local okc, px, py = pcall(plate.GetCenter, plate)
-          local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
-          if okc and px and py and uw and uh then
-            return px - uw * 0.5, py - uh * 0.5, true
+        if plate and not (plate.IsForbidden and plate:IsForbidden()) then
+          local u = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+          if u and UnitGUID and UnitGUID(u) == destGUID and plate.GetCenter then
+            local okc, px, py = pcall(plate.GetCenter, plate)
+            local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+            if okc and px and py and uw and uh then
+              return px - uw * 0.5, py - uh * 0.5, true
+            end
           end
         end
       end
