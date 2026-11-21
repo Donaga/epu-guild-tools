@@ -463,12 +463,22 @@ local function OnCombatLog()
   end
 end
 
+local cleuRegistered = false
+local function SyncCLEU()
+  if cleuRegistered then return end
+  if not DB().enabled then return end
+  -- Midnight (12.0+) / backported clients with Secret Values / C_DamageMeter block addon CLEU registration.
+  if C_Secrets or C_DamageMeter then return end
+  cleuRegistered = true
+  ns.On("COMBAT_LOG_EVENT_UNFILTERED", OnCombatLog)
+end
+
 if ns.On then
   ns.On("PLAYER_LOGIN", function()
     playerGUID = UnitGUID and UnitGUID("player") or nil
     if DB().hideBlizz then ApplyBlizzardFCT(true) end
+    SyncCLEU()
   end)
-  ns.On("COMBAT_LOG_EVENT_UNFILTERED", OnCombatLog)
 end
 
 -- Show/Hide movable/resizable scroll area overlays with sample numbers
