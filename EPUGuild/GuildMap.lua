@@ -2755,10 +2755,17 @@ function ns.OpenPopoutChatSettings()
       }
       local function OpenMultiSelect(anchorBtn, ct, keepOpen)
         if not popOptsWin.multiDrop then
-          local dd = CreateFrame("Frame", nil, popOptsWin)
+          local catcher = CreateFrame("Button", nil, UIParent)
+          catcher:SetAllPoints(UIParent)
+          catcher:SetFrameStrata("DIALOG")
+          catcher:Hide()
+          local dd = CreateFrame("Frame", nil, catcher)
           dd:SetFrameStrata("DIALOG")
+          dd:SetFrameLevel(catcher:GetFrameLevel() + 10)
           dd:SetWidth(210)
           dd:EnableMouse(true)
+          catcher:SetScript("OnClick", function() dd:Hide(); catcher:Hide() end)
+          popOptsWin:HookScript("OnHide", function() dd:Hide(); catcher:Hide() end)
           K.Tex(dd, "BACKGROUND", C2.bg or C2.panel):SetAllPoints()
           for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
             local t = K.Tex(dd, "BORDER", C2.line)
@@ -2766,10 +2773,11 @@ function ns.OpenPopoutChatSettings()
             if side[3] then t:SetHeight(1) else t:SetWidth(1) end
           end
           dd.items = {}
+          dd.catcher = catcher
           popOptsWin.multiDrop = dd
         end
         local dd = popOptsWin.multiDrop
-        if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); return end
+        if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); dd.catcher:Hide(); return end
         dd.tabId = ct.id
         for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
         dd.items = {}
@@ -2792,13 +2800,14 @@ function ns.OpenPopoutChatSettings()
         end
         local done = ns.InterfaceButton(dd, "Done", 194, 20)
         done:SetPoint("TOPLEFT", 8, dy - 4)
-        done:SetScript("OnClick", function() dd:Hide() end)
+        done:SetScript("OnClick", function() dd:Hide(); dd.catcher:Hide() end)
         dd.items[#dd.items + 1] = done
         dd:SetHeight(-dy + 32)
         if not keepOpen then
           dd:ClearAllPoints()
           dd:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -2)
         end
+        dd.catcher:Show()
         dd:Show()
       end
 
