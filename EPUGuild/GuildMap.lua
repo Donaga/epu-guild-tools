@@ -2753,7 +2753,7 @@ function ns.OpenPopoutChatSettings()
         { "trade", "Trade" }, { "lfg", "LFG" }, { "defense", "LocalDefense" },
         { "worlddefense", "WorldDefense" },
       }
-      local function OpenMultiSelect(anchorBtn, ct)
+      local function OpenMultiSelect(anchorBtn, ct, keepOpen)
         if not popOptsWin.multiDrop then
           local dd = CreateFrame("Frame", nil, popOptsWin)
           dd:SetFrameStrata("DIALOG")
@@ -2769,7 +2769,7 @@ function ns.OpenPopoutChatSettings()
           popOptsWin.multiDrop = dd
         end
         local dd = popOptsWin.multiDrop
-        if dd:IsShown() and dd.tabId == ct.id then dd:Hide(); return end
+        if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); return end
         dd.tabId = ct.id
         for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
         dd.items = {}
@@ -2784,8 +2784,7 @@ function ns.OpenPopoutChatSettings()
               ct.sources = ct.sources or {}
               ct.sources[sk] = not (ct.sources[sk] and true or false) and true or nil
               SyncUI()
-              OpenMultiSelect(anchorBtn, ct)
-              dd:Show()
+              OpenMultiSelect(anchorBtn, ct, true)
             end)
             dd.items[#dd.items + 1] = b
             dy = dy - 22
@@ -2796,8 +2795,10 @@ function ns.OpenPopoutChatSettings()
         done:SetScript("OnClick", function() dd:Hide() end)
         dd.items[#dd.items + 1] = done
         dd:SetHeight(-dy + 32)
-        dd:ClearAllPoints()
-        dd:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -2)
+        if not keepOpen then
+          dd:ClearAllPoints()
+          dd:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -2)
+        end
         dd:Show()
       end
 
