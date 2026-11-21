@@ -441,14 +441,22 @@ local CHANNELS = {
     icon = "Interface\\Icons\\INV_Misc_GroupNeedMore" },
   defense = { label = "LocalDefense", group = "CHANNEL", info = "CHANNEL3", short = "Defense", channelBase = "LocalDefense", color = "|cffff8080",
     icon = "Interface\\Icons\\INV_Shield_04" },
+  say = { label = "Say", group = "SAY", info = "SAY", short = "Say", send = "SAY", color = "|cffffffff",
+    icon = "Interface\\Icons\\Spell_Shadow_SoothingKiss" },
+  yell = { label = "Yell", group = "YELL", info = "YELL", short = "Yell", send = "YELL", color = "|cffff4040",
+    icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
+  instance = { label = "Instance / BG", group = "INSTANCE_CHAT", info = "INSTANCE_CHAT", short = "Instance", send = "INSTANCE_CHAT", color = "|cffff7f00",
+    icon = "Interface\\Icons\\INV_BannerPVP_02" },
+  worlddefense = { label = "WorldDefense", group = "CHANNEL", info = "CHANNEL5", short = "WorldDef", channelBase = "WorldDefense", color = "|cffff6060",
+    icon = "Interface\\Icons\\INV_Shield_06" },
 }
 CHANNELS.guild.short, CHANNELS.guild.send, CHANNELS.guild.color = "Guild", "GUILD", "|cff40ff40"
 CHANNELS.guild.icon = "Interface\\Icons\\INV_Shirt_GuildTabard_01"
 CHANNELS.officer.short, CHANNELS.officer.send, CHANNELS.officer.color = "Officer", "OFFICER", "|cff40c040"
 CHANNELS.officer.icon = "Interface\\Icons\\INV_Misc_Key_03"
-local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
+local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid", "instance", "say", "yell", "general", "trade", "lfg", "defense", "worlddefense" }
 -- the group chats, shown pinned above whispers
-local GROUP_CHANNELS = { "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
+local GROUP_CHANNELS = { "guild", "officer", "party", "raid", "instance", "say", "yell", "general", "trade", "lfg", "defense", "worlddefense" }
 ns.CHAT_GROUP_CHANNELS = GROUP_CHANNELS
 
 -- Chat is shared by all characters on this account (and still only on this
@@ -674,11 +682,17 @@ ns.On("CHAT_MSG_COMMUNITIES_CHANNEL", function(msg, sender, _, channelName, _, _
 end)
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
+ns.On("CHAT_MSG_SAY", function(msg, sender) if ns.ChatKeep("say") then Group("say")(msg, sender) end end)
+ns.On("CHAT_MSG_YELL", function(msg, sender) if ns.ChatKeep("yell") then Group("yell")(msg, sender) end end)
+for _, ev in ipairs({ "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER" }) do
+  ns.On(ev, function(msg, sender) if ns.ChatKeep("instance") then Group("instance")(msg, sender) end end)
+end
 local PUBLIC_BASES = {
   general = "general",
   trade = "trade",
   lookingforgroup = "lfg",
   localdefense = "defense",
+  worlddefense = "worlddefense",
 }
 ns.On("CHAT_MSG_CHANNEL", function(msg, sender, _, channelName, _, _, _, _, channelBaseName)
   local base = Plain(channelBaseName) or Plain(channelName) or ""
