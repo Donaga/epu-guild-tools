@@ -1299,6 +1299,12 @@ function ns.ChatConversations()
     c.n = c.n + 1
     if not e.out and (e.t or 0) > c.since then c.unread = c.unread + 1 end
   end
+  local chatOpts = ChatDB() and ChatDB().chatOpts
+  if chatOpts and chatOpts.convOldestFirst then
+    for i = 1, math.floor(#out / 2) do
+      out[i], out[#out - i + 1] = out[#out - i + 1], out[i]
+    end
+  end
   return out
 end
 local function Ago(t)
@@ -1389,6 +1395,12 @@ local function ThreadLines(key, max)
     end
     if not skip and (not who or e.who == who) then lines[#lines + 1] = e end
     if #lines >= (max or 60) then break end
+  end
+  local chatOpts = ChatDB() and ChatDB().chatOpts
+  if chatOpts and chatOpts.oldestFirst then
+    for i = 1, math.floor(#lines / 2) do
+      lines[i], lines[#lines - i + 1] = lines[#lines - i + 1], lines[i]
+    end
   end
   return lines, channel, who
 end
@@ -2602,6 +2614,14 @@ local function FillChatSettings(det)
   end
   det:Buttons({ { Check(c.chatkeep.replay ~= false, "Show the last hour after a reload"), function()
     c.chatkeep.replay = c.chatkeep.replay == false; Again() end } })
+  det:Buttons({
+    { o.oldestFirst and "Messages: Oldest on top" or "Messages: Newest on top", function()
+      o.oldestFirst = not o.oldestFirst; ns.ChatColorsChanged(); Again()
+    end, tip = "Flip message direction in Chat and the pop-out Messenger" },
+    { o.convOldestFirst and "Conversations: Oldest first" or "Conversations: Newest first", function()
+      o.convOldestFirst = not o.convOldestFirst; Again()
+    end, tip = "Flip whisper conversation order in the Chat sidebar" },
+  })
   -- people with their own color
   local people = {}
   for k2 in pairs(c.chatColors or {}) do if k2:sub(1, 2) == "w:" then people[#people + 1] = k2:sub(3) end end
