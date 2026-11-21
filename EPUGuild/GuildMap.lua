@@ -1906,13 +1906,9 @@ local function BuildWindow(id)
   f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
   f.settings = K.Btn(bar, "Opts", 40, 20)
   f.settings:SetPoint("RIGHT", f.full, "LEFT", -3, 0)
-  f.settings.tip = "Open Chat settings (channels, pop-out tabs, sort order, colors)"
+  f.settings.tip = "Open Chat settings popup (channels, pop-out tabs, sort order)"
   f.settings:SetScript("OnClick", function()
-    if ns.UI then
-      ns.UI:Show()
-      ns.UI:SetView("chat")
-      ns.UI:OpenDetails("chatsettings", "all")
-    end
+    if ns.OpenPopoutChatSettings then ns.OpenPopoutChatSettings() end
   end)
   f.pick:SetPoint("RIGHT", f.settings, "LEFT", -4, 0)
   f.body = CreateFrame("Frame", nil, f)
@@ -2574,6 +2570,122 @@ local function FillChatNew(det)
   end
   return true
 end
+local popOptsWin
+function ns.OpenPopoutChatSettings()
+  if not popOptsWin then
+    local K = ns.UIKit
+    local C2 = ns.InterfaceColors
+    popOptsWin = ns.InterfaceWindow("EPUGuildChatOptsPopup", UIParent, "Chat Settings", 420, 480)
+    popOptsWin:SetMovable(true)
+    popOptsWin:RegisterForDrag("LeftButton")
+    popOptsWin:SetScript("OnDragStart", popOptsWin.StartMoving)
+    popOptsWin:SetScript("OnDragStop", popOptsWin.StopMovingOrSizing)
+
+    local scroll = CreateFrame("ScrollFrame", nil, popOptsWin)
+    scroll:SetPoint("TOPLEFT", 12, -42)
+    scroll:SetPoint("BOTTOMRIGHT", -12, 12)
+    scroll:EnableMouseWheel(true)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetWidth(388); child:SetHeight(200)
+    scroll:SetScrollChild(child)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+      local maxV = math.max(0, child:GetHeight() - self:GetHeight())
+      self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
+    end)
+    popOptsWin.scroll = scroll
+    popOptsWin.child = child
+    popOptsWin.widgets = {}
+
+    function popOptsWin:Refresh()
+      local curScroll = self.scroll:GetVerticalScroll() or 0
+      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
+      self.widgets = {}
+
+      local o = Opt()
+      local c = ChatDB()
+      local y = -4
+      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
+      local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
+      local function SyncUI()
+        for _, w in pairs(Windows) do
+          if w and w.Tabs then w:Tabs() end
+          if w and w.Update then w:Update() end
+        end
+        if ns.RefreshChatBubble then ns.RefreshChatBubble() end
+        if ns.UI and ns.UI:IsShown() then ns.UI:Refresh() end
+        self:Refresh()
+      end
+      local function Heading(text)
+        y = y - 6
+        local h = Track(ns.InterfaceFont(self.child, 12, C2.gold))
+        h:SetPoint("TOPLEFT", 4, y); h:SetText(text)
+        y = y - 20
+      end
+      local function Row(btns)
+        local x = 4
+        for _, spec in ipairs(btns) do
+          local b = Track(ns.InterfaceButton(self.child, spec[1], spec[2] or 180, 22))
+          b:SetPoint("TOPLEFT", x, y)
+          b:SetScript("OnClick", spec[3])
+          x = x + (spec[2] or 180) + 6
+        end
+        y = y - 26
+      end
+
+      Heading("Sort Order")
+      Row({
+        { o.oldestFirst and "Messages: Oldest on top" or "Messages: Newest on top", 186, function()
+          o.oldestFirst = not o.oldestFirst; ns.ChatColorsChanged(); SyncUI()
+        end },
+        { o.convOldestFirst and "Chats: Oldest first" or "Chats: Newest first", 186, function()
+          o.convOldestFirst = not o.convOldestFirst; SyncUI()
+        end },
+      })
+
+      Heading("Window & Behavior")
+      Row({
+        { Check(o.pop, "Open on whisper"), 186, function() o.pop = not o.pop; SyncUI() end },
+        { Check(o.combat, "Tuck in combat"), 186, function() o.combat = not o.combat; SyncUI() end },
+      })
+      Row({
+        { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
+        { Check(o.lineTimes, "Time on every line"), 186, function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); SyncUI() end },
+      })
+
+      Heading("Channels (Keep & Pop-out Tabs)")
+      for _, k in ipairs(CHANNEL_ORDER) do
+        if k ~= "officer" or CanOfficerChat() then
+          local keep = ns.ChatKeep(k)
+          local lbl = CHANNELS[k].short or "Whispers"
+          if k == "whisper" then
+            Row({ { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end } })
+          else
+            local inPop = o.popTabs[k] ~= false
+            local btns = {
+              { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end },
+            }
+            if keep then
+              btns[#btns + 1] = { Check(inPop, "Pop-out tab"), 140, function() o.popTabs[k] = not inPop; SyncUI() end }
+            end
+            Row(btns)
+          end
+        end
+      end
+      if c and c.chatkeep then
+        Row({ { Check(c.chatkeep.replay ~= false, "Replay last hour after /reload"), 260, function()
+          c.chatkeep.replay = c.chatkeep.replay == false; SyncUI()
+        end } })
+      end
+
+      self.child:SetHeight(math.max(200, -y + 12))
+      local maxV = math.max(0, self.child:GetHeight() - self.scroll:GetHeight())
+      self.scroll:SetVerticalScroll(math.min(curScroll, maxV))
+    end
+  end
+  popOptsWin:Refresh()
+  popOptsWin:Show()
+end
+
 local function FillChatSettings(det)
   local c = ChatDB()
   local o = Opt()
