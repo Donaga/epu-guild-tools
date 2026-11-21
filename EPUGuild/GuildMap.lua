@@ -1439,6 +1439,7 @@ local function Opt()
   if o.mentions == nil then o.mentions = true end       -- alert when your name comes up
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
+  if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
   o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
   o.words = o.words or {}
@@ -1452,8 +1453,11 @@ ns.ChatOptions = Opt
 -- Reading font for chat: which font, size and outline (Chat settings > Text).
 ns.CHAT_FONTS = {
   { label = "EPU (Inter)", value = "epu" },
+  { label = "EPU Bold (Inter SemiBold)", value = "epu_bold", path = "Interface\\AddOns\\EPUGuild\\Media\\Fonts\\Inter-SemiBold.ttf" },
   { label = "Game (Friz Quadrata)", value = "friz", path = "Fonts\\FRIZQT__.TTF" },
   { label = "Chat (Arial Narrow)", value = "arial", path = "Fonts\\ARIALN.TTF" },
+  { label = "2002 (Clean Sans)", value = "2002", path = "Fonts\\2002.TTF" },
+  { label = "2002 Bold", value = "2002b", path = "Fonts\\2002B.TTF" },
   { label = "Skurri", value = "skurri", path = "Fonts\\skurri.ttf" },
   { label = "Morpheus", value = "morpheus", path = "Fonts\\MORPHEUS.TTF" },
 }
@@ -1782,6 +1786,14 @@ local function FillChatWith(det, key)
   if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
   for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain, focus and focus.q)) do det:Text(block) end
   ns.MarkChatSeen(key)
+  if not focus and det.scroll and det.scroll.SetVerticalScroll and det.body then
+    if Opt().oldestFirst then
+      local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
+      det.scroll:SetVerticalScroll(maxV)
+    else
+      det.scroll:SetVerticalScroll(0)
+    end
+  end
   return true
 end
 
@@ -2116,6 +2128,10 @@ local function BuildWindow(id)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
+    if not self.searching and self.scroll and self.scroll.SetVerticalScroll and self.child then
+      local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
+      self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0)
+    end
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
   end
@@ -2616,6 +2632,7 @@ local function FillChatNew(det)
   return true
 end
 local popOptsWin
+local UpdateEnterBinding
 function ns.OpenPopoutChatSettings()
   if not popOptsWin then
     local K = ns.UIKit
@@ -2657,7 +2674,10 @@ function ns.OpenPopoutChatSettings()
           if w and w.Update then w:Update() end
         end
         if ns.RefreshChatBubble then ns.RefreshChatBubble() end
-        if ns.UI and ns.UI:IsShown() then ns.UI:Refresh() end
+        if ns.UI and ns.UI:IsShown() then
+          if ns.UI.details and ns.UI.details.kind == "chatsettings" then ns.UI:FillDetails() end
+          ns.UI:Refresh()
+        end
         self:Refresh()
       end
       local function Heading(text)
@@ -2689,32 +2709,76 @@ function ns.OpenPopoutChatSettings()
 
       Heading("Window & Behavior")
       Row({
+        { "Tabs in one window", 186, function() o.windows = "tabs"; SyncUI() end },
+        { "One window per person", 186, function() o.windows = "separate"; SyncUI() end },
+      })
+      Row({
         { Check(o.pop, "Open on whisper"), 186, function() o.pop = not o.pop; SyncUI() end },
         { Check(o.combat, "Tuck in combat"), 186, function() o.combat = not o.combat; SyncUI() end },
       })
       Row({
         { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
+        { Check(o.typing, "Show/send typing..."), 186, function() o.typing = not o.typing; SyncUI() end },
+      })
+      Row({
         { Check(o.lineTimes, "Time on every line"), 186, function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); SyncUI() end },
+        { Check(o.presence ~= false, "Guild online/offline"), 186, function() o.presence = o.presence == false; SyncUI() end },
+      })
+      Row({
+        { Check(o.shareGuild ~= false, "Fill in missed guild chat from guildmates"), 378, function() o.shareGuild = o.shareGuild == false; SyncUI() end },
+      })
+      Row({
+        { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; UpdateEnterBinding(); SyncUI() end },
       })
 
-      Heading("Channels (Keep & Pop-out Tabs)")
+      Heading("Text")
+      local fontLabel = "EPU (Inter)"
+      for _, f in ipairs(ns.CHAT_FONTS or {}) do if f.value == (o.font or "epu") then fontLabel = f.label end end
+      local _, fsize = ns.ChatFont()
+      Row({
+        { "Font: " .. fontLabel, 170, function(self)
+          K.OpenMenu(self, ns.CHAT_FONTS, o.font or "epu", function(v) o.font = v or "epu"; ns.ChatColorsChanged(); SyncUI() end)
+        end },
+        { "A-", 40, function() o.size = math.max(9, fsize - 1); ns.ChatColorsChanged(); SyncUI() end },
+        { "Size " .. fsize, 70, function() o.size = 12; ns.ChatColorsChanged(); SyncUI() end },
+        { "A+", 40, function() o.size = math.min(22, fsize + 1); ns.ChatColorsChanged(); SyncUI() end },
+      })
+      Row({
+        { Check(o.outline, "Outline"), 120, function() o.outline = not o.outline; ns.ChatColorsChanged(); SyncUI() end },
+      })
+
+      Heading("Channels (Keep, Pop-out, Color, Sound, Clear)")
       for _, k in ipairs(CHANNEL_ORDER) do
         if k ~= "officer" or CanOfficerChat() then
           local keep = ns.ChatKeep(k)
           local lbl = CHANNELS[k].short or "Whispers"
+          local sndLbl = "Sound: Off"
+          for _, snd in ipairs(ns.CHAT_SOUNDS or {}) do if snd.value == (o.sounds[k] or false) then sndLbl = "Snd: " .. snd.label end end
+          local btns = {
+            { Check(keep, lbl), 120, function() ns.SetChatKeep(k, not keep); SyncUI() end },
+            { ChatColor(k, false) .. "Color|r", 54, function() ns.PickChatColor(k, false) end },
+          }
           if k == "whisper" then
-            Row({ { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end } })
-          else
+            btns[#btns + 1] = { ChatColor(k, true) .. "Sent|r", 50, function() ns.PickChatColor(k, true) end }
+          elseif keep then
             local inPop = o.popTabs[k] ~= false
-            local btns = {
-              { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end },
-            }
-            if keep then
-              btns[#btns + 1] = { Check(inPop, "Pop-out tab"), 140, function() o.popTabs[k] = not inPop; SyncUI() end }
-            end
-            Row(btns)
+            btns[#btns + 1] = { Check(inPop, "Pop"), 74, function() o.popTabs[k] = not inPop; SyncUI() end }
           end
+          btns[#btns + 1] = { sndLbl, 84, function(self)
+            K.OpenMenu(self, ns.CHAT_SOUNDS, o.sounds[k] or false, function(v)
+              o.sounds[k] = v or nil
+              if v and PlaySound then pcall(PlaySound, v, "Master") end
+              SyncUI()
+            end)
+          end }
+          if #ns.ChatLog(k) > 0 then
+            btns[#btns + 1] = { "Clr", 34, function() wipe(ns.ChatLog(k)); SyncUI() end }
+          end
+          Row(btns)
         end
+      end
+      if c and c.chatColors and next(c.chatColors) then
+        Row({ { "Use the game's chat colors", 220, function() c.chatColors = nil; ns.ChatColorsChanged(); SyncUI() end } })
       end
       if c and c.chatkeep then
         Row({ { Check(c.chatkeep.replay ~= false, "Replay last hour after /reload"), 260, function()
@@ -2722,12 +2786,52 @@ function ns.OpenPopoutChatSettings()
         end } })
       end
 
+      Heading("Mentions")
+      local mSndLbl = "Sound: Off"
+      for _, snd in ipairs(ns.CHAT_SOUNDS or {}) do if snd.value == (o.sounds.mention or false) then mSndLbl = "Sound: " .. snd.label end end
+      Row({
+        { Check(o.mentions, "Alert when mentioned"), 196, function() o.mentions = not o.mentions; SyncUI() end },
+        { mSndLbl, 150, function(self)
+          K.OpenMenu(self, ns.CHAT_SOUNDS, o.sounds.mention or false, function(v)
+            o.sounds.mention = v or false
+            if v and PlaySound then pcall(PlaySound, v, "Master") end
+            SyncUI()
+          end)
+        end },
+      })
+      Row({
+        { Check(o.mentionColor, "Color mentions"), 140, function() o.mentionColor = not o.mentionColor; ns.ChatColorsChanged(); SyncUI() end },
+        { ChatColor("mention") .. "Color|r", 64, function() ns.PickChatColor("mention") end },
+        { Check(o.mentionGame, "In game chat too"), 154, function() o.mentionGame = not o.mentionGame; SyncUI() end },
+      })
+      local wordBox = Track(ns.InterfaceInput(self.child, 230, "Add mention word..."))
+      wordBox:SetPoint("TOPLEFT", 4, y)
+      local addWordBtn = Track(ns.InterfaceButton(self.child, "+ Add Word", 110, 22))
+      addWordBtn:SetPoint("LEFT", wordBox, "RIGHT", 6, 0)
+      addWordBtn:SetScript("OnClick", function()
+        local w = (wordBox:GetText() or ""):lower():match("^%s*(.-)%s*$")
+        if w ~= "" then o.words = o.words or {}; o.words[w] = true; SyncUI() end
+      end)
+      y = y - 28
+      local wList = {}
+      for w in pairs(o.words or {}) do wList[#wList + 1] = w end
+      table.sort(wList)
+      if #wList > 0 then
+        local wBtns = {}
+        for _, w in ipairs(wList) do
+          local wc = w
+          wBtns[#wBtns + 1] = { wc .. " x", 90, function() o.words[wc] = nil; SyncUI() end }
+          if #wBtns == 4 then Row(wBtns); wBtns = {} end
+        end
+        if #wBtns > 0 then Row(wBtns) end
+      end
+
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
         Heading("Customizable Log Windows")
         Row({
-          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 124, function() ns.ToggleLogWindow("combat"); SyncUI() end },
-          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 118, function() ns.ToggleLogWindow("xp"); SyncUI() end },
-          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 134, function() ns.ToggleLogWindow("system"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 118, function() ns.ToggleLogWindow("combat"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
       end
 
@@ -2839,6 +2943,50 @@ function ns.OpenPopoutChatSettings()
   popOptsWin:Show()
 end
 
+local enterBtn = CreateFrame("Button", "EPUGuildEnterKeyBtn", UIParent)
+enterBtn:SetScript("OnClick", function()
+  if not Opt().enterToAddon then return end
+  if ns.OpenMessenger then
+    ns.OpenMessenger()
+    local w = Mgr
+    if w and w.box then
+      if not w.box:IsShown() then
+        local st = MState()
+        st.key = st.lastWhisper or (ns.ChatKeep("guild") and "guild") or st.key
+        w:Update()
+      end
+      if w.box:IsShown() then w.box:SetFocus() end
+    end
+  end
+end)
+
+local enterBound = false
+UpdateEnterBinding = function()
+  if not SetOverrideBindingClick or not ClearOverrideBindings then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  local want = Opt().enterToAddon and true or false
+  if want == enterBound then return end
+  if enterBound then
+    ClearOverrideBindings(enterBtn)
+    enterBound = false
+  end
+  if want then
+    SetOverrideBindingClick(enterBtn, false, "ENTER", "EPUGuildEnterKeyBtn")
+    enterBound = true
+  end
+end
+
+if ns.On then
+  ns.On("PLAYER_LOGIN", UpdateEnterBinding)
+  ns.On("PLAYER_REGEN_ENABLED", UpdateEnterBinding)
+  ns.On("PLAYER_REGEN_DISABLED", function()
+    if enterBound and ClearOverrideBindings and not (InCombatLockdown and InCombatLockdown()) then
+      ClearOverrideBindings(enterBtn)
+      enterBound = false
+    end
+  end)
+end
+
 local function FillChatSettings(det)
   local c = ChatDB()
   local o = Opt()
@@ -2847,6 +2995,7 @@ local function FillChatSettings(det)
   local function Again()
     local y = det.scroll and det.scroll.GetVerticalScroll and det.scroll:GetVerticalScroll() or 0
     UI:FillDetails(); UI:Refresh()
+    if popOptsWin and popOptsWin:IsShown() then popOptsWin:Refresh() end
     if det.scroll and det.scroll.SetVerticalScroll and det.body then
       local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
       det.scroll:SetVerticalScroll(math.min(y, maxV))

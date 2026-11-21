@@ -658,10 +658,23 @@ local function AttachToWorldMap()
   if mapHooked or not WorldMapFrame then return end
   mapHooked = true
 
-  local anchor = WorldMapFrame.BorderFrame or WorldMapFrame
-  local btn = Btn(anchor, "Visitor's Guide", 112, 22)
-  btn:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", -64, -30)
+  -- Parent to UIParent (never WorldMapFrame.BorderFrame) to avoid tainting the World Map.
+  local btn = Btn(UIParent, "Visitor's Guide", 112, 22)
   btn:SetFrameStrata("HIGH")
+  btn:Hide()
+  local function SyncMapBtn()
+    if InCombatLockdown and InCombatLockdown() then return end
+    if WorldMapFrame:IsShown() then
+      btn:ClearAllPoints()
+      btn:SetPoint("TOPRIGHT", WorldMapFrame, "TOPRIGHT", -64, -30)
+      btn:Show()
+    else
+      btn:Hide()
+    end
+  end
+  WorldMapFrame:HookScript("OnShow", SyncMapBtn)
+  WorldMapFrame:HookScript("OnHide", SyncMapBtn)
+  SyncMapBtn()
   btn:SetScript("OnEnter", function(self)
     if GameTooltip then
       GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")

@@ -150,8 +150,10 @@ function ns.InstallCommunityViews(views,env)
         local e=c.last
         local short=ns.Short and ns.Short(c.who) or c.who
         if E.Match(q,c.who,e.msg) then
+          local icon,coords
+          if ns.roster[short] then icon,coords=ns.ClassIcon(ns.roster[short].classFile) end
           out[#out+1]={key="chat:w:"..c.who,title=short..(c.unread>0 and (" |cff4ade80("..c.unread..")|r") or ""),
-            icon=(ns.roster[short] and ns.ClassIcon(ns.roster[short].classFile)) or "Interface\\Icons\\INV_Letter_15",
+            icon=icon or "Interface\\Icons\\INV_Letter_15", iconCoords=coords,
             dot=(ns.roster[short] or {}).online,
             sub=(e.out and "You: " or "")..e.msg,right=(c.unread>0 and ("|cff4ade80"..c.unread.." new|r · ") or "")..ns.ChatAgo(e.t),
             onClick=function() if ns.ChatFocus then ns.ChatFocus(nil) end; Open("chatwith","w:"..c.who) end,
