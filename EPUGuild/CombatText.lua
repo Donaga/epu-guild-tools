@@ -135,7 +135,7 @@ local function SchoolColor(key)
 end
 
 local function ApplyBlizzardFCT(hide)
-  if not SetCVar then return end
+  if not SetCVar or (InCombatLockdown and InCombatLockdown()) then return end
   local v = hide and "0" or "1"
   pcall(SetCVar, "floatingCombatTextCombatDamage", v)
   pcall(SetCVar, "floatingCombatTextCombatHealing", v)
@@ -166,13 +166,17 @@ local function AnchorForGUID(destGUID)
     if ok and type(plates) == "table" then
       for _, plate in ipairs(plates) do
         local u = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
-        if u and UnitGUID and UnitGUID(u) == destGUID then
-          return plate
+        if u and UnitGUID and UnitGUID(u) == destGUID and plate.GetCenter then
+          local okc, px, py = pcall(plate.GetCenter, plate)
+          local uw, uh = UIParent:GetWidth(), UIParent:GetHeight()
+          if okc and px and py and uw and uh then
+            return px - uw * 0.5, py - uh * 0.5, true
+          end
         end
       end
     end
   end
-  return nil
+  return 0, 60, false
 end
 
 local function FindArea(id)
@@ -232,12 +236,12 @@ local function SpawnDisplay(opts)
 
   local area
   if not isIncoming and opts.route == "nameplate" then
-    local plate = AnchorForGUID(opts.destGUID)
-    anchor = plate or UIParent
+    local px, py, onPlate = AnchorForGUID(opts.destGUID)
+    anchor = UIParent
     local off = (s.styleOffsets and s.styleOffsets[style]) or { x = 0, y = 20 }
     local spread = (style == "classic") and 12 or 26
-    startX = off.x + math.random(-spread, spread)
-    startY = (plate and 0 or 60) + off.y + math.random(-6, 8)
+    startX = px + off.x + math.random(-spread, spread)
+    startY = py + off.y + math.random(-6, 8)
     dur = (s.npDuration or 1.1) / math.max(0.4, s.npSpeed or 1.0)
     local dist = s.npDistance or 64
     vy = dist / dur

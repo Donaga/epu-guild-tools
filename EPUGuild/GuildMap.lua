@@ -2632,6 +2632,7 @@ local function FillChatNew(det)
   return true
 end
 local popOptsWin
+local UpdateEnterBinding
 function ns.OpenPopoutChatSettings()
   if not popOptsWin then
     local K = ns.UIKit
@@ -2727,7 +2728,7 @@ function ns.OpenPopoutChatSettings()
         { Check(o.shareGuild ~= false, "Fill in missed guild chat from guildmates"), 378, function() o.shareGuild = o.shareGuild == false; SyncUI() end },
       })
       Row({
-        { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; SyncUI() end },
+        { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; UpdateEnterBinding(); SyncUI() end },
       })
 
       Heading("Text")
@@ -2945,27 +2946,38 @@ function ns.OpenPopoutChatSettings()
   popOptsWin:Show()
 end
 
-if hooksecurefunc and ChatFrame_OpenChat then
-  hooksecurefunc("ChatFrame_OpenChat", function(text)
-    if not Opt().enterToAddon then return end
-    if type(text) == "string" and text ~= "" then return end -- allow /slash commands normally
-    if InCombatLockdown and InCombatLockdown() then return end
-    local eb = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() or ChatFrame1EditBox
-    if eb then
-      if ChatEdit_DeactivateChat then pcall(ChatEdit_DeactivateChat, eb)
-      else eb:ClearFocus(); eb:Hide() end
-    end
-    if ns.OpenMessenger then
-      ns.OpenMessenger()
-      local w = Mgr
-      if w and w.box then
-        if not w.box:IsShown() then
-          local st = MState()
-          st.key = st.lastWhisper or (ns.ChatKeep("guild") and "guild") or st.key
-          w:Update()
-        end
-        if w.box:IsShown() then w.box:SetFocus() end
+local enterBtn = CreateFrame("Button", "EPUGuildEnterKeyBtn", UIParent)
+enterBtn:SetScript("OnClick", function()
+  if not Opt().enterToAddon then return end
+  if ns.OpenMessenger then
+    ns.OpenMessenger()
+    local w = Mgr
+    if w and w.box then
+      if not w.box:IsShown() then
+        local st = MState()
+        st.key = st.lastWhisper or (ns.ChatKeep("guild") and "guild") or st.key
+        w:Update()
       end
+      if w.box:IsShown() then w.box:SetFocus() end
+    end
+  end
+end)
+
+UpdateEnterBinding = function()
+  if not SetOverrideBindingClick or not ClearOverrideBindings then return end
+  if InCombatLockdown and InCombatLockdown() then return end
+  ClearOverrideBindings(enterBtn)
+  if Opt().enterToAddon then
+    SetOverrideBindingClick(enterBtn, false, "ENTER", "EPUGuildEnterKeyBtn")
+  end
+end
+
+if ns.On then
+  ns.On("PLAYER_LOGIN", UpdateEnterBinding)
+  ns.On("PLAYER_REGEN_ENABLED", UpdateEnterBinding)
+  ns.On("PLAYER_REGEN_DISABLED", function()
+    if ClearOverrideBindings and not (InCombatLockdown and InCombatLockdown()) then
+      ClearOverrideBindings(enterBtn)
     end
   end)
 end
