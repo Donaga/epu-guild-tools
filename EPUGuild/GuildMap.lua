@@ -1439,6 +1439,7 @@ local function Opt()
   if o.mentions == nil then o.mentions = true end       -- alert when your name comes up
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
+  o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -2073,8 +2074,11 @@ local function BuildWindow(id)
     local st = MState()
     if st.key and st.key:sub(1, 2) == "w:" then st.lastWhisper = st.key end
     local list = { { key = "tells", label = "Tells", n = ns.ChatUnread() } }
+    local o = Opt()
     for _, ch in ipairs(GROUP_CHANNELS) do
-      if ns.ChatKeep(ch) then list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) } end
+      if ns.ChatKeep(ch) and (not o.popTabs or o.popTabs[ch] ~= false) then
+        list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) }
+      end
     end
     local width = (self:GetWidth() or 340) - 20
     local w = math.floor((width - (#list - 1) * 3) / #list)
@@ -2609,6 +2613,13 @@ local function FillChatSettings(det)
         tip = "Pick a color for " .. CHANNELS[k].label:lower() .. " in EPU. Right now: " .. (select(4, ns.ChatColorRGB(k, false)) and "your own color" or "the game's chat color") }
       if k == "whisper" then
         specs[#specs + 1] = { ChatColor(k, true) .. "Sent|r", function() ns.PickChatColor(k, true) end, tip = "Color for whispers you send" }
+      elseif keep then
+        local inPop = o.popTabs[k] ~= false
+        specs[#specs + 1] = { Check(inPop, "Pop-out"), function()
+          o.popTabs[k] = not inPop; if ns.RefreshChatBubble then ns.RefreshChatBubble() end
+          for _, w in pairs(Windows) do if w and w.Tabs then w:Tabs() end end
+          Again()
+        end, tip = "Show " .. CHANNELS[k].label:lower() .. " as a tab in the pop-out Messenger window" }
       end
       local soundLabel = "Sound: Off"
       for _, snd in ipairs(ns.CHAT_SOUNDS) do if snd.value == (o.sounds[k] or false) then soundLabel = "Sound: " .. snd.label end end
