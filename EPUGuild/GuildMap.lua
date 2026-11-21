@@ -2713,6 +2713,22 @@ function ns.OpenPopoutChatSettings()
         { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; SyncUI() end },
       })
 
+      Heading("Text")
+      local fontLabel = "EPU (Inter)"
+      for _, f in ipairs(ns.CHAT_FONTS or {}) do if f.value == (o.font or "epu") then fontLabel = f.label end end
+      local _, fsize = ns.ChatFont()
+      Row({
+        { "Font: " .. fontLabel, 170, function(self)
+          K.OpenMenu(self, ns.CHAT_FONTS, o.font or "epu", function(v) o.font = v or "epu"; ns.ChatColorsChanged(); SyncUI() end)
+        end },
+        { "A-", 40, function() o.size = math.max(9, fsize - 1); ns.ChatColorsChanged(); SyncUI() end },
+        { "Size " .. fsize, 70, function() o.size = 12; ns.ChatColorsChanged(); SyncUI() end },
+        { "A+", 40, function() o.size = math.min(22, fsize + 1); ns.ChatColorsChanged(); SyncUI() end },
+      })
+      Row({
+        { Check(o.outline, "Outline"), 120, function() o.outline = not o.outline; ns.ChatColorsChanged(); SyncUI() end },
+      })
+
       Heading("Channels (Keep & Pop-out Tabs)")
       for _, k in ipairs(CHANNEL_ORDER) do
         if k ~= "officer" or CanOfficerChat() then
