@@ -2963,12 +2963,19 @@ enterBtn:SetScript("OnClick", function()
   end
 end)
 
+local enterBound = false
 UpdateEnterBinding = function()
   if not SetOverrideBindingClick or not ClearOverrideBindings then return end
   if InCombatLockdown and InCombatLockdown() then return end
-  ClearOverrideBindings(enterBtn)
-  if Opt().enterToAddon then
+  local want = Opt().enterToAddon and true or false
+  if want == enterBound then return end
+  if enterBound then
+    ClearOverrideBindings(enterBtn)
+    enterBound = false
+  end
+  if want then
     SetOverrideBindingClick(enterBtn, false, "ENTER", "EPUGuildEnterKeyBtn")
+    enterBound = true
   end
 end
 
@@ -2976,8 +2983,9 @@ if ns.On then
   ns.On("PLAYER_LOGIN", UpdateEnterBinding)
   ns.On("PLAYER_REGEN_ENABLED", UpdateEnterBinding)
   ns.On("PLAYER_REGEN_DISABLED", function()
-    if ClearOverrideBindings and not (InCombatLockdown and InCombatLockdown()) then
+    if enterBound and ClearOverrideBindings and not (InCombatLockdown and InCombatLockdown()) then
       ClearOverrideBindings(enterBtn)
+      enterBound = false
     end
   end)
 end
