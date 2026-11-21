@@ -1439,6 +1439,7 @@ local function Opt()
   if o.mentions == nil then o.mentions = true end       -- alert when your name comes up
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
+  if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
   o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
   o.words = o.words or {}
@@ -2696,6 +2697,9 @@ function ns.OpenPopoutChatSettings()
         { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
         { Check(o.lineTimes, "Time on every line"), 186, function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); SyncUI() end },
       })
+      Row({
+        { Check(o.enterToAddon, "Enter key -> EPU chat"), 240, function() o.enterToAddon = not o.enterToAddon; SyncUI() end },
+      })
 
       Heading("Channels (Keep & Pop-out Tabs)")
       for _, k in ipairs(CHANNEL_ORDER) do
@@ -2837,6 +2841,31 @@ function ns.OpenPopoutChatSettings()
   end
   popOptsWin:Refresh()
   popOptsWin:Show()
+end
+
+if hooksecurefunc and ChatFrame_OpenChat then
+  hooksecurefunc("ChatFrame_OpenChat", function(text)
+    if not Opt().enterToAddon then return end
+    if type(text) == "string" and text ~= "" then return end -- allow /slash commands normally
+    if InCombatLockdown and InCombatLockdown() then return end
+    local eb = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow() or ChatFrame1EditBox
+    if eb then
+      if ChatEdit_DeactivateChat then pcall(ChatEdit_DeactivateChat, eb)
+      else eb:ClearFocus(); eb:Hide() end
+    end
+    if ns.OpenMessenger then
+      ns.OpenMessenger()
+      local w = Mgr
+      if w and w.box then
+        if not w.box:IsShown() then
+          local st = MState()
+          st.key = st.lastWhisper or (ns.ChatKeep("guild") and "guild") or st.key
+          w:Update()
+        end
+        if w.box:IsShown() then w.box:SetFocus() end
+      end
+    end
+  end)
 end
 
 local function FillChatSettings(det)
