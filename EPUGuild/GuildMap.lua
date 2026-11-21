@@ -1367,7 +1367,7 @@ local function Send(key, text)
   return true
 end
 local function ThreadKey(key)
-  if not (CHANNELS[key] and key ~= "whisper") and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
+  if not (CHANNELS[key] and key ~= "whisper") and key:sub(1, 2) ~= "w:" and key:sub(1, 7) ~= "custom:" then key = "w:" .. key end
   return key
 end
 -- Lines of a conversation, newest first.
@@ -1806,6 +1806,9 @@ local function ConversationItems()
   for _, c in ipairs(ns.ChatConversations()) do
     items[#items + 1] = { label = (ns.Short and ns.Short(c.who) or c.who) .. (c.unread > 0 and (" (" .. c.unread .. " new)") or ""), value = "w:" .. c.who }
   end
+  for _, ct in ipairs(Opt().customTabs or {}) do
+    items[#items + 1] = { label = "Tab: " .. ct.label, value = "custom:" .. ct.id }
+  end
   return items
 end
 -- Windows: "main" is the tabbed messenger; "w:<name>" are per-person windows
@@ -2024,7 +2027,11 @@ local function BuildWindow(id)
     elseif key:sub(1, 2) == "w:" then
       label = Display(key:sub(3))
       if ns.ChatTyping(key:sub(3)) then label = label .. "  |cff4ade80typing...|r" end
-    else label = CHANNELS[key].label end
+    elseif key:sub(1, 7) == "custom:" then
+      local cid = key:sub(8)
+      label = "Custom"
+      for _, ct in ipairs(Opt().customTabs or {}) do if ct.id == cid then label = ct.label; break end end
+    else label = CHANNELS[key] and CHANNELS[key].label or key end
     self.pick:SetLabel(label)
     if st.min then
       self:Hide()
