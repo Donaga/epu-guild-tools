@@ -2746,29 +2746,78 @@ function ns.OpenPopoutChatSettings()
       y = y - 28
 
       local STREAM_SOURCES = {
-        { "combat", "Combat" }, { "xp", "XP/Rep" }, { "system", "Server/Loot" },
-        { "guild", "Guild" }, { "party", "Party" }, { "raid", "Raid" },
+        { "combat", "Combat Log" }, { "xp", "XP & Rep" }, { "system", "Server & Loot" },
+        { "whisper", "Whispers" }, { "guild", "Guild" }, { "officer", "Officer" },
+        { "party", "Party" }, { "raid", "Raid" }, { "instance", "Instance / BG" },
         { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },
-        { "trade", "Trade" }, { "lfg", "LFG" }, { "defense", "Defense" },
+        { "trade", "Trade" }, { "lfg", "LFG" }, { "defense", "LocalDefense" },
+        { "worlddefense", "WorldDefense" },
       }
-      for idx, ct in ipairs(o.customTabs or {}) do
-        local iCopy = idx
-        Row({
-          { "Tab: " .. ct.label, 220, function() end },
-          { "Delete", 90, function() table.remove(o.customTabs, iCopy); SyncUI() end },
-        })
-        local rBtns = {}
+      local function OpenMultiSelect(anchorBtn, ct)
+        if not popOptsWin.multiDrop then
+          local dd = CreateFrame("Frame", nil, popOptsWin)
+          dd:SetFrameStrata("DIALOG")
+          dd:SetWidth(210)
+          dd:EnableMouse(true)
+          K.Tex(dd, "BACKGROUND", C2.bg or C2.panel):SetAllPoints()
+          for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+            local t = K.Tex(dd, "BORDER", C2.line)
+            t:SetPoint(side[1]); t:SetPoint(side[2])
+            if side[3] then t:SetHeight(1) else t:SetWidth(1) end
+          end
+          dd.items = {}
+          popOptsWin.multiDrop = dd
+        end
+        local dd = popOptsWin.multiDrop
+        if dd:IsShown() and dd.tabId == ct.id then dd:Hide(); return end
+        dd.tabId = ct.id
+        for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
+        dd.items = {}
+        local dy = -6
         for _, src in ipairs(STREAM_SOURCES) do
           local sk, sl = src[1], src[2]
-          local on = ct.sources and ct.sources[sk]
-          rBtns[#rBtns + 1] = { Check(on, sl), 92, function()
-            ct.sources = ct.sources or {}
-            ct.sources[sk] = not on and true or nil
-            SyncUI()
-          end }
-          if #rBtns == 4 then Row(rBtns); rBtns = {} end
+          if sk ~= "officer" or CanOfficerChat() then
+            local on = ct.sources and ct.sources[sk]
+            local b = ns.InterfaceButton(dd, Check(on, sl), 194, 20)
+            b:SetPoint("TOPLEFT", 8, dy)
+            b:SetScript("OnClick", function()
+              ct.sources = ct.sources or {}
+              ct.sources[sk] = not (ct.sources[sk] and true or false) and true or nil
+              SyncUI()
+              OpenMultiSelect(anchorBtn, ct)
+              dd:Show()
+            end)
+            dd.items[#dd.items + 1] = b
+            dy = dy - 22
+          end
         end
-        if #rBtns > 0 then Row(rBtns) end
+        local done = ns.InterfaceButton(dd, "Done", 194, 20)
+        done:SetPoint("TOPLEFT", 8, dy - 4)
+        done:SetScript("OnClick", function() dd:Hide() end)
+        dd.items[#dd.items + 1] = done
+        dd:SetHeight(-dy + 32)
+        dd:ClearAllPoints()
+        dd:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -2)
+        dd:Show()
+      end
+
+      for idx, ct in ipairs(o.customTabs or {}) do
+        local iCopy, ctCopy = idx, ct
+        local cnt = 0
+        for _, v in pairs(ct.sources or {}) do if v then cnt = cnt + 1 end end
+        local x = 4
+        local lblBtn = Track(ns.InterfaceButton(self.child, ct.label, 140, 22))
+        lblBtn:SetPoint("TOPLEFT", x, y)
+        local dropBtn = Track(ns.InterfaceButton(self.child, string.format("Channels (%d) v", cnt), 150, 22))
+        dropBtn:SetPoint("LEFT", lblBtn, "RIGHT", 6, 0)
+        dropBtn:SetScript("OnClick", function(btn) OpenMultiSelect(btn, ctCopy) end)
+        local delBtn = Track(ns.InterfaceButton(self.child, "Delete", 74, 22))
+        delBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
+        delBtn:SetScript("OnClick", function()
+          if popOptsWin.multiDrop then popOptsWin.multiDrop:Hide() end
+          table.remove(o.customTabs, iCopy); SyncUI()
+        end)
+        y = y - 26
       end
 
       self.child:SetHeight(math.max(200, -y + 12))
