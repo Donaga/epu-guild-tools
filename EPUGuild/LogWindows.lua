@@ -9,6 +9,7 @@ local DEFAULTS = {
 
 local frames = {}
 local logs = { combat = {}, xp = {}, system = {} }
+local rawLogs = { combat = {}, xp = {}, system = {} }
 local paused = {}
 local sessionStart = time()
 local sessionXP = 0
@@ -47,11 +48,27 @@ local function Append(kind, msg, colorHex)
   if paused[kind] or type(msg) ~= "string" or msg == "" then return end
   if issecretvalue and issecretvalue(msg) then return end
   local list = logs[kind]
+  local raw = rawLogs[kind]
   local maxL = DEFAULTS[kind].maxLines
-  local line = string.format("|cff888888%s|r %s%s|r", date("%H:%M:%S"), colorHex or "|cffffffff", msg)
+  local now = time()
+  local line = string.format("|cff888888%s|r %s%s|r", date("%H:%M:%S", now), colorHex or "|cffffffff", msg)
   list[#list + 1] = line
+  raw[#raw + 1] = { t = now, msg = msg, color = colorHex or "|cffffffff", kind = kind }
   while #list > maxL do table.remove(list, 1) end
+  while #raw > maxL do table.remove(raw, 1) end
   RefreshWindow(kind)
+  if ns.RefreshChatBubble then ns.RefreshChatBubble() end
+  if ns.ChatWindows then
+    for _, w in pairs(ns.ChatWindows) do
+      if w and w.IsShown and w:IsShown() and w.Key and type(w:Key()) == "string" and w:Key():sub(1, 7) == "custom:" then
+        if w.Update then w:Update() end
+      end
+    end
+  end
+end
+
+function ns.GetLogStreamLines(kind)
+  return rawLogs[kind] or {}
 end
 
 local function EnsureWindow(kind)

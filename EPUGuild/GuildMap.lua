@@ -1440,6 +1440,7 @@ local function Opt()
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
+  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -2062,6 +2063,37 @@ local function BuildWindow(id)
       end
       empty = #q < 2 and "|cff888888Type at least two letters to search" .. (single and " this conversation." or " whispers and the chat you keep.") .. "|r"
         or "|cff888888Nothing found.|r"
+    elseif key and key:sub(1, 7) == "custom:" then
+      local cid = key:sub(8)
+      local tabDef
+      for _, ct in ipairs(Opt().customTabs or {}) do if ct.id == cid then tabDef = ct; break end end
+      local merged = {}
+      if tabDef and tabDef.sources then
+        for src, on in pairs(tabDef.sources) do
+          if on then
+            if src == "combat" or src == "xp" or src == "system" then
+              for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
+                merged[#merged + 1] = { t = e.t, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
+              end
+            else
+              for _, e in ipairs(ns.ChatLog(src)) do
+                if type(e.msg) == "string" and not Protected(e.msg) then
+                  local who = e.out and "You" or (ns.Short and ns.Short(e.who or "") or (e.who or "?"))
+                  local col = ChatColor(src, e.out)
+                  merged[#merged + 1] = { t = e.t or 0, text = string.format("|cff888888%s|r |cffffffff[%s] %s:|r %s%s|r", date("%H:%M", e.t or 0), CHANNELS[src] and CHANNELS[src].short or src, who, col, e.msg) }
+                end
+              end
+            end
+          end
+        end
+      end
+      local oldest = Opt().oldestFirst
+      table.sort(merged, function(a, b)
+        if oldest then return (a.t or 0) < (b.t or 0) end
+        return (a.t or 0) > (b.t or 0)
+      end)
+      for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
+      empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
       local lines, channel = ThreadLines(key, 100)
       out = ThreadBlocks(channel, lines, self.child.blockPlain)
@@ -2070,7 +2102,9 @@ local function BuildWindow(id)
     ApplyFont(self.text)
     if self.box.SetFont then ApplyFont(self.box) end
     self.text:SetText(#out > 0 and table.concat(out, self.searching and not self.focus and "\n" or "\n\n") or empty)
-    self.box:SetShown(key ~= nil and not self.searching); self.send:SetShown(key ~= nil and not self.searching)
+    local isCustom = key and key:sub(1, 7) == "custom:"
+    self.box:SetShown(key ~= nil and not self.searching and not isCustom)
+    self.send:SetShown(key ~= nil and not self.searching and not isCustom)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
@@ -2086,6 +2120,9 @@ local function BuildWindow(id)
       if ns.ChatKeep(ch) and (not o.popTabs or o.popTabs[ch] ~= false) then
         list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) }
       end
+    end
+    for _, ct in ipairs(o.customTabs or {}) do
+      list[#list + 1] = { key = "custom:" .. ct.id, label = ct.label, n = 0 }
     end
     local width = (self:GetWidth() or 340) - 20
     local w = math.floor((width - (#list - 1) * 3) / #list)
@@ -2684,6 +2721,46 @@ function ns.OpenPopoutChatSettings()
           { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 118, function() ns.ToggleLogWindow("xp"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 134, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
+      end
+
+      Heading("Custom Pop-out Tabs")
+      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Combat, City)..."))
+      nameBox:SetPoint("TOPLEFT", 4, y)
+      local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
+      addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
+      addBtn:SetScript("OnClick", function()
+        local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
+        if nm == "" then return ns.Print("Enter a name for the custom tab.") end
+        o.customTabs = o.customTabs or {}
+        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { combat = true } }
+        SyncUI()
+      end)
+      y = y - 28
+
+      local STREAM_SOURCES = {
+        { "combat", "Combat" }, { "xp", "XP/Rep" }, { "system", "Server/Loot" },
+        { "guild", "Guild" }, { "party", "Party" }, { "raid", "Raid" },
+        { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },
+        { "trade", "Trade" }, { "lfg", "LFG" }, { "defense", "Defense" },
+      }
+      for idx, ct in ipairs(o.customTabs or {}) do
+        local iCopy = idx
+        Row({
+          { "Tab: " .. ct.label, 220, function() end },
+          { "Delete", 90, function() table.remove(o.customTabs, iCopy); SyncUI() end },
+        })
+        local rBtns = {}
+        for _, src in ipairs(STREAM_SOURCES) do
+          local sk, sl = src[1], src[2]
+          local on = ct.sources and ct.sources[sk]
+          rBtns[#rBtns + 1] = { Check(on, sl), 92, function()
+            ct.sources = ct.sources or {}
+            ct.sources[sk] = not on and true or nil
+            SyncUI()
+          end }
+          if #rBtns == 4 then Row(rBtns); rBtns = {} end
+        end
+        if #rBtns > 0 then Row(rBtns) end
       end
 
       self.child:SetHeight(math.max(200, -y + 12))
