@@ -1453,8 +1453,11 @@ ns.ChatOptions = Opt
 -- Reading font for chat: which font, size and outline (Chat settings > Text).
 ns.CHAT_FONTS = {
   { label = "EPU (Inter)", value = "epu" },
+  { label = "EPU Bold (Inter SemiBold)", value = "epu_bold", path = "Interface\\AddOns\\EPUGuild\\Media\\Fonts\\Inter-SemiBold.ttf" },
   { label = "Game (Friz Quadrata)", value = "friz", path = "Fonts\\FRIZQT__.TTF" },
   { label = "Chat (Arial Narrow)", value = "arial", path = "Fonts\\ARIALN.TTF" },
+  { label = "2002 (Clean Sans)", value = "2002", path = "Fonts\\2002.TTF" },
+  { label = "2002 Bold", value = "2002b", path = "Fonts\\2002B.TTF" },
   { label = "Skurri", value = "skurri", path = "Fonts\\skurri.ttf" },
   { label = "Morpheus", value = "morpheus", path = "Fonts\\MORPHEUS.TTF" },
 }
@@ -2670,7 +2673,10 @@ function ns.OpenPopoutChatSettings()
           if w and w.Update then w:Update() end
         end
         if ns.RefreshChatBubble then ns.RefreshChatBubble() end
-        if ns.UI and ns.UI:IsShown() then ns.UI:Refresh() end
+        if ns.UI and ns.UI:IsShown() then
+          if ns.UI.details and ns.UI.details.kind == "chatsettings" then ns.UI:FillDetails() end
+          ns.UI:Refresh()
+        end
         self:Refresh()
       end
       local function Heading(text)
@@ -2969,6 +2975,7 @@ local function FillChatSettings(det)
   local function Again()
     local y = det.scroll and det.scroll.GetVerticalScroll and det.scroll:GetVerticalScroll() or 0
     UI:FillDetails(); UI:Refresh()
+    if popOptsWin and popOptsWin:IsShown() then popOptsWin:Refresh() end
     if det.scroll and det.scroll.SetVerticalScroll and det.body then
       local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
       det.scroll:SetVerticalScroll(math.min(y, maxV))
