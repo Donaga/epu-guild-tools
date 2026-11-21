@@ -41,7 +41,6 @@ GuildRuns.lua
 RaidPrep.lua
 LevelingToolsUI.lua
 LogWindows.lua
-CombatText.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua
