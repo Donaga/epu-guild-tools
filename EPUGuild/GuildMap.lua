@@ -1904,6 +1904,17 @@ local function BuildWindow(id)
   f.full:SetPoint("RIGHT", f.findBtn, "LEFT", -3, 0)
   f.full.tip = "Open the Chat page"
   f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
+  f.settings = K.Btn(bar, "Opts", 40, 20)
+  f.settings:SetPoint("RIGHT", f.full, "LEFT", -3, 0)
+  f.settings.tip = "Open Chat settings (channels, pop-out tabs, sort order, colors)"
+  f.settings:SetScript("OnClick", function()
+    if ns.UI then
+      ns.UI:Show()
+      ns.UI:SetView("chat")
+      ns.UI:OpenDetails("chatsettings", "all")
+    end
+  end)
+  f.pick:SetPoint("RIGHT", f.settings, "LEFT", -4, 0)
   f.body = CreateFrame("Frame", nil, f)
   f.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   f.body:SetPoint("BOTTOMRIGHT")
