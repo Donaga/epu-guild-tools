@@ -433,14 +433,22 @@ local CHANNELS = {
     icon = "Interface\\Icons\\INV_Misc_GroupNeedMore" },
   raid = { label = "Raid chat", group = "RAID", info = "RAID", short = "Raid", send = "RAID", color = "|cffff7f00",
     icon = "Interface\\Icons\\INV_Misc_Head_Dragon_01" },
+  general = { label = "General chat", group = "CHANNEL", info = "CHANNEL1", short = "General", channelBase = "General", color = "|cffffc0c0",
+    icon = "Interface\\Icons\\INV_Misc_Note_01" },
+  trade = { label = "Trade chat", group = "CHANNEL", info = "CHANNEL2", short = "Trade", channelBase = "Trade", color = "|cffffa07a",
+    icon = "Interface\\Icons\\INV_Misc_Coin_01" },
+  lfg = { label = "LookingForGroup", group = "CHANNEL", info = "CHANNEL4", short = "LFG", channelBase = "LookingForGroup", color = "|cffffd280",
+    icon = "Interface\\Icons\\INV_Misc_GroupNeedMore" },
+  defense = { label = "LocalDefense", group = "CHANNEL", info = "CHANNEL3", short = "Defense", channelBase = "LocalDefense", color = "|cffff8080",
+    icon = "Interface\\Icons\\INV_Shield_04" },
 }
 CHANNELS.guild.short, CHANNELS.guild.send, CHANNELS.guild.color = "Guild", "GUILD", "|cff40ff40"
 CHANNELS.guild.icon = "Interface\\Icons\\INV_Shirt_GuildTabard_01"
 CHANNELS.officer.short, CHANNELS.officer.send, CHANNELS.officer.color = "Officer", "OFFICER", "|cff40c040"
 CHANNELS.officer.icon = "Interface\\Icons\\INV_Misc_Key_03"
-local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid" }
+local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
 -- the group chats, shown pinned above whispers
-local GROUP_CHANNELS = { "guild", "officer", "party", "raid" }
+local GROUP_CHANNELS = { "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
 ns.CHAT_GROUP_CHANNELS = GROUP_CHANNELS
 
 -- Chat is shared by all characters on this account (and still only on this
@@ -666,6 +674,19 @@ ns.On("CHAT_MSG_COMMUNITIES_CHANNEL", function(msg, sender, _, channelName, _, _
 end)
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
+local PUBLIC_BASES = {
+  general = "general",
+  trade = "trade",
+  lookingforgroup = "lfg",
+  localdefense = "defense",
+}
+ns.On("CHAT_MSG_CHANNEL", function(msg, sender, _, channelName, _, _, _, _, channelBaseName)
+  local base = Plain(channelBaseName) or Plain(channelName) or ""
+  base = base:gsub("^%d+%.%s*", ""):gsub("%s*%-.*$", ""):lower()
+  local ch = PUBLIC_BASES[base]
+  if not ch or not ns.ChatKeep(ch) then return end
+  Group(ch)(msg, sender)
+end)
 -- Guild chat history from the game's server. The Guild & Communities window
 -- keeps guild (and officer) chat from before you logged in; EPU reads the same
 -- history so its Guild chat has it too. Lines it already has are skipped.
@@ -1290,11 +1311,39 @@ end
 ns.ChatAgo = Ago
 -- One conversation in the side panel: the thread, newest at the bottom, and a
 -- reply box. key is "w:<name>" for whispers, or "guild" / "officer".
+local function ResolvePublicChannelID(baseName)
+  if not baseName then return nil end
+  if GetChannelList then
+    local list = { GetChannelList() }
+    for i = 1, #list, 3 do
+      local id, name = list[i], list[i + 1]
+      if type(name) == "string" and name:lower():find(baseName:lower(), 1, true) then
+        return id
+      end
+    end
+  end
+  if GetChannelName then
+    local id = GetChannelName(baseName)
+    if type(id) == "number" and id > 0 then return id end
+  end
+  return nil
+end
+
 local function Send(key, text)
   if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
   text = text:sub(1, 255)
-  if CHANNELS[key] and CHANNELS[key].send then SendChatMessage(text, CHANNELS[key].send)
-  else SendChatMessage(text, "WHISPER", nil, key:sub(3)) end
+  if CHANNELS[key] and CHANNELS[key].channelBase then
+    local cid = ResolvePublicChannelID(CHANNELS[key].channelBase)
+    if not cid then
+      ns.Print("You are not currently in " .. CHANNELS[key].label .. ".")
+      return false
+    end
+    SendChatMessage(text, "CHANNEL", nil, cid)
+  elseif CHANNELS[key] and CHANNELS[key].send then
+    SendChatMessage(text, CHANNELS[key].send)
+  else
+    SendChatMessage(text, "WHISPER", nil, key:sub(3))
+  end
   return true
 end
 local function ThreadKey(key)
