@@ -1574,6 +1574,7 @@ ns.ChatThreadKey, ns.ChatThreadLines, ns.ChatLineText, ns.ChatSend, ns.ChatThrea
 
 -- A whole conversation as text: plain, Discord (Markdown) or BBCode, oldest first.
 function ns.ChatConversationText(key, fmt)
+  if type(key) == "string" and key:sub(1, 7) == "custom:" then return "" end
   local lines, channel = ThreadLines(key, 300)
   local out = {}
   for i = #lines, 1, -1 do
@@ -2012,7 +2013,7 @@ local function BuildWindow(id)
     local w = math.max(200, (self:GetWidth() or 340) - 30)
     self.child:SetWidth(w)
     self.text:SetWidth(w - 6)
-    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 12))
+    self.pick:SetWidth(math.max(80, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 3 - 40 - 12))
     self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
   end
   function f:Update()
