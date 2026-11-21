@@ -1783,6 +1783,14 @@ local function FillChatWith(det, key)
   if #lines == 0 then det:Text(who and ("No saved whispers with " .. short .. " yet.") or "Nothing saved yet.", nil) end
   for _, block in ipairs(ThreadBlocks(channel, lines, body and body.blockPlain, focus and focus.q)) do det:Text(block) end
   ns.MarkChatSeen(key)
+  if not focus and det.scroll and det.scroll.SetVerticalScroll and det.body then
+    if Opt().oldestFirst then
+      local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
+      det.scroll:SetVerticalScroll(maxV)
+    else
+      det.scroll:SetVerticalScroll(0)
+    end
+  end
   return true
 end
 
@@ -2117,6 +2125,10 @@ local function BuildWindow(id)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
+    if not self.searching and self.scroll and self.scroll.SetVerticalScroll and self.child then
+      local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
+      self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0)
+    end
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
   end

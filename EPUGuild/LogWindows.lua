@@ -42,6 +42,10 @@ local function RefreshWindow(kind)
   end
   f.text:SetText(header .. (#logs[kind] > 0 and table.concat(logs[kind], "\n") or "|cff888888Waiting for messages...|r"))
   f.child:SetHeight(math.max(100, (f.text:GetStringHeight() or 40) + 16))
+  if f.scroll and f.scroll.SetVerticalScroll then
+    local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
+    f.scroll:SetVerticalScroll(maxV)
+  end
 end
 
 local function Append(kind, msg, colorHex)
