@@ -441,14 +441,22 @@ local CHANNELS = {
     icon = "Interface\\Icons\\INV_Misc_GroupNeedMore" },
   defense = { label = "LocalDefense", group = "CHANNEL", info = "CHANNEL3", short = "Defense", channelBase = "LocalDefense", color = "|cffff8080",
     icon = "Interface\\Icons\\INV_Shield_04" },
+  say = { label = "Say", group = "SAY", info = "SAY", short = "Say", send = "SAY", color = "|cffffffff",
+    icon = "Interface\\Icons\\Spell_Shadow_SoothingKiss" },
+  yell = { label = "Yell", group = "YELL", info = "YELL", short = "Yell", send = "YELL", color = "|cffff4040",
+    icon = "Interface\\Icons\\Ability_Warrior_BattleShout" },
+  instance = { label = "Instance / BG", group = "INSTANCE_CHAT", info = "INSTANCE_CHAT", short = "Instance", send = "INSTANCE_CHAT", color = "|cffff7f00",
+    icon = "Interface\\Icons\\INV_BannerPVP_02" },
+  worlddefense = { label = "WorldDefense", group = "CHANNEL", info = "CHANNEL5", short = "WorldDef", channelBase = "WorldDefense", color = "|cffff6060",
+    icon = "Interface\\Icons\\INV_Shield_06" },
 }
 CHANNELS.guild.short, CHANNELS.guild.send, CHANNELS.guild.color = "Guild", "GUILD", "|cff40ff40"
 CHANNELS.guild.icon = "Interface\\Icons\\INV_Shirt_GuildTabard_01"
 CHANNELS.officer.short, CHANNELS.officer.send, CHANNELS.officer.color = "Officer", "OFFICER", "|cff40c040"
 CHANNELS.officer.icon = "Interface\\Icons\\INV_Misc_Key_03"
-local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
+local CHANNEL_ORDER = { "whisper", "guild", "officer", "party", "raid", "instance", "say", "yell", "general", "trade", "lfg", "defense", "worlddefense" }
 -- the group chats, shown pinned above whispers
-local GROUP_CHANNELS = { "guild", "officer", "party", "raid", "general", "trade", "lfg", "defense" }
+local GROUP_CHANNELS = { "guild", "officer", "party", "raid", "instance", "say", "yell", "general", "trade", "lfg", "defense", "worlddefense" }
 ns.CHAT_GROUP_CHANNELS = GROUP_CHANNELS
 
 -- Chat is shared by all characters on this account (and still only on this
@@ -674,11 +682,17 @@ ns.On("CHAT_MSG_COMMUNITIES_CHANNEL", function(msg, sender, _, channelName, _, _
 end)
 ns.On("CHAT_MSG_OFFICER", Group("officer"))
 for _, ev in ipairs({ "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER" }) do ns.On(ev, Group("party")) end
+ns.On("CHAT_MSG_SAY", function(msg, sender) if ns.ChatKeep("say") then Group("say")(msg, sender) end end)
+ns.On("CHAT_MSG_YELL", function(msg, sender) if ns.ChatKeep("yell") then Group("yell")(msg, sender) end end)
+for _, ev in ipairs({ "CHAT_MSG_INSTANCE_CHAT", "CHAT_MSG_INSTANCE_CHAT_LEADER" }) do
+  ns.On(ev, function(msg, sender) if ns.ChatKeep("instance") then Group("instance")(msg, sender) end end)
+end
 local PUBLIC_BASES = {
   general = "general",
   trade = "trade",
   lookingforgroup = "lfg",
   localdefense = "defense",
+  worlddefense = "worlddefense",
 }
 ns.On("CHAT_MSG_CHANNEL", function(msg, sender, _, channelName, _, _, _, _, channelBaseName)
   local base = Plain(channelBaseName) or Plain(channelName) or ""
@@ -1353,7 +1367,7 @@ local function Send(key, text)
   return true
 end
 local function ThreadKey(key)
-  if not (CHANNELS[key] and key ~= "whisper") and key:sub(1, 2) ~= "w:" then key = "w:" .. key end
+  if not (CHANNELS[key] and key ~= "whisper") and key:sub(1, 2) ~= "w:" and key:sub(1, 7) ~= "custom:" then key = "w:" .. key end
   return key
 end
 -- Lines of a conversation, newest first.
@@ -1425,6 +1439,8 @@ local function Opt()
   if o.mentions == nil then o.mentions = true end       -- alert when your name comes up
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
+  o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
+  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -1558,6 +1574,7 @@ ns.ChatThreadKey, ns.ChatThreadLines, ns.ChatLineText, ns.ChatSend, ns.ChatThrea
 
 -- A whole conversation as text: plain, Discord (Markdown) or BBCode, oldest first.
 function ns.ChatConversationText(key, fmt)
+  if type(key) == "string" and key:sub(1, 7) == "custom:" then return "" end
   local lines, channel = ThreadLines(key, 300)
   local out = {}
   for i = #lines, 1, -1 do
@@ -1790,6 +1807,9 @@ local function ConversationItems()
   for _, c in ipairs(ns.ChatConversations()) do
     items[#items + 1] = { label = (ns.Short and ns.Short(c.who) or c.who) .. (c.unread > 0 and (" (" .. c.unread .. " new)") or ""), value = "w:" .. c.who }
   end
+  for _, ct in ipairs(Opt().customTabs or {}) do
+    items[#items + 1] = { label = "Tab: " .. ct.label, value = "custom:" .. ct.id }
+  end
   return items
 end
 -- Windows: "main" is the tabbed messenger; "w:<name>" are per-person windows
@@ -1889,6 +1909,13 @@ local function BuildWindow(id)
   f.full:SetPoint("RIGHT", f.findBtn, "LEFT", -3, 0)
   f.full.tip = "Open the Chat page"
   f.full:SetScript("OnClick", function() ns.ShowChatHistory() end)
+  f.settings = K.Btn(bar, "Opts", 40, 20)
+  f.settings:SetPoint("RIGHT", f.full, "LEFT", -3, 0)
+  f.settings.tip = "Open Chat settings popup (channels, pop-out tabs, sort order)"
+  f.settings:SetScript("OnClick", function()
+    if ns.OpenPopoutChatSettings then ns.OpenPopoutChatSettings() end
+  end)
+  f.pick:SetPoint("RIGHT", f.settings, "LEFT", -4, 0)
   f.body = CreateFrame("Frame", nil, f)
   f.body:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", 0, 0)
   f.body:SetPoint("BOTTOMRIGHT")
@@ -1986,7 +2013,7 @@ local function BuildWindow(id)
     local w = math.max(200, (self:GetWidth() or 340) - 30)
     self.child:SetWidth(w)
     self.text:SetWidth(w - 6)
-    self.pick:SetWidth(math.max(90, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 12))
+    self.pick:SetWidth(math.max(80, (self:GetWidth() or 340) - 4 - 22 - 3 - 22 - 3 - 44 - 3 - 40 - 3 - 44 - 3 - 40 - 12))
     self.child:SetHeight(math.max(10, math.ceil(self.text:GetStringHeight() or 10)))
   end
   function f:Update()
@@ -2001,7 +2028,11 @@ local function BuildWindow(id)
     elseif key:sub(1, 2) == "w:" then
       label = Display(key:sub(3))
       if ns.ChatTyping(key:sub(3)) then label = label .. "  |cff4ade80typing...|r" end
-    else label = CHANNELS[key].label end
+    elseif key:sub(1, 7) == "custom:" then
+      local cid = key:sub(8)
+      label = "Custom"
+      for _, ct in ipairs(Opt().customTabs or {}) do if ct.id == cid then label = ct.label; break end end
+    else label = CHANNELS[key] and CHANNELS[key].label or key end
     self.pick:SetLabel(label)
     if st.min then
       self:Hide()
@@ -2040,6 +2071,37 @@ local function BuildWindow(id)
       end
       empty = #q < 2 and "|cff888888Type at least two letters to search" .. (single and " this conversation." or " whispers and the chat you keep.") .. "|r"
         or "|cff888888Nothing found.|r"
+    elseif key and key:sub(1, 7) == "custom:" then
+      local cid = key:sub(8)
+      local tabDef
+      for _, ct in ipairs(Opt().customTabs or {}) do if ct.id == cid then tabDef = ct; break end end
+      local merged = {}
+      if tabDef and tabDef.sources then
+        for src, on in pairs(tabDef.sources) do
+          if on then
+            if src == "combat" or src == "xp" or src == "system" then
+              for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
+                merged[#merged + 1] = { t = e.t, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
+              end
+            else
+              for _, e in ipairs(ns.ChatLog(src)) do
+                if type(e.msg) == "string" and not Protected(e.msg) then
+                  local who = e.out and "You" or (ns.Short and ns.Short(e.who or "") or (e.who or "?"))
+                  local col = ChatColor(src, e.out)
+                  merged[#merged + 1] = { t = e.t or 0, text = string.format("|cff888888%s|r |cffffffff[%s] %s:|r %s%s|r", date("%H:%M", e.t or 0), CHANNELS[src] and CHANNELS[src].short or src, who, col, e.msg) }
+                end
+              end
+            end
+          end
+        end
+      end
+      local oldest = Opt().oldestFirst
+      table.sort(merged, function(a, b)
+        if oldest then return (a.t or 0) < (b.t or 0) end
+        return (a.t or 0) > (b.t or 0)
+      end)
+      for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
+      empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
       local lines, channel = ThreadLines(key, 100)
       out = ThreadBlocks(channel, lines, self.child.blockPlain)
@@ -2048,7 +2110,9 @@ local function BuildWindow(id)
     ApplyFont(self.text)
     if self.box.SetFont then ApplyFont(self.box) end
     self.text:SetText(#out > 0 and table.concat(out, self.searching and not self.focus and "\n" or "\n\n") or empty)
-    self.box:SetShown(key ~= nil and not self.searching); self.send:SetShown(key ~= nil and not self.searching)
+    local isCustom = key and key:sub(1, 7) == "custom:"
+    self.box:SetShown(key ~= nil and not self.searching and not isCustom)
+    self.send:SetShown(key ~= nil and not self.searching and not isCustom)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
@@ -2059,8 +2123,14 @@ local function BuildWindow(id)
     local st = MState()
     if st.key and st.key:sub(1, 2) == "w:" then st.lastWhisper = st.key end
     local list = { { key = "tells", label = "Tells", n = ns.ChatUnread() } }
+    local o = Opt()
     for _, ch in ipairs(GROUP_CHANNELS) do
-      if ns.ChatKeep(ch) then list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) } end
+      if ns.ChatKeep(ch) and (not o.popTabs or o.popTabs[ch] ~= false) then
+        list[#list + 1] = { key = ch, label = CHANNELS[ch].short, n = ns.ChatUnreadFor(ch) }
+      end
+    end
+    for _, ct in ipairs(o.customTabs or {}) do
+      list[#list + 1] = { key = "custom:" .. ct.id, label = ct.label, n = 0 }
     end
     local width = (self:GetWidth() or 340) - 20
     local w = math.floor((width - (#list - 1) * 3) / #list)
@@ -2076,7 +2146,7 @@ local function BuildWindow(id)
       b:SetLabel(t.label .. (t.n > 0 and (" |cff4ade80" .. t.n .. "|r") or ""))
       local on = (t.key == "tells" and st.key and st.key:sub(1, 2) == "w:") or st.key == t.key
       b:SetOn(on and true or false)
-      b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key].label .. ": read and reply here")
+      b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key] and (CHANNELS[t.key].label .. ": read and reply here") or (t.label .. ": custom tab"))
       b:SetScript("OnClick", function()
         self.searching, self.focus = false, nil
         if t.key == "tells" then
@@ -2545,12 +2615,243 @@ local function FillChatNew(det)
   end
   return true
 end
+local popOptsWin
+function ns.OpenPopoutChatSettings()
+  if not popOptsWin then
+    local K = ns.UIKit
+    local C2 = ns.InterfaceColors
+    popOptsWin = ns.InterfaceWindow("EPUGuildChatOptsPopup", UIParent, "Chat Settings", 420, 480)
+    popOptsWin:SetMovable(true)
+    popOptsWin:RegisterForDrag("LeftButton")
+    popOptsWin:SetScript("OnDragStart", popOptsWin.StartMoving)
+    popOptsWin:SetScript("OnDragStop", popOptsWin.StopMovingOrSizing)
+
+    local scroll = CreateFrame("ScrollFrame", nil, popOptsWin)
+    scroll:SetPoint("TOPLEFT", 12, -42)
+    scroll:SetPoint("BOTTOMRIGHT", -12, 12)
+    scroll:EnableMouseWheel(true)
+    local child = CreateFrame("Frame", nil, scroll)
+    child:SetWidth(388); child:SetHeight(200)
+    scroll:SetScrollChild(child)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+      local maxV = math.max(0, child:GetHeight() - self:GetHeight())
+      self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
+    end)
+    popOptsWin.scroll = scroll
+    popOptsWin.child = child
+    popOptsWin.widgets = {}
+
+    function popOptsWin:Refresh()
+      local curScroll = self.scroll:GetVerticalScroll() or 0
+      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
+      self.widgets = {}
+
+      local o = Opt()
+      local c = ChatDB()
+      local y = -4
+      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
+      local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
+      local function SyncUI()
+        for _, w in pairs(Windows) do
+          if w and w.Tabs then w:Tabs() end
+          if w and w.Update then w:Update() end
+        end
+        if ns.RefreshChatBubble then ns.RefreshChatBubble() end
+        if ns.UI and ns.UI:IsShown() then ns.UI:Refresh() end
+        self:Refresh()
+      end
+      local function Heading(text)
+        y = y - 6
+        local h = Track(ns.InterfaceFont(self.child, 12, C2.gold))
+        h:SetPoint("TOPLEFT", 4, y); h:SetText(text)
+        y = y - 20
+      end
+      local function Row(btns)
+        local x = 4
+        for _, spec in ipairs(btns) do
+          local b = Track(ns.InterfaceButton(self.child, spec[1], spec[2] or 180, 22))
+          b:SetPoint("TOPLEFT", x, y)
+          b:SetScript("OnClick", spec[3])
+          x = x + (spec[2] or 180) + 6
+        end
+        y = y - 26
+      end
+
+      Heading("Sort Order")
+      Row({
+        { o.oldestFirst and "Messages: Oldest on top" or "Messages: Newest on top", 186, function()
+          o.oldestFirst = not o.oldestFirst; ns.ChatColorsChanged(); SyncUI()
+        end },
+        { o.convOldestFirst and "Chats: Oldest first" or "Chats: Newest first", 186, function()
+          o.convOldestFirst = not o.convOldestFirst; SyncUI()
+        end },
+      })
+
+      Heading("Window & Behavior")
+      Row({
+        { Check(o.pop, "Open on whisper"), 186, function() o.pop = not o.pop; SyncUI() end },
+        { Check(o.combat, "Tuck in combat"), 186, function() o.combat = not o.combat; SyncUI() end },
+      })
+      Row({
+        { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
+        { Check(o.lineTimes, "Time on every line"), 186, function() o.lineTimes = not o.lineTimes; ns.ChatColorsChanged(); SyncUI() end },
+      })
+
+      Heading("Channels (Keep & Pop-out Tabs)")
+      for _, k in ipairs(CHANNEL_ORDER) do
+        if k ~= "officer" or CanOfficerChat() then
+          local keep = ns.ChatKeep(k)
+          local lbl = CHANNELS[k].short or "Whispers"
+          if k == "whisper" then
+            Row({ { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end } })
+          else
+            local inPop = o.popTabs[k] ~= false
+            local btns = {
+              { Check(keep, lbl), 186, function() ns.SetChatKeep(k, not keep); SyncUI() end },
+            }
+            if keep then
+              btns[#btns + 1] = { Check(inPop, "Pop-out tab"), 140, function() o.popTabs[k] = not inPop; SyncUI() end }
+            end
+            Row(btns)
+          end
+        end
+      end
+      if c and c.chatkeep then
+        Row({ { Check(c.chatkeep.replay ~= false, "Replay last hour after /reload"), 260, function()
+          c.chatkeep.replay = c.chatkeep.replay == false; SyncUI()
+        end } })
+      end
+
+      if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
+        Heading("Customizable Log Windows")
+        Row({
+          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 124, function() ns.ToggleLogWindow("combat"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 118, function() ns.ToggleLogWindow("xp"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 134, function() ns.ToggleLogWindow("system"); SyncUI() end },
+        })
+      end
+
+      Heading("Custom Pop-out Tabs")
+      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Combat, City)..."))
+      nameBox:SetPoint("TOPLEFT", 4, y)
+      local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
+      addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
+      addBtn:SetScript("OnClick", function()
+        local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
+        if nm == "" then return ns.Print("Enter a name for the custom tab.") end
+        o.customTabs = o.customTabs or {}
+        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { combat = true } }
+        SyncUI()
+      end)
+      y = y - 28
+
+      local STREAM_SOURCES = {
+        { "combat", "Combat Log" }, { "xp", "XP & Rep" }, { "system", "Server & Loot" },
+        { "whisper", "Whispers" }, { "guild", "Guild" }, { "officer", "Officer" },
+        { "party", "Party" }, { "raid", "Raid" }, { "instance", "Instance / BG" },
+        { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },
+        { "trade", "Trade" }, { "lfg", "LFG" }, { "defense", "LocalDefense" },
+        { "worlddefense", "WorldDefense" },
+      }
+      local function OpenMultiSelect(anchorBtn, ct, keepOpen)
+        if not popOptsWin.multiDrop then
+          local catcher = CreateFrame("Button", nil, UIParent)
+          catcher:SetAllPoints(UIParent)
+          catcher:SetFrameStrata("DIALOG")
+          catcher:Hide()
+          local dd = CreateFrame("Frame", nil, catcher)
+          dd:SetFrameStrata("DIALOG")
+          dd:SetFrameLevel(catcher:GetFrameLevel() + 10)
+          dd:SetWidth(210)
+          dd:EnableMouse(true)
+          catcher:SetScript("OnClick", function() dd:Hide(); catcher:Hide() end)
+          popOptsWin:HookScript("OnHide", function() dd:Hide(); catcher:Hide() end)
+          K.Tex(dd, "BACKGROUND", C2.bg or C2.panel):SetAllPoints()
+          for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true }, { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+            local t = K.Tex(dd, "BORDER", C2.line)
+            t:SetPoint(side[1]); t:SetPoint(side[2])
+            if side[3] then t:SetHeight(1) else t:SetWidth(1) end
+          end
+          dd.items = {}
+          dd.catcher = catcher
+          popOptsWin.multiDrop = dd
+        end
+        local dd = popOptsWin.multiDrop
+        if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); dd.catcher:Hide(); return end
+        dd.tabId = ct.id
+        for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
+        dd.items = {}
+        local dy = -6
+        for _, src in ipairs(STREAM_SOURCES) do
+          local sk, sl = src[1], src[2]
+          if sk ~= "officer" or CanOfficerChat() then
+            local on = ct.sources and ct.sources[sk]
+            local b = ns.InterfaceButton(dd, Check(on, sl), 194, 20)
+            b:SetPoint("TOPLEFT", 8, dy)
+            b:SetScript("OnClick", function()
+              ct.sources = ct.sources or {}
+              ct.sources[sk] = not (ct.sources[sk] and true or false) and true or nil
+              SyncUI()
+              OpenMultiSelect(anchorBtn, ct, true)
+            end)
+            dd.items[#dd.items + 1] = b
+            dy = dy - 22
+          end
+        end
+        local done = ns.InterfaceButton(dd, "Done", 194, 20)
+        done:SetPoint("TOPLEFT", 8, dy - 4)
+        done:SetScript("OnClick", function() dd:Hide(); dd.catcher:Hide() end)
+        dd.items[#dd.items + 1] = done
+        dd:SetHeight(-dy + 32)
+        if not keepOpen then
+          dd:ClearAllPoints()
+          dd:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -2)
+        end
+        dd.catcher:Show()
+        dd:Show()
+      end
+
+      for idx, ct in ipairs(o.customTabs or {}) do
+        local iCopy, ctCopy = idx, ct
+        local cnt = 0
+        for _, v in pairs(ct.sources or {}) do if v then cnt = cnt + 1 end end
+        local x = 4
+        local lblBtn = Track(ns.InterfaceButton(self.child, ct.label, 140, 22))
+        lblBtn:SetPoint("TOPLEFT", x, y)
+        local dropBtn = Track(ns.InterfaceButton(self.child, string.format("Channels (%d) v", cnt), 150, 22))
+        dropBtn:SetPoint("LEFT", lblBtn, "RIGHT", 6, 0)
+        dropBtn:SetScript("OnClick", function(btn) OpenMultiSelect(btn, ctCopy) end)
+        local delBtn = Track(ns.InterfaceButton(self.child, "Delete", 74, 22))
+        delBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
+        delBtn:SetScript("OnClick", function()
+          if popOptsWin.multiDrop then popOptsWin.multiDrop:Hide() end
+          table.remove(o.customTabs, iCopy); SyncUI()
+        end)
+        y = y - 26
+      end
+
+      self.child:SetHeight(math.max(200, -y + 12))
+      local maxV = math.max(0, self.child:GetHeight() - self.scroll:GetHeight())
+      self.scroll:SetVerticalScroll(math.min(curScroll, maxV))
+    end
+  end
+  popOptsWin:Refresh()
+  popOptsWin:Show()
+end
+
 local function FillChatSettings(det)
   local c = ChatDB()
   local o = Opt()
   local UI = ns.UI
   local K = ns.UIKit
-  local function Again() UI:FillDetails(); UI:Refresh() end
+  local function Again()
+    local y = det.scroll and det.scroll.GetVerticalScroll and det.scroll:GetVerticalScroll() or 0
+    UI:FillDetails(); UI:Refresh()
+    if det.scroll and det.scroll.SetVerticalScroll and det.body then
+      local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
+      det.scroll:SetVerticalScroll(math.min(y, maxV))
+    end
+  end
   local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
   det:Reset("Interface\\Icons\\INV_Misc_Gear_01", nil, "Chat settings", "Saved on this PC only and never shared with the guild")
   det:Section("Windows")
@@ -2595,6 +2896,13 @@ local function FillChatSettings(det)
         tip = "Pick a color for " .. CHANNELS[k].label:lower() .. " in EPU. Right now: " .. (select(4, ns.ChatColorRGB(k, false)) and "your own color" or "the game's chat color") }
       if k == "whisper" then
         specs[#specs + 1] = { ChatColor(k, true) .. "Sent|r", function() ns.PickChatColor(k, true) end, tip = "Color for whispers you send" }
+      elseif keep then
+        local inPop = o.popTabs[k] ~= false
+        specs[#specs + 1] = { Check(inPop, "Pop-out"), function()
+          o.popTabs[k] = not inPop; if ns.RefreshChatBubble then ns.RefreshChatBubble() end
+          for _, w in pairs(Windows) do if w and w.Tabs then w:Tabs() end end
+          Again()
+        end, tip = "Show " .. CHANNELS[k].label:lower() .. " as a tab in the pop-out Messenger window" }
       end
       local soundLabel = "Sound: Off"
       for _, snd in ipairs(ns.CHAT_SOUNDS) do if snd.value == (o.sounds[k] or false) then soundLabel = "Sound: " .. snd.label end end
