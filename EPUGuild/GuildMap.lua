@@ -2826,12 +2826,15 @@ function ns.OpenPopoutChatSettings()
       end
 
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
-        Heading("Customizable Log Windows")
+        Heading("Customizable Log Windows & Personal SCT")
         Row({
-          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 124, function() ns.ToggleLogWindow("combat"); SyncUI() end },
-          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 118, function() ns.ToggleLogWindow("xp"); SyncUI() end },
-          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 134, function() ns.ToggleLogWindow("system"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 118, function() ns.ToggleLogWindow("combat"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
+          { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
+        if ns.OpenSCTSettings then
+          Row({ { "Personal Scrolling Combat Text (/epu sct)", 280, function() ns.OpenSCTSettings() end } })
+        end
       end
 
       Heading("Custom Pop-out Tabs")

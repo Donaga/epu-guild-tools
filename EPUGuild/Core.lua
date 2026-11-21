@@ -495,6 +495,8 @@ SlashCmdList.EPUGUILD = function(msg)
     elseif ns.OpenPopoutChatSettings then
       ns.OpenPopoutChatSettings()
     end
+  elseif cmd == "sct" or cmd == "combattext" then
+    if ns.OpenSCTSettings then ns.OpenSCTSettings() end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
