@@ -2138,7 +2138,7 @@ local function BuildWindow(id)
       b:SetLabel(t.label .. (t.n > 0 and (" |cff4ade80" .. t.n .. "|r") or ""))
       local on = (t.key == "tells" and st.key and st.key:sub(1, 2) == "w:") or st.key == t.key
       b:SetOn(on and true or false)
-      b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key].label .. ": read and reply here")
+      b.tip = t.key == "tells" and "Your whispers. Pick a person from the name at the top." or (CHANNELS[t.key] and (CHANNELS[t.key].label .. ": read and reply here") or (t.label .. ": custom tab"))
       b:SetScript("OnClick", function()
         self.searching, self.focus = false, nil
         if t.key == "tells" then
