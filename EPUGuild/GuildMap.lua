@@ -2579,7 +2579,14 @@ local function FillChatSettings(det)
   local o = Opt()
   local UI = ns.UI
   local K = ns.UIKit
-  local function Again() UI:FillDetails(); UI:Refresh() end
+  local function Again()
+    local y = det.scroll and det.scroll.GetVerticalScroll and det.scroll:GetVerticalScroll() or 0
+    UI:FillDetails(); UI:Refresh()
+    if det.scroll and det.scroll.SetVerticalScroll and det.body then
+      local maxV = math.max(0, (det.body:GetHeight() or 0) - (det.scroll:GetHeight() or 0))
+      det.scroll:SetVerticalScroll(math.min(y, maxV))
+    end
+  end
   local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
   det:Reset("Interface\\Icons\\INV_Misc_Gear_01", nil, "Chat settings", "Saved on this PC only and never shared with the guild")
   det:Section("Windows")
