@@ -526,7 +526,7 @@ local function NameColorHex(who, isOut)
     local _, file = UnitClass("player")
     cf = file
   end
-  if not cf and who then
+  if not cf and ns.IsReadableString(who) then
     local short = ns.Short and ns.Short(who) or who
     local r = ns.roster and ns.roster[short]
     cf = r and r.classFile
@@ -2629,7 +2629,7 @@ local function MentionFilter(_, _, msg, ...)
   local o = Opt()
   if not (o.mentionColor and o.mentionGame) or not ns.IsReadableString(msg) or msg:find("|K", 1, true) then return false end
   local author = ...
-  if type(author) == "string" and ns.Short and ns.Short(author) == ns.me then return false end
+  if ns.IsReadableString(author) and ns.Short and ns.Short(author) == ns.me then return false end
   if not ns.ChatMentions(msg) then return false end
   local color = ChatColor("mention")
   return false, color .. msg:gsub("|r", "|r" .. color) .. "|r", ...
