@@ -493,6 +493,56 @@ local function LogTable(c, channel)
   c.chatlog[channel] = c.chatlog[channel] or {}
   return c.chatlog[channel]
 end
+local chatSeq = 0
+local function NextSeq()
+  chatSeq = chatSeq + 1
+  return chatSeq
+end
+local function StableSortByTime(list, desc)
+  local order = {}
+  for i, item in ipairs(list) do order[item] = i end
+  table.sort(list, function(a, b)
+    local ta, tb = a.t or 0, b.t or 0
+    if ta ~= tb then
+      if desc then return ta > tb end
+      return ta < tb
+    end
+    local sa, sb = a.seq, b.seq
+    if sa and sb and sa ~= sb then
+      if desc then return sa > sb end
+      return sa < sb
+    end
+    local ia, ib = type(a.id) == "number" and a.id or nil, type(b.id) == "number" and b.id or nil
+    if ia and ib and ia ~= ib then
+      if desc then return ia > ib end
+      return ia < ib
+    end
+    return (order[a] or 0) < (order[b] or 0)
+  end)
+end
+local function NameColorHex(who, isOut)
+  local cf
+  if isOut and UnitClass then
+    local _, file = UnitClass("player")
+    cf = file
+  end
+  if not cf and who then
+    local short = ns.Short and ns.Short(who) or who
+    local r = ns.roster and ns.roster[short]
+    cf = r and r.classFile
+    if not cf and ns.MainOf then
+      local main = ns.MainOf(short)
+      r = main and ns.roster and ns.roster[main]
+      cf = r and r.classFile
+    end
+  end
+  local c = cf and RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf]
+  if c then
+    if c.colorStr then return "|c" .. c.colorStr end
+    return string.format("|cff%02x%02x%02x", math.floor((c.r or 1) * 255 + 0.5), math.floor((c.g or 1) * 255 + 0.5), math.floor((c.b or 1) * 255 + 0.5))
+  end
+  return isOut and "|cff9fb4c8" or "|cffffffff"
+end
 -- One-time move of a character's chat from before 0.28 into the shared store.
 MigrateChat = function(c, cdb)
   if not (ns.GuildKey and ns.GuildKey()) and (next(cdb.chatlog.guild or {}) or next(cdb.chatlog.officer or {})) then return end
@@ -505,7 +555,7 @@ MigrateChat = function(c, cdb)
           dest[#dest + 1] = e
         end
       end
-      table.sort(dest, function(a, b) return (a.t or 0) < (b.t or 0) end)
+      StableSortByTime(dest)
       while #dest > CHAT_KEEP do table.remove(dest, 1) end
     end
   end
@@ -591,7 +641,7 @@ function ns.LogChat(channel, who, msg, out, sys)
       if not Protected(x.msg) and SameAuthorTime(x, { who = who, t = time() }, 3) then return end
     end
     local id = fromServer or ("l" .. tostring(GetTime and GetTime() or time()))
-    session[channel][id] = { t = time(), id = id, who = who, msg = text, out = out and true or nil }
+    session[channel][id] = { t = time(), seq = NextSeq(), id = id, who = who, msg = text, out = out and true or nil }
     if ns.MessengerChanged then ns.MessengerChanged(channel, who, not out) end
     return
   end
@@ -608,7 +658,7 @@ function ns.LogChat(channel, who, msg, out, sys)
   end
   -- sys: "on" / "off" for a guildmate coming online or going offline; these
   -- never count as unread
-  log[#log + 1] = { t = time(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys,
+  log[#log + 1] = { t = time(), seq = NextSeq(), who = who, msg = text, out = (out or sys) and true or nil, sys = sys,
     me = channel == "whisper" and ns.me or nil, id = fromServer, live = fromServer and true or nil }
   local cutoff = time() - CHAT_MAX_AGE
   local drop = 0
@@ -808,7 +858,7 @@ local function MergeHistory(channel, entries)
     end
   end
   if added > 0 then
-    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    StableSortByTime(log)
     while #log > CHAT_KEEP do table.remove(log, 1) end
     -- history from before now isn't "new": don't let it flood the unread counts
     local c = ChatDB()
@@ -978,7 +1028,7 @@ function ns.MergeSharedGuildChat(from, lines)
     end
   end
   if added > 0 then
-    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    StableSortByTime(log)
     while #log > CHAT_KEEP do table.remove(log, 1) end
     -- what you missed isn't "new"
     local c = ChatDB()
@@ -1050,7 +1100,7 @@ function ns.MergeDiscordChat(list)
     end
   end
   if added > 0 then
-    table.sort(log, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    StableSortByTime(log)
     while #log > CHAT_KEEP do table.remove(log, 1) end
     -- what you missed isn't "new"
     c.chatSeen = c.chatSeen or {}
@@ -1380,7 +1430,7 @@ local function ThreadLines(key, max)
     local merged = {}
     for _, e in ipairs(log) do merged[#merged + 1] = e end
     for _, e in pairs(session[channel]) do merged[#merged + 1] = e end
-    table.sort(merged, function(a, b) return (a.t or 0) < (b.t or 0) end)
+    StableSortByTime(merged)
     log = merged
   end
   local function Twin(a, b)
@@ -1564,7 +1614,7 @@ local function ThreadBlocks(channel, lines, plains, hl)
     else
       local n = 1
       if plains then plains[#plains + 1] = table.concat(b.plain, "\n"); n = #plains end
-      local name = b.out and "|cff9fb4c8You|r" or ("|cffffffff|Hplayer:" .. b.who .. "|h" .. Display(b.who) .. "|h|r")
+      local name = b.out and (NameColorHex(b.who, true) .. "You|r") or (NameColorHex(b.who, false) .. "|Hplayer:" .. b.who .. "|h" .. Display(b.who) .. "|h|r")
       local stamp = plains and ("|cff888888|Hepublock:" .. n .. "|h" .. date("%H:%M", b.t) .. "|h|r") or ("|cff888888" .. date("%H:%M", b.t) .. "|r")
       -- messages inside a block are oldest first, like normal chat; blocks are newest first
       local on = (b.me and b.me ~= ns.me) and ("  |cff888888on " .. b.me .. "|r") or ""
@@ -2093,14 +2143,15 @@ local function BuildWindow(id)
           if on then
             if src == "combat" or src == "xp" or src == "system" then
               for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
-                merged[#merged + 1] = { t = e.t, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
+                merged[#merged + 1] = { t = e.t, seq = e.seq, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
               end
             else
               for _, e in ipairs(ns.ChatLog(src)) do
                 if type(e.msg) == "string" and not Protected(e.msg) then
                   local who = e.out and "You" or (ns.Short and ns.Short(e.who or "") or (e.who or "?"))
+                  local nameCol = NameColorHex(e.who, e.out)
                   local col = ChatColor(src, e.out)
-                  merged[#merged + 1] = { t = e.t or 0, text = string.format("|cff888888%s|r |cffffffff[%s] %s:|r %s%s|r", date("%H:%M", e.t or 0), CHANNELS[src] and CHANNELS[src].short or src, who, col, e.msg) }
+                  merged[#merged + 1] = { t = e.t or 0, seq = e.seq, id = e.id, text = string.format("|cff888888%s|r |cffffffff[%s]|r %s%s:|r %s%s|r", date("%H:%M", e.t or 0), CHANNELS[src] and CHANNELS[src].short or src, nameCol, who, col, e.msg) }
                 end
               end
             end
@@ -2108,10 +2159,7 @@ local function BuildWindow(id)
         end
       end
       local oldest = Opt().oldestFirst
-      table.sort(merged, function(a, b)
-        if oldest then return (a.t or 0) < (b.t or 0) end
-        return (a.t or 0) > (b.t or 0)
-      end)
+      StableSortByTime(merged, not oldest)
       for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
       empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
@@ -2633,6 +2681,10 @@ local function FillChatNew(det)
 end
 local popOptsWin
 local UpdateEnterBinding
+function ns.RefreshPopoutChatSettings()
+  if popOptsWin and popOptsWin:IsShown() and popOptsWin.Refresh then popOptsWin:Refresh() end
+end
+
 function ns.OpenPopoutChatSettings()
   if not popOptsWin then
     local K = ns.UIKit
@@ -2833,6 +2885,11 @@ function ns.OpenPopoutChatSettings()
           { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
+        if ns.SetLogWindowsCombined and ns.IsLogWindowsCombined then
+          Row({
+            { Check(ns.IsLogWindowsCombined(), "Combine log windows into one tabbed window"), 310, function() ns.SetLogWindowsCombined(not ns.IsLogWindowsCombined()); SyncUI() end },
+          })
+        end
       end
 
       Heading("Custom Pop-out Tabs")
