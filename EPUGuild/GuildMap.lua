@@ -2891,7 +2891,10 @@ function ns.OpenPopoutChatSettings()
           })
         end
         if ns.OpenInfoBarsSettings then
-          Row({ { "Info Bars (/epu bars)", 180, function() ns.OpenInfoBarsSettings() end } })
+          Row({
+            { "Info Bars (/epu bars)", 170, function() ns.OpenInfoBarsSettings() end },
+            { "Travel & QoL (/epu qol)", 170, function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end },
+          })
         end
       end
 

@@ -44,6 +44,7 @@ RaidPrep.lua
 LevelingToolsUI.lua
 LogWindows.lua
 InfoBars.lua
+WorldQoL.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua

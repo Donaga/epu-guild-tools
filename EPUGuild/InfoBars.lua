@@ -12,7 +12,7 @@ local DEFAULT_WIDGETS = {
 
 local MODULE_ORDER = {
   "fps", "ms", "gold", "durability", "bags", "currency", "reputation",
-  "xp", "clock", "zone", "guild", "friends", "mail", "epuchat", "epuevents", "volume",
+  "xp", "clock", "zone", "speed", "hearth", "guild", "friends", "mail", "epuchat", "epuevents", "volume",
 }
 local MODULE_LABELS = {
   fps = "FPS",
@@ -25,6 +25,8 @@ local MODULE_LABELS = {
   xp = "XP / iLvl",
   clock = "Clock",
   zone = "Zone & Coords",
+  speed = "Move Speed",
+  hearth = "Hearthstone",
   guild = "Guild Online",
   friends = "Friends Online",
   mail = "Mail",
@@ -742,6 +744,59 @@ MODULES.volume = {
     pcall(SetCVar, "Sound_MasterVolume", string.format("%.2f", nextV))
     if ns.RefreshInfoBars then ns.RefreshInfoBars() end
   end,
+}
+
+MODULES.speed = {
+  text = function()
+    local cur = GetUnitSpeed and SafeNum(GetUnitSpeed("player")) or 0
+    local pct = math.floor((cur / 7) * 100 + 0.5)
+    local col = pct > 100 and "|cff4ade80" or (pct > 0 and "|cffffffff" or "|cff888888")
+    return "|cff9fb4c8Spd:|r " .. col .. pct .. "%|r"
+  end,
+  tooltip = function(tt)
+    local cur, run, flight, swim = 0, 7, 7, 4.7
+    if GetUnitSpeed then cur, run, flight, swim = GetUnitSpeed("player") end
+    tt:AddLine("Movement Speed", 1, 0.84, 0.35)
+    tt:AddDoubleLine("Current:", math.floor(((cur or 0) / 7) * 100 + 0.5) .. "%", 0.85, 0.85, 0.85, 1, 1, 1)
+    tt:AddDoubleLine("Ground:", math.floor(((run or 7) / 7) * 100 + 0.5) .. "%", 0.85, 0.85, 0.85, 1, 1, 1)
+    tt:AddDoubleLine("Flight:", math.floor(((flight or 7) / 7) * 100 + 0.5) .. "%", 0.85, 0.85, 0.85, 1, 1, 1)
+    tt:AddDoubleLine("Swim:", math.floor(((swim or 4.7) / 7) * 100 + 0.5) .. "%", 0.85, 0.85, 0.85, 1, 1, 1)
+    tt:AddLine(" ")
+    tt:AddLine("Click: Open Travel & QoL Settings", 0.5, 0.8, 1)
+  end,
+  onClick = function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end,
+}
+
+MODULES.hearth = {
+  text = function()
+    local loc = GetBindLocation and SafeStr(GetBindLocation()) or "Hearth"
+    local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
+    local start, dur = getCD and getCD(6948)
+    start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
+    if start > 0 and dur > 1.5 then
+      local rem = math.max(0, math.ceil((start + dur) - GetTime()))
+      local cdStr = rem >= 60 and (math.ceil(rem / 60) .. "m") or (rem .. "s")
+      return "|cffffd100HS:|r |cff9fb4c8" .. loc:sub(1, 10) .. "|r |cffff6b6b(" .. cdStr .. ")|r"
+    end
+    return "|cff4ade80HS:|r |cffffffff" .. loc:sub(1, 12) .. "|r"
+  end,
+  tooltip = function(tt)
+    local loc = GetBindLocation and SafeStr(GetBindLocation()) or "Unknown"
+    tt:AddLine("Hearthstone", 1, 0.84, 0.35)
+    tt:AddDoubleLine("Bind Location:", loc, 0.85, 0.85, 0.85, 1, 1, 1)
+    local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
+    local start, dur = getCD and getCD(6948)
+    start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
+    if start > 0 and dur > 1.5 then
+      local rem = math.max(0, math.ceil((start + dur) - GetTime()))
+      tt:AddDoubleLine("Cooldown:", string.format("%dm %ds", math.floor(rem / 60), rem % 60), 0.85, 0.85, 0.85, 1, 0.4, 0.4)
+    else
+      tt:AddDoubleLine("Status:", "Ready", 0.85, 0.85, 0.85, 0.4, 0.9, 0.5)
+    end
+    tt:AddLine(" ")
+    tt:AddLine("Click: Open Travel & QoL Settings", 0.5, 0.8, 1)
+  end,
+  onClick = function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end,
 }
 
 local function LayoutBar(id)

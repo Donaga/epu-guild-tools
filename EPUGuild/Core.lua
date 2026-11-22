@@ -497,6 +497,8 @@ SlashCmdList.EPUGUILD = function(msg)
     end
   elseif cmd == "bars" or cmd == "infobars" then
     if ns.OpenInfoBarsSettings then ns.OpenInfoBarsSettings() end
+  elseif cmd == "qol" or cmd == "travel" then
+    if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
