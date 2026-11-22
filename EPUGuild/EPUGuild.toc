@@ -2,8 +2,8 @@
 ## Title: EPU Guild Tools
 ## Notes: Guild bank wish list, item requests, donation log, crafter directory and recipe lookup for E Pluribus Unum.
 ## Author: Chris Baker
-## Version: 0.29.4
-## X-CurseForge-Version: 0.29.4
+## Version: 0.30.0
+## X-CurseForge-Version: 0.30.0
 ## X-CurseForge-Version: 0.29.4
 ## X-CurseForge-Version: 0.29.3
 ## X-CurseForge-Version: 0.29.0
