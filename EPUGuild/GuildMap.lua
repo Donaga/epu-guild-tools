@@ -1858,19 +1858,48 @@ local function MState()
   c.messenger = c.messenger or {}
   return c.messenger
 end
-local function ConversationItems()
+local function IsContactOnline(who)
+  if not who then return nil end
+  local short = ns.Short and ns.Short(who) or who
+  local r = ns.roster and ns.roster[short]
+  if r then return r.online and true or false end
+  if C_FriendList and C_FriendList.GetFriendInfo then
+    local info = C_FriendList.GetFriendInfo(short)
+    if info then return info.connected and true or false end
+  end
+  return nil
+end
+local function OnlineTag(who)
+  local on = IsContactOnline(who)
+  if on == true then return "|cff4ade80[On]|r " end
+  if on == false then return "|cff888888[Off]|r " end
+  return ""
+end
+local function ConversationItems(whispersOnly)
   local items = {}
-  for _, ch in ipairs(GROUP_CHANNELS) do
-    if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then
-      local n = ns.ChatUnreadFor(ch)
-      items[#items + 1] = { label = CHANNELS[ch].label .. (n > 0 and (" (" .. n .. " new)") or ""), value = ch }
+  if not whispersOnly then
+    for _, ch in ipairs(GROUP_CHANNELS) do
+      if ns.ChatKeep(ch) and (ch ~= "officer" or CanOfficerChat()) then
+        local n = ns.ChatUnreadFor(ch)
+        items[#items + 1] = { label = CHANNELS[ch].label .. (n > 0 and (" (" .. n .. " new)") or ""), value = ch }
+      end
     end
   end
-  for _, c in ipairs(ns.ChatConversations()) do
-    items[#items + 1] = { label = (ns.Short and ns.Short(c.who) or c.who) .. (c.unread > 0 and (" (" .. c.unread .. " new)") or ""), value = "w:" .. c.who }
+  local convs = {}
+  for _, c in ipairs(ns.ChatConversations()) do convs[#convs + 1] = c end
+  table.sort(convs, function(a, b)
+    return (a.last and a.last.t or 0) > (b.last and b.last.t or 0)
+  end)
+  for _, c in ipairs(convs) do
+    local short = ns.Short and ns.Short(c.who) or c.who
+    local unread = c.unread > 0 and (" |cff4ade80(" .. c.unread .. " new)|r") or ""
+    local ago = (c.last and c.last.t) and (" |cff888888(" .. Ago(c.last.t) .. ")|r") or ""
+    items[#items + 1] = { label = OnlineTag(c.who) .. short .. unread .. ago, value = "w:" .. c.who }
   end
-  for _, ct in ipairs(Opt().customTabs or {}) do
-    items[#items + 1] = { label = "Tab: " .. ct.label, value = "custom:" .. ct.id }
+  if not whispersOnly then
+    for _, ct in ipairs(Opt().customTabs or {}) do
+      items[#items + 1] = { label = "Tab: " .. ct.label, value = "custom:" .. ct.id }
+    end
   end
   return items
 end
@@ -1940,7 +1969,9 @@ local function BuildWindow(id)
       if ns.GuildmateMenu and ns.roster[short] then ns.GuildmateMenu(self, short) end
       return
     end
-    K.OpenMenu(self, ConversationItems(), MState().key, function(v)
+    local cur = MState().key
+    local whispersOnly = type(cur) == "string" and cur:sub(1, 2) == "w:"
+    K.OpenMenu(self, ConversationItems(whispersOnly), cur, function(v)
       if v then MState().key = v; f.searching, f.focus = false, nil; f:Update() end
     end)
   end)
@@ -2088,7 +2119,7 @@ local function BuildWindow(id)
     local label
     if not key then label = "Chat"
     elseif key:sub(1, 2) == "w:" then
-      label = Display(key:sub(3))
+      label = OnlineTag(key:sub(3)) .. Display(key:sub(3))
       if ns.ChatTyping(key:sub(3)) then label = label .. "  |cff4ade80typing...|r" end
     elseif key:sub(1, 7) == "custom:" then
       local cid = key:sub(8)
@@ -2214,7 +2245,10 @@ local function BuildWindow(id)
       b:SetScript("OnClick", function()
         self.searching, self.focus = false, nil
         if t.key == "tells" then
-          local first = ns.ChatConversations()[1]
+          local convs = {}
+          for _, c in ipairs(ns.ChatConversations()) do convs[#convs + 1] = c end
+          table.sort(convs, function(a, b) return (a.last and a.last.t or 0) > (b.last and b.last.t or 0) end)
+          local first = convs[1]
           st.key = st.lastWhisper or (first and ("w:" .. first.who)) or st.key
         else
           st.key = t.key
