@@ -2890,6 +2890,12 @@ function ns.OpenPopoutChatSettings()
             { Check(ns.IsLogWindowsCombined(), "Combine log windows into one tabbed window"), 310, function() ns.SetLogWindowsCombined(not ns.IsLogWindowsCombined()); SyncUI() end },
           })
         end
+        if ns.OpenInfoBarsSettings then
+          Row({
+            { "Info Bars (/epu bars)", 170, function() ns.OpenInfoBarsSettings() end },
+            { "Travel & QoL (/epu qol)", 170, function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end },
+          })
+        end
       end
 
       Heading("Custom Pop-out Tabs")
