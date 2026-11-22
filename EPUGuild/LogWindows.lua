@@ -458,7 +458,7 @@ if ns.On then
   end)
 
   ns.On("CHAT_MSG_COMBAT_XP_GAIN", function(msg)
-    if type(msg) == "string" then
+    if type(msg) == "string" and not (issecretvalue and issecretvalue(msg)) then
       local gained = tonumber(msg:match("(%d+)%s+experience"))
       if gained then sessionXP = sessionXP + gained end
     end
