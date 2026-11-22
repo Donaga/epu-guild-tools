@@ -195,8 +195,7 @@ function ns.SetWaypoint(x, y, label)
   EnsureWayFrame():Show()
 end
 
-SLASH_EPUWAY1 = "/way"
-SlashCmdList.EPUWAY = function(msg)
+function ns.HandleWayCommand(msg)
   msg = tostring(msg or ""):match("^%s*(.-)%s*$")
   if msg == "" or msg:lower() == "clear" or msg:lower() == "reset" then
     activeWay = nil
@@ -206,7 +205,7 @@ SlashCmdList.EPUWAY = function(msg)
   local xStr, yStr, rest = msg:match("^(%d+%.?%d*)%s*[,%s]+(%d+%.?%d*)%s*(.*)$")
   local x, y = tonumber(xStr), tonumber(yStr)
   if not x or not y or x < 0 or x > 100 or y < 0 or y > 100 then
-    return ns.Print("Usage: /way <x> <y> [label]  or  /way clear")
+    return ns.Print("Usage: /epu way <x> <y> [label]  or  /epu way clear")
   end
   ns.SetWaypoint(x, y, rest)
 end
@@ -478,7 +477,7 @@ function ns.OpenWorldQoLSettings()
       AddToggle("World Map Player & Cursor Coordinates", "mapCoords", function()
         if coordFrame and WorldMapFrame then coordFrame:SetShown(db.mapCoords and WorldMapFrame:IsShown()) end
       end)
-      AddToggle("Waypoints (/way x y [label] and /way clear)", "waypoints", function(on)
+      AddToggle("Waypoints (/epu way x y [label] and /epu way clear)", "waypoints", function(on)
         if not on and wayFrame then wayFrame:Hide() end
       end)
       AddToggle("Flight Path Timer Bar (learns route times)", "flightTimer", function(on)
