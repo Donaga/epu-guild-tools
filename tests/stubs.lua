@@ -213,6 +213,11 @@ function GetRepairAllCost() return __repairCost, __repairCost > 0 end
 function CanGuildBankRepair() return __canGuildRepair end
 function GetGuildBankWithdrawMoney() return __gbWithdraw end
 function RepairAllItems(guild) __repaired = guild and "guild" or "own" end
+-- Flight masters, like the game: the server boards you a moment after TakeTaxiNode.
+__onTaxi = false
+function TakeTaxiNode(slot) end
+function TaxiNodeName(slot) return "Ironforge" end
+function UnitOnTaxi(unit) return __onTaxi end
 function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, "subj", m.money or 0, 0 end end
 function GetInboxItemLink(i, a) local m = __inbox[i]; if m and m.items[a] then return __link(m.items[a][1]) end end
 function GetInboxItem(i, a) local m = __inbox[i]; if m and m.items[a] then return "x", m.items[a][1], "tex", m.items[a][2] end end

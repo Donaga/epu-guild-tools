@@ -253,14 +253,25 @@ local function EnsureFlightFrame()
 
   f:SetScript("OnUpdate", function()
     if not curFlight or not DB().flightTimer then f:Hide(); return end
-    if UnitOnTaxi and not UnitOnTaxi("player") then
-      local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
-      if elapsed >= 3 and curFlight.key then
-        DB().flightTimes[curFlight.key] = elapsed
+    -- The server puts us on the taxi a moment after TakeTaxiNode, so wait
+    -- for boarding (and time the flight from then) before treating "not on
+    -- a taxi" as landed. No boarding within 10 seconds means no flight.
+    local onTaxi = UnitOnTaxi and UnitOnTaxi("player")
+    if onTaxi and not curFlight.boarded then
+      curFlight.boarded = true
+      curFlight.startedAt = GetTime()
+    elseif not onTaxi then
+      if curFlight.boarded then
+        local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
+        if elapsed >= 3 and curFlight.key then
+          DB().flightTimes[curFlight.key] = elapsed
+        end
       end
-      curFlight = nil
-      f:Hide()
-      return
+      if curFlight.boarded or GetTime() - curFlight.startedAt > 10 then
+        curFlight = nil
+        f:Hide()
+        return
+      end
     end
     local elapsed = GetTime() - curFlight.startedAt
     if curFlight.expected and curFlight.expected > 0 then
