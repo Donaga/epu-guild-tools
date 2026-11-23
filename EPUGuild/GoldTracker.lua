@@ -10,7 +10,11 @@ local CATEGORIES = {
   { id = "training", label = "Training & Riding", color = "|cffff9e64", rgb = { 1.00, 0.62, 0.39 } },
   { id = "flight", label = "Flight Paths", color = "|cff70b8ff", rgb = { 0.44, 0.72, 1.00 } },
   { id = "trade", label = "Player Trade", color = "|cfff2c14e", rgb = { 0.95, 0.76, 0.31 } },
-  { id = "guildbank", label = "Guild Bank", color = "|cff8a9cff", rgb = { 0.54, 0.61, 1.00 } },
+  -- Transfers: gold moved between your own characters, or into and out of the
+  -- guild bank. It isn't earned or spent, so it stays out of income, spending
+  -- and the budget, and is shown on its own line instead.
+  { id = "guildbank", label = "Guild Bank", color = "|cff8a9cff", rgb = { 0.54, 0.61, 1.00 }, transfer = true },
+  { id = "alts", label = "Your Other Characters", color = "|cff7fd4c1", rgb = { 0.50, 0.83, 0.76 }, transfer = true },
   { id = "other", label = "Other", color = "|cffaaaaaa", rgb = { 0.67, 0.67, 0.67 } },
 }
 local CAT_MAP = {}
@@ -64,9 +68,47 @@ local pendingCat = nil
 local pendingUntil = 0
 local warnedDay, warnedWeek
 
-local function SetPending(cat, secs)
+local pendingSign, pendingAmount
+local function SetPending(cat, secs, sign, amount)
   pendingCat = cat
   pendingUntil = GetTime() + (secs or 2)
+  pendingSign, pendingAmount = sign, amount
+end
+
+function ns.IsGoldTransfer(cat)
+  local c = CAT_MAP[cat]
+  return c ~= nil and c.transfer == true
+end
+
+-- Is this one of your own characters? SavedVariables are shared by the whole
+-- account, so EPU knows every character that has logged in with it. Mail
+-- may name just the first name; that counts if only one of yours has it.
+local function MyCharacters()
+  local mine = {}
+  local function Add(n) n = ns.Short and ns.Short(n) or n; if type(n) == "string" and n ~= "" then mine[n:lower()] = n end end
+  Add(ns.me)
+  local adb = ns.db or {}
+  for _, chars in pairs(adb.accountChars or {}) do
+    if type(chars) == "table" then for n in pairs(chars) do Add(n) end end
+  end
+  for _, chars in pairs((adb.infoBars and adb.infoBars.altGold) or {}) do
+    if type(chars) == "table" then for n in pairs(chars) do Add(n) end end
+  end
+  for _, e in ipairs((adb.goldTracker and adb.goldTracker.entries) or {}) do Add(e.who) end
+  return mine
+end
+
+function ns.IsMyCharacter(name)
+  name = SafeStr(name)
+  if not name then return false end
+  name = (ns.Short and ns.Short(name)) or name
+  if not name then return false end
+  local mine, lower = MyCharacters(), name:lower()
+  if mine[lower] then return true end
+  if lower:find(" ", 1, true) then return false end
+  local hits = 0
+  for l in pairs(mine) do if l:match("^(%S+)") == lower then hits = hits + 1 end end
+  return hits == 1
 end
 
 -- Repairs and flights only cost gold; loot only brings it in. A pending label
@@ -76,10 +118,11 @@ local SPEND_ONLY = { repair = true, flight = true }
 local function DetectCategory(delta)
   if pendingCat and GetTime() <= pendingUntil then
     local spend = SPEND_ONLY[pendingCat]
+    if pendingSign then spend = pendingSign < 0 end
     if (spend and delta < 0) or (not spend and delta > 0) then
-      local c = pendingCat
-      pendingCat = nil
-      return c
+      local c, amount = pendingCat, pendingAmount
+      pendingCat, pendingSign, pendingAmount = nil, nil, nil
+      return c, amount
     end
   end
   if openState.auction then return "auction" end
@@ -102,7 +145,7 @@ function ns.GetGoldSummary(sinceTime, charOnly)
   local db = DB()
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   local byCat = {}
-  local income, expense = 0, 0
+  local income, expense, moveIn, moveOut = 0, 0, 0, 0
   local list = {}
   for _, c in ipairs(CATEGORIES) do byCat[c.id] = { inc = 0, exp = 0 } end
   for i = #db.entries, 1, -1 do
@@ -110,12 +153,13 @@ function ns.GetGoldSummary(sinceTime, charOnly)
     if (e.t or 0) < (sinceTime or 0) then break end
     if (not e.realm or e.realm == realm) and (not charOnly or e.who == ns.me) then
       local bucket = byCat[e.cat] or byCat.other
+      local transfer = ns.IsGoldTransfer(e.cat)
       if (e.delta or 0) >= 0 then
-        income = income + e.delta
+        if transfer then moveIn = moveIn + e.delta else income = income + e.delta end
         bucket.inc = bucket.inc + e.delta
       else
         local absD = -e.delta
-        expense = expense + absD
+        if transfer then moveOut = moveOut + absD else expense = expense + absD end
         bucket.exp = bucket.exp + absD
       end
       list[#list + 1] = e
@@ -125,6 +169,8 @@ function ns.GetGoldSummary(sinceTime, charOnly)
     income = income,
     expense = expense,
     net = income - expense,
+    transferIn = moveIn,     -- from your other characters and the guild bank
+    transferOut = moveOut,   -- to your other characters and the guild bank
     byCat = byCat,
     entries = list,
   }
@@ -165,9 +211,7 @@ local function CheckBudgetAlerts()
   end
 end
 
-local function RecordDelta(delta, cat)
-  if not delta or delta == 0 then return end
-  local db = DB()
+local function AddEntry(db, delta, cat)
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   local cf
   if UnitClass then cf = select(2, UnitClass("player")) end
@@ -179,6 +223,19 @@ local function RecordDelta(delta, cat)
     delta = delta,
     cat = CAT_MAP[cat] and cat or "other",
   }
+end
+
+-- amount: the part of a loss that was a transfer (gold mailed to an alt); the
+-- rest of it (postage) is mail spending.
+local function RecordDelta(delta, cat, amount)
+  if not delta or delta == 0 then return end
+  local db = DB()
+  if amount and amount > 0 and delta < 0 and -delta > amount then
+    AddEntry(db, -amount, cat)
+    AddEntry(db, delta + amount, "mail")
+  else
+    AddEntry(db, delta, cat)
+  end
   while #db.entries > 2000 do table.remove(db.entries, 1) end
   CheckBudgetAlerts()
   if win and win:IsShown() and win.Refresh then win:Refresh() end
@@ -255,13 +312,20 @@ function ns.OpenGoldTracker()
       sumText:SetText(string.format("Income: |cff4ade80%s|r    Spent: |cffff6b6b%s|r    Net: %s%s|r",
         FormatMoney(sum.income), FormatMoney(sum.expense), netCol, FormatMoney(sum.net)))
       y = y - 24
+      if sum.transferIn > 0 or sum.transferOut > 0 then
+        local moved = pool:Font(11, C.muted, "moved")
+        moved:SetPoint("TOPLEFT", 0, y + 4)
+        moved:SetText(string.format("Moved, not earned or spent: |cff4ade80+%s|r in, |cffff6b6b-%s|r out (your alts and the guild bank)",
+          FormatMoney(sum.transferIn), FormatMoney(sum.transferOut)))
+        y = y - 18
+      end
 
       -- Pie / Donut Chart (Spending by Category)
       if (graphMode == "both" or graphMode == "pie") and sum.expense > 0 then
         local slices = {}
         for _, cat in ipairs(CATEGORIES) do
           local bucket = sum.byCat[cat.id]
-          if bucket and bucket.exp > 0 then
+          if bucket and bucket.exp > 0 and not cat.transfer then
             slices[#slices + 1] = { cat = cat, val = bucket.exp, pct = (bucket.exp / sum.expense) }
           end
         end
@@ -320,7 +384,7 @@ function ns.OpenGoldTracker()
         local maxBar = 1
         for _, cat in ipairs(CATEGORIES) do
           local bucket = sum.byCat[cat.id]
-          if bucket and bucket.exp > 0 then
+          if bucket and bucket.exp > 0 and not cat.transfer then
             bars[#bars + 1] = { cat = cat, val = bucket.exp }
             if bucket.exp > maxBar then maxBar = bucket.exp end
           end
@@ -368,7 +432,7 @@ function ns.OpenGoldTracker()
           local de = ds + 86400
           local inc, exp = 0, 0
           for _, e in ipairs(db.entries) do
-            if (e.t or 0) >= ds and (e.t or 0) < de and (scopeAll or e.who == ns.me) then
+            if (e.t or 0) >= ds and (e.t or 0) < de and (scopeAll or e.who == ns.me) and not ns.IsGoldTransfer(e.cat) then
               if (e.delta or 0) >= 0 then inc = inc + e.delta else exp = exp + (-e.delta) end
             end
           end
@@ -440,7 +504,7 @@ function ns.OpenGoldTracker()
           local parts = {}
           if bucket.inc > 0 then parts[#parts + 1] = "|cff4ade80+" .. FormatMoney(bucket.inc) .. "|r" end
           if bucket.exp > 0 then parts[#parts + 1] = "|cffff6b6b-" .. FormatMoney(bucket.exp) .. "|r" end
-          line:SetText(string.format("%s%s|r:  %s", cat.color, cat.label, table.concat(parts, "   ")))
+          line:SetText(string.format("%s%s|r%s:  %s", cat.color, cat.label, cat.transfer and " |cff888888(moved, not spent)|r" or "", table.concat(parts, "   ")))
           y = y - 18
         end
       end
@@ -456,6 +520,7 @@ function ns.OpenGoldTracker()
           local e = sum.entries[i]
           local cat = CAT_MAP[e.cat] or CAT_MAP.other
           local dCol = e.delta >= 0 and "|cff4ade80+" or "|cffff6b6b"
+          if cat.transfer then dCol = e.delta >= 0 and "|cffa3afc2+" or "|cffa3afc2" end
           local short = ns.Short and ns.Short(e.who or "?") or (e.who or "?")
           local rowText = pool:Font(11, C.text)
           rowText:SetPoint("TOPLEFT", 4, y)
@@ -475,6 +540,22 @@ if hooksecurefunc then
   -- A guild-funded repair (RepairAllItems(true)) doesn't touch the player's gold.
   if RepairAllItems then hooksecurefunc("RepairAllItems", function(guild) if not guild then SetPending("repair", 3) end end) end
   if TakeTaxiNode then hooksecurefunc("TakeTaxiNode", function() SetPending("flight", 4) end) end
+  -- Gold mailed to, or taken from mail sent by, one of your own characters.
+  if SendMail then
+    hooksecurefunc("SendMail", function(to)
+      local money = GetSendMailMoney and SafeNum(GetSendMailMoney()) or 0
+      if money > 0 and ns.IsMyCharacter(to) then SetPending("alts", 6, -1, money) end
+    end)
+  end
+  local function FromMyCharacter(i)
+    if not GetInboxHeaderInfo then return end
+    local _, _, sender, _, money, cod = GetInboxHeaderInfo(i)
+    if (SafeNum(money) or 0) > 0 and (SafeNum(cod) or 0) == 0 and ns.IsMyCharacter(sender) then
+      SetPending("alts", 4, 1)
+    end
+  end
+  if TakeInboxMoney then hooksecurefunc("TakeInboxMoney", FromMyCharacter) end
+  if AutoLootMailItem then hooksecurefunc("AutoLootMailItem", FromMyCharacter) end
 end
 
 if ns.On then
@@ -485,7 +566,8 @@ if ns.On then
     local cur = GetMoney and SafeNum(GetMoney())
     if not cur then return end
     if lastMoney ~= nil and cur ~= lastMoney then
-      RecordDelta(cur - lastMoney, DetectCategory(cur - lastMoney))
+      local cat, amount = DetectCategory(cur - lastMoney)
+      RecordDelta(cur - lastMoney, cat, amount)
     end
     lastMoney = cur
   end)
