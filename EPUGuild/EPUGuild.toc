@@ -57,6 +57,7 @@ Discord.lua
 Inbox.lua
 UI.lua
 NeededMatsUI.lua
+NeededMatsBank.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua

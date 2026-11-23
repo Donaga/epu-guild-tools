@@ -16,6 +16,18 @@ The main window has a **Needed mats** page under **Professions** that lists ever
 
 Each character has its own list, up to 40 materials. EPU fills in the profession from your shared recipes when one of them uses the material. Type it after the amount to choose it yourself: `/epu mats add [item] 20 Tailoring`.
 
+## Already in the guild bank
+
+Press **In the guild bank** on the Needed mats page, or type `/epu mats bank`, to see which needed materials the bank already holds: the in-game guild bank and the bank alts. Each line shows the material, how many are needed and for whom, and where the bank keeps it, for example "In the bank: Guild Bank (Mats) 27, Epu Bank 12". Guild bank tabs show once you've opened the guild bank on that character; before that it shows the guild bank's total.
+
+Each line has one button:
+
+- **Pull** (at the open guild bank): takes what's still needed straight out of the guild bank into your bags, one stack at a time. With no amount on the list it takes one stack. The game decides what you may take: only tabs your rank can withdraw from, and only as many stacks as that tab's daily withdrawal limit has left. What you take counts toward your list, like anything else that arrives in your bags.
+- **Request**: when it can't be pulled right now (the guild bank is closed, your rank has no withdrawals left on that tab, or only a bank alt holds it), it files a normal bank request for what's needed, up to what the bank holds. Bank managers see it on the Requests page.
+- **Requested**: there's already an open request for it, so the button doesn't make another.
+
+Members get the button on their own entries. Officers and bank managers get it on everyone's: at the open guild bank, **Pull** fills the member's request (making one, or approving the one that was waiting) and moves it into your bags, ready for **Mail it** on the request. With the bank closed, **Request** makes the approved request in the member's name, to send from a bank alt or pull later.
+
 ## When an entry comes off
 
 - **You have what you asked for.** With an amount, EPU counts what arrives in your bags after you add it (loot, mail, trades, the auction house). Using some for crafting doesn't undo that progress, and moving your own stock between bank and bags doesn't count. Once the amount is in, it comes off your list and you get one chat line. Without an amount, it stays until you remove it.
