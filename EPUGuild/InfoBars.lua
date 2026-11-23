@@ -652,7 +652,7 @@ MODULES.guild = {
     tt:AddLine(" ")
     tt:AddLine("Click: Open EPU Roster", 0.5, 0.8, 1)
   end,
-  onClick = function() if SlashCmdList and SlashCmdList.EPUGUILD then SlashCmdList.EPUGUILD("roster") end end,
+  onClick = function() if SlashCmdList and SlashCmdList.EPUGUILD then SlashCmdList.EPUGUILD("online") end end,
 }
 
 MODULES.friends = {
