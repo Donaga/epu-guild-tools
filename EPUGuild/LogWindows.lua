@@ -57,6 +57,14 @@ local function LayoutScrollText(f)
   f.child:SetHeight(math.max(100, (f.text:GetStringHeight() or 40) + 16))
 end
 
+-- Follow new lines only when the reader is already at the newest one, so
+-- scrolling up to read back isn't undone by every loot or system message.
+local function AtNewest(f)
+  if not (f.scroll and f.scroll.GetVerticalScroll and f.child) then return true end
+  local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
+  return (f.scroll:GetVerticalScroll() or 0) >= maxV - 20
+end
+
 local function RefreshWindow(kind)
   local db = DB()
   if ns.IsLogWindowsCombined() then
@@ -65,13 +73,15 @@ local function RefreshWindow(kind)
     local cfg = db.combinedCfg or {}
     local active = cfg.active
     if not DEFAULTS[active] then active = "system"; cfg.active = active end
+    local follow = AtNewest(f) or f.lastActive ~= active
+    f.lastActive = active
     local fnt = f.text.SetFont and f.text:GetFont()
     if fnt then f.text:SetFont(fnt, cfg.fontSize or 11, "") end
     f.text:SetText(BuildLogText(active))
     LayoutScrollText(f)
     if f.UpdateTabs then f:UpdateTabs() end
     if f.pauseBtn then f.pauseBtn:SetText(paused[active] and "Resume" or "Pause") end
-    if f.scroll and f.scroll.SetVerticalScroll then
+    if follow and f.scroll and f.scroll.SetVerticalScroll then
       local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
       f.scroll:SetVerticalScroll(maxV)
     end
@@ -81,12 +91,13 @@ local function RefreshWindow(kind)
   local f = frames[kind]
   if not f or not f:IsShown() then return end
   local cfg = db[kind] or DEFAULTS[kind]
+  local follow = AtNewest(f)
   local fnt = f.text.SetFont and f.text:GetFont()
   if fnt then f.text:SetFont(fnt, cfg.fontSize or 11, "") end
   f.text:SetText(BuildLogText(kind))
   LayoutScrollText(f)
   if f.pauseBtn then f.pauseBtn:SetText(paused[kind] and "Resume" or "Pause") end
-  if f.scroll and f.scroll.SetVerticalScroll then
+  if follow and f.scroll and f.scroll.SetVerticalScroll then
     local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
     f.scroll:SetVerticalScroll(maxV)
   end

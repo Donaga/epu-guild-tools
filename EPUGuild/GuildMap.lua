@@ -2117,6 +2117,14 @@ local function BuildWindow(id)
   end
   function f:Update()
     local st = WState(id)
+    -- Is the reader at the newest message right now (before the rebuild)?
+    if self.scroll and self.scroll.GetVerticalScroll and self.child then
+      local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
+      local cur = self.scroll:GetVerticalScroll() or 0
+      local oldest = Opt().oldestFirst and true or false
+      self.wasAtNewest = self.scrollOldest ~= oldest or (oldest and cur >= maxV - 20) or (not oldest and cur <= 20)
+      self.scrollOldest = oldest
+    end
     if not single and not MState().key then
       local first = ns.ChatConversations()[1]
       MState().key = first and ("w:" .. first.who) or (ns.ChatKeep("guild") and "guild" or nil)
@@ -2213,9 +2221,14 @@ local function BuildWindow(id)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
+    -- Jump to the newest message only for a new conversation or when the
+    -- reader was already there; otherwise a busy channel (Trade, General)
+    -- keeps pulling them back while they scroll up to read.
     if not self.searching and self.scroll and self.scroll.SetVerticalScroll and self.child then
       local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
-      self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0)
+      local follow = self.scrollKey ~= key or self.wasAtNewest ~= false
+      if follow then self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0) end
+      self.scrollKey = key
     end
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
