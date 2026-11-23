@@ -183,7 +183,7 @@ function ns.GetGuildDungeonStats()
   for who, r in pairs(ns.roster or {}) do
     totalMembers = totalMembers + 1
     if r.online then onlineCount = onlineCount + 1 end
-    if r.version then epuUsers = epuUsers + 1 end
+    if ns.UsesEPU and ns.UsesEPU(who) then epuUsers = epuUsers + 1 end
     local lv = r.level or 1
     if lv >= 60 then brackets.cap = brackets.cap + 1
     elseif lv >= 40 then brackets.high = brackets.high + 1
@@ -191,14 +191,14 @@ function ns.GetGuildDungeonStats()
     else brackets.low = brackets.low + 1 end
 
     local prof = profiles[who]
-    if prof then
-      if prof.tank then roles.tank = roles.tank + 1 end
-      if prof.healer then roles.healer = roles.healer + 1 end
-      if prof.dps then roles.dps = roles.dps + 1 end
-    end
+    -- Profiles keep roles as letters: "t", "h", "d" (see ns.SetProfile).
+    local pr = prof and type(prof.roles) == "string" and prof.roles or ""
+    if pr:find("t", 1, true) then roles.tank = roles.tank + 1 end
+    if pr:find("h", 1, true) then roles.healer = roles.healer + 1 end
+    if pr:find("d", 1, true) then roles.dps = roles.dps + 1 end
 
     local mStat = byMember[who]
-    if (not mStat or mStat.recent30 == 0) and lv >= 13 and (r.online or (r.lastSeen and (now - r.lastSeen) <= cutoff7)) then
+    if (not mStat or mStat.recent30 == 0) and lv >= 13 and (r.online or (type(r.away) == "number" and r.away <= 7)) then
       zeroRunMembers[#zeroRunMembers + 1] = { name = who, level = lv, online = r.online }
     end
   end

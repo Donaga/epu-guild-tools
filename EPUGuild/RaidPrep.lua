@@ -108,11 +108,11 @@ function ns.GetRaidRosterReport()
       local role = (rs and rs.role) or "DPS"
       local g = ns.G and ns.G()
       local prof = g and g.profiles and g.profiles[who]
-      if prof then
-        if prof.tank then role = "Tank"
-        elseif prof.healer then role = "Healer"
-        elseif prof.dps then role = "DPS" end
-      end
+      -- Profiles keep roles as letters: "t", "h", "d" (see ns.SetProfile).
+      local pr = prof and type(prof.roles) == "string" and prof.roles or ""
+      if pr:find("t", 1, true) then role = "Tank"
+      elseif pr:find("h", 1, true) then role = "Healer"
+      elseif pr:find("d", 1, true) then role = "DPS" end
       local entry = {
         name = who,
         level = lv,
