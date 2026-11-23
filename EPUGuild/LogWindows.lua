@@ -234,8 +234,9 @@ local function EnsureWindow(kind)
     def.title,
     cfg.w or def.w,
     cfg.h or def.h,
-    cfg.x or def.x,
-    cfg.y or def.y,
+    -- 0.29.x saved x/y without the anchor point; those don't place right.
+    cfg.point and cfg.x or def.x,
+    cfg.point and cfg.y or def.y,
     function()
       local s = DB()[kind]
       if s then s.enabled = false end
@@ -307,8 +308,8 @@ local function EnsureCombinedWindow()
     "EPU Logs",
     cfg.w or 380,
     cfg.h or 280,
-    cfg.x or 0,
-    cfg.y or 120,
+    cfg.point and cfg.x or 0,
+    cfg.point and cfg.y or 120,
     function()
       local d = DB()
       for _, k in ipairs(ORDER) do
