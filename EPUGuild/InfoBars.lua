@@ -368,10 +368,27 @@ MODULES.gold = {
       local sign = diff > 0 and "|cff4ade80+" or (diff < 0 and "|cffff6b6b-" or "|cff888888")
       tt:AddDoubleLine("Session Net:", sign .. FormatMoney(diff) .. "|r", 0.8, 0.8, 0.8, 1, 1, 1)
     end
+    if ns.GetGoldSummary then
+      local d = date("*t"); d.hour, d.min, d.sec = 0, 0, 0
+      local tSum = ns.GetGoldSummary(time(d), false)
+      if tSum and (tSum.income > 0 or tSum.expense > 0) then
+        tt:AddDoubleLine("Today In / Out:", "|cff4ade80+" .. FormatMoney(tSum.income) .. "|r / |cffff6b6b-" .. FormatMoney(tSum.expense) .. "|r", 0.8, 0.8, 0.8, 1, 1, 1)
+      end
+    end
+    if ns.GetGoldBudgetStatus then
+      local bs = ns.GetGoldBudgetStatus()
+      if bs and bs.dailyLimit > 0 then
+        local rem = math.max(0, bs.dailyLimit - bs.dailySpent)
+        tt:AddDoubleLine("Daily Budget Left:", FormatMoney(rem), 0.8, 0.8, 0.8, 1, 1, 1)
+      end
+    end
     tt:AddLine(" ")
-    tt:AddLine("Click: Toggle Bags", 0.5, 0.8, 1)
+    tt:AddLine("Left-click: Toggle Bags · Right-click: Gold & Budget", 0.5, 0.8, 1)
   end,
-  onClick = function() if ToggleAllBags then ToggleAllBags() end end,
+  onClick = function(button)
+    if button == "RightButton" and ns.OpenGoldTracker then ns.OpenGoldTracker()
+    elseif ToggleAllBags then ToggleAllBags() end
+  end,
 }
 
 MODULES.durability = {
@@ -414,10 +431,27 @@ MODULES.bags = {
       tt:AddLine(" ")
       tt:AddDoubleLine("Specialized Bags:", sFree .. " / " .. sTotal .. " free", 0.7, 0.8, 0.95, 1, 1, 1)
     end
+    if ns.GetGoldSummary then
+      local d = date("*t"); d.hour, d.min, d.sec = 0, 0, 0
+      local tSum = ns.GetGoldSummary(time(d), false)
+      if tSum and (tSum.income > 0 or tSum.expense > 0) then
+        tt:AddDoubleLine("Today In / Out:", "|cff4ade80+" .. FormatMoney(tSum.income) .. "|r / |cffff6b6b-" .. FormatMoney(tSum.expense) .. "|r", 0.8, 0.8, 0.8, 1, 1, 1)
+      end
+    end
+    if ns.GetGoldBudgetStatus then
+      local bs = ns.GetGoldBudgetStatus()
+      if bs and bs.dailyLimit > 0 then
+        local rem = math.max(0, bs.dailyLimit - bs.dailySpent)
+        tt:AddDoubleLine("Daily Budget Left:", FormatMoney(rem), 0.8, 0.8, 0.8, 1, 1, 1)
+      end
+    end
     tt:AddLine(" ")
-    tt:AddLine("Click: Toggle Bags", 0.5, 0.8, 1)
+    tt:AddLine("Left-click: Toggle Bags · Right-click: Gold & Budget", 0.5, 0.8, 1)
   end,
-  onClick = function() if ToggleAllBags then ToggleAllBags() end end,
+  onClick = function(button)
+    if button == "RightButton" and ns.OpenGoldTracker then ns.OpenGoldTracker()
+    elseif ToggleAllBags then ToggleAllBags() end
+  end,
 }
 
 MODULES.currency = {
@@ -840,6 +874,7 @@ local function LayoutBar(id)
         btn.label = ns.InterfaceFont(btn, cfg.fontSize or 11, C.white)
         btn.label:SetPoint("CENTER")
         btn:EnableMouse(true)
+        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:EnableMouseWheel(true)
         btn:SetScript("OnEnter", function(self)
           local m = self.mod
@@ -851,8 +886,8 @@ local function LayoutBar(id)
           end
         end)
         btn:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-        btn:SetScript("OnClick", function(self)
-          if self.mod and self.mod.onClick then self.mod.onClick() end
+        btn:SetScript("OnClick", function(self, button)
+          if self.mod and self.mod.onClick then self.mod.onClick(button) end
         end)
         btn:SetScript("OnMouseWheel", function(self, delta)
           if self.mod and self.mod.onWheel then self.mod.onWheel(delta) end
