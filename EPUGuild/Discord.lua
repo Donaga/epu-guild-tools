@@ -10,8 +10,11 @@
 --     doesn't contain that folder, so an update through CurseForge, WowUp or
 --     a folder copy can't replace it. Older companions wrote Inbox.lua in this
 --     folder (EPUGuildInbox); EPU still reads both and applies each id once.
--- Only officers' clients apply inbox entries, so the companion should run
--- on an officer's PC.
+-- Only officers' clients apply approvals, announcements and other officer
+-- actions. The companion runs on one officer's PC; other officers can carry
+-- the same actions with the sync helper (marked "officer" in the bot's
+-- config), so Discord keeps moving while the organiser is away. Each action
+-- has a fixed id, so two officers applying it change one record.
 local ADDON, ns = ...
 -- Newer clients keep these under C_Item; the old global names only exist when
 -- the game's "deprecated API" fallback is on, which varies from PC to PC.

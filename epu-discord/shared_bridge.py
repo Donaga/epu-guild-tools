@@ -6,8 +6,19 @@ import epu_core as core
 
 MAX_BYTES=8*1024*1024
 EVENT_MODULES={'event_response':'EventBridge.lua','event_create':'EventCreateBridge.lua'}
-KINDS={'guild_invite','request'} | set(EVENT_MODULES)
+# Officer actions from Discord (approvals, announcements, onboarding steps,
+# helper whitelist). Only a helper the organiser marks "officer": true in the
+# bot config is sent these, and the addon applies them only on an officer's
+# character, so any officer's PC running the helper can carry Discord while
+# the organiser is away. Every action has a fixed id, so several officers
+# carrying the same one change the same record once.
+OFFICER_KINDS={'status','news','news_remove','checklist','sync_helper'}
+KINDS={'guild_invite','request'} | set(EVENT_MODULES) | OFFICER_KINDS
 FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','memberInfo','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
+# Announcements, milestones and the guild MOTD, which the bot posts as the
+# guild's own: exported only by officer helpers and taken only from them.
+OFFICER_FIELDS={'news','feed','motd'}
+OFFICER_CAPABILITY='officer'
 WIRE={'requests':'req','donations':'don','crafters':'craft'}
 def safe(value,depth=0):
     if depth>24: raise ValueError('Bridge data is too deeply nested')
@@ -37,14 +48,16 @@ def verify(path,helper,guild,direction,secret,minimum=0):
     if type(issued) is not int or issued>time.time()+300 or time.time()-issued>86400:raise ValueError('Shared sync data is stale; wait for the central bot')
     if type(seq) is not int or seq<minimum:raise ValueError('An older cloud copy was ignored')
     return packet
-def public_snapshot(gd,character):
+def public_snapshot(gd,character,officer=False):
     g={}
     unconf=gd.g.get('unconf') or {}
-    for field in FIELDS:
+    for field in FIELDS|(OFFICER_FIELDS if officer else set()):
         value=copy.deepcopy(gd.g.get(field) or {})
         wire=WIRE.get(field,field); blocked=unconf.get(wire) or {}
         if field=='needs':
             if blocked:continue
+        elif field=='motd':
+            if not isinstance(value,dict) or not isinstance(value.get('text'),str):continue
         elif isinstance(value,dict):
             value={k:v for k,v in value.items() if not blocked.get(k) and not blocked.get(str(k))}
         if field=='mats':
@@ -80,6 +93,25 @@ def read_helper_uploads(cfg):
             except (OSError,ValueError,KeyError,TypeError):continue
         if newest:out.append((helper,newest))
     return out
+def _stamp_ok(value):return isinstance(value,(int,float)) and not isinstance(value,bool) and 0<=value<=time.time()+300
+def merge_officer_fields(g,src):
+    """Announcements, milestones and the MOTD from an officer's helper; newer wins."""
+    news=src.get('news')
+    if isinstance(news,dict):
+        target=g.setdefault('news',{})
+        for key,r in news.items():
+            if not isinstance(r,dict) or not isinstance(r.get('title',''),str) or not isinstance(r.get('text',''),str):continue
+            rev=r.get('u',r.get('t',0)); old=target.get(key) or {}
+            if _stamp_ok(rev) and rev>float(old.get('u',old.get('t',0)) or 0):target[key]=r
+    feed=src.get('feed')
+    if isinstance(feed,dict):
+        target=g.setdefault('feed',{})
+        for key,r in feed.items():
+            if isinstance(r,dict) and isinstance(r.get('text'),str) and _stamp_ok(r.get('t')) and key not in target:target[key]=r
+    motd=src.get('motd')
+    if isinstance(motd,dict) and isinstance(motd.get('text'),str) and _stamp_ok(motd.get('t')):
+        old=g.get('motd') or {}
+        if motd['t']>float(old.get('t') or 0):g['motd']=motd
 def merge_public(base,cfg):
     uploads=read_helper_uploads(cfg)
     if not base:return base,''
@@ -105,20 +137,32 @@ def merge_public(base,cfg):
                 stamp='v' if field=='bank' else ('u' if field=='requests' else 't')
                 rev=r.get(stamp,0); old=target.get(key) or {}
                 if isinstance(rev,(int,float)) and 0<=rev<=time.time()+300 and rev>float(old.get(stamp) or 0):target[key]=r
+        if (cfg.get('sync_helpers',{}).get(helper) or {}).get('officer'):
+            merge_officer_fields(g,(s.get('game') or {}))
         # Only public item metadata is supplemented. Identity/alt proofs,
         # policies, notes, private preferences and inboxDone are never imported.
         db.setdefault('itemNames',{}).update(s.get('itemNames') or {})
         db.setdefault('itemClass',{}).update(s.get('itemClass') or {})
     fingerprint=hashlib.sha256(canonical([(h,p['sequence']) for h,p in uploads])).hexdigest()
     return core.GuildData(db,base.key),fingerprint
+def officer_helper(cfg,helper,payload=None):
+    """An organiser-marked officer helper whose helper app can carry officer actions."""
+    entry=cfg.get('sync_helpers',{}).get(helper) or {}
+    if not entry.get('officer') or not entry.get('enabled',True):return False
+    return payload is None or OFFICER_CAPABILITY in (payload.get('capabilities') or [])
 def reconcile_helper_acks(cfg,state):
     remove=set()
     for helper,packet in read_helper_uploads(cfg):
         payload=packet['payload']; snapshot=payload['snapshot']; g=snapshot.get('game') or {}
         acks=set(payload.get('acked') or [])
+        officer=officer_helper(cfg,helper,payload)
         for e in state.data['inbox']:
             if e['id'] not in acks:continue
-            if e.get('kind')=='guild_invite':
+            if e.get('kind') in OFFICER_KINDS:
+                # Applied (or dropped as stale) by an officer's client. Only an
+                # officer helper is ever sent these, so its receipt is enough.
+                if officer:remove.add(e['id'])
+            elif e.get('kind')=='guild_invite':
                 r=(g.get('inviteRequests') or {}).get(e.get('source')) or {}
                 if r.get('who')==e.get('who') and r.get('revision',0)>=e.get('revision',1) and r.get('cancelled')==e.get('cancelled'):remove.add(e['id'])
             elif e.get('kind')=='request':
@@ -142,8 +186,12 @@ def publish(cfg,state):
         enabled=entry.get('enabled',True)
         capabilities=(uploads.get(helper,{}).get('payload') or {}).get('capabilities') or []
         kinds={'guild_invite','request'} | (set(EVENT_MODULES) & set(capabilities))
+        # Officer actions only go to an officer helper whose app understands
+        # them (an older helper app would reject the whole feed).
+        officer=bool(enabled and entry.get('officer'))
+        if officer and OFFICER_CAPABILITY in capabilities:kinds|=OFFICER_KINDS
         entries=[dict(e,guild=cfg['guild_key']) for e in state.data['inbox'] if e.get('kind') in kinds] if enabled else []
-        payload={'enabled':enabled,'characters':entry.get('characters',[]),'entries':entries,'received_sequence':received.get(helper,0)}
+        payload={'enabled':enabled,'characters':entry.get('characters',[]),'entries':entries,'received_sequence':received.get(helper,0),'officer':officer}
         digest=hashlib.sha256(canonical(payload)).hexdigest()
         last=state.data.setdefault('bridge_feeds',{}).get(helper) or {}
         if last.get('digest')==digest and time.time()-last.get('issued',0)<60:continue
@@ -167,7 +215,8 @@ def helper_cycle(config,local):
     toc=addon/'EPUGuild.toc'
     modules=toc.read_text(encoding='utf-8').splitlines() if toc.exists() else []
     if 'InviteRequests.lua' not in modules:raise ValueError('Update EPU Guild Tools before starting the helper')
-    capabilities=[kind for kind,module in EVENT_MODULES.items() if module in modules]
+    capabilities=[kind for kind,module in EVENT_MODULES.items() if module in modules]+[OFFICER_CAPABILITY]
+    officer=payload.get('officer') is True
     # The inbox lives in EPUGuild_Inbox, beside the addon, so addon updates
     # can't replace it; anything still in the old EPUGuild\\Inbox.lua moves there.
     if core.addon_reads_inbox_addon(config['wow_path']) and Path(core.inbox_drop_path(config['wow_path'])).exists():
@@ -176,7 +225,8 @@ def helper_cycle(config,local):
         existing=core.read_legacy_inbox(config['wow_path'])
     owned=set(local.get('owned_ids') or [])
     other=[e for e in existing if isinstance(e,dict) and e.get('id') not in owned]
-    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries if e['kind'] not in EVENT_MODULES or e['kind'] in capabilities] if payload.get('enabled') else []
+    stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries
+           if (e['kind'] not in EVENT_MODULES or e['kind'] in capabilities) and (officer or e['kind'] not in OFFICER_KINDS)] if payload.get('enabled') else []
     core.write_inbox_files(config['wow_path'],other+stage,seen_at=local.get('drop_seen',0))
     local['owned_ids']=[e['id'] for e in stage];local['feed_sequence']=feed['sequence']
     if not payload.get('enabled'):return 'Helper access disabled by the organiser.'
@@ -191,13 +241,14 @@ def helper_cycle(config,local):
             character=gd.db.get('syncHelperCharacter')
             if character not in allowed or not guild_matches(gd.key,guild) or gd.db.get('syncHelperGuild')!=gd.key:continue
             signature=hashlib.sha256(Path(path).read_bytes()).hexdigest()
-            if signature!=local.get('uploaded') or capabilities!=local.get('capabilities') or time.time()-local.get('uploaded_at',0)>300:
-                snap=public_snapshot(gd,character)
+            if signature!=local.get('uploaded') or capabilities!=local.get('capabilities') or officer!=local.get('officer',False) or time.time()-local.get('uploaded_at',0)>300:
+                snap=public_snapshot(gd,character,officer)
                 acked=[e['id'] for e in entries if e['id'] in gd.inbox_done]
                 packet=envelope(helper,guild,'upload',{'snapshot':snap,'acked':acked,'capabilities':capabilities},secret,max(time.time_ns()//1000000,local.get('upload_sequence',0)+1))
                 atomic(folder/'to-bot.json',packet)
-                local.update(uploaded=signature,uploaded_at=time.time(),upload_sequence=packet['sequence'],capabilities=capabilities)
+                local.update(uploaded=signature,uploaded_at=time.time(),upload_sequence=packet['sequence'],capabilities=capabilities,officer=officer)
             receipt='Bot received your game snapshot.' if payload.get('received_sequence',0)>=local.get('upload_sequence',1) else 'Game snapshot exported; waiting for cloud transfer and bot receipt.'
-            return str(len(stage))+' queued update(s) ready. '+receipt+' /reload to import incoming updates.'
+            role=' Carrying officer actions for Discord (they apply on an officer character).' if officer else ''
+            return str(len(stage))+' queued update(s) ready. '+receipt+role+' /reload to import incoming updates.'
         except (OSError,ValueError,KeyError,TypeError):continue
     return str(len(stage))+' queued update(s) ready. Log into a whitelisted character, then /reload to export your game snapshot.'
