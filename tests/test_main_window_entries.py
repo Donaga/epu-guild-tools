@@ -45,12 +45,18 @@ check('a tile hides itself when its tool is not loaded', 'gold' not in keys())
 A.ex('__ns.OpenGoldTracker=__saved; __ns.UI.nav.membertools:Click()')
 check('the tile comes back when the tool is loaded', 'gold' in keys())
 
-check('Personal trackers tile stays hidden while that tool is not in the addon', 'trackers' not in keys())
-A.ex('__opened=nil; __ns.OpenPersonalTrackers=function(tab) __opened=tab or "default" end; __ns.UI.nav.membertools:Click()')
-check('Personal trackers tile appears once the tool is loaded', 'trackers' in keys())
-A.ex('__clickRow("trackers")')
-check('Personal trackers tile opens the trackers window', A.ev('__opened') == 'default')
-A.ex('__ns.OpenPersonalTrackers=nil')
+if A.ev('__ns.OpenPersonalTrackers ~= nil'):
+    # Personal Trackers (/epu trackers) is in the addon: the real window opens
+    A.ex('__hide("EPUGuildPersonalTrackers"); __ns.UI.nav.membertools:Click(); __clickRow("trackers")')
+    check('Personal trackers tile opens the trackers window', A.ev('__shown("EPUGuildPersonalTrackers")'))
+    A.ex('__hide("EPUGuildPersonalTrackers")')
+else:
+    check('Personal trackers tile stays hidden while that tool is not in the addon', 'trackers' not in keys())
+    A.ex('__opened=nil; __ns.OpenPersonalTrackers=function(tab) __opened=tab or "default" end; __ns.UI.nav.membertools:Click()')
+    check('Personal trackers tile appears once the tool is loaded', 'trackers' in keys())
+    A.ex('__clickRow("trackers")')
+    check('Personal trackers tile opens the trackers window', A.ev('__opened') == 'default')
+    A.ex('__ns.OpenPersonalTrackers=nil')
 
 # --- Settings rows ---
 A.ex('__ns.UI:SetView("settings")')
