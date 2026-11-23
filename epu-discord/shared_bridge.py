@@ -168,14 +168,16 @@ def helper_cycle(config,local):
     modules=toc.read_text(encoding='utf-8').splitlines() if toc.exists() else []
     if 'InviteRequests.lua' not in modules:raise ValueError('Update EPU Guild Tools before starting the helper')
     capabilities=[kind for kind,module in EVENT_MODULES.items() if module in modules]
-    target=Path(core.inbox_path(config['wow_path'])); existing=[]
-    if target.exists():
-        parsed=core.parse_saved_variables(target.read_text(encoding='utf-8')).get('EPUGuildInbox') or []
-        existing=list(parsed.values()) if isinstance(parsed,dict) else parsed
+    # The inbox lives in EPUGuild_Inbox, beside the addon, so addon updates
+    # can't replace it; anything still in the old EPUGuild\\Inbox.lua moves there.
+    if core.addon_reads_inbox_addon(config['wow_path']) and Path(core.inbox_drop_path(config['wow_path'])).exists():
+        existing=core.read_inbox_drop(config['wow_path'])
+    else:
+        existing=core.read_legacy_inbox(config['wow_path'])
     owned=set(local.get('owned_ids') or [])
     other=[e for e in existing if isinstance(e,dict) and e.get('id') not in owned]
     stage=[dict(e,bridge=True,bridgeIssued=feed['issued']) for e in entries if e['kind'] not in EVENT_MODULES or e['kind'] in capabilities] if payload.get('enabled') else []
-    core.write_inbox(str(target),other+stage)
+    core.write_inbox_files(config['wow_path'],other+stage,seen_at=local.get('drop_seen',0))
     local['owned_ids']=[e['id'] for e in stage];local['feed_sequence']=feed['sequence']
     if not payload.get('enabled'):return 'Helper access disabled by the organiser.'
     paths=core.find_saved_variables(config['wow_path'])
@@ -184,6 +186,8 @@ def helper_cycle(config,local):
     for path in paths:
         try:
             gd=core.load_guild_data(path,guild)
+            seen=gd.db.get('inboxDropSeen')
+            if isinstance(seen,(int,float)) and seen>local.get('drop_seen',0):local['drop_seen']=seen
             character=gd.db.get('syncHelperCharacter')
             if character not in allowed or not guild_matches(gd.key,guild) or gd.db.get('syncHelperGuild')!=gd.key:continue
             signature=hashlib.sha256(Path(path).read_bytes()).hexdigest()

@@ -1,7 +1,8 @@
 """EPU Discord companion: the parts that don't need Discord.
 
 * Reads the EPUGuild SavedVariables file that WoW writes on /reload and logout.
-* Writes Inbox.lua, which the addon loads at the next login or /reload.
+* Writes the Discord inbox (EPUGuild_Inbox/Inbox.lua, beside the addon), which
+  the addon loads at the next login or /reload.
 * Works out what changed since the last read (new requests, status changes,
   donations) so the bot can post or edit Discord messages.
 """
@@ -185,9 +186,9 @@ def lua_value(v, indent=0) -> str:
 
 
 INBOX_HEADER = (
-    "-- Written by the EPU Discord companion. Leave this file in place; it is\n"
-    "-- replaced automatically. Entries here are applied by an officer's client\n"
-    "-- at login or /reload.\n"
+    "-- Written by the EPU Discord companion for older copies of EPU. EPU now reads\n"
+    "-- the inbox from the EPUGuild_Inbox addon beside this one, which addon updates\n"
+    "-- can't replace. Entries here are applied once, by id, at login or /reload.\n"
 )
 
 
@@ -249,7 +250,24 @@ def ingame_chat_list(lines: dict, now: float | None = None) -> list:
     return out[-INGAME_CHAT_MAX:]
 
 
+def _write_text(path: str, text: str) -> bool:
+    """Write text to path atomically; False when the file already says that."""
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as existing:
+            if existing.read() == text:
+                return False
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    safe_replace(tmp, path)
+    return True
+
+
 def write_inbox(path: str, entries: list, chat: list | None = None) -> None:
+    """The old inbox, Inbox.lua inside the EPUGuild folder (EPUGuildInbox).
+
+    Addon updates (CurseForge, WowUp, a folder copy) replace that folder, so
+    new addons read the inbox from EPUGuild_Inbox instead (write_inbox_files)."""
     lock = os.path.join(os.path.dirname(os.path.dirname(path)), ".EPUGuild-update.lock")
     if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 600:
         raise BlockingIOError("The addon updater is installing EPU; queued actions will retry shortly.")
@@ -257,14 +275,135 @@ def write_inbox(path: str, entries: list, chat: list | None = None) -> None:
     if chat is not None:
         text += "-- the last day of the guild's linked Discord chat, added to EPU's Guild chat at login\n"
         text += "EPUGuildDiscordChat = " + lua_value(chat) + "\n"
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as existing:
-            if existing.read() == text:
-                return
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-    safe_replace(tmp, path)
+    _write_text(path, text)
+
+
+# ---------------------------------------------------------------------------
+# The Discord inbox addon (EPUGuild_Inbox)
+#
+# The EPU download is only the EPUGuild folder, and every addon manager
+# replaces that folder whole on an update. So the companion keeps the inbox
+# in a small addon of its own beside it, EPUGuild_Inbox, which no EPU
+# download contains and so no update can replace. EPUGuild lists it under
+# OptionalDeps, so WoW loads it first; it only sets EPUGuildInboxDrop.
+# ---------------------------------------------------------------------------
+INBOX_ADDON = "EPUGuild_Inbox"
+INBOX_DROP_HEADER = (
+    "-- Written by the EPU Discord companion: requests, approvals and guild chat\n"
+    "-- from Discord, applied by an officer's EPU at login or /reload. This addon\n"
+    "-- is not part of the EPU download, so addon updates leave it alone.\n"
+)
+
+
+def inbox_addon_dir(wow_path: str) -> str:
+    return os.path.join(wow_path, "Interface", "AddOns", INBOX_ADDON)
+
+
+def inbox_drop_path(wow_path: str) -> str:
+    return os.path.join(inbox_addon_dir(wow_path), "Inbox.lua")
+
+
+def _addon_toc(wow_path: str) -> list[str]:
+    toc = os.path.join(wow_path, "Interface", "AddOns", "EPUGuild", "EPUGuild.toc")
+    try:
+        with open(toc, encoding="utf-8-sig") as f:
+            return f.read().splitlines()
+    except OSError:
+        return []
+
+
+def addon_reads_inbox_addon(wow_path: str) -> bool:
+    """True when the installed EPU loads EPUGuild_Inbox (its TOC lists it under OptionalDeps)."""
+    for line in _addon_toc(wow_path):
+        m = re.match(r"\s*##\s*OptionalDeps\s*:(.*)", line, re.I)
+        if m and INBOX_ADDON.lower() in [d.strip().lower() for d in m.group(1).split(",")]:
+            return True
+    return False
+
+
+def inbox_addon_toc(wow_path: str) -> str:
+    interface = "16001, 11509"
+    for line in _addon_toc(wow_path):
+        m = re.match(r"\s*##\s*Interface\s*:\s*(.+?)\s*$", line, re.I)
+        if m:
+            interface = m.group(1)
+            break
+    return ("## Interface: " + interface + "\n"
+            "## Title: EPU Guild Tools: Discord inbox\n"
+            "## Notes: Requests and approvals from Discord, kept by the EPU Discord companion. "
+            "Not part of the EPU download, so updates can't replace it. Keep it enabled on officers' PCs.\n"
+            "## Author: EPU Discord companion\n"
+            "## Version: 1\n"
+            "Inbox.lua\n")
+
+
+def inbox_drop_text(entries: list, chat: list | None = None) -> str:
+    drop = {"v": 1, "entries": entries}
+    if chat is not None:
+        drop["chat"] = chat
+    return INBOX_DROP_HEADER + "EPUGuildInboxDrop = " + lua_value(drop) + "\n"
+
+
+def read_inbox_drop(wow_path: str) -> list:
+    """Entries in EPUGuild_Inbox\\Inbox.lua, or [] when there's none yet."""
+    path = inbox_drop_path(wow_path)
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        drop = parse_saved_variables(f.read()).get("EPUGuildInboxDrop") or {}
+    entries = drop.get("entries") if isinstance(drop, dict) else None
+    entries = list(entries.values()) if isinstance(entries, dict) else (entries or [])
+    return [e for e in entries if isinstance(e, dict)]
+
+
+def read_legacy_inbox(wow_path: str) -> list:
+    """Entries still in the old EPUGuild\\Inbox.lua, to carry into EPUGuild_Inbox."""
+    path = inbox_path(wow_path)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            parsed = parse_saved_variables(f.read()).get("EPUGuildInbox") or []
+    except Exception:
+        return []
+    entries = list(parsed.values()) if isinstance(parsed, dict) else parsed
+    return [e for e in entries if isinstance(e, dict) and isinstance(e.get("id"), str)]
+
+
+def write_inbox_files(wow_path: str, entries: list, chat: list | None = None, seen_at: float = 0) -> str:
+    """Write the Discord inbox where the installed EPU reads it.
+
+    An EPU that loads EPUGuild_Inbox gets it there. WoW only finds a new addon
+    folder when the game starts, so until EPU has said it loaded this
+    EPUGuild_Inbox (seen_at, EPUGuildDB.inboxDropSeen, later than the folder's
+    TOC), the old EPUGuild\\Inbox.lua gets the same entries, which the addon
+    applies once by id. After that the old file is left empty.
+    An older EPU only gets the old file. Returns "addon", "legacy", or
+    "denied" when Windows won't let the companion make EPUGuild_Inbox (the
+    old file is written then, as before)."""
+    if not addon_reads_inbox_addon(wow_path):
+        write_inbox(inbox_path(wow_path), entries, chat)
+        return "legacy"
+    folder = inbox_addon_dir(wow_path)
+    toc = os.path.join(folder, INBOX_ADDON + ".toc")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        _write_text(toc, inbox_addon_toc(wow_path))
+        _write_text(inbox_drop_path(wow_path), inbox_drop_text(entries, chat))
+    except PermissionError:
+        write_inbox(inbox_path(wow_path), entries, chat)
+        return "denied"
+    legacy = inbox_path(wow_path)
+    if os.path.isdir(os.path.dirname(legacy)):
+        try:
+            loaded = isinstance(seen_at, (int, float)) and seen_at > 0 and seen_at >= os.path.getmtime(toc)
+            if loaded:
+                write_inbox(legacy, [])
+            else:
+                write_inbox(legacy, entries, chat)
+        except BlockingIOError:
+            pass  # the updater is replacing EPUGuild; the inbox addon already has everything
+    return "addon"
 
 
 # ---------------------------------------------------------------------------
@@ -889,6 +1028,23 @@ class State:
         self.data["inbox"].append(e)
         self.save()
         return e
+
+    def adopt_legacy_inbox(self, entries: list) -> int:
+        """Queue entries found in the old EPUGuild\\Inbox.lua that this queue
+        lost track of, so they move into EPUGuild_Inbox. Runs once; the addon
+        applies each id once, and prune_inbox drops them when it has."""
+        if self.data.get("legacy_inbox_adopted"):
+            return 0
+        have = {e.get("id") for e in self.data["inbox"]}
+        added = 0
+        for e in entries:
+            if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"] not in have and not e.get("bridge"):
+                self.data["inbox"].append(dict(e))
+                have.add(e["id"])
+                added += 1
+        self.data["legacy_inbox_adopted"] = True
+        self.save()
+        return added
 
     def prune_inbox(self, inbox_done: dict) -> bool:
         before = len(self.data["inbox"])

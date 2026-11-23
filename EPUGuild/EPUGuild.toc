@@ -5,7 +5,7 @@
 ## Version: 0.31.1
 ## SavedVariables: EPUGuildDB
 ## SavedVariablesPerCharacter: EPUGuildCharDB
-## OptionalDeps: AHledger, TradeSkillMaster, Auctionator, GatherMate2
+## OptionalDeps: AHledger, TradeSkillMaster, Auctionator, GatherMate2, EPUGuild_Inbox
 ## IconTexture: Interface\AddOns\EPUGuild\Media\logo
 
 Libs/Libraries.xml

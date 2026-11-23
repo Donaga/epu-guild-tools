@@ -99,7 +99,7 @@ function ns.GetBubbleActions(guild, state)
   end
   if officer then
     local done = ns.db and ns.db.inboxDone or {}
-    for _, entry in ipairs(EPUGuildInbox or {}) do
+    for _, entry in ipairs(ns.InboxEntries and ns.InboxEntries() or {}) do
       if type(entry) == 'table' and entry.id and not done[entry.id] then actions.inbox[#actions.inbox+1] = entry.id end
     end
   end

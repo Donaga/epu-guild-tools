@@ -2290,7 +2290,7 @@ Views.roster = {
 local function InboxWaiting()
   local n = 0
   local done = (ns.db and ns.db.inboxDone) or {}
-  for _, e in ipairs(EPUGuildInbox or {}) do
+  for _, e in ipairs(ns.InboxEntries()) do
     if type(e) == "table" and e.id and not done[e.id] then n = n + 1 end
   end
   return n
@@ -3107,7 +3107,7 @@ do
   UI.inboxHint = h4
   local applyInbox = Btn(officerPage, "Apply inbox now", 120, 22)
   applyInbox:SetPoint("TOPRIGHT", -146, lineY)
-  applyInbox.tip = "Apply requests and approvals made in Discord that have arrived in Inbox.lua."
+  applyInbox.tip = "Apply requests and approvals made in Discord that have arrived. The Discord companion keeps them in the EPU Guild Tools: Discord inbox addon beside EPU, which addon updates never replace."
   applyInbox:SetScript("OnClick", function() ns.ProcessInbox(); UI:Refresh() end)
   local saveDiscord = Btn(officerPage, "Save for Discord", 126, 22)
   saveDiscord:SetPoint("TOPRIGHT", -14, lineY)
@@ -3213,7 +3213,9 @@ local function RefreshOfficerPage(g)
     if rv.promote then promote = promote + 1 end
   end
   local waiting = InboxWaiting()
-  UI.inboxHint:SetText(waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
+  local source = ns.InboxSource and ns.InboxSource()
+  UI.inboxHint:SetText((waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
+    .. (source == "off" and " |cffff6060(Discord inbox addon is turned off)|r" or ""))
   local open, pending, members, fulfillment = 0, 0, 0, 0
   for _, r in pairs(g.requests) do
     if ns.IsActiveRequest(r) then open = open + 1 end
