@@ -49,6 +49,7 @@ function ns.Changed()
     ns.Debounce("goals", 3, ns.CloseMetGoals)
   end
   if ns.RefreshBagMarkers then ns.Debounce("bagmarkers", 1, ns.RefreshBagMarkers) end
+  if ns.RefreshNeededMatsBank then ns.RefreshNeededMatsBank() end
 end
 
 -- Request states: pending -> approved | rejected -> filled; or cancelled.

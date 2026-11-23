@@ -2349,6 +2349,10 @@ Views.neededmats = {
   tools = function(bar)
     bar:Add(Btn(bar, "My needed mats", 120, 22, "accent"), "right", function() ns.ShowNeededMats() end,
       "Add or remove the materials you need. Guildmates see them on the item's tooltip.")
+    if ns.ShowNeededMatsBank then
+      UI.neededBankBtn = bar:Add(Btn(bar, "In the guild bank", 130, 22), "right", function() ns.ShowNeededMatsBank() end,
+        "Needed mats the bank already holds, with a Pull or Request button for whoever needs them.")
+    end
   end,
   rows = function(g, q)
     local ids, seen, out = {}, {}, {}

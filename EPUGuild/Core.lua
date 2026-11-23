@@ -385,7 +385,7 @@ local HELP = {
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
-  "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips",
+  "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
   "|cffffd100/epu sharespots on|off|r - share the gathering spots you record with the guild (on by default)",
@@ -456,6 +456,8 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
+  elseif (cmd == "mats" or cmd == "neededmats") and (args or ""):lower():match("^%s*bank%s*$") and ns.ShowNeededMatsBank then
+    ns.ShowNeededMatsBank()
   elseif cmd == "mats" or cmd == "neededmats" then
     ns.NeededMatsCommand(args)
   elseif cmd == "market" then

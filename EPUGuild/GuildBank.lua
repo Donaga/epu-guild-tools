@@ -344,42 +344,32 @@ local function InBags(item)
   return total
 end
 
-function ns.PullForRequest(rid)
-  local g = ns.G()
-  local r = g and g.requests[rid]
-  if not r then return end
-  if not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers and bank managers pull requests from the guild bank.") end
-  if r.crafter or not r.item then return ns.Print("Only item requests to the bank can be pulled from the guild bank.") end
-  if r.status ~= "approved" then return ns.Print("Approve the request before pulling it from the guild bank.") end
-  if not isOpen then return ns.Print("Open the guild bank first, then click Pull for request again.") end
-  if pulling then return ns.Print("Still pulling the last request. Wait a moment.") end
-  local want = ns.Remaining(r)
-  if want <= 0 then return ns.Print("This request has nothing left to send.") end
-  local steps, got, have, limited = ns.PlanGuildBankPull(r.item, want)
+-- Take `want` of `item` out of the open guild bank into your bags, one stack
+-- at a time. The game only lets you do this at a guild vault, from tabs your
+-- rank may withdraw from, within the tab's daily withdrawal limit; the plan
+-- skips tabs that are out of withdrawals. finish(moved, got, have, limited)
+-- runs once the moves have settled. Returns true when the moves started.
+function ns.PullFromGuildBank(item, want, finish)
+  if not isOpen then return false end
+  if pulling then ns.Print("Still pulling from the guild bank. Wait a moment.") return false end
+  local steps, got, have, limited = ns.PlanGuildBankPull(item, want)
   if #steps == 0 then
-    if limited then return ns.Print("You have no guild bank withdrawals left today on the tabs that hold " .. ns.ItemLink(r.item) .. ".") end
-    return ns.Print("The guild bank has no " .. ns.ItemLink(r.item) .. " you can take right now.")
+    if limited then ns.Print("You have no guild bank withdrawals left today on the tabs that hold " .. ns.ItemLink(item) .. ".") return false end
+    ns.Print("The guild bank has no " .. ns.ItemLink(item) .. " you can take right now.")
+    return false
   end
   local free = EmptyBagSlots()
   if #free < #steps then
-    return ns.Print("That needs " .. #steps .. " empty bag slot" .. (#steps == 1 and "" or "s") .. " and you have " .. #free .. ". Make room, then try again.")
+    ns.Print("That needs " .. #steps .. " empty bag slot" .. (#steps == 1 and "" or "s") .. " and you have " .. #free .. ". Make room, then try again.")
+    return false
   end
-  local to, start = r.to or r.who, InBags(r.item)
+  local start = InBags(item)
   pulling = true
   local i = 0
   local function Finish()
     pulling = false
     C_Timer.After(0.5, function()
-      local moved = InBags(r.item) - start
-      if moved >= want then
-        ns.Print("Pulled " .. ns.ItemLink(r.item) .. " x" .. want .. " for " .. to .. ". Take it to a mailbox and click Mail it on the request.")
-      elseif moved > 0 then
-        ns.Print("Pulled " .. moved .. " of " .. want .. " " .. ns.ItemLink(r.item) .. " for " .. to .. "."
-          .. ((got < want) and (limited and " Your withdrawal limit stopped the rest." or (" The guild bank only had " .. have .. ".")) or " Check your bags; the rest didn't move.")
-          .. " Mail it sends what you have; the rest stays open.")
-      else
-        ns.Print("Nothing moved from the guild bank. Check your withdrawal limit for today, then try again.")
-      end
+      if finish then finish(InBags(item) - start, got, have, limited) end
     end)
   end
   local function Step()
@@ -395,9 +385,34 @@ function ns.PullForRequest(rid)
     C_Timer.After(0.5, Step)
   end
   if got < want then
-    ns.Print("The guild bank can give " .. got .. " of " .. want .. " " .. ns.ItemLink(r.item) .. " right now.")
+    ns.Print("The guild bank can give " .. got .. " of " .. want .. " " .. ns.ItemLink(item) .. " right now.")
   end
   Step()
+  return true
+end
+
+function ns.PullForRequest(rid)
+  local g = ns.G()
+  local r = g and g.requests[rid]
+  if not r then return end
+  if not ns.IsBankTrusted(ns.me) then return ns.Print("Only officers and bank managers pull requests from the guild bank.") end
+  if r.crafter or not r.item then return ns.Print("Only item requests to the bank can be pulled from the guild bank.") end
+  if r.status ~= "approved" then return ns.Print("Approve the request before pulling it from the guild bank.") end
+  if not isOpen then return ns.Print("Open the guild bank first, then click Pull for request again.") end
+  local want = ns.Remaining(r)
+  if want <= 0 then return ns.Print("This request has nothing left to send.") end
+  local to = r.to or r.who
+  return ns.PullFromGuildBank(r.item, want, function(moved, got, have, limited)
+    if moved >= want then
+      ns.Print("Pulled " .. ns.ItemLink(r.item) .. " x" .. want .. " for " .. to .. ". Take it to a mailbox and click Mail it on the request.")
+    elseif moved > 0 then
+      ns.Print("Pulled " .. moved .. " of " .. want .. " " .. ns.ItemLink(r.item) .. " for " .. to .. "."
+        .. ((got < want) and (limited and " Your withdrawal limit stopped the rest." or (" The guild bank only had " .. have .. ".")) or " Check your bags; the rest didn't move.")
+        .. " Mail it sends what you have; the rest stays open.")
+    else
+      ns.Print("Nothing moved from the guild bank. Check your withdrawal limit for today, then try again.")
+    end
+  end)
 end
 
 -- Query one tab at a time: GUILDBANKBAGSLOTS_CHANGED has no tab argument.
