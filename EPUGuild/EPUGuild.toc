@@ -62,6 +62,7 @@ BankCatalog.lua
 Discord.lua
 Inbox.lua
 UI.lua
+NeededMatsUI.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua
