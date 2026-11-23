@@ -2203,9 +2203,12 @@ local function BuildWindow(id)
           end
         end
       end
-      local oldest = Opt().oldestFirst
-      StableSortByTime(merged, not oldest)
+      -- Keep the newest 100, then show them in the chosen order.
+      StableSortByTime(merged, true)
       for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
+      if Opt().oldestFirst then
+        for i = 1, math.floor(#out / 2) do out[i], out[#out + 1 - i] = out[#out + 1 - i], out[i] end
+      end
       empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
       local lines, channel = ThreadLines(key, 100)
