@@ -1,5 +1,8 @@
 -- EPU Guild Tools: World travel, waypoints, flight timer, vendor QoL, and item tooltip extras.
 local _, ns = ...
+-- Newer clients keep this under C_Item; the old global only exists when the
+-- game's "deprecated API" fallback is on (see Core.lua).
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 local function SafeStr(v)
   if type(v) ~= "string" or (issecretvalue and issecretvalue(v)) then return nil end
@@ -20,7 +23,10 @@ local function DB()
   if db.flightTimer == nil then db.flightTimer = true end
   if db.autoSellGrey == nil then db.autoSellGrey = true end
   if db.autoRepair == nil then db.autoRepair = true end
-  if db.guildRepair == nil then db.guildRepair = true end
+  -- Paying repairs from the guild bank is the player's choice, not a default.
+  -- 0.30.x saved it as on for everyone, so reset it once; the toggle below
+  -- marks it chosen.
+  if not db.guildRepairChosen then db.guildRepair = false end
   if db.tooltipExtras == nil then db.tooltipExtras = true end
   db.flightTimes = db.flightTimes or {}
   db.altItems = db.altItems or {}
@@ -247,14 +253,25 @@ local function EnsureFlightFrame()
 
   f:SetScript("OnUpdate", function()
     if not curFlight or not DB().flightTimer then f:Hide(); return end
-    if UnitOnTaxi and not UnitOnTaxi("player") then
-      local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
-      if elapsed >= 3 and curFlight.key then
-        DB().flightTimes[curFlight.key] = elapsed
+    -- The server puts us on the taxi a moment after TakeTaxiNode, so wait
+    -- for boarding (and time the flight from then) before treating "not on
+    -- a taxi" as landed. No boarding within 10 seconds means no flight.
+    local onTaxi = UnitOnTaxi and UnitOnTaxi("player")
+    if onTaxi and not curFlight.boarded then
+      curFlight.boarded = true
+      curFlight.startedAt = GetTime()
+    elseif not onTaxi then
+      if curFlight.boarded then
+        local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
+        if elapsed >= 3 and curFlight.key then
+          DB().flightTimes[curFlight.key] = elapsed
+        end
       end
-      curFlight = nil
-      f:Hide()
-      return
+      if curFlight.boarded or GetTime() - curFlight.startedAt > 10 then
+        curFlight = nil
+        f:Hide()
+        return
+      end
     end
     local elapsed = GetTime() - curFlight.startedAt
     if curFlight.expected and curFlight.expected > 0 then
@@ -292,6 +309,8 @@ end
 ---------------------------------------------------------------------------
 local function OnMerchantShow()
   if IsShiftKeyDown and IsShiftKeyDown() then return end
+  -- A bank alt's bags and gold are the guild's: leave them alone.
+  if ns.IsBankAlt and ns.IsBankAlt() then return end
   local db = DB()
 
   if db.autoSellGrey then
@@ -331,8 +350,12 @@ local function OnMerchantShow()
     cost = SafeNum(cost) or 0
     if canRepair and cost > 0 then
       if db.guildRepair and CanGuildBankRepair and CanGuildBankRepair() then
+        -- What the guild can pay: today's withdrawal limit (-1 = no limit),
+        -- but never more than the guild bank holds.
         local gLimit = GetGuildBankWithdrawMoney and SafeNum(GetGuildBankWithdrawMoney()) or 0
-        if gLimit == -1 or gLimit >= cost then
+        local inBank = GetGuildBankMoney and SafeNum(GetGuildBankMoney()) or 0
+        local canPay = gLimit == -1 and inBank or math.min(gLimit, inBank)
+        if canPay >= cost then
           RepairAllItems(true)
           ns.Print("Repaired using guild bank funds: " .. FormatMoneyText(cost))
           return
@@ -355,7 +378,8 @@ local function ScanCharacterItems(includeBank)
   if not db.altItems then return end
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   db.altItems[realm] = db.altItems[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   local rec = db.altItems[realm][ns.me] or { bags = {}, bank = {} }
   rec.classFile = cf
   rec.bags = {}
@@ -395,7 +419,11 @@ local function AppendItemTooltip(tt, itemLinkOrID)
   local itemID = type(itemLinkOrID) == "number" and itemLinkOrID or (SafeStr(itemLinkOrID) and tonumber(itemLinkOrID:match("item:(%d+)")))
   if not itemID then return end
 
-  local _, _, _, _, _, _, _, maxStack, _, _, sellPrice = GetItemInfo and GetItemInfo(itemID)
+  local maxStack, sellPrice
+  if GetItemInfo then
+    local info = { GetItemInfo(itemID) }
+    maxStack, sellPrice = info[8], info[11]
+  end
   maxStack = SafeNum(maxStack)
   sellPrice = SafeNum(sellPrice)
 
@@ -485,7 +513,7 @@ function ns.OpenWorldQoLSettings()
       end)
       AddToggle("Auto-Sell Grey Junk at Vendors (hold Shift to skip)", "autoSellGrey")
       AddToggle("Auto-Repair Gear at Vendors (hold Shift to skip)", "autoRepair")
-      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair")
+      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair", function() db.guildRepairChosen = true end)
       AddToggle("Item Tooltip Extras (Alt/Bank counts, Sell price, Stack)", "tooltipExtras")
 
       local note = Track(K.Font(qolWin, 11, C.muted))

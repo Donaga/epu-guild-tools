@@ -62,6 +62,15 @@ check('the messenger shows the newest message first', mt.index('sure, 10 min') <
 check('messages from the same person are grouped under one name', mt.count('|Hplayer:Tyler') <= 2)
 A.ex('EPUGuildMessenger.box:SetText("brb"); __log={}; EPUGuildMessenger.box.onEnter(EPUGuildMessenger.box)')
 check('you can reply from the messenger', 'brb' in A.ev('table.concat(__log,"\\n")'))
+A.ex('EPUGuildMessenger:Update(); EPUGuildMessenger.scroll:SetVerticalScroll(120)')
+A.ex('__fire("CHAT_MSG_WHISPER","still there?","Tyler Baker-Forever")'); tick(1)
+A.ex('EPUGuildMessenger:Update()')
+check('a new message does not pull you back while reading older ones', A.ev('EPUGuildMessenger.scroll:GetVerticalScroll()') == 120)
+A.ex('EPUGuildMessenger.scroll:SetVerticalScroll(0); EPUGuildMessenger:Update()')
+check('at the newest message, it keeps following', A.ev('EPUGuildMessenger.scroll:GetVerticalScroll()') == 0)
+A.ex('__opened=nil; ChatFrame_OpenChat=function(t) __opened=t end')
+A.ex('EPUGuildMessenger.box:SetText("/inv Tyler Baker"); __log={}; EPUGuildMessenger.box.onEnter(EPUGuildMessenger.box)')
+check('slash commands go to WoW chat, not posted as text', A.ev('#__log') == 0 and A.ev('__opened') == '/inv Tyler Baker')
 A.ex('__ns.MinimizeMessenger(true); __ns.ChatDB().chatSeenAt = time() - 5; __fire("CHAT_MSG_WHISPER","you there?","Tyler Baker-Forever")'); tick(1)
 check('minimized, it becomes a bubble with an unread count', not A.ev('EPUGuildMessenger:IsShown()') and A.ev('EPUGuildChatBubble:IsShown()') and A.ev('EPUGuildChatBubble.badge:IsShown()') and A.ev('EPUGuildChatBubble.badge.text:GetText()') == str(A.ev('__ns.ChatUnread()')))
 A.ex('EPUGuildChatBubble:GetScript("OnClick")(EPUGuildChatBubble,"LeftButton")'); tick(1)
@@ -328,5 +337,16 @@ check('no suggestions inside a word like an email', A.ev('EPUGuildMentionPop:IsS
 A.ex('__ns.GuildStore().profiles["Chris Baker"]={t=1,nick="Donny"}')
 check('your Call me name counts as a mention of you', A.ev('__ns.ChatMentions("thanks @Donny")') is True)
 __check_end = True
+
+# The Combat Log window is gone (its events were removed from the game in 2.4).
+# Settings saved by 0.29.x are cleared, and custom tabs keep their other sources.
+A.ex('''__ns.db.logWindows = {combat={enabled=true,fontSize=11}, xp={enabled=false}, combined=true, combinedCfg={x=0,y=120,w=380,h=280,active="combat",fontSize=11}}
+__ns.ChatOptions().customTabs = {{id="tc", label="Fights", sources={combat=true, guild=true}}}''')
+check('the combat log window cannot be turned on', not A.ev('__ns.IsLogWindowEnabled("combat")'))
+A.ex('__ns.ToggleLogWindow("combat", true)')
+check('old combat log settings are cleared', A.ev('__ns.db.logWindows.combat == nil and __ns.db.logWindows.combinedCfg.active == "system"'))
+check('a custom tab drops the combat source and keeps the rest',
+      A.ev('(function() local s=__ns.ChatOptions().customTabs[1].sources return s.combat==nil and s.guild==true end)()'))
+check('the logs command no longer has a combat window', 'sub == "combat"' not in open(os.path.join(ADDON, "Core.lua"), encoding="utf-8").read())
 print('Chat tests:', check.failed, 'failed')
 sys.exit(1 if check.failed else 0)

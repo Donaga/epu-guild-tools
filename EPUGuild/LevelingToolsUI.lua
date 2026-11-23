@@ -620,7 +620,9 @@ local function Render()
     end
 
     local nextSize = ({ [10] = 20, [20] = 40, [40] = 10 })[state.raidSize] or 10
-    local squads, poolCount = ns.BuildRaidSquads and ns.BuildRaidSquads(state.raidSize) or {}, 0
+    local squads, poolCount = {}, 0
+    if ns.BuildRaidSquads then squads, poolCount = ns.BuildRaidSquads(state.raidSize) end
+    squads, poolCount = squads or {}, poolCount or 0
     flow:Section(string.format("Squad Builder (%d-Man Teams · %d Guildmates Lv 58+)", state.raidSize, poolCount))
     flow:Card({
       title = "Team Size: " .. state.raidSize .. "-Player (" .. #squads .. " squad(s))",
