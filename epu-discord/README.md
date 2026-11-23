@@ -25,7 +25,7 @@ The bot reads the last day of the Discord channel linked to guild chat in game (
 
 ## Shared-folder volunteers and guild invitations (0.18)
 
-See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge.
+See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge, except on helpers marked `"officer": true`: then any officer running the helper carries Discord approvals and announcements while you're away (see [officer helpers](../docs/guild-invites.md#officer-helpers-any-officers-pc-can-carry-discord)).
 
 ## 0.10 identity and recovery changes
 

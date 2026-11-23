@@ -457,6 +457,68 @@ def status_label(r: dict) -> str:
     return CRAFT_LABEL.get(st, st) if is_craft(r) else st
 
 
+GUILD_BANK = "Guild Bank"
+DUP_WINDOW = 3 * 3600
+_LOGGER_RE = re.compile(r"^(.*?):\d+:\d+$")
+
+
+def donation_logger(did) -> str:
+    """Who logged a donation: ids look like "Chris Baker:1700000000:3"."""
+    m = _LOGGER_RE.match(str(did))
+    return m.group(1) if m else str(did)
+
+
+def donation_clusters(donations: dict) -> list[tuple[list[str], list[str]]]:
+    """Group donation records that are one real gift: (all ids, ids to keep).
+
+    Two officers who open the guild bank close together each log the same
+    deposit before the other's record reaches them, under two ids. This
+    matches the addon's GuildBank.lua MarkDuplicateDonations: records to the
+    guild bank with the same who/item/count/gold, each within 3 hours of the
+    next, are one run; the logger who recorded the most of them is kept (ties:
+    the lowest name), so real identical deposits logged by one officer stay.
+    Voided records and mail or trade gifts (logged by one bank alt) stand alone.
+    """
+    groups: dict[tuple, list] = {}
+    out = []
+    for did, d in donations.items():
+        if not isinstance(d, dict) or d.get("void"):
+            continue
+        if d.get("to") != GUILD_BANK:
+            out.append(([str(did)], [str(did)]))
+            continue
+        def num(v):
+            try:
+                return float(v or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        sig = (str(d.get("who")), str(d.get("item") or ""), num(d.get("n")), num(d.get("money")))
+        groups.setdefault(sig, []).append((num(d.get("t")), str(did), donation_logger(did)))
+    for rows in groups.values():
+        rows.sort(key=lambda r: (r[0], r[1]))
+        i = 0
+        while i < len(rows):
+            j = i
+            while j + 1 < len(rows) and rows[j + 1][0] - rows[j][0] <= DUP_WINDOW:
+                j += 1
+            run = rows[i:j + 1]
+            count: dict[str, int] = {}
+            for _, _, by in run:
+                count[by] = count.get(by, 0) + 1
+            keep = min(count, key=lambda by: (-count[by], by))
+            out.append(([r[1] for r in run], [r[1] for r in run if r[2] == keep]))
+            i = j + 1
+    return out
+
+
+def duplicate_donations(donations: dict) -> set[str]:
+    """Ids of guild bank deposits that another officer also logged."""
+    dups = set()
+    for ids, keep in donation_clusters(donations):
+        dups.update(set(ids) - set(keep))
+    return dups
+
+
 NEEDED_MATS_STALE = 30 * 86400   # the addon hides lists nobody has refreshed for 30 days
 
 
@@ -533,8 +595,11 @@ class GuildData:
 
     @property
     def donations(self) -> dict:
-        """Donation records, minus ones an officer voided as mistakes."""
-        return {k: d for k, d in (self.g.get("donations") or {}).items() if not (isinstance(d, dict) and d.get("void"))}
+        """Donation records, minus ones an officer voided as mistakes and second
+        copies of a guild bank deposit that two officers both logged."""
+        raw = self.g.get("donations") or {}
+        dups = duplicate_donations(raw)
+        return {k: d for k, d in raw.items() if not (isinstance(d, dict) and d.get("void")) and str(k) not in dups}
 
     @property
     def bank(self) -> dict:
@@ -639,8 +704,10 @@ class GuildData:
         return out
 
     def feed(self) -> list[dict]:
-        """Guild milestones, oldest first."""
-        rows = [{"id": k, **v} for k, v in (self.g.get("feed") or {}).items() if isinstance(v, dict)]
+        """Guild milestones, oldest first. A shout-out for a guild bank deposit
+        that two officers both logged is listed once."""
+        dups = {"don:" + d for d in duplicate_donations(self.g.get("donations") or {})}
+        rows = [{"id": k, **v} for k, v in (self.g.get("feed") or {}).items() if isinstance(v, dict) and str(k) not in dups]
         rows.sort(key=lambda e: e.get("t", 0))
         return rows
 
@@ -1092,14 +1159,23 @@ def diff(gd: GuildData, state: State) -> dict:
                 out["new_requests"].append((rid, r))
         elif posted.get("status") != st or (posted.get('signature') is not None and posted['signature']!=request_signature(gd,rid,r,state.data['inbox'])):
             out["changed_requests"].append((rid, r))
+    # One thank-you per real gift. A guild bank deposit two officers both
+    # logged arrives as two records, perhaps minutes apart (whichever officer's
+    # save reached the bot first), and which copy is kept can change once the
+    # other arrives, so count what's already been thanked per gift.
     seen = set(state.data.get("donations_seen", []))
     new_seen = []
-    for did, d in gd.donations.items():
-        if did in seen:
+    raw = {str(k): v for k, v in (gd.g.get("donations") or {}).items()}
+    for ids, keep in donation_clusters(raw):
+        fresh_ids = [i for i in ids if i not in seen]
+        if not fresh_ids:
             continue
-        new_seen.append(did)
-        if primed and isinstance(d, dict):
-            out["new_donations"].append(d)
+        thanked = len(ids) - len(fresh_ids)
+        allowance = max(0, len(keep) - thanked)
+        candidates = sorted((i for i in keep if i not in seen), key=lambda i: (raw[i].get("t") or 0, i))
+        new_seen.extend(fresh_ids)
+        if primed:
+            out["new_donations"].extend(raw[i] for i in candidates[:allowance])
     if new_seen:
         state.data["donations_seen"] = (state.data.get("donations_seen", []) + new_seen)[-2000:]
     # milestones: post each once; skip old ones (first run, or the bot was off for a while)

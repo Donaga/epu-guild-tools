@@ -1747,7 +1747,8 @@ Views.donations = {
   label = "Donations", icon = "Interface\\Icons\\INV_Misc_Gift_01",
   rows = function(g, q)
     local list = {}
-    for id, d in pairs(g.donations) do list[#list + 1] = { id = id, d = d } end
+    -- a guild bank deposit two officers both logged is listed once
+    for id, d in pairs(g.donations) do if not d.dup then list[#list + 1] = { id = id, d = d } end end
     table.sort(list, function(a, b) return (a.d.t or 0) > (b.d.t or 0) end)
     local out = {}
     for _, e in ipairs(list) do
@@ -1771,7 +1772,7 @@ Views.donations = {
   footer = function(g)
     local cutoff, counts = ns.Now() - 30 * 86400, {}
     for _, d in pairs(g.donations) do
-      if not d.void and (d.t or 0) > cutoff and d.who then
+      if ns.DonationCounts(d) and (d.t or 0) > cutoff and d.who then
         local p = ns.MainOf(d.who)
         counts[p] = (counts[p] or 0) + 1
       end
@@ -4054,7 +4055,7 @@ function UI:FillDetails()
     if not d then return UI:CloseDetails() end
     local name = d.item and ns.ItemName(d.item, true) or Money(d.money)
     det:Reset(d.item and ns.ItemIcon(d.item) or "Interface\\Icons\\INV_Misc_Coin_01", d.item and Quality(d.item) or 1,
-      name, Ago(d.t) .. (d.void and "  ·  voided" or ""))
+      name, Ago(d.t) .. (d.void and "  ·  voided" or "") .. (d.dup and "  ·  also logged by another officer" or ""))
     det:Text("From " .. ns.WhoLabel(d.who or "?"))
     det:Text("Received by " .. tostring(d.to) .. " on " .. date("%b %d %H:%M", d.t), C.muted)
     if d.item then det:Text("Quantity: " .. (d.n or 1), C.muted) end
