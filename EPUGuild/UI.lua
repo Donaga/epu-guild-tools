@@ -4152,7 +4152,7 @@ do
       news="Guild announcements and milestones.",
       projects="Guild crafting projects and who is working on which part.",
       invites="Invite requests for new members.",
-      membertools="Quest guides, catch-up help and your notifications.",
+      membertools="Quest guides, the zone guide, leveling and dungeon tools, gold tracking, catch-up and notifications.",
       onboarding="Your guild checklist for getting started.",
       settings="Notifications, map sharing and the minimap button.",
       sync="How up to date your guild data is and who has shared it.",
@@ -4236,7 +4236,7 @@ for _, group in ipairs(GROUPS) do
   end
   local groupDesc = ({Bank="Bank stock, item requests, needs, what to buy and donations.",
     Professions="Market prices, crafters and recipes.", Guild="News, crafting projects and invites.",
-    ["Member tools"]="Quest guides, catch-up help and your getting-started checklist."})[group.label]
+    ["Member tools"]="Quest guides, zone guide, leveling tools, gold tracking, catch-up and your getting-started checklist."})[group.label]
   button:SetScript("OnEnter", function(self)
     self.hovered=true; self:SetOn(self.on)
     if groupDesc then
