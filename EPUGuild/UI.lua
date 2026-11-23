@@ -2586,7 +2586,7 @@ Views.settings = {
       {key="infobars", title="Info bars", sub="Bars along the screen edges showing gold, XP, durability, friends and more (/epu bars).",
         icon="Interface\\Icons\\INV_Misc_Spyglass_02", available=function() return ns.OpenInfoBarsSettings~=nil end,
         onClick=function() ns.OpenInfoBarsSettings() end},
-      {key="qol", title="Travel, vendor and tooltips", sub="Map coordinates, waypoints, flight timer, auto-sell and repair, tooltip extras (/epu qol).",
+      {key="qol", title="Travel, vendor and tooltips", sub="Map coordinates, waypoints, flight timer, auto-sell and repair, needed mats sale warning, tooltip extras (/epu qol).",
         icon="Interface\\Icons\\Ability_Mount_RidingHorse", available=function() return ns.OpenWorldQoLSettings~=nil end,
         onClick=function() ns.OpenWorldQoLSettings() end},
       {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
