@@ -2,16 +2,16 @@
 local _, ns = ...
 
 local CATEGORIES = {
-  { id = "loot", label = "Loot & Quests", color = "|cff4ade80" },
-  { id = "vendor", label = "Vendor / Junk", color = "|cffffd100" },
-  { id = "repair", label = "Repairs", color = "|cffff6b6b" },
-  { id = "auction", label = "Auction House", color = "|cff4fc3f7" },
-  { id = "mail", label = "Mail / COD", color = "|cffc77dff" },
-  { id = "training", label = "Training & Riding", color = "|cffff9e64" },
-  { id = "flight", label = "Flight Paths", color = "|cff70b8ff" },
-  { id = "trade", label = "Player Trade", color = "|cfff2c14e" },
-  { id = "guildbank", label = "Guild Bank", color = "|cff8a9cff" },
-  { id = "other", label = "Other", color = "|cffaaaaaa" },
+  { id = "loot", label = "Loot & Quests", color = "|cff4ade80", rgb = { 0.29, 0.87, 0.50 } },
+  { id = "vendor", label = "Vendor / Junk", color = "|cffffd100", rgb = { 1.00, 0.82, 0.00 } },
+  { id = "repair", label = "Repairs", color = "|cffff6b6b", rgb = { 1.00, 0.42, 0.42 } },
+  { id = "auction", label = "Auction House", color = "|cff4fc3f7", rgb = { 0.31, 0.76, 0.97 } },
+  { id = "mail", label = "Mail / COD", color = "|cffc77dff", rgb = { 0.78, 0.49, 1.00 } },
+  { id = "training", label = "Training & Riding", color = "|cffff9e64", rgb = { 1.00, 0.62, 0.39 } },
+  { id = "flight", label = "Flight Paths", color = "|cff70b8ff", rgb = { 0.44, 0.72, 1.00 } },
+  { id = "trade", label = "Player Trade", color = "|cfff2c14e", rgb = { 0.95, 0.76, 0.31 } },
+  { id = "guildbank", label = "Guild Bank", color = "|cff8a9cff", rgb = { 0.54, 0.61, 1.00 } },
+  { id = "other", label = "Other", color = "|cffaaaaaa", rgb = { 0.67, 0.67, 0.67 } },
 }
 local CAT_MAP = {}
 for _, c in ipairs(CATEGORIES) do CAT_MAP[c.id] = c end
@@ -139,6 +139,7 @@ end
 local win
 local timeframe = "today"
 local scopeAll = true
+local graphMode = "both"
 
 local function CheckBudgetAlerts()
   local b = DB().budgets
@@ -221,12 +222,18 @@ function ns.OpenGoldTracker()
       end
 
       Row({
-        { "Session", 72, function() timeframe = "session" end, timeframe == "session" and "accent" or nil },
-        { "Today", 68, function() timeframe = "today" end, timeframe == "today" and "accent" or nil },
-        { "7 Days", 72, function() timeframe = "week" end, timeframe == "week" and "accent" or nil },
-        { "30 Days", 76, function() timeframe = "month" end, timeframe == "month" and "accent" or nil },
-        { "All", 54, function() timeframe = "all" end, timeframe == "all" and "accent" or nil },
-        { scopeAll and "All Alts" or "This Char", 92, function() scopeAll = not scopeAll end },
+        { "Session", 64, function() timeframe = "session" end, timeframe == "session" and "accent" or nil },
+        { "Today", 58, function() timeframe = "today" end, timeframe == "today" and "accent" or nil },
+        { "7 Days", 62, function() timeframe = "week" end, timeframe == "week" and "accent" or nil },
+        { "30 Days", 66, function() timeframe = "month" end, timeframe == "month" and "accent" or nil },
+        { "All", 44, function() timeframe = "all" end, timeframe == "all" and "accent" or nil },
+        { scopeAll and "All Alts" or "This Char", 82, function() scopeAll = not scopeAll end },
+        { "Graph: " .. graphMode, 84, function()
+          local modes = { "both", "bar", "pie", "off" }
+          local idx = 1
+          for i, m in ipairs(modes) do if m == graphMode then idx = i; break end end
+          graphMode = modes[(idx % #modes) + 1]
+        end },
       })
 
       local since = 0
@@ -242,6 +249,151 @@ function ns.OpenGoldTracker()
       sumText:SetText(string.format("Income: |cff4ade80%s|r    Spent: |cffff6b6b%s|r    Net: %s%s|r",
         FormatMoney(sum.income), FormatMoney(sum.expense), netCol, FormatMoney(sum.net)))
       y = y - 24
+
+      -- Pie / Donut Chart (Spending by Category)
+      if (graphMode == "both" or graphMode == "pie") and sum.expense > 0 then
+        local slices = {}
+        for _, cat in ipairs(CATEGORIES) do
+          local bucket = sum.byCat[cat.id]
+          if bucket and bucket.exp > 0 then
+            slices[#slices + 1] = { cat = cat, val = bucket.exp, pct = (bucket.exp / sum.expense) }
+          end
+        end
+        table.sort(slices, function(a, b) return a.val > b.val end)
+        if #slices > 0 then
+          Heading("Spending Pie Chart")
+          local pieBox = Track(CreateFrame("Frame", nil, child))
+          local pieH = math.max(126, #slices * 18 + 12)
+          pieBox:SetSize(480, pieH)
+          pieBox:SetPoint("TOPLEFT", 0, y)
+
+          local cx, cy, radius = 64, -math.floor(pieH / 2), 42
+          local SEGS = 90
+          local segIdx = 1
+          for _, sl in ipairs(slices) do
+            local count = math.max(1, math.floor(sl.pct * SEGS + 0.5))
+            local rgb = sl.cat.rgb or { 0.7, 0.7, 0.7 }
+            for _ = 1, count do
+              if segIdx <= SEGS then
+                local angle = ((segIdx - 1) / SEGS) * math.pi * 2
+                local tex = pieBox:CreateTexture(nil, "ARTWORK")
+                tex:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+                tex:SetVertexColor(rgb[1], rgb[2], rgb[3], 0.95)
+                tex:SetSize(5, 18)
+                local px = cx + math.cos(angle) * radius
+                local py = cy + math.sin(angle) * radius
+                tex:SetPoint("CENTER", pieBox, "TOPLEFT", px, py)
+                if tex.SetRotation then tex:SetRotation(angle + math.pi / 2) end
+                segIdx = segIdx + 1
+              end
+            end
+          end
+
+          local centerLbl = pieBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+          centerLbl:SetPoint("CENTER", pieBox, "TOPLEFT", cx, cy)
+          centerLbl:SetText(FormatMoney(sum.expense))
+
+          local ly = -6
+          for _, sl in ipairs(slices) do
+            local swatch = pieBox:CreateTexture(nil, "ARTWORK")
+            swatch:SetColorTexture(sl.cat.rgb[1], sl.cat.rgb[2], sl.cat.rgb[3], 1)
+            swatch:SetSize(10, 10)
+            swatch:SetPoint("TOPLEFT", 142, ly - 2)
+            local lbl = K.Font(pieBox, 11, C.text)
+            lbl:SetPoint("TOPLEFT", 158, ly)
+            lbl:SetText(string.format("%s%s|r: %s (%.0f%%)", sl.cat.color, sl.cat.label, FormatMoney(sl.val), sl.pct * 100))
+            ly = ly - 18
+          end
+          y = y - pieH - 6
+        end
+      end
+
+      -- Bar Graph (Category Spending + 7-Day Income vs Expense)
+      if graphMode == "both" or graphMode == "bar" then
+        local bars = {}
+        local maxBar = 1
+        for _, cat in ipairs(CATEGORIES) do
+          local bucket = sum.byCat[cat.id]
+          if bucket and bucket.exp > 0 then
+            bars[#bars + 1] = { cat = cat, val = bucket.exp }
+            if bucket.exp > maxBar then maxBar = bucket.exp end
+          end
+        end
+        table.sort(bars, function(a, b) return a.val > b.val end)
+        if #bars > 0 then
+          Heading("Spending Bar Graph")
+          local barBox = Track(CreateFrame("Frame", nil, child))
+          local bh = #bars * 20 + 6
+          barBox:SetSize(480, bh)
+          barBox:SetPoint("TOPLEFT", 0, y)
+          local by = -2
+          for _, br in ipairs(bars) do
+            local lbl = K.Font(barBox, 11, C.text)
+            lbl:SetPoint("TOPLEFT", 0, by)
+            lbl:SetText(br.cat.color .. br.cat.label .. "|r")
+
+            local bgBar = barBox:CreateTexture(nil, "BACKGROUND")
+            bgBar:SetColorTexture(0.14, 0.16, 0.20, 0.9)
+            bgBar:SetSize(220, 12)
+            bgBar:SetPoint("TOPLEFT", 130, by - 1)
+
+            local fillW = math.max(3, math.floor((br.val / maxBar) * 220))
+            local fill = barBox:CreateTexture(nil, "ARTWORK")
+            fill:SetColorTexture(br.cat.rgb[1], br.cat.rgb[2], br.cat.rgb[3], 0.95)
+            fill:SetSize(fillW, 12)
+            fill:SetPoint("TOPLEFT", 130, by - 1)
+
+            local valLbl = K.Font(barBox, 11, C.white)
+            valLbl:SetPoint("TOPLEFT", 358, by)
+            valLbl:SetText(FormatMoney(br.val))
+            by = by - 20
+          end
+          y = y - bh - 6
+        end
+
+        -- 7-Day Income vs Expense Trend Bars
+        local dayTotals = {}
+        local maxDay = 1
+        local now = time()
+        for dOff = 6, 0, -1 do
+          local d = date("*t", now - dOff * 86400)
+          d.hour, d.min, d.sec = 0, 0, 0
+          local ds = time(d)
+          local de = ds + 86400
+          local inc, exp = 0, 0
+          for _, e in ipairs(db.entries) do
+            if (e.t or 0) >= ds and (e.t or 0) < de and (scopeAll or e.who == ns.me) then
+              if (e.delta or 0) >= 0 then inc = inc + e.delta else exp = exp + (-e.delta) end
+            end
+          end
+          maxDay = math.max(maxDay, inc, exp)
+          dayTotals[#dayTotals + 1] = { label = date("%a", ds), inc = inc, exp = exp }
+        end
+        Heading("7-Day Trend (Green = In, Red = Out)")
+        local trendBox = Track(CreateFrame("Frame", nil, child))
+        trendBox:SetSize(480, 96)
+        trendBox:SetPoint("TOPLEFT", 0, y)
+        local tBg = trendBox:CreateTexture(nil, "BACKGROUND")
+        tBg:SetColorTexture(0.10, 0.12, 0.16, 0.85)
+        tBg:SetAllPoints()
+        for i, dt in ipairs(dayTotals) do
+          local gx = 18 + (i - 1) * 66
+          local incH = dt.inc > 0 and math.max(3, math.floor((dt.inc / maxDay) * 64)) or 2
+          local expH = dt.exp > 0 and math.max(3, math.floor((dt.exp / maxDay) * 64)) or 2
+          local incBar = trendBox:CreateTexture(nil, "ARTWORK")
+          incBar:SetColorTexture(0.29, 0.87, 0.50, dt.inc > 0 and 0.95 or 0.2)
+          incBar:SetSize(16, incH)
+          incBar:SetPoint("BOTTOMLEFT", trendBox, "BOTTOMLEFT", gx, 22)
+          local expBar = trendBox:CreateTexture(nil, "ARTWORK")
+          expBar:SetColorTexture(1.00, 0.42, 0.42, dt.exp > 0 and 0.95 or 0.2)
+          expBar:SetSize(16, expH)
+          expBar:SetPoint("BOTTOMLEFT", trendBox, "BOTTOMLEFT", gx + 19, 22)
+          local dLbl = K.Font(trendBox, 10, C.muted)
+          dLbl:SetPoint("BOTTOM", trendBox, "BOTTOMLEFT", gx + 17, 5)
+          dLbl:SetText(dt.label)
+        end
+        y = y - 104
+      end
 
       Heading("Spending Budget")
       Row({
