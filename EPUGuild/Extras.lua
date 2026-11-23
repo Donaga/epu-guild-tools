@@ -1,5 +1,5 @@
 -- EPU Guild Tools: help outside the main window.
---   * item tooltips show what the guild bank needs / holds
+--   * item tooltips show what the guild bank needs / holds, and which guildmates need it (needed mats)
 --   * a gold marker on items in your bags that the bank needs
 --   * a "Donate" panel at the mailbox: pick items and amounts, then Fill mail
 --   * pop-up notices when your request changes (and new requests for officers)
@@ -110,6 +110,7 @@ local function TooltipLines(tt, id)
       added = true
     end
   end
+  if ns.NeededMatsTooltip and ns.NeededMatsTooltip(tt, id) then added = true end
   if CraftLines(tt, id) then added = true end
   if added then tt:Show() end
 end

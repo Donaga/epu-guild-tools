@@ -23,6 +23,8 @@ local memberTools={
     icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
     icon="Interface\\Icons\\INV_Misc_Coin_02", open=function() ns.ShowGatheringMarket() end},
+  {key="mats", title="Needed mats", hint="List the materials you need; guildmates see it on the item's tooltip before they vendor it.",
+    icon="Interface\\Icons\\INV_Fabric_Linen_01", open=function() ns.ShowNeededMats() end},
 }
 local toolActions={guides="Settings",quests="Sharing",catchup="Review",notifications="Settings"}
 local dungeonGroups={

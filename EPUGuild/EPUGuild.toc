@@ -44,6 +44,7 @@ GoldTracker.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua
+NeededMats.lua
 QuestMatching.lua
 Sync.lua
 Bank.lua
@@ -54,6 +55,7 @@ BankCatalog.lua
 Discord.lua
 Inbox.lua
 UI.lua
+NeededMatsUI.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua
