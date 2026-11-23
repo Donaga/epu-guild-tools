@@ -1048,7 +1048,7 @@ ns.On("PLAYER_LOGIN", function()
 end)
 
 -- Guild chat from the guild's linked Discord channel. The EPU Discord bot
--- writes the last day of it into Inbox.lua (EPUGuildDiscordChat); at login
+-- writes the last day of it into its inbox (ns.InboxChat); at login
 -- EPU adds the lines it missed while you were offline. Discord shows the
 -- person, not the character, so a line names their main (or their Discord
 -- name) and lists their linked characters in `chars` for matching.
@@ -1067,7 +1067,7 @@ local function DiscordGuildOk(g)
   return type(g) == "string" and key ~= nil and (key == g or key:sub(1, #g + 3) == g .. " - ")
 end
 function ns.MergeDiscordChat(list)
-  list = list or EPUGuildDiscordChat
+  list = list or (ns.InboxChat and ns.InboxChat()) or EPUGuildDiscordChat
   if type(list) ~= "table" or not ns.ChatKeep("guild") then return 0 end
   local c = ChatDB()
   if not c then return 0 end

@@ -164,7 +164,24 @@ def read_latest(force=False) -> core.GuildData | None:
     return combined
 
 
+inbox_where=''
+
+
+def adopt_legacy_inbox():
+    """Once: carry anything left in the old EPUGuild\\Inbox.lua into the queue."""
+    if not core.addon_reads_inbox_addon(cfg["wow_path"]) or state.data.get("legacy_inbox_adopted"):
+        return
+    try:
+        n=state.adopt_legacy_inbox(core.read_legacy_inbox(cfg["wow_path"]))
+    except (OSError,ValueError,KeyError,TypeError):
+        log.exception("Couldn't read the old Inbox.lua; it's left in place and EPU still reads it.")
+        return
+    if n:
+        log.info("Moved %d queued update(s) from the old Inbox.lua into EPUGuild_Inbox.",n)
+
+
 def flush_inbox():
+    global inbox_where
     try:
         bridge.reconcile_helper_acks(cfg,state)
         bridge.publish(cfg,state)
@@ -182,9 +199,20 @@ def flush_inbox():
         entries=[e for e in entries if e.get('kind') not in unsupported]
         entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
         chat=core.ingame_chat_list(ingame_chat) if ingame_chat_id else None
-        core.write_inbox(core.inbox_path(cfg["wow_path"]), entries, chat)
+        # The old EPUGuild\Inbox.lua is emptied once EPU says it loaded EPUGuild_Inbox.
+        seen=latest.db.get('inboxDropSeen') if latest else 0
+        where=core.write_inbox_files(cfg["wow_path"], entries, chat, seen_at=seen if isinstance(seen,(int,float)) else 0)
+        if where!=inbox_where:
+            if where=='addon':
+                log.info("Discord updates go to %s, which EPU updates never replace.",core.inbox_drop_path(cfg["wow_path"]))
+            elif where=='denied':
+                log.warning("Windows won't let me make %s, so Discord updates still go to Inbox.lua inside EPUGuild, "
+                            "where an addon update can replace them until I rewrite it. See README (Folder permissions).",core.inbox_addon_dir(cfg["wow_path"]))
+            elif where=='legacy':
+                log.info("The installed EPU is older and reads Inbox.lua inside EPUGuild. Update EPU so Discord updates are kept where addon updates can't replace them.")
+            inbox_where=where
     except (OSError,ValueError,KeyError,TypeError) as e:
-        log.error("Couldn't write Inbox.lua (%s). Check folder permissions; see README.", e)
+        log.error("Couldn't write the Discord inbox (%s). Check folder permissions; see README.", e)
 
 
 def is_officer(member) -> bool:
@@ -1905,7 +1933,7 @@ async def on_ready():
     await tree.sync(guild=GUILD)
     path = sv_path()
     log.info("Logged in as %s. Watching %s", client.user, path or "(no EPUGuild SavedVariables yet - log in once with the addon)")
-    queue_helper_whitelist();flush_inbox()
+    adopt_legacy_inbox();queue_helper_whitelist();flush_inbox()
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
     await ensure_help_post()

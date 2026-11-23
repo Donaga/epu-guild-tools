@@ -13,7 +13,7 @@ The list comes from the officer's last save, like the status post, so it's as fr
 
 ## Guild chat history for EPU (0.28)
 
-The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into Inbox.lua. At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
+The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into the Discord inbox (see below). At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
 
 ## Linking and class/rank roles (0.23)
 
@@ -33,7 +33,7 @@ Upgrade this companion together with the addon. Old, unverified Discord links ar
 
 Approval also queues the Discord onboarding checklist step for the next officer login/reload. Existing guild role checks still protect approvals. The companion records link approvals in its local audit and writes a previous-state recovery copy at `state.json.bak` before replacing state. Back up state.json and config.json with the companion stopped; the recovery copy can contain guild information and should stay on the officer PC.
 
-The bot periodically restores Inbox.lua if an addon manager replaced it, and defers writes during an EPU updater install. Discord changes remain queued until the game imports them on login/reload. Partial-delivery counts are shown on request messages and reduce the outstanding shopping quantity.
+The bot keeps the Discord inbox in a small addon of its own, `Interface\AddOns\EPUGuild_Inbox` (it shows in the AddOns list as **EPU Guild Tools: Discord inbox**). No EPU download contains that folder, so updating EPU through CurseForge, WowUp, the EPU updater or a folder copy can't replace what's queued there. It's created the first time the bot runs with this version of EPU installed; WoW only notices a new addon folder when the game starts, so restart the game once afterwards (a /reload isn't enough), and keep it enabled. Until EPU has loaded it, the bot also writes the same updates into the old `EPUGuild\Inbox.lua`, which EPU applies once by id; after that the old file is left empty. Anything that was only in the old file is moved into the bot's queue the first time it starts. With an older EPU installed, the bot writes only the old file, as before. Discord changes remain queued until the game imports them on login/reload. Partial-delivery counts are shown on request messages and reduce the outstanding shopping quantity.
 
 Connects the **EPU Guild Tools** addon to a Discord channel.
 
@@ -51,7 +51,7 @@ WoW addons can't use the internet, so this program runs on **your PC**, next to 
 | Direction | File | When it updates |
 |---|---|---|
 | Game → Discord | `WTF\Account\<you>\SavedVariables\EPUGuild.lua` | WoW only writes this on **/reload** or logout. `/epu save` does a reload. |
-| Discord → game | `Interface\AddOns\EPUGuild\Inbox.lua` | WoW only reads this at **login** or **/reload**. |
+| Discord → game | `Interface\AddOns\EPUGuild_Inbox\Inbox.lua` | WoW only reads this at **login** or **/reload**. |
 
 So it isn't instant. A Discord request shows up in game the next time you /reload or log in. A request made in game shows up in Discord the next time you /reload or log out. Typing `/epu save` before you log off for the night pushes everything at once.
 
@@ -106,7 +106,18 @@ Double-click **start.bat**. The first run creates a private Python environment a
 
 Leave the window open while you play. It should say `Logged in as ... Watching ...EPUGuild.lua`.
 
-If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program Files`. Right-click `...\_forever_\Interface\AddOns\EPUGuild` → **Properties → Security → Edit**, select **Users**, and tick **Modify**. Or run start.bat once as administrator.
+### Folder permissions
+If it says it can't write the Discord inbox, or that Windows won't let it make **EPUGuild_Inbox**, Windows is blocking writes to `Program Files`. Make the folder once and let your Windows user change it. Open **PowerShell as administrator** (Start, type PowerShell, right-click it, **Run as administrator**) and run:
+
+```
+cd "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns"
+New-Item -ItemType Directory -Force EPUGuild_Inbox
+icacls EPUGuild_Inbox /grant "Users:(OI)(CI)M"
+```
+
+Change the first line if WoW is installed somewhere else. Then restart the bot, and restart the game once so WoW finds the new folder. Until then the bot keeps using the old `EPUGuild\Inbox.lua`, as before.
+
+Never copy an EPU folder over this one, and don't delete it while requests are waiting.
 
 ## Using it
 Sold-out weapons and armor are excluded from `/bank` and `/request`; other
