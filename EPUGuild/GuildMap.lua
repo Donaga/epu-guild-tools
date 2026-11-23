@@ -1401,6 +1401,12 @@ end
 
 local function Send(key, text)
   if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
+  -- A slash command (/inv, /dance, /epu) goes to WoW's own chat box instead
+  -- of being posted as text; pressing Enter there runs it as usual.
+  if text:match("^%s*/") then
+    if ChatFrame_OpenChat then ChatFrame_OpenChat((text:gsub("^%s+", ""))) end
+    return true
+  end
   text = text:sub(1, 255)
   if CHANNELS[key] and CHANNELS[key].channelBase then
     local cid = ResolvePublicChannelID(CHANNELS[key].channelBase)
