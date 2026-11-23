@@ -140,18 +140,19 @@ local function AddResizeGrip(f, saveFn)
   grip:SetScript("OnMouseDown", function() f:StartSizing("BOTTOMRIGHT") end)
   grip:SetScript("OnMouseUp", function()
     f:StopMovingOrSizing()
+    if f.SetUserPlaced then f:SetUserPlaced(false) end
     if saveFn then saveFn(f) end
   end)
   return grip
 end
 
 -- Build a MEDIUM-strata, non-UISpecialFrames window so Esc won't close it and bags/panels stay on top.
-local function CreateFloatingLogFrame(name, title, w, h, x, y, onClose, onSave)
+local function CreateFloatingLogFrame(name, title, w, h, x, y, onClose, onSave, point, relPoint)
   local C = ns.InterfaceColors
   local f = CreateFrame("Frame", name, UIParent)
   f:SetSize(w, h)
   f:ClearAllPoints()
-  f:SetPoint("CENTER", UIParent, "CENTER", x, y)
+  f:SetPoint(point or "CENTER", UIParent, relPoint or "CENTER", x, y)
   f:SetFrameStrata("MEDIUM")
   f:SetClampedToScreen(true)
   f:EnableMouse(true)
@@ -182,6 +183,7 @@ local function CreateFloatingLogFrame(name, title, w, h, x, y, onClose, onSave)
   f:SetScript("OnDragStart", f.StartMoving)
   f:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
+    if self.SetUserPlaced then self:SetUserPlaced(false) end
     if onSave then onSave(self) end
   end)
 
@@ -199,7 +201,9 @@ end
 
 local function SaveFrameGeom(f, tbl)
   if not f or not tbl then return end
-  local _, _, _, x, y = f:GetPoint()
+  local p, _, rp, x, y = f:GetPoint()
+  tbl.point = p or "CENTER"
+  tbl.relPoint = rp or "CENTER"
   tbl.x = math.floor((x or 0) + 0.5)
   tbl.y = math.floor((y or 0) + 0.5)
   tbl.w = math.floor((f:GetWidth() or 340) + 0.5)
@@ -226,7 +230,9 @@ local function EnsureWindow(kind)
     end,
     function(self)
       SaveFrameGeom(self, DB()[kind])
-    end
+    end,
+    cfg.point,
+    cfg.relPoint
   )
 
   local clr = ns.InterfaceButton(f, "Clear", 44, 20)
@@ -299,7 +305,9 @@ local function EnsureCombinedWindow()
     end,
     function(self)
       SaveFrameGeom(self, DB().combinedCfg)
-    end
+    end,
+    cfg.point,
+    cfg.relPoint
   )
 
   local clr = ns.InterfaceButton(f, "Clear", 44, 20)
