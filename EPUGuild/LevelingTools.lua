@@ -183,27 +183,23 @@ end
 function ns.CheckGuildStockAndCrafters(itemName, itemID)
   local bankQty, crafters = 0, {}
   local g = ns.G and ns.G()
-  if g and g.bank then
+  -- Bank snapshots keep a plain count per item: g.bank[alt].items[id] = n.
+  if g and g.bank and itemID then
     for _, b in pairs(g.bank) do
-      if b.items and itemID and b.items[itemID] then
-        bankQty = bankQty + (b.items[itemID].qty or 0)
+      if type(b) == "table" and type(b.items) == "table" then
+        bankQty = bankQty + (tonumber(b.items[itemID]) or 0)
       end
     end
   end
-  if g and g.guildBank and g.guildBank.items and itemID and g.guildBank.items[itemID] then
-    bankQty = bankQty + (g.guildBank.items[itemID].qty or 0)
-  end
-  local needle = (itemName or ""):lower()
-  if g and g.recipes and needle ~= "" then
-    for who, rlist in pairs(g.recipes) do
-      for _, rec in ipairs(rlist) do
-        local rname = type(rec) == "table" and rec.name or tostring(rec)
-        if rname:lower():find(needle, 1, true) then
-          local online = ns.roster and ns.roster[who] and ns.roster[who].online
-          crafters[#crafters + 1] = { name = who, online = online and true or false }
-          break
-        end
-      end
+  -- Crafters come from the shared recipe index (Data.lua), by item, then by name.
+  local entry = itemID and ns.RecipeFor and ns.RecipeFor("item:" .. itemID)
+  if not entry and itemName and itemName ~= "" and ns.RecipeByName then entry = ns.RecipeByName(itemName) end
+  local seen = {}
+  for _, c in ipairs(entry and entry.crafters or {}) do
+    if not seen[c.who] then
+      seen[c.who] = true
+      local online = ns.roster and ns.roster[c.who] and ns.roster[c.who].online
+      crafters[#crafters + 1] = { name = c.who, online = online and true or false }
     end
   end
   table.sort(crafters, function(a, b)

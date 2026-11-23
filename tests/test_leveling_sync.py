@@ -76,5 +76,8 @@ check('guild stats read profile roles', A.ev('(function() %s return s.roles.tank
 A.ex('__ns.roster["Tyler Baker"].level=60')
 check('raid roster takes the role from the profile', A.ev('(function() for _,r in ipairs((__ns.GetRaidRosterReport())) do if r.name=="Tyler Baker" then return r.role end end end)()') == 'Tank')
 
+# Leveling advisor: guild bank stock and crafters don't break the window.
+A.ex('__ns.G().bank["Epu Bank"]={v=1,items={[929]=7}}')
+check('guild stock counts bank snapshots', A.ev('(__ns.CheckGuildStockAndCrafters("Healing Potion", 929))') == 7)
 print('Leveling sync checks:', check.failed, 'failed')
 sys.exit(bool(check.failed))
