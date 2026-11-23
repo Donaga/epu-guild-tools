@@ -51,6 +51,7 @@ GoldTracker.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua
+NeededMats.lua
 QuestMatching.lua
 Sync.lua
 Bank.lua

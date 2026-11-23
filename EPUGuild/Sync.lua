@@ -55,7 +55,7 @@ local function FieldDigests(g)
     local confirmed={}
     for k,v in pairs(g[field] or {}) do if not U(g,wire,k) then confirmed[k]=DigestView(wire,v) end end
     -- The optional invite bridge adds no hello traffic when it has no records.
-    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus' and wire~='gatherSpots' and wire~='discordClaims' and wire~='runRequests' and wire~='runInterest') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
+    if (wire~='inviteRequests' and wire~='syncHelpers' and wire~='inviteOutcomes' and wire~='guildFocus' and wire~='gatherSpots' and wire~='neededMats' and wire~='discordClaims' and wire~='runRequests' and wire~='runInterest') or next(confirmed) then out[wire]=ns.Fingerprint(confirmed) end
   end
   return out
 end
@@ -130,7 +130,7 @@ local GROUPS = {
   { "needs", "policy", "bank" },
   { "req", "don" },
   { "news", "feed" },
-  { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps", "guildFocus", "gatherSpots", "discordClaims" },
+  { "craft", "alts", "altVerified", "profiles", "joined", "projects", "onboarding", "onboardingSteps", "guildFocus", "gatherSpots", "neededMats", "discordClaims" },
   { "activityPosts", "activityReplies", "helpers", "kitTemplates", "guildEvents", "eventResponses", "syncHelpers" },
   { "runRequests", "runInterest" },
 }
@@ -341,7 +341,7 @@ local LABELS = {
   { "projects", "projects" }, { "onboarding", "checklist updates" }, { "onboardingSteps", "checklist instructions" },
   { "altVerified", "character confirmations" },
   { "needs", "needs" }, { "bank", "bank snapshots" }, { "req", "requests" }, { "don", "donations" },
-  { "news", "announcements" }, { "feed", "milestones" }, { "craft", "crafters" }, { "recipes", "recipe lists" },
+  { "news", "announcements" }, { "feed", "milestones" }, { "craft", "crafters" }, { "neededMats", "needed mats lists" }, { "recipes", "recipe lists" },
   { "profiles", "profiles" }, { "alts", "alt groups" }, { "joined", "join dates" }, { "policy", "settings" },
 }
 
