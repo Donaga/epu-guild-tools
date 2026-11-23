@@ -23,6 +23,7 @@ local function MakeTex(parent, layer, c, a)
 end
 
 local function MakeEdges(frame, c)
+  local edges = {}
   for _, spec in ipairs({
     { "TOPLEFT", "TOPRIGHT", "height", 1 },
     { "BOTTOMLEFT", "BOTTOMRIGHT", "height", 1 },
@@ -32,8 +33,12 @@ local function MakeEdges(frame, c)
     local t = MakeTex(frame, "BORDER", c, 1)
     t:SetPoint(spec[1]); t:SetPoint(spec[2])
     if spec[3] == "height" then t:SetHeight(spec[4]) else t:SetWidth(spec[4]) end
+    edges[#edges + 1] = t
   end
+  return edges
 end
+
+local function Paint(t, c, a) t:SetColorTexture(c[1], c[2], c[3], a or 1) end
 
 local function FactionColor(faction)
   local C = Colors()
@@ -58,21 +63,14 @@ local function FactionAllowed(itemFaction, playerFaction)
   return itemFaction == playerFaction
 end
 
--- Simple vertical flow builder for the scrollable content child.
+-- Simple vertical flow builder for the scrollable content child. Widgets come
+-- from a pool, so redrawing the guide reuses the last draw's widgets instead of
+-- making new ones each time (the game never frees them).
 local function NewFlow(child, width)
-  local flow = { child = child, width = width, y = -8, widgets = {} }
-
-  local function Track(w)
-    flow.widgets[#flow.widgets + 1] = w
-    return w
-  end
+  local flow = { child = child, width = width, y = -8, pool = ns.NewWidgetPool(child) }
 
   function flow:Clear()
-    for _, w in ipairs(self.widgets) do
-      w:Hide()
-      w:SetParent(nil)
-    end
-    self.widgets = {}
+    self.pool:ReleaseAll()
     self.y = -8
   end
 
@@ -83,12 +81,12 @@ local function NewFlow(child, width)
   function flow:Section(title)
     local C = Colors()
     self:Space(6)
-    local h = Track(Font(self.child, 13, C.gold))
+    local h = self.pool:Font(13, C.gold, "section")
     h:SetPoint("TOPLEFT", 10, self.y)
     h:SetWidth(self.width - 24)
-    h:SetJustifyH("LEFT")
     h:SetText(title)
-    local rule = Track(MakeTex(self.child, "BORDER", C.line, 1))
+    local rule = self.pool:Texture("BORDER", "rule")
+    Paint(rule, C.line)
     rule:SetPoint("TOPLEFT", 10, self.y - 18)
     rule:SetSize(self.width - 24, 1)
     self.y = self.y - 26
@@ -96,10 +94,9 @@ local function NewFlow(child, width)
 
   function flow:Paragraph(text, color)
     local C = Colors()
-    local fs = Track(Font(self.child, 12, color or C.text))
+    local fs = self.pool:Font(12, color or C.text, "paragraph")
     fs:SetPoint("TOPLEFT", 12, self.y)
     fs:SetWidth(self.width - 28)
-    fs:SetJustifyH("LEFT")
     fs:SetWordWrap(true)
     fs:SetText(text)
     local h = math.max(16, fs:GetStringHeight() or 16)
@@ -108,18 +105,22 @@ local function NewFlow(child, width)
 
   function flow:Card(opts)
     local C = Colors()
-    local card = Track(CreateFrame("Frame", nil, self.child))
+    local card, inner = self.pool:Frame("card", function(f)
+      f.bg = MakeTex(f, "BACKGROUND", C.panel, 1)
+      f.bg:SetAllPoints()
+      f.edges = MakeEdges(f, C.line)
+    end)
     card:SetPoint("TOPLEFT", 10, self.y)
     card:SetWidth(self.width - 24)
-    MakeTex(card, "BACKGROUND", C.panel, 1):SetAllPoints()
-    MakeEdges(card, C.line)
+    Paint(card.bg, C.panel)
+    for _, e in ipairs(card.edges) do Paint(e, C.line) end
 
     local padX, curY = 10, -8
     local rightOffset = 10
 
     if opts.coords and opts.coords[1] and opts.coords[2] then
       local cx, cy = opts.coords[1], opts.coords[2]
-      local wp = Track(Btn(card, string.format("%.1f, %.1f", cx, cy), 82, 22))
+      local wp = inner:Button(string.format("%.1f, %.1f", cx, cy), 82, 22)
       wp:SetPoint("TOPRIGHT", -8, -7)
       wp.tip = "Click to set a map waypoint here"
       local mapID, label = opts.mapID, opts.waypointLabel or opts.title
@@ -127,35 +128,20 @@ local function NewFlow(child, width)
       rightOffset = 98
     end
 
-    local title = Track(Font(card, 12, opts.titleColor or C.white))
-    title:SetPoint("TOPLEFT", padX, curY)
-    title:SetWidth(self.width - 24 - padX - rightOffset)
-    title:SetJustifyH("LEFT")
-    title:SetWordWrap(true)
-    title:SetText(opts.title or "")
-    local th = math.max(15, title:GetStringHeight() or 15)
-    curY = curY - th - 2
-
-    if opts.sub and opts.sub ~= "" then
-      local sub = Track(Font(card, 11, opts.subColor or C.muted))
-      sub:SetPoint("TOPLEFT", padX, curY)
-      sub:SetWidth(self.width - 24 - padX - rightOffset)
-      sub:SetJustifyH("LEFT")
-      sub:SetWordWrap(true)
-      sub:SetText(opts.sub)
-      local sh = math.max(14, sub:GetStringHeight() or 14)
-      curY = curY - sh - 2
+    local function Line(size, color, tag, text, w, minH)
+      local fs = inner:Font(size, color, tag)
+      fs:SetPoint("TOPLEFT", padX, curY)
+      fs:SetWidth(w)
+      fs:SetWordWrap(true)
+      fs:SetText(text)
+      curY = curY - math.max(minH, fs:GetStringHeight() or minH) - 2
     end
-
+    Line(12, opts.titleColor or C.white, "title", opts.title or "", self.width - 24 - padX - rightOffset, 15)
+    if opts.sub and opts.sub ~= "" then
+      Line(11, opts.subColor or C.muted, "sub", opts.sub, self.width - 24 - padX - rightOffset, 14)
+    end
     if opts.note and opts.note ~= "" then
-      local note = Track(Font(card, 11, opts.noteColor or C.text))
-      note:SetPoint("TOPLEFT", padX, curY)
-      note:SetWidth(self.width - 44)
-      note:SetJustifyH("LEFT")
-      note:SetWordWrap(true)
-      note:SetText(opts.note)
-      local nh = math.max(14, note:GetStringHeight() or 14)
-      curY = curY - nh - 2
+      Line(11, opts.noteColor or C.text, "note", opts.note, self.width - 44, 14)
     end
 
     local totalH = math.max(36, -curY + 6)

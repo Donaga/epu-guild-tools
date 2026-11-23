@@ -2766,17 +2766,16 @@ function ns.OpenPopoutChatSettings()
     end)
     popOptsWin.scroll = scroll
     popOptsWin.child = child
-    popOptsWin.widgets = {}
+    popOptsWin.pool = ns.NewWidgetPool(child)
 
     function popOptsWin:Refresh()
       local curScroll = self.scroll:GetVerticalScroll() or 0
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
 
       local o = Opt()
       local c = ChatDB()
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function SyncUI()
         for _, w in pairs(Windows) do
@@ -2792,14 +2791,14 @@ function ns.OpenPopoutChatSettings()
       end
       local function Heading(text)
         y = y - 6
-        local h = Track(ns.InterfaceFont(self.child, 12, C2.gold))
+        local h = pool:Font(12, C2.gold)
         h:SetPoint("TOPLEFT", 4, y); h:SetText(text)
         y = y - 20
       end
       local function Row(btns)
         local x = 4
         for _, spec in ipairs(btns) do
-          local b = Track(ns.InterfaceButton(self.child, spec[1], spec[2] or 180, 22))
+          local b = pool:Button(spec[1], spec[2] or 180, 22)
           b:SetPoint("TOPLEFT", x, y)
           b:SetScript("OnClick", spec[3])
           x = x + (spec[2] or 180) + 6
@@ -2914,9 +2913,9 @@ function ns.OpenPopoutChatSettings()
         { ChatColor("mention") .. "Color|r", 64, function() ns.PickChatColor("mention") end },
         { Check(o.mentionGame, "In game chat too"), 154, function() o.mentionGame = not o.mentionGame; SyncUI() end },
       })
-      local wordBox = Track(ns.InterfaceInput(self.child, 230, "Add mention word..."))
+      local wordBox = pool:Input(230, "Add mention word...", "word")
       wordBox:SetPoint("TOPLEFT", 4, y)
-      local addWordBtn = Track(ns.InterfaceButton(self.child, "+ Add Word", 110, 22))
+      local addWordBtn = pool:Button("+ Add Word", 110, 22)
       addWordBtn:SetPoint("LEFT", wordBox, "RIGHT", 6, 0)
       addWordBtn:SetScript("OnClick", function()
         local w = (wordBox:GetText() or ""):lower():match("^%s*(.-)%s*$")
@@ -2957,9 +2956,9 @@ function ns.OpenPopoutChatSettings()
       end
 
       Heading("Custom Pop-out Tabs")
-      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Loot, City)..."))
+      local nameBox = pool:Input(230, "New tab name (e.g. Loot, City)...", "tabname")
       nameBox:SetPoint("TOPLEFT", 4, y)
-      local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
+      local addBtn = pool:Button("+ Add Tab", 110, 22)
       addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
       addBtn:SetScript("OnClick", function()
         local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
@@ -2997,21 +2996,20 @@ function ns.OpenPopoutChatSettings()
             t:SetPoint(side[1]); t:SetPoint(side[2])
             if side[3] then t:SetHeight(1) else t:SetWidth(1) end
           end
-          dd.items = {}
+          dd.pool = ns.NewWidgetPool(dd)
           dd.catcher = catcher
           popOptsWin.multiDrop = dd
         end
         local dd = popOptsWin.multiDrop
         if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); dd.catcher:Hide(); return end
         dd.tabId = ct.id
-        for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
-        dd.items = {}
+        dd.pool:ReleaseAll()
         local dy = -6
         for _, src in ipairs(STREAM_SOURCES) do
           local sk, sl = src[1], src[2]
           if sk ~= "officer" or CanOfficerChat() then
             local on = ct.sources and ct.sources[sk]
-            local b = ns.InterfaceButton(dd, Check(on, sl), 194, 20)
+            local b = dd.pool:Button(Check(on, sl), 194, 20)
             b:SetPoint("TOPLEFT", 8, dy)
             b:SetScript("OnClick", function()
               ct.sources = ct.sources or {}
@@ -3019,14 +3017,12 @@ function ns.OpenPopoutChatSettings()
               SyncUI()
               OpenMultiSelect(anchorBtn, ct, true)
             end)
-            dd.items[#dd.items + 1] = b
             dy = dy - 22
           end
         end
-        local done = ns.InterfaceButton(dd, "Done", 194, 20)
+        local done = dd.pool:Button("Done", 194, 20)
         done:SetPoint("TOPLEFT", 8, dy - 4)
         done:SetScript("OnClick", function() dd:Hide(); dd.catcher:Hide() end)
-        dd.items[#dd.items + 1] = done
         dd:SetHeight(-dy + 32)
         if not keepOpen then
           dd:ClearAllPoints()
@@ -3041,12 +3037,12 @@ function ns.OpenPopoutChatSettings()
         local cnt = 0
         for _, v in pairs(ct.sources or {}) do if v then cnt = cnt + 1 end end
         local x = 4
-        local lblBtn = Track(ns.InterfaceButton(self.child, ct.label, 140, 22))
+        local lblBtn = pool:Button(ct.label, 140, 22)
         lblBtn:SetPoint("TOPLEFT", x, y)
-        local dropBtn = Track(ns.InterfaceButton(self.child, string.format("Channels (%d) v", cnt), 150, 22))
+        local dropBtn = pool:Button(string.format("Channels (%d) v", cnt), 150, 22)
         dropBtn:SetPoint("LEFT", lblBtn, "RIGHT", 6, 0)
         dropBtn:SetScript("OnClick", function(btn) OpenMultiSelect(btn, ctCopy) end)
-        local delBtn = Track(ns.InterfaceButton(self.child, "Delete", 74, 22))
+        local delBtn = pool:Button("Delete", 74, 22)
         delBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
         delBtn:SetScript("OnClick", function()
           if popOptsWin.multiDrop then popOptsWin.multiDrop:Hide() end

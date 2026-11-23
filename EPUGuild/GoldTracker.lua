@@ -185,12 +185,10 @@ local function RecordDelta(delta, cat)
 end
 
 function ns.OpenGoldTracker()
-  local K = ns.UIKit
   if not win then
     local C = ns.InterfaceColors
     win = ns.InterfaceWindow("EPUGuildGoldTracker", UIParent, "EPU Gold & Budget Tracker", 520, 520)
     win:SetFrameStrata("DIALOG")
-    win.widgets = {}
 
     local scroll = CreateFrame("ScrollFrame", nil, win)
     scroll:SetPoint("TOPLEFT", 12, -44)
@@ -204,18 +202,18 @@ function ns.OpenGoldTracker()
       self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
     end)
     win.scroll, win.child = scroll, child
+    win.pool = ns.NewWidgetPool(child)
 
     function win:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local b = db.budgets
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Row(items)
         local x = 0
         for _, it in ipairs(items) do
-          local btn = Track(K.Btn(child, it[1], it[2], 22, it[4]))
+          local btn = pool:Button(it[1], it[2], 22, it[4])
           btn:SetPoint("TOPLEFT", x, y)
           btn:SetScript("OnClick", function() it[3](); win:Refresh() end)
           x = x + it[2] + 6
@@ -223,7 +221,7 @@ function ns.OpenGoldTracker()
         y = y - 28
       end
       local function Heading(t)
-        local h = Track(K.Font(child, 12, C.gold or C.white))
+        local h = pool:Font(12, C.gold or C.white)
         h:SetPoint("TOPLEFT", 0, y - 4)
         h:SetText(t)
         y = y - 22
@@ -252,7 +250,7 @@ function ns.OpenGoldTracker()
 
       local sum = ns.GetGoldSummary(since, not scopeAll)
       local netCol = sum.net >= 0 and "|cff4ade80+" or "|cffff6b6b"
-      local sumText = Track(K.Font(child, 12, C.white))
+      local sumText = pool:Font(12, C.white)
       sumText:SetPoint("TOPLEFT", 0, y)
       sumText:SetText(string.format("Income: |cff4ade80%s|r    Spent: |cffff6b6b%s|r    Net: %s%s|r",
         FormatMoney(sum.income), FormatMoney(sum.expense), netCol, FormatMoney(sum.net)))
@@ -270,7 +268,7 @@ function ns.OpenGoldTracker()
         table.sort(slices, function(a, b) return a.val > b.val end)
         if #slices > 0 then
           Heading("Spending Pie Chart")
-          local pieBox = Track(CreateFrame("Frame", nil, child))
+          local pieBox, piePool = pool:Frame("pie")
           local pieH = math.max(126, #slices * 18 + 12)
           pieBox:SetSize(480, pieH)
           pieBox:SetPoint("TOPLEFT", 0, y)
@@ -284,7 +282,7 @@ function ns.OpenGoldTracker()
             for _ = 1, count do
               if segIdx <= SEGS then
                 local angle = ((segIdx - 1) / SEGS) * math.pi * 2
-                local tex = pieBox:CreateTexture(nil, "ARTWORK")
+                local tex = piePool:Texture("ARTWORK", "segment")
                 tex:SetTexture("Interface\\BUTTONS\\WHITE8X8")
                 tex:SetVertexColor(rgb[1], rgb[2], rgb[3], 0.95)
                 tex:SetSize(5, 18)
@@ -297,17 +295,17 @@ function ns.OpenGoldTracker()
             end
           end
 
-          local centerLbl = pieBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+          local centerLbl = piePool:Font(11, C.white, "center")
           centerLbl:SetPoint("CENTER", pieBox, "TOPLEFT", cx, cy)
           centerLbl:SetText(FormatMoney(sum.expense))
 
           local ly = -6
           for _, sl in ipairs(slices) do
-            local swatch = pieBox:CreateTexture(nil, "ARTWORK")
+            local swatch = piePool:Texture("ARTWORK", "swatch")
             swatch:SetColorTexture(sl.cat.rgb[1], sl.cat.rgb[2], sl.cat.rgb[3], 1)
             swatch:SetSize(10, 10)
             swatch:SetPoint("TOPLEFT", 142, ly - 2)
-            local lbl = K.Font(pieBox, 11, C.text)
+            local lbl = piePool:Font(11, C.text)
             lbl:SetPoint("TOPLEFT", 158, ly)
             lbl:SetText(string.format("%s%s|r: %s (%.0f%%)", sl.cat.color, sl.cat.label, FormatMoney(sl.val), sl.pct * 100))
             ly = ly - 18
@@ -330,28 +328,28 @@ function ns.OpenGoldTracker()
         table.sort(bars, function(a, b) return a.val > b.val end)
         if #bars > 0 then
           Heading("Spending Bar Graph")
-          local barBox = Track(CreateFrame("Frame", nil, child))
+          local barBox, barPool = pool:Frame("bars")
           local bh = #bars * 20 + 6
           barBox:SetSize(480, bh)
           barBox:SetPoint("TOPLEFT", 0, y)
           local by = -2
           for _, br in ipairs(bars) do
-            local lbl = K.Font(barBox, 11, C.text)
+            local lbl = barPool:Font(11, C.text)
             lbl:SetPoint("TOPLEFT", 0, by)
             lbl:SetText(br.cat.color .. br.cat.label .. "|r")
 
-            local bgBar = barBox:CreateTexture(nil, "BACKGROUND")
+            local bgBar = barPool:Texture("BACKGROUND")
             bgBar:SetColorTexture(0.14, 0.16, 0.20, 0.9)
             bgBar:SetSize(220, 12)
             bgBar:SetPoint("TOPLEFT", 130, by - 1)
 
             local fillW = math.max(3, math.floor((br.val / maxBar) * 220))
-            local fill = barBox:CreateTexture(nil, "ARTWORK")
+            local fill = barPool:Texture("ARTWORK")
             fill:SetColorTexture(br.cat.rgb[1], br.cat.rgb[2], br.cat.rgb[3], 0.95)
             fill:SetSize(fillW, 12)
             fill:SetPoint("TOPLEFT", 130, by - 1)
 
-            local valLbl = K.Font(barBox, 11, C.white)
+            local valLbl = barPool:Font(11, C.white)
             valLbl:SetPoint("TOPLEFT", 358, by)
             valLbl:SetText(FormatMoney(br.val))
             by = by - 20
@@ -378,25 +376,25 @@ function ns.OpenGoldTracker()
           dayTotals[#dayTotals + 1] = { label = date("%a", ds), inc = inc, exp = exp }
         end
         Heading("7-Day Trend (Green = In, Red = Out)")
-        local trendBox = Track(CreateFrame("Frame", nil, child))
+        local trendBox, trendPool = pool:Frame("trend")
         trendBox:SetSize(480, 96)
         trendBox:SetPoint("TOPLEFT", 0, y)
-        local tBg = trendBox:CreateTexture(nil, "BACKGROUND")
+        local tBg = trendPool:Texture("BACKGROUND")
         tBg:SetColorTexture(0.10, 0.12, 0.16, 0.85)
         tBg:SetAllPoints()
         for i, dt in ipairs(dayTotals) do
           local gx = 18 + (i - 1) * 66
           local incH = dt.inc > 0 and math.max(3, math.floor((dt.inc / maxDay) * 64)) or 2
           local expH = dt.exp > 0 and math.max(3, math.floor((dt.exp / maxDay) * 64)) or 2
-          local incBar = trendBox:CreateTexture(nil, "ARTWORK")
+          local incBar = trendPool:Texture("ARTWORK", "in")
           incBar:SetColorTexture(0.29, 0.87, 0.50, dt.inc > 0 and 0.95 or 0.2)
           incBar:SetSize(16, incH)
           incBar:SetPoint("BOTTOMLEFT", trendBox, "BOTTOMLEFT", gx, 22)
-          local expBar = trendBox:CreateTexture(nil, "ARTWORK")
+          local expBar = trendPool:Texture("ARTWORK", "out")
           expBar:SetColorTexture(1.00, 0.42, 0.42, dt.exp > 0 and 0.95 or 0.2)
           expBar:SetSize(16, expH)
           expBar:SetPoint("BOTTOMLEFT", trendBox, "BOTTOMLEFT", gx + 19, 22)
-          local dLbl = K.Font(trendBox, 10, C.muted)
+          local dLbl = trendPool:Font(10, C.muted)
           dLbl:SetPoint("BOTTOM", trendBox, "BOTTOMLEFT", gx + 17, 5)
           dLbl:SetText(dt.label)
         end
@@ -424,7 +422,7 @@ function ns.OpenGoldTracker()
           local wPct = st.weeklyLimit > 0 and math.floor((st.weeklySpent / st.weeklyLimit) * 100 + 0.5) or 0
           local dCol = dPct >= 100 and "|cffff6b6b" or (dPct >= 80 and "|cffffd100" or "|cff4ade80")
           local wCol = wPct >= 100 and "|cffff6b6b" or (wPct >= 80 and "|cffffd100" or "|cff4ade80")
-          local bLine = Track(K.Font(child, 11, C.text))
+          local bLine = pool:Font(11, C.text)
           bLine:SetPoint("TOPLEFT", 0, y)
           bLine:SetText(string.format("Today: %s%s|r / %s (%d%%)    7-Day: %s%s|r / %s (%d%%)",
             dCol, FormatMoney(st.dailySpent), FormatMoney(st.dailyLimit), dPct,
@@ -437,7 +435,7 @@ function ns.OpenGoldTracker()
       for _, cat in ipairs(CATEGORIES) do
         local bucket = sum.byCat[cat.id]
         if bucket and (bucket.inc > 0 or bucket.exp > 0) then
-          local line = Track(K.Font(child, 11, C.text))
+          local line = pool:Font(11, C.text)
           line:SetPoint("TOPLEFT", 4, y)
           local parts = {}
           if bucket.inc > 0 then parts[#parts + 1] = "|cff4ade80+" .. FormatMoney(bucket.inc) .. "|r" end
@@ -449,7 +447,7 @@ function ns.OpenGoldTracker()
 
       Heading("Recent Transactions (" .. math.min(25, #sum.entries) .. " of " .. #sum.entries .. ")")
       if #sum.entries == 0 then
-        local empty = Track(K.Font(child, 11, C.muted))
+        local empty = pool:Font(11, C.muted)
         empty:SetPoint("TOPLEFT", 4, y)
         empty:SetText("No gold transactions recorded in this timeframe yet.")
         y = y - 20
@@ -459,7 +457,7 @@ function ns.OpenGoldTracker()
           local cat = CAT_MAP[e.cat] or CAT_MAP.other
           local dCol = e.delta >= 0 and "|cff4ade80+" or "|cffff6b6b"
           local short = ns.Short and ns.Short(e.who or "?") or (e.who or "?")
-          local rowText = Track(K.Font(child, 11, C.text))
+          local rowText = pool:Font(11, C.text)
           rowText:SetPoint("TOPLEFT", 4, y)
           rowText:SetText(string.format("|cff888888%s|r  %s  %s%s|r  %s%s|r",
             date("%m/%d %H:%M", e.t or 0), short, cat.color, cat.label, dCol, FormatMoney(e.delta)))

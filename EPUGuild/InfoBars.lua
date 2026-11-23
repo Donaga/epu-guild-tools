@@ -984,7 +984,6 @@ function ns.OpenInfoBarsSettings()
     local C = ns.InterfaceColors
     cfgWin = ns.InterfaceWindow("EPUGuildInfoBarsConfig", UIParent, "EPU Info Bars", 440, 500)
     cfgWin:SetFrameStrata("DIALOG")
-    cfgWin.widgets = {}
 
     local scroll = CreateFrame("ScrollFrame", nil, cfgWin)
     scroll:SetPoint("TOPLEFT", 12, -44)
@@ -998,19 +997,19 @@ function ns.OpenInfoBarsSettings()
       self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
     end)
     cfgWin.scroll, cfgWin.child = scroll, child
+    cfgWin.pool = ns.NewWidgetPool(child)
 
     function cfgWin:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local cfg = db.bars[selectedBar]
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function Row(items)
         local x = 0
         for _, it in ipairs(items) do
-          local b = Track(K.Btn(child, it[1], it[2], 22, it[4]))
+          local b = pool:Button(it[1], it[2], 22, it[4])
           b:SetPoint("TOPLEFT", x, y)
           b:SetScript("OnClick", function() it[3](); ns.RefreshInfoBars(); cfgWin:Refresh() end)
           x = x + it[2] + 6
@@ -1018,7 +1017,7 @@ function ns.OpenInfoBarsSettings()
         y = y - 28
       end
       local function Heading(t)
-        local h = Track(K.Font(child, 12, C.gold or C.white))
+        local h = pool:Font(12, C.gold or C.white)
         h:SetPoint("TOPLEFT", 0, y - 4)
         h:SetText(t)
         y = y - 24
@@ -1062,7 +1061,7 @@ function ns.OpenInfoBarsSettings()
 
       Heading("Active Widgets on " .. BAR_LABELS[selectedBar])
       if #cfg.widgets == 0 then
-        local t = Track(K.Font(child, 11, C.muted))
+        local t = pool:Font(11, C.muted)
         t:SetPoint("TOPLEFT", 0, y)
         t:SetText("No widgets on this bar. Add some below.")
         y = y - 22

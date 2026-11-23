@@ -14,7 +14,7 @@ check('guild-funded repair starts off', T.ev('__ns.db.worldQoL.guildRepair') is 
 T.ex('__ns.db.worldQoL.guildRepair = true')
 T.ex('__ns.db.worldQoL.guildRepairChosen = nil; __ns.OpenWorldQoLSettings()')
 check('an unchosen setting saved by 0.30.x is switched off once', T.ev('__ns.db.worldQoL.guildRepair') is False)
-T.ex("""for _,w in ipairs(EPUGuildWorldQoLConfig.widgets) do
+T.ex("""for _,w in ipairs(EPUGuildWorldQoLConfig.pool.used) do
   if w.text and w.text:GetText()=="[ ] Use Guild Bank Funds for Auto-Repair when allowed" then w:Click() end end""")
 check('turning it on is remembered', T.ev('__ns.db.worldQoL.guildRepair') is True and T.ev('__ns.db.worldQoL.guildRepairChosen') is True)
 T.ex('__ns.OpenWorldQoLSettings()')

@@ -482,17 +482,16 @@ function ns.OpenWorldQoLSettings()
     local C = ns.InterfaceColors
     qolWin = ns.InterfaceWindow("EPUGuildWorldQoLConfig", UIParent, "EPU Travel, Vendor & Tooltips", 410, 360)
     qolWin:SetFrameStrata("DIALOG")
-    qolWin.widgets = {}
+    qolWin.pool = ns.NewWidgetPool(qolWin)
 
     function qolWin:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local y = -44
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function AddToggle(label, key, onChange)
-        local b = Track(K.Btn(qolWin, Check(db[key], label), 370, 22))
+        local b = pool:Button(Check(db[key], label), 370, 22)
         b:SetPoint("TOPLEFT", 18, y)
         b:SetScript("OnClick", function()
           db[key] = not db[key]
@@ -516,7 +515,7 @@ function ns.OpenWorldQoLSettings()
       AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair", function() db.guildRepairChosen = true end)
       AddToggle("Item Tooltip Extras (Alt/Bank counts, Sell price, Stack)", "tooltipExtras")
 
-      local note = Track(K.Font(qolWin, 11, C.muted))
+      local note = pool:Font(11, C.muted, "note")
       note:SetPoint("TOPLEFT", 18, y - 6)
       note:SetWidth(370)
       note:SetJustifyH("LEFT")
