@@ -36,5 +36,13 @@ check('with guild repair off, the player pays', visit(T) == 'own')
 K.ex('__ns.cdb.bankAlt = true; __money = 500000; __repairCost = 30000; __canGuildRepair = true; __gbWithdraw = -1')
 check('bank alts never auto-repair', visit(K) is None)
 
+# Gold tracker: a repair is a cost; a sale at the same visit stays "vendor".
+T.ex('''__ns.db.goldTracker = nil; __fire("PLAYER_LOGIN")
+__fire("MERCHANT_SHOW"); RepairAllItems(false)
+__money = __money + 120; __fire("PLAYER_MONEY")
+__money = __money - 30000; __fire("PLAYER_MONEY")
+__fire("MERCHANT_CLOSED")''')
+cats = T.ev('(function() local o={} for _,e in ipairs(__ns.db.goldTracker.entries) do o[#o+1]=e.cat..":"..e.delta end return table.concat(o,",") end)()')
+check('sales stay vendor and the repair is labelled repair ' + cats, cats == 'vendor:120,repair:-30000')
 print('Vendor checks:', check.failed, 'failed')
 sys.exit(bool(check.failed))
