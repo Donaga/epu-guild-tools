@@ -104,8 +104,10 @@ local function RefreshWindow(kind)
 end
 
 local function Append(kind, msg, colorHex)
-  if paused[kind] or type(msg) ~= "string" or msg == "" then return end
+  -- Check for a secret value before comparing: comparing one is an error.
+  if paused[kind] or type(msg) ~= "string" then return end
   if issecretvalue and issecretvalue(msg) then return end
+  if msg == "" then return end
   local list = logs[kind]
   local raw = rawLogs[kind]
   local maxL = DEFAULTS[kind].maxLines
