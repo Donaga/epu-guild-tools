@@ -49,5 +49,26 @@ check('raid prep status reaches guildmates', tick_until(lambda: A.ev('__ns.G().r
 A.ex('__fire("CHAT_MSG_ADDON","EPUGuild","S%s"..__ns.Serialize({who="Pip Baker",level=60,role="Tank",t=__ns.Now()+60}),"GUILD","Tyler Baker")' % zk)
 check('raid prep can only update the sender', A.ev('(__ns.G().raidPrep or {})["Pip Baker"] == nil'))
 
+# Officer run log: officer chat only, from trusted senders, with clean members.
+def run(t, members='{"Chris Baker","Tyler Baker"}'):
+    return '__ns.Serialize({id="RFake:1",dungeon="Deadmines",members=%s,t=%s,by="Chris Baker"})' % (members, t)
+A.ex('__fire("CHAT_MSG_ADDON","EPUGuild","SR"..%s,"GUILD","Epu Bank")' % run('__ns.Now()'))
+check('runs sent on guild chat are ignored', A.ev('(__ns.G().dungeonRuns or {})["RFake:1"] == nil'))
+A.ex('__fire("CHAT_MSG_ADDON","EPUGuild","SR"..%s,"OFFICER","Chris Stone")' % run('__ns.Now()'))
+check('runs from members are ignored', A.ev('(__ns.G().dungeonRuns or {})["RFake:1"] == nil'))
+A.ex('__ns.LogGuildDungeonRun("Deadmines", nil, {"Chris Baker","Tyler Baker"}, true, "")')
+check('an officer can still log a run', A.ev('(function() local n=0 for _ in pairs(__ns.G().dungeonRuns) do n=n+1 end return n end)()') == 1)
+
+# Auto-logging: only one officer in a group logs a boss kill.
+A.ex('''GetInstanceInfo=function() return "The Deadmines","party" end
+GetNumGroupMembers=function() return 2 end; IsInRaid=function() return false end
+UnitExists=function(u) return u=="party1" end; UnitName=function(u) if u=="party1" then return "Tyler Baker" end return "Chris Baker" end
+__ns.G().dungeonRuns={}''')
+A.ex('__fire("ENCOUNTER_END", 1, "Rhahk\'Zor", 1, 5, 1)')
+A.ex('__fire("ENCOUNTER_END", 2, "Sneed", 1, 5, true)')
+check('boss kills log one run with both bosses',
+      A.ev('(function() local n,r=0 for _,v in pairs(__ns.G().dungeonRuns) do n=n+1; r=v end return n==1 and r.note:find("Sneed",1,true)~=nil end)()'))
+
+
 print('Leveling sync checks:', check.failed, 'failed')
 sys.exit(bool(check.failed))

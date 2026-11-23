@@ -90,25 +90,40 @@ function ns.VoidGuildDungeonRun(id)
   if ns.Changed then ns.Changed() end
 end
 
-ns.comm.R = function(sender, run)
+ns.comm.R = function(sender, run, channel)
+  -- Officer chat only: the server decides who can read and write it, unlike
+  -- a rank name, so a bank-rank character can't add or rewrite runs.
+  if channel ~= "OFFICER" then return end
   if not ns.IsTrusted or not ns.IsTrusted(ns.me) then return end
   if not ns.IsTrusted(sender) then return end
-  if type(run) ~= "table" or type(run.id) ~= "string" or type(run.dungeon) ~= "string" then return end
+  if type(run) ~= "table" or type(run.id) ~= "string" or #run.id > 80
+    or type(run.dungeon) ~= "string" or run.dungeon == "" or #run.dungeon > 60 then return end
+  local now = ns.Now and ns.Now() or time()
+  local t = tonumber(run.t)
+  if not t or t > now + 300 then return end
+  local members = {}
+  if type(run.members) == "table" then
+    for i, who in ipairs(run.members) do
+      if i > 40 then break end
+      if type(who) == "string" and who ~= "" and #who <= 48 then members[#members + 1] = who end
+    end
+  end
   local store = Store()
   if not store then return end
   local cur = store[run.id]
-  if cur and (cur.t or 0) >= (run.t or 0) then return end
+  if cur and (cur.t or 0) >= t then return end
   store[run.id] = {
     id = run.id,
     dungeon = run.dungeon,
-    dungeonId = run.dungeonId,
-    members = type(run.members) == "table" and run.members or {},
+    dungeonId = (type(run.dungeonId) == "number" or type(run.dungeonId) == "string") and run.dungeonId or nil,
+    members = members,
     fullGuild = run.fullGuild and true or false,
-    note = type(run.note) == "string" and run.note or "",
-    t = tonumber(run.t) or (ns.Now and ns.Now() or time()),
-    by = run.by or sender,
+    note = type(run.note) == "string" and run.note:sub(1, 160) or "",
+    t = t,
+    by = (cur and cur.by) or (type(run.by) == "string" and #run.by <= 48 and run.by) or sender,
     voided = run.voided and true or false,
   }
+  if ns.Changed then ns.Changed() end
 end
 
 function ns.GetGuildDungeonStats()
@@ -207,14 +222,36 @@ function ns.GetGuildDungeonStats()
   }
 end
 
--- Auto-log guild dungeon/raid runs on boss kill (ENCOUNTER_END) for officers
-local sessionRunIds = {}
+-- Auto-log guild dungeon/raid runs on boss kill (ENCOUNTER_END) for officers.
+-- Only one officer in the group logs, so a group with three officers makes
+-- one run, not three: the first EPU-using officer in the group by name.
+local sessionRunIds, lastInstance = {}, nil
+local function IsRunLogger(members)
+  local first
+  for _, who in ipairs(members) do
+    if ns.IsTrusted(who) and (who == ns.me or (ns.UsesEPU and ns.UsesEPU(who, 7))) then
+      if not first or who < first then first = who end
+    end
+  end
+  return first == ns.me
+end
 if ns.On then
+  -- A new instance (or leaving one) starts a new run on the next kill.
+  ns.On("PLAYER_ENTERING_WORLD", function()
+    local name
+    if GetInstanceInfo then
+      local ok, n, itype = pcall(GetInstanceInfo)
+      if ok and (itype == "party" or itype == "raid") then name = n end
+    end
+    if name ~= lastInstance then sessionRunIds = {} end
+    lastInstance = name
+  end)
   ns.On("ENCOUNTER_END", function(encounterID, encounterName, difficultyID, groupSize, success)
-    if success ~= 1 then return end
+    if success ~= 1 and success ~= true then return end
     if not (ns.IsTrusted and ns.IsTrusted(ns.me)) then return end
     local party = ns.GetCurrentPartyGuildStatus()
     if not party.instance or #party.members < 2 then return end
+    if not IsRunLogger(party.members) then return end
 
     local store = Store()
     if not store then return end
