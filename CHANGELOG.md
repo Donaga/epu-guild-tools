@@ -3,11 +3,78 @@
 ## Unreleased
 
 - **Needed mats.** Crafters can list the materials they still need (`/epu mats`, or the new **Professions → Needed mats** page in the main window). Everyone in the guild sees it on the item's tooltip, for example "Needed by: Tyler (x20), Ana", so the stack goes to a guildmate instead of a vendor or the auction house. Lists are per character, up to 40 materials, with an optional amount; an entry comes off by itself once that many have arrived in your bags. Officers can clear entries, and a list ages out after 30 days without its character logging in. Details: [docs/needed-mats.md](docs/needed-mats.md).
+- **Every tool opens from the main window.** **Member tools** has tiles for the **Zone guide**, **Leveling and dungeons** and **Gold and budget** (and **Personal trackers** once that tool is in the addon). **Settings** has rows for the pop-out chat and log windows, **Info bars**, and **Travel, vendor and tooltips**. The slash commands still work.
+- **The Combat Log window is gone.** It listened for combat messages the game no longer sends, so it never showed anything. Its window, its tab in the combined log window, its Chat Settings checkbox, its source for custom tabs, and `/epu combatlog` and `/epu logs combat` are removed. Settings it saved are cleared the first time you load this version; custom tabs keep their other sources.
+- **Guild-funded auto-repair is off until you turn it on.** 0.30.0 switched it on for everyone with repair rights, so the guild bank paid at every vendor without asking. If you want it, turn it on again in **Travel, vendor and tooltips** (`/epu qol`). When it's on, EPU checks what the guild can actually pay (today's limit and the gold in the bank); if it can't cover the repair, you pay instead of the repair failing. Bank alts never auto-sell or auto-repair.
+- **Dungeon readiness and raid prep reach the guild.** Since 0.29.0 they used the same message kinds as the guild map and quest sharing, so nobody ever received them. Everyone needs this version for readiness and raid status to show. A guildmate can no longer overwrite someone else's record.
+- **Officer run log counts each run once.** Only one officer in the group logs a boss kill (before, each officer logged it, tripling attendance), runs only count when sent on officer chat, and entering a new instance starts a new run.
+- **Raid prep and guild stats read roles from profiles**, so tanks and healers are counted again and the squad builder shows how many guildmates it's working with.
+- **Leveling advisor** no longer stops with an error when a bank alt holds a listed item, and finds crafters again.
+- **Gold tracker: gold you move isn't spending.** Gold mailed to (or taken from mail sent by) your own characters, and gold put in or taken out of the guild bank, no longer count as income or spending or against your daily and weekly budget. They show on their own "Moved, not earned or spent" line, in the breakdown and in the transaction list. Postage still counts as mail spending.
+- **Gold tracker labels:** grey items sold at the same visit as a repair stay under Vendor, and the repair goes under Repairs.
+- **Windows no longer grow over a long session.** The gold tracker (every time your gold changed), info bar settings, travel and vendor settings, chat settings, zone guide, leveling tools and needed mats window made new frames each time they redrew. They now reuse them, so memory use stays flat.
+- **Slash commands typed in EPU chat run.** With "Enter key -> EPU chat" on, `/inv Name` or `/dance` typed in the EPU box was posted as text; now it runs.
+- **Chat and log windows stay where you scrolled** while new lines arrive, and only follow new lines when you're at the newest one. Custom tabs set to oldest on top keep showing new lines after 100.
+- **Log windows you moved in 0.29.x** reopen on screen instead of clamped to an edge.
+- **Flight timer** waits until you're on the flight path before timing it, so it learns route times.
+- **Hearthstone cooldown, tooltip sell price and stack size, and alt class colors** show again. The info bar Guild widget opens the online roster instead of the help text.
+- **World Map guide button** shows and hides with the map during combat.
 
 ## 0.31.1
 
 - Guide notices explain the five dungeon entries per hour limit and the Vampiric Embrace group healing adjustment.
 - Method Skinning is available through skill 299 after review of its added later sections.
+
+## 0.31.0
+
+- **Gold & Budget tracker** (`/epu gold` or `/epu budget`). EPU sorts the gold you earn and spend into Loot & Quests, Vendor, Repairs, Auction House, Mail, Training & Riding, Flight Paths, Player Trade, Guild Bank and Other. Look at this session, today, 7 days, 30 days or everything, for this character or all of them, with a spending pie chart, a bar graph and a 7-day in-and-out trend. You can set a daily and weekly spending budget and get a chat warning when you reach it. The info bar Gold widget shows today's in and out and the budget left; right-click it to open the tracker.
+- Floating log windows reopen where you left them after a reload.
+
+## 0.30.1
+
+- **Whispers in the pop-out chat window:** on the Tells tab, the conversation list shows whispers only, most recent first, with each person's online or offline status.
+
+## 0.30.0
+
+- **Info bars** (`/epu bars`). Add a bar to the top, bottom, left or right edge of the screen and choose what it shows: FPS, latency and addon memory, gold (with your alts' totals and this session's net), durability, bag space, currencies, reputation, XP and item level, clock, zone and coordinates, movement speed, Hearthstone, guildmates and friends online, mail, EPU chat and events, and volume. Each has a tooltip and a click action. Bars can be resized, faded, hidden in combat or shown only on mouseover.
+- **Travel, vendor and tooltips** (`/epu qol`): your and the cursor's coordinates on the World Map, waypoints with `/epu way x y [label]` (and `/epu way clear`), a flight timer that learns how long each route takes, auto-sell grey items and auto-repair at vendors (hold Shift to skip), and item tooltips with how many your alts and banks hold, the sell price and the stack size.
+
+## 0.29.4
+
+- **Chat order:** messages sent in the same second by the same person no longer swap places.
+- **Class-colored names** in chat and in custom pop-out tabs.
+- **Log windows** stay under your bags and panels, aren't closed by Esc, can be resized from the corner, and remember their size, place and whether they're open. Chat Settings can combine them into one window with tabs.
+
+## 0.29.3
+
+- **Enter key to EPU chat** (optional, in Options and Chat Settings): Enter opens EPU's chat box instead of the game's.
+- Chat and log windows scroll to new lines whichever way they're sorted.
+- The pop-out Chat Settings window has every chat setting, with three more fonts: Inter SemiBold, 2002 and 2002 Bold.
+- Class icons in the chat conversation list show properly.
+- The World Map guide button no longer causes "blocked action" pop-ups.
+
+## 0.29.2
+
+- **More chat channels:** Say, Yell, Instance/Battleground and WorldDefense can be kept too (off until you turn them on in Chat settings), each with its own row, color, sound and reply box.
+- **Pop-out chat window:** choose which kept channels get a tab, and open Chat Settings from its **Opts** button.
+- **Custom pop-out tabs:** make your own tab and pick any mix of channels and log streams for it.
+- **Floating log windows** (`/epu logs`): movable windows for XP & reputation (with XP per hour this session), and server and loot messages. A Combat Log window was also added, but it never showed anything and has since been removed.
+
+## 0.29.1
+
+- **Public chat:** General, Trade, LookingForGroup and LocalDefense can be kept in EPU chat (off until you turn them on in Chat settings), each with its own row, pop-out tab, color, sound and reply box.
+- **Sort order:** choose newest or oldest messages on top, and newest or oldest conversations first, in Chat settings.
+
+## 0.29.0
+
+- **Zone Visitor's Guide** (`/epu zone [name]`, or the guide button on the World Map, which follows the zone you're viewing): 43 WoW: Forever and Classic zones with level ranges, flight paths, fishing, trainers, vendors and their recipes, guildmates there now, gathering spots, quests colored by level, and waypoints you can click.
+- **Leveling tools** (`/epu leveling`): zones and dungeons for your level and milestones to aim for, with quest items you might be missing checked against the guild bank and crafters, so you can ask for them in one click.
+- **Dungeons** (`/epu dungeons`): a warning when someone in your group is 12 or more levels apart (they'd get no XP), keys and attunements, quests to pick up first, and who in the guild has done each dungeon and who still needs it.
+- **Gear** (`/epu gear`): dungeons and notable drops for your level, class and role.
+- **Writs** (`/epu writs`): Waylaid Crates and Craftsman's Writs, with waypoints, a bag check against the guild bank and crafters, and the daily writ cooldown.
+- **Camping blueprints** (`/epu camping`): where Tier 2 and Tier 3 blueprints drop, which you've learned, and which camping stations the guild covers.
+- **Raid prep** (`/epu raid`) for December 9: Barrow Deeps (10), Hyjal Summit (20) and Onyxia's Lair (40), with Drakefire Amulet and fire resistance tracking, a squad builder and raid consumables for the bank.
+- **Guild run log for officers** (`/epu runs`): dungeon runs logged from boss kills or in one click, who has done what, attendance over 30 days and guild stats.
 
 ## 0.28.6
 

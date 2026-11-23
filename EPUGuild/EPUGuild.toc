@@ -11,6 +11,7 @@
 Libs/Libraries.xml
 
 Core.lua
+WidgetPool.lua
 Comm.lua
 Data.lua
 Alts.lua

@@ -12,7 +12,6 @@ local win
 local function Build_Window()
   local K, C = ns.UIKit, ns.InterfaceColors
   win = ns.InterfaceWindow("EPUGuildNeededMats", UIParent, "Needed mats", 460, 480)
-  win.widgets = {}
 
   local item = K.Box(win, 250, "Shift-click or drag a material")
   item:SetPoint("TOPLEFT", 14, -46)
@@ -47,28 +46,28 @@ local function Build_Window()
     self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
   end)
   win.child = child
+  win.pool = ns.NewWidgetPool(child)
 
   function win:Refresh()
-    for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-    self.widgets = {}
+    local pool = self.pool
+    pool:ReleaseAll()
     self.texts = {}
     local y = -2
-    local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
     local function Heading(t)
-      local h = Track(K.Font(child, 13, C.gold))
+      local h = pool:Font(13, C.gold)
       h:SetPoint("TOPLEFT", 0, y)
       h:SetText(t)
       self.texts[#self.texts + 1] = t
       y = y - 22
     end
     local function Row(text, label, fn)
-      local fs = Track(K.Font(child, 12, C.text))
+      local fs = pool:Font(12, C.text, "row")
       fs:SetPoint("TOPLEFT", 4, y - 4)
       fs:SetWidth(label and 340 or 428)
       fs:SetText(text)
       self.texts[#self.texts + 1] = text
       if label then
-        local b = Track(K.Btn(child, label, 80, 20))
+        local b = pool:Button(label, 80, 20)
         b:SetPoint("TOPRIGHT", 0, y)
         b:SetScript("OnClick", fn)
         self.buttons = self.buttons or {}
@@ -77,7 +76,7 @@ local function Build_Window()
       y = y - 24
     end
     local function Note(text)
-      local fs = Track(K.Font(child, 11, C.muted))
+      local fs = pool:Font(11, C.muted)
       fs:SetPoint("TOPLEFT", 4, y - 2)
       fs:SetText(text)
       self.texts[#self.texts + 1] = text
