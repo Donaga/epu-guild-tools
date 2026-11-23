@@ -2652,7 +2652,7 @@ function ns.ChatMentions(msg)
   if not msg then return false end
   local low = msg:lower()
   for _, w in ipairs(MentionWords()) do
-    local pat = "%f[%w]" .. w:gsub("(%W)", "%%%1") .. "%f[%W]"
+    local pat = "%f[%w']" .. w:gsub("(%W)", "%%%1") .. "%f[^%w']"
     if low:find(pat) then return true end
   end
   return false
@@ -2928,10 +2928,7 @@ function ns.OpenPopoutChatSettings()
           Row({
             { "Info Bars (/epu bars)", 140, function() ns.OpenInfoBarsSettings() end },
             { "Travel & QoL (/epu qol)", 140, function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end },
-          })
-          Row({
-            { "Gold & Budget (/epu gold)", 160, function() if ns.OpenGoldTracker then ns.OpenGoldTracker() end end },
-            { "Trackers (/epu trackers)", 165, function() if ns.OpenPersonalTrackers then ns.OpenPersonalTrackers() end end },
+            { "Gold & Budget (/epu gold)", 150, function() if ns.OpenGoldTracker then ns.OpenGoldTracker() end end },
           })
         end
       end
