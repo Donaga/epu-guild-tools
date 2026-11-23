@@ -20,7 +20,10 @@ local function DB()
   if db.flightTimer == nil then db.flightTimer = true end
   if db.autoSellGrey == nil then db.autoSellGrey = true end
   if db.autoRepair == nil then db.autoRepair = true end
-  if db.guildRepair == nil then db.guildRepair = true end
+  -- Paying repairs from the guild bank is the player's choice, not a default.
+  -- 0.30.x saved it as on for everyone, so reset it once; the toggle below
+  -- marks it chosen.
+  if not db.guildRepairChosen then db.guildRepair = false end
   if db.tooltipExtras == nil then db.tooltipExtras = true end
   db.flightTimes = db.flightTimes or {}
   db.altItems = db.altItems or {}
@@ -292,6 +295,8 @@ end
 ---------------------------------------------------------------------------
 local function OnMerchantShow()
   if IsShiftKeyDown and IsShiftKeyDown() then return end
+  -- A bank alt's bags and gold are the guild's: leave them alone.
+  if ns.IsBankAlt and ns.IsBankAlt() then return end
   local db = DB()
 
   if db.autoSellGrey then
@@ -331,8 +336,12 @@ local function OnMerchantShow()
     cost = SafeNum(cost) or 0
     if canRepair and cost > 0 then
       if db.guildRepair and CanGuildBankRepair and CanGuildBankRepair() then
+        -- What the guild can pay: today's withdrawal limit (-1 = no limit),
+        -- but never more than the guild bank holds.
         local gLimit = GetGuildBankWithdrawMoney and SafeNum(GetGuildBankWithdrawMoney()) or 0
-        if gLimit == -1 or gLimit >= cost then
+        local inBank = GetGuildBankMoney and SafeNum(GetGuildBankMoney()) or 0
+        local canPay = gLimit == -1 and inBank or math.min(gLimit, inBank)
+        if canPay >= cost then
           RepairAllItems(true)
           ns.Print("Repaired using guild bank funds: " .. FormatMoneyText(cost))
           return
@@ -485,7 +494,7 @@ function ns.OpenWorldQoLSettings()
       end)
       AddToggle("Auto-Sell Grey Junk at Vendors (hold Shift to skip)", "autoSellGrey")
       AddToggle("Auto-Repair Gear at Vendors (hold Shift to skip)", "autoRepair")
-      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair")
+      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair", function() db.guildRepairChosen = true end)
       AddToggle("Item Tooltip Extras (Alt/Bank counts, Sell price, Stack)", "tooltipExtras")
 
       local note = Track(K.Font(qolWin, 11, C.muted))

@@ -206,6 +206,13 @@ C_Container = {
   GetContainerNumFreeSlots = function() return 5 end,
 }
 function GetMoney() return __money end
+-- Merchant repair, like the game: guild repairs spend guild gold, not the player's.
+__repairCost = 0; __canGuildRepair = false; __gbWithdraw = 0; __repaired = nil
+function CanMerchantRepair() return __repairCost > 0 end
+function GetRepairAllCost() return __repairCost, __repairCost > 0 end
+function CanGuildBankRepair() return __canGuildRepair end
+function GetGuildBankWithdrawMoney() return __gbWithdraw end
+function RepairAllItems(guild) __repaired = guild and "guild" or "own" end
 function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, "subj", m.money or 0, 0 end end
 function GetInboxItemLink(i, a) local m = __inbox[i]; if m and m.items[a] then return __link(m.items[a][1]) end end
 function GetInboxItem(i, a) local m = __inbox[i]; if m and m.items[a] then return "x", m.items[a][1], "tex", m.items[a][2] end end
