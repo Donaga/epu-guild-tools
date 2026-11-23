@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.31.1
+
+- Guide notices explain the five dungeon entries per hour limit and the Vampiric Embrace group healing adjustment.
+- Method Skinning is available through skill 299 after review of its added later sections.
+
 ## 0.28.6
 
 - **Pull for request.** At the guild bank, officers and bank managers can take exactly what an approved request still needs out of the guild bank in one click: **Pull for request** in the request's details (or the bag icon on its row while the guild bank is open). EPU moves whole stacks where they fit and splits one for the rest, one move at a time, into empty bag slots. Then take it to a mailbox and click **Mail it** as usual. It checks your bag space and today's guild bank withdrawal limit first, and if the guild bank has less than is owed it takes what there is and says so. Pulling doesn't mark the request filled; sending the mail does.

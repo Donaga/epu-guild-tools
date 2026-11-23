@@ -29,8 +29,10 @@ build 1.60.1.70790; a data snapshot is not proof of later tuning compatibility.
 Some general zone pages have stale or inconsistent ranges and were excluded.
 Do not substitute Classic, Season of Discovery or Retail advice for Forever.
 
-The November 9 review corrected Method Skinning to skill 224 and Herbalism to
-204: their later sections are explicitly unfinished or speculative. Leatherworking
+The November 9 review capped Method Skinning at skill 224 and Herbalism at
+204. On November 23, Skinning coverage was expanded through 299 after reading
+the added 225-300 sections. Its stale introduction is flagged. Herbalism
+retains its cap because the later sections remain speculative. Leatherworking
 retains a beta disclaimer. A `focus` label identifies a class leveling path aimed
 at one playstyle; it remains a labelled option before a playstyle is chosen and
 is hidden when a different focus is chosen. A stricter `spec` entry requires a
@@ -51,7 +53,10 @@ quantities are copied into the addon.
 Blizzard also confirmed a November 8 hotfix increasing dungeon enemy kill XP by
 50%; class leveling sources now carry a dated note about older route comparisons.
 Since November 13, dungeon kills award zero XP to the entire party when the enemy
-is trivial to any party member. See the official hotfix references in the registry.
+is trivial to any party member. Since November 20, each dungeon allows five
+entries per hour. The November review also records the reduced group healing
+from Vampiric Embrace while explaining that solo self-healing is unchanged.
+See the official hotfix references in the registry.
 
 Player relevance is mandatory: current class, level, learned profession IDs and
 skill range, and matching talent focus for specialization entries. Never show
