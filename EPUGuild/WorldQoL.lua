@@ -1,5 +1,8 @@
 -- EPU Guild Tools: World travel, waypoints, flight timer, vendor QoL, and item tooltip extras.
 local _, ns = ...
+-- Newer clients keep this under C_Item; the old global only exists when the
+-- game's "deprecated API" fallback is on (see Core.lua).
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 local function SafeStr(v)
   if type(v) ~= "string" or (issecretvalue and issecretvalue(v)) then return nil end
@@ -364,7 +367,8 @@ local function ScanCharacterItems(includeBank)
   if not db.altItems then return end
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   db.altItems[realm] = db.altItems[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   local rec = db.altItems[realm][ns.me] or { bags = {}, bank = {} }
   rec.classFile = cf
   rec.bags = {}
@@ -404,7 +408,11 @@ local function AppendItemTooltip(tt, itemLinkOrID)
   local itemID = type(itemLinkOrID) == "number" and itemLinkOrID or (SafeStr(itemLinkOrID) and tonumber(itemLinkOrID:match("item:(%d+)")))
   if not itemID then return end
 
-  local _, _, _, _, _, _, _, maxStack, _, _, sellPrice = GetItemInfo and GetItemInfo(itemID)
+  local maxStack, sellPrice
+  if GetItemInfo then
+    local info = { GetItemInfo(itemID) }
+    maxStack, sellPrice = info[8], info[11]
+  end
   maxStack = SafeNum(maxStack)
   sellPrice = SafeNum(sellPrice)
 

@@ -169,7 +169,8 @@ local function RecordDelta(delta, cat)
   if not delta or delta == 0 then return end
   local db = DB()
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   db.entries[#db.entries + 1] = {
     t = time(),
     who = ns.me or "Player",

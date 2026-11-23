@@ -105,7 +105,8 @@ local function RecordAltGold()
   if not db.altGold then return end
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   db.altGold[realm] = db.altGold[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   db.altGold[realm][ns.me] = { money = m, classFile = cf }
 end
 
@@ -696,7 +697,8 @@ MODULES.mail = {
   tooltip = function(tt)
     tt:AddLine("Mailbox", 1, 0.84, 0.35)
     if HasNewMail and HasNewMail() then
-      local s1, s2, s3 = GetLatestThreeSenders and GetLatestThreeSenders()
+      local s1, s2, s3
+      if GetLatestThreeSenders then s1, s2, s3 = GetLatestThreeSenders() end
       tt:AddLine("You have unread mail" .. (s1 and " from:" or "."), 0.4, 0.9, 0.5)
       for _, s in ipairs({ s1, s2, s3 }) do if SafeStr(s) then tt:AddLine("  " .. s, 1, 1, 1) end end
     else
@@ -805,7 +807,8 @@ MODULES.hearth = {
   text = function()
     local loc = GetBindLocation and SafeStr(GetBindLocation()) or "Hearth"
     local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
-    local start, dur = getCD and getCD(6948)
+    local start, dur
+    if getCD then start, dur = getCD(6948) end
     start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
     if start > 0 and dur > 1.5 then
       local rem = math.max(0, math.ceil((start + dur) - GetTime()))
@@ -819,7 +822,8 @@ MODULES.hearth = {
     tt:AddLine("Hearthstone", 1, 0.84, 0.35)
     tt:AddDoubleLine("Bind Location:", loc, 0.85, 0.85, 0.85, 1, 1, 1)
     local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
-    local start, dur = getCD and getCD(6948)
+    local start, dur
+    if getCD then start, dur = getCD(6948) end
     start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
     if start > 0 and dur > 1.5 then
       local rem = math.max(0, math.ceil((start + dur) - GetTime()))
