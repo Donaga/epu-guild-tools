@@ -19,6 +19,22 @@ local memberTools={
     icon="Interface\\Icons\\INV_Scroll_03"},
   {key="notifications", title="Notifications", hint="Set alerts, sounds, and quiet hours.",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_01"},
+  -- Pop-up windows that used to open only by slash command (/epu zone,
+  -- /epu leveling, /epu gold). Each tile hides itself if its file isn't loaded.
+  {key="zoneguide", title="Zone guide", hint="Dungeons, flight paths, vendors, trainers, fishing and quests for any zone (/epu zone).",
+    icon="Interface\\Icons\\INV_Misc_Map02", available=function() return ns.OpenZoneGuide~=nil end,
+    open=function() ns.OpenZoneGuide() end},
+  {key="leveling", title="Leveling and dungeons", hint="Leveling advisor, dungeon readiness, gear by level, writs, camping blueprints and raid prep (/epu leveling).",
+    icon="Interface\\Icons\\INV_Sword_04", available=function() return ns.OpenLevelingTools~=nil end,
+    open=function() ns.OpenLevelingTools("advisor") end},
+  {key="gold", title="Gold and budget", hint="Where your gold comes from and goes, by category, with a budget (/epu gold).",
+    icon="Interface\\Icons\\INV_Misc_Coin_01", available=function() return ns.OpenGoldTracker~=nil end,
+    open=function() ns.OpenGoldTracker() end},
+  -- Personal Trackers (/epu trackers) is still in its own pull request; this
+  -- tile stays hidden until that file is loaded.
+  {key="trackers", title="Personal trackers", hint="Lockouts and profession cooldowns across your alts, farming sessions, consumables, rep and PvP (/epu trackers).",
+    icon="Interface\\Icons\\INV_Misc_PocketWatch_02", available=function() return ns.OpenPersonalTrackers~=nil end,
+    open=function() ns.OpenPersonalTrackers() end},
   {key="chat", title="Chat history", hint="Whispers (and, if you choose, guild and officer chat) kept after a reload.",
     icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
@@ -234,7 +250,7 @@ function ns.InstallCommunityViews(views,env)
       if isHome then
         local rows={}
         for _,tool in ipairs(memberTools) do
-          if E.Match(q,tool.title,tool.hint) then
+          if (not tool.available or tool.available()) and E.Match(q,tool.title,tool.hint) then
             local key=tool.key
             rows[#rows+1]={key=key,title=tool.title,sub=tool.hint,icon=tool.icon,right="Open",
               onClick=tool.open or function() ns.OpenMemberTools(key) end}
