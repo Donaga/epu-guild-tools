@@ -323,6 +323,8 @@ end
 -- =========================================================================
 -- Guild-wide Key / Attunement / Milestone Tracker + Projects & Needs Links
 -- =========================================================================
+-- "L" is the guild map's location kind (GuildMap.lua), so readiness uses its own.
+local READINESS_KIND = "E"
 local function ReadinessStore()
   local g = ns.G and ns.G()
   if not g then return end
@@ -345,7 +347,7 @@ function ns.ToggleMyReadiness(keyId, val)
   store[ns.me].done[keyId] = val and true or nil
   store[ns.me].t = ns.Now and ns.Now() or time()
   if ns.Send then
-    ns.Send("L", { who = ns.me, done = store[ns.me].done, t = store[ns.me].t })
+    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
   end
   if ns.Changed then ns.Changed() end
 end
@@ -363,7 +365,7 @@ function ns.SyncMyKeys()
   end
   if changed then
     store[ns.me].t = ns.Now and ns.Now() or time()
-    if ns.Send then ns.Send("L", { who = ns.me, done = store[ns.me].done, t = store[ns.me].t }) end
+    if ns.Send then ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t }) end
   end
 end
 
@@ -403,7 +405,7 @@ function ns.ToggleMyCampingStation(bpName)
   store[ns.me].camp[bpName] = not store[ns.me].camp[bpName] and true or nil
   store[ns.me].t = ns.Now and ns.Now() or time()
   if ns.Send then
-    ns.Send("L", { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
+    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
   end
 end
 
@@ -423,22 +425,30 @@ function ns.GetGuildCampingCoverage(bpName)
   return owners
 end
 
-ns.comm.L = function(sender, payload)
-  if type(payload) ~= "table" or type(payload.done) ~= "table" then return end
-  local who = ns.Member and ns.Member(payload.who or sender) or sender
+ns.comm[READINESS_KIND] = function(sender, payload, channel)
+  if channel ~= "GUILD" or type(payload) ~= "table" or type(payload.done) ~= "table" then return end
+  -- Only the sender's own record: a member can't rewrite someone else's.
+  local who = ns.Member and ns.Member(sender)
   if not who then return end
+  local now = ns.Now and ns.Now() or time()
+  if tonumber(payload.t) and tonumber(payload.t) > now + 300 then return end
   local store = ReadinessStore()
   if not store then return end
   local cur = store[who]
   if cur and (cur.t or 0) >= (payload.t or 0) then return end
-  local clean, cleanCamp = {}, {}
+  local clean, cleanCamp, n = {}, {}, 0
   for k, v in pairs(payload.done) do
-    if type(k) == "string" and v == true then clean[k] = true end
+    n = n + 1
+    if n > 200 then return end
+    if type(k) == "string" and #k <= 60 and v == true then clean[k] = true end
   end
-  if type(payload.camp) == "table" then
-    for k, v in pairs(payload.camp) do
-      if type(k) == "string" and v == true then cleanCamp[k] = true end
-    end
+  -- A dungeon update without camp keeps the camping stations we already had.
+  local camp = payload.camp
+  if type(camp) ~= "table" then camp = cur and cur.camp or {} end
+  for k, v in pairs(camp) do
+    n = n + 1
+    if n > 400 then return end
+    if type(k) == "string" and #k <= 80 and v == true then cleanCamp[k] = true end
   end
   store[who] = { done = clean, camp = cleanCamp, t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
 end
