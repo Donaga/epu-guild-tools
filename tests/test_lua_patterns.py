@@ -21,5 +21,12 @@ for path in sorted(glob.glob(os.path.join(ADDON, "*.lua"))):
 ok = not hits
 print(("PASS " if ok else "FAIL ") + "no multi-value assignment from `f and f()` " + ", ".join(hits))
 failed += not ok
+# The release job adds one X-CurseForge-Version line to the zip's TOC, and
+# Core.lua trusts it to mean "a published build". Copies of the line kept in
+# the repo stack up in every release and can hide the real one.
+toc = open(os.path.join(ADDON, "EPUGuild.toc"), encoding="utf-8").read()
+ok = "X-CurseForge-Version" not in toc
+print(("PASS " if ok else "FAIL ") + "the repo TOC carries no X-CurseForge-Version line")
+failed += not ok
 print("Lua pattern checks:", failed, "failed")
 sys.exit(bool(failed))
