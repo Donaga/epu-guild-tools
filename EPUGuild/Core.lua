@@ -503,6 +503,10 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.HandleWayCommand then ns.HandleWayCommand(args) end
   elseif cmd == "gold" or cmd == "budget" then
     if ns.OpenGoldTracker then ns.OpenGoldTracker() end
+  elseif cmd == "trackers" or cmd == "lockouts" or cmd == "cds" then
+    if ns.OpenPersonalTrackers then
+      ns.OpenPersonalTrackers(cmd == "lockouts" and "lockouts" or (cmd == "cds" and "cooldowns" or nil))
+    end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

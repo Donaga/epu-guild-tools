@@ -2928,7 +2928,10 @@ function ns.OpenPopoutChatSettings()
           Row({
             { "Info Bars (/epu bars)", 140, function() ns.OpenInfoBarsSettings() end },
             { "Travel & QoL (/epu qol)", 140, function() if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end end },
-            { "Gold & Budget (/epu gold)", 150, function() if ns.OpenGoldTracker then ns.OpenGoldTracker() end end },
+          })
+          Row({
+            { "Gold & Budget (/epu gold)", 160, function() if ns.OpenGoldTracker then ns.OpenGoldTracker() end end },
+            { "Trackers (/epu trackers)", 165, function() if ns.OpenPersonalTrackers then ns.OpenPersonalTrackers() end end },
           })
         end
       end
