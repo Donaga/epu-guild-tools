@@ -662,11 +662,16 @@ local function AttachToWorldMap()
   local btn = Btn(UIParent, "Visitor's Guide", 112, 22)
   btn:SetFrameStrata("HIGH")
   btn:Hide()
+  -- The button is our own plain frame, so showing and hiding it is fine in
+  -- combat; only re-anchoring waits until combat ends (the first anchor
+  -- stays put meanwhile). Returning early in combat left it floating on
+  -- screen after the map closed.
   local function SyncMapBtn()
-    if InCombatLockdown and InCombatLockdown() then return end
     if WorldMapFrame:IsShown() then
-      btn:ClearAllPoints()
-      btn:SetPoint("TOPRIGHT", WorldMapFrame, "TOPRIGHT", -64, -30)
+      if not (InCombatLockdown and InCombatLockdown()) or not btn:GetPoint() then
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPRIGHT", WorldMapFrame, "TOPRIGHT", -64, -30)
+      end
       btn:Show()
     else
       btn:Hide()

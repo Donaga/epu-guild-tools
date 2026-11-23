@@ -69,11 +69,18 @@ local function SetPending(cat, secs)
   pendingUntil = GetTime() + (secs or 2)
 end
 
-local function DetectCategory()
+-- Repairs and flights only cost gold; loot only brings it in. A pending label
+-- waits for a change of its own sign, so grey items sold at the same vendor
+-- visit as a repair stay "vendor" and the repair still gets its label.
+local SPEND_ONLY = { repair = true, flight = true }
+local function DetectCategory(delta)
   if pendingCat and GetTime() <= pendingUntil then
-    local c = pendingCat
-    pendingCat = nil
-    return c
+    local spend = SPEND_ONLY[pendingCat]
+    if (spend and delta < 0) or (not spend and delta > 0) then
+      local c = pendingCat
+      pendingCat = nil
+      return c
+    end
   end
   if openState.auction then return "auction" end
   if openState.mail then return "mail" end
@@ -162,7 +169,8 @@ local function RecordDelta(delta, cat)
   if not delta or delta == 0 then return end
   local db = DB()
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   db.entries[#db.entries + 1] = {
     t = time(),
     who = ns.me or "Player",
@@ -466,7 +474,8 @@ function ns.OpenGoldTracker()
 end
 
 if hooksecurefunc then
-  if RepairAllItems then hooksecurefunc("RepairAllItems", function() SetPending("repair", 3) end) end
+  -- A guild-funded repair (RepairAllItems(true)) doesn't touch the player's gold.
+  if RepairAllItems then hooksecurefunc("RepairAllItems", function(guild) if not guild then SetPending("repair", 3) end end) end
   if TakeTaxiNode then hooksecurefunc("TakeTaxiNode", function() SetPending("flight", 4) end) end
 end
 
@@ -478,7 +487,7 @@ if ns.On then
     local cur = GetMoney and SafeNum(GetMoney())
     if not cur then return end
     if lastMoney ~= nil and cur ~= lastMoney then
-      RecordDelta(cur - lastMoney, DetectCategory())
+      RecordDelta(cur - lastMoney, DetectCategory(cur - lastMoney))
     end
     lastMoney = cur
   end)

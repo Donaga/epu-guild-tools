@@ -491,9 +491,9 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("runs") end
   elseif cmd == "raid" or cmd == "raids" or cmd == "raidprep" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("raid") end
-  elseif cmd == "logs" or cmd == "combatlog" then
+  elseif cmd == "logs" then
     local sub = (args or ""):lower()
-    if sub == "combat" or sub == "xp" or sub == "system" then
+    if sub == "xp" or sub == "system" then
       if ns.ToggleLogWindow then ns.ToggleLogWindow(sub) end
     elseif ns.OpenPopoutChatSettings then
       ns.OpenPopoutChatSettings()
