@@ -318,6 +318,9 @@ def status_label(r: dict) -> str:
     return CRAFT_LABEL.get(st, st) if is_craft(r) else st
 
 
+NEEDED_MATS_STALE = 30 * 86400   # the addon hides lists nobody has refreshed for 30 days
+
+
 class GuildData:
     """A read of one guild's data out of EPUGuildDB."""
 
@@ -642,6 +645,62 @@ class GuildData:
             "requests": counts,
             "updated": max([int(s.get("v") or 0) for _, s in banks] + [int((self.g.get("needs") or {}).get("v") or 0)]),
         }
+
+    def needed_mats(self, now: float | None = None) -> list[dict]:
+        """Guildmates' needed mats, one row per material, by the addon's rules:
+        only characters still on the roster, and only lists refreshed in the
+        last 30 days. Rows: {id, name, total, prof, who: [{who, n, p}]}, where
+        n = 0 means no amount was given. Most-wanted materials first."""
+        now = time.time() if now is None else now
+        members = set(self.members)
+        rows: dict[int, dict] = {}
+        for who, r in (self.g.get("neededMats") or {}).items():
+            if not isinstance(who, str) or who not in members or not isinstance(r, dict):
+                continue
+            try:
+                stamp = float(r.get("t") or 0)
+            except (TypeError, ValueError):
+                continue
+            items = r.get("i")
+            if now - stamp > NEEDED_MATS_STALE or not isinstance(items, dict):
+                continue
+            for item_id, e in items.items():
+                try:
+                    item_id = int(item_id)
+                    n = max(0, int((e or {}).get("n") or 0)) if isinstance(e, dict) else 0
+                except (TypeError, ValueError):
+                    continue
+                if item_id <= 0:
+                    continue
+                prof = e.get("p") if isinstance(e, dict) and isinstance(e.get("p"), str) else None
+                row = rows.setdefault(item_id, {"id": item_id, "name": self.item_name(item_id), "total": 0, "who": []})
+                row["who"].append({"who": who, "n": n, "p": prof})
+                row["total"] += n
+        out = []
+        for row in rows.values():
+            row["who"].sort(key=lambda w: (-w["n"], w["who"]))
+            profs = [w["p"] for w in row["who"] if w["p"]]
+            row["prof"] = max(sorted(set(profs)), key=profs.count) if profs else None
+            out.append(row)
+        out.sort(key=lambda r: (-len(r["who"]), -r["total"], r["name"].lower()))
+        return out
+
+
+def needed_mats_groups(rows: list[dict], max_items: int = 15, max_names: int = 3) -> tuple[list[tuple[str, list[str]]], int]:
+    """The daily "guild needs" post, kept short: the most-wanted materials
+    (up to max_items), grouped by profession, one line each:
+        **Linen Cloth** x40: Tyler Baker (20), Ana Stone (20), +1 more
+    Returns ([(profession, lines)], how many materials were left out)."""
+    shown = rows[:max(0, max_items)]
+    groups: dict[str, list[str]] = {}
+    for row in shown:
+        names = [f"{w['who']} ({w['n']})" if w["n"] else w["who"] for w in row["who"][:max_names]]
+        if len(row["who"]) > max_names:
+            names.append(f"+{len(row['who']) - max_names} more")
+        amount = f" x{row['total']}" if row["total"] else ""
+        groups.setdefault(row["prof"] or "Other", []).append(f"**{row['name']}**{amount}: {', '.join(names)}")
+    order = sorted(groups, key=lambda p: (p == "Other", -len(groups[p]), p))
+    return [(p, groups[p]) for p in order], max(0, len(rows) - len(shown))
 
 
 def load_guild_data(sv_path: str, guild_key: str | None = None) -> GuildData:

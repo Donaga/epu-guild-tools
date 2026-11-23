@@ -35,3 +35,7 @@ Turn these warnings off in the main window under **Settings → Travel, vendor a
 ## Sync
 
 Lists sync like shared gathering spots: a member can only publish their own, officers keep the guild's copy and pass it to members who log in later, and `/epu tooltips` turns the tooltip line off along with EPU's other tooltip lines. Guildmates need this version of EPU to see or share lists.
+
+## On Discord
+
+If your officers run the EPU Discord companion, it can post a short **Guild needs** list once a day from these lists (who needs what, and how many), and anyone can type `/neededmats` in Discord to see it. Your character name and your list show there. Setup is in the [companion README](../epu-discord/README.md#daily-guild-needs-post).
