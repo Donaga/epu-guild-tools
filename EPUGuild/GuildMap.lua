@@ -1401,6 +1401,12 @@ end
 
 local function Send(key, text)
   if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
+  -- A slash command (/inv, /dance, /epu) goes to WoW's own chat box instead
+  -- of being posted as text; pressing Enter there runs it as usual.
+  if text:match("^%s*/") then
+    if ChatFrame_OpenChat then ChatFrame_OpenChat((text:gsub("^%s+", ""))) end
+    return true
+  end
   text = text:sub(1, 255)
   if CHANNELS[key] and CHANNELS[key].channelBase then
     local cid = ResolvePublicChannelID(CHANNELS[key].channelBase)
@@ -1491,7 +1497,9 @@ local function Opt()
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
-  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
+  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Loot", sources={system=true,...} } }
+  -- The Combat Log source is gone (it never had any lines); a tab that used it keeps its other sources.
+  for _, ct in ipairs(o.customTabs) do if type(ct) == "table" and type(ct.sources) == "table" then ct.sources.combat = nil end end
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -2111,6 +2119,14 @@ local function BuildWindow(id)
   end
   function f:Update()
     local st = WState(id)
+    -- Is the reader at the newest message right now (before the rebuild)?
+    if self.scroll and self.scroll.GetVerticalScroll and self.child then
+      local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
+      local cur = self.scroll:GetVerticalScroll() or 0
+      local oldest = Opt().oldestFirst and true or false
+      self.wasAtNewest = self.scrollOldest ~= oldest or (oldest and cur >= maxV - 20) or (not oldest and cur <= 20)
+      self.scrollOldest = oldest
+    end
     if not single and not MState().key then
       local first = ns.ChatConversations()[1]
       MState().key = first and ("w:" .. first.who) or (ns.ChatKeep("guild") and "guild" or nil)
@@ -2172,7 +2188,7 @@ local function BuildWindow(id)
       if tabDef and tabDef.sources then
         for src, on in pairs(tabDef.sources) do
           if on then
-            if src == "combat" or src == "xp" or src == "system" then
+            if src == "xp" or src == "system" then
               for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
                 merged[#merged + 1] = { t = e.t, seq = e.seq, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
               end
@@ -2189,9 +2205,12 @@ local function BuildWindow(id)
           end
         end
       end
-      local oldest = Opt().oldestFirst
-      StableSortByTime(merged, not oldest)
+      -- Keep the newest 100, then show them in the chosen order.
+      StableSortByTime(merged, true)
       for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
+      if Opt().oldestFirst then
+        for i = 1, math.floor(#out / 2) do out[i], out[#out + 1 - i] = out[#out + 1 - i], out[i] end
+      end
       empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
       local lines, channel = ThreadLines(key, 100)
@@ -2207,9 +2226,14 @@ local function BuildWindow(id)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
+    -- Jump to the newest message only for a new conversation or when the
+    -- reader was already there; otherwise a busy channel (Trade, General)
+    -- keeps pulling them back while they scroll up to read.
     if not self.searching and self.scroll and self.scroll.SetVerticalScroll and self.child then
       local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
-      self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0)
+      local follow = self.scrollKey ~= key or self.wasAtNewest ~= false
+      if follow then self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0) end
+      self.scrollKey = key
     end
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
@@ -2915,7 +2939,6 @@ function ns.OpenPopoutChatSettings()
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
         Heading("Customizable Log Windows")
         Row({
-          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 118, function() ns.ToggleLogWindow("combat"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
@@ -2934,7 +2957,7 @@ function ns.OpenPopoutChatSettings()
       end
 
       Heading("Custom Pop-out Tabs")
-      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Combat, City)..."))
+      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Loot, City)..."))
       nameBox:SetPoint("TOPLEFT", 4, y)
       local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
       addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
@@ -2942,13 +2965,13 @@ function ns.OpenPopoutChatSettings()
         local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
         if nm == "" then return ns.Print("Enter a name for the custom tab.") end
         o.customTabs = o.customTabs or {}
-        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { combat = true } }
+        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { system = true } }
         SyncUI()
       end)
       y = y - 28
 
       local STREAM_SOURCES = {
-        { "combat", "Combat Log" }, { "xp", "XP & Rep" }, { "system", "Server & Loot" },
+        { "xp", "XP & Rep" }, { "system", "Server & Loot" },
         { "whisper", "Whispers" }, { "guild", "Guild" }, { "officer", "Officer" },
         { "party", "Party" }, { "raid", "Raid" }, { "instance", "Instance / BG" },
         { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },

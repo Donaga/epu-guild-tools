@@ -3,13 +3,6 @@
 ## Notes: Guild bank wish list, item requests, donation log, crafter directory and recipe lookup for E Pluribus Unum.
 ## Author: Chris Baker
 ## Version: 0.31.1
-## X-CurseForge-Version: 0.31.0
-## X-CurseForge-Version: 0.30.1
-## X-CurseForge-Version: 0.30.0
-## X-CurseForge-Version: 0.29.4
-## X-CurseForge-Version: 0.29.3
-## X-CurseForge-Version: 0.29.0
-## X-CurseForge-Version: 0.28.6
 ## SavedVariables: EPUGuildDB
 ## SavedVariablesPerCharacter: EPUGuildCharDB
 ## OptionalDeps: AHledger, TradeSkillMaster, Auctionator, GatherMate2
@@ -51,6 +44,7 @@ GoldTracker.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua
+NeededMats.lua
 QuestMatching.lua
 Sync.lua
 Bank.lua
@@ -61,6 +55,7 @@ BankCatalog.lua
 Discord.lua
 Inbox.lua
 UI.lua
+NeededMatsUI.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua

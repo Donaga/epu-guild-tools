@@ -1299,10 +1299,10 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "neededmats", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
-  {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
+  {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes", "neededmats"},
   {label="Guild", first="news", iconView="news", "news", "projects", "invites"},
   {label="Member tools", first="membertools", iconView="membertools", "membertools", "onboarding"},
 }
@@ -2343,6 +2343,47 @@ ns.UIKit={FONT=FONT,FallbackFont=fallbackFont,Btn=Btn,Match=Match,C=C,OpenMenu=O
 if ns.InstallCasualViews then ns.InstallCasualViews(Views,ns.UIKit) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
+-- Needed mats: what guildmates (and you) still need for their crafting -----
+Views.neededmats = {
+  label = "Needed mats", icon = "Interface\\Icons\\INV_Fabric_Linen_01",
+  tools = function(bar)
+    bar:Add(Btn(bar, "My needed mats", 120, 22, "accent"), "right", function() ns.ShowNeededMats() end,
+      "Add or remove the materials you need. Guildmates see them on the item's tooltip.")
+  end,
+  rows = function(g, q)
+    local ids, seen, out = {}, {}, {}
+    for _, e in ipairs(ns.MyNeededMats()) do if not seen[e.id] then seen[e.id] = true; ids[#ids + 1] = e.id end end
+    for _, e in ipairs(ns.GuildNeededMats()) do if not seen[e.id] then seen[e.id] = true; ids[#ids + 1] = e.id end end
+    for _, id in ipairs(ids) do
+      local name = ns.ItemName(id, true)
+      local list = ns.NeededBy(id)
+      local names, total, profs = {}, 0, {}
+      for _, c in ipairs(list) do
+        local n = c.me and "you" or c.who
+        if not c.me and c.online then n = "|cff4ade80" .. n .. "|r" end
+        names[#names + 1] = n .. (c.n > 0 and (" x" .. c.n) or "")
+        total = total + c.n
+        if c.p then profs[c.p] = true end
+      end
+      local plist = {}
+      for p in pairs(profs) do plist[#plist + 1] = p end
+      table.sort(plist)
+      if #list > 0 and Match(q, name, table.concat(names, " "), table.concat(plist, " ")) then
+        out[#out + 1] = {
+          key = "neededmat:" .. id, item = id, sortName = (name or "") .. "\031" .. id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
+          title = name .. (#plist > 0 and ("  |cff7e8590" .. table.concat(plist, ", ") .. "|r") or ""),
+          sub = "Needed by " .. table.concat(names, ", "),
+          right = total > 0 and ("x" .. total) or "", rightColor = C.gold,
+          onClick = function() ns.ShowNeededMats() end,
+        }
+      end
+    end
+    table.sort(out, function(a, b) return a.sortName < b.sortName end)
+    return out
+  end,
+  footer = function() return "Before you vendor or list a material, check here. Add your own with My needed mats or /epu mats add [item] 20." end,
+  empty = "No guildmate has listed a needed material yet. Add yours with My needed mats.",
+}
 Views.home = {
   label = "Home", icon = "Interface\\Icons\\INV_Misc_Map_01",
   rows = function(g, query)
@@ -4161,6 +4202,7 @@ do
       market="Prices guildmates ask for gathered materials and crafts.",
       crafters="Who can craft what, and their profession skill.",
       recipes="Every recipe guildmates know. Ask someone to craft one.",
+      neededmats="Materials guildmates need for their crafting, and your own list.",
       news="Guild announcements and milestones.",
       projects="Guild crafting projects and who is working on which part.",
       invites="Invite requests for new members.",

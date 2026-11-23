@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Needed mats.** Crafters can list the materials they still need (`/epu mats`, or the new **Professions → Needed mats** page in the main window). Everyone in the guild sees it on the item's tooltip, for example "Needed by: Tyler (x20), Ana", so the stack goes to a guildmate instead of a vendor or the auction house. Lists are per character, up to 40 materials, with an optional amount; an entry comes off by itself once that many have arrived in your bags. Officers can clear entries, and a list ages out after 30 days without its character logging in. Details: [docs/needed-mats.md](docs/needed-mats.md).
+
 ## 0.31.1
 
 - Guide notices explain the five dungeon entries per hour limit and the Vampiric Embrace group healing adjustment.

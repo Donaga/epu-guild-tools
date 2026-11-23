@@ -1,17 +1,18 @@
--- EPU Guild Tools: Customizable floating windows for Combat Log, XP & Rep, and Server/Loot.
+-- EPU Guild Tools: Customizable floating windows for XP & Rep and Server/Loot.
+-- (0.29.x also had a Combat Log window. It listened for chat events the game
+-- dropped in 2.4, so it never showed anything; DB() clears what it saved.)
 local _, ns = ...
 
-local ORDER = { "combat", "xp", "system" }
+local ORDER = { "xp", "system" }
 local DEFAULTS = {
-  combat = { title = "EPU Combat Log", tab = "Combat Log", enabled = false, maxLines = 150, fontSize = 11, x = -260, y = 120, w = 340, h = 260 },
   xp = { title = "EPU XP & Reputation", tab = "XP & Rep", enabled = false, maxLines = 120, fontSize = 11, x = 0, y = 120, w = 340, h = 260 },
   system = { title = "EPU Server & Loot", tab = "Server & Loot", enabled = false, maxLines = 150, fontSize = 11, x = 260, y = 120, w = 340, h = 260 },
 }
 
 local frames = {}
 local combinedFrame
-local logs = { combat = {}, xp = {}, system = {} }
-local rawLogs = { combat = {}, xp = {}, system = {} }
+local logs = { xp = {}, system = {} }
+local rawLogs = { xp = {}, system = {} }
 local paused = {}
 local sessionStart = time()
 local sessionXP = 0
@@ -19,6 +20,8 @@ local sessionXP = 0
 local function DB()
   if not ns.db then return {} end
   ns.db.logWindows = ns.db.logWindows or {}
+  -- The Combat Log window is gone: drop its saved settings and its tab.
+  ns.db.logWindows.combat = nil
   for k, def in pairs(DEFAULTS) do
     ns.db.logWindows[k] = ns.db.logWindows[k] or {}
     local s = ns.db.logWindows[k]
@@ -28,6 +31,7 @@ local function DB()
   if type(ns.db.logWindows.combinedCfg) ~= "table" then
     ns.db.logWindows.combinedCfg = { x = 0, y = 120, w = 380, h = 280, active = "system", fontSize = 11 }
   end
+  if not DEFAULTS[ns.db.logWindows.combinedCfg.active or "system"] then ns.db.logWindows.combinedCfg.active = "system" end
   return ns.db.logWindows
 end
 
@@ -57,6 +61,14 @@ local function LayoutScrollText(f)
   f.child:SetHeight(math.max(100, (f.text:GetStringHeight() or 40) + 16))
 end
 
+-- Follow new lines only when the reader is already at the newest one, so
+-- scrolling up to read back isn't undone by every loot or system message.
+local function AtNewest(f)
+  if not (f.scroll and f.scroll.GetVerticalScroll and f.child) then return true end
+  local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
+  return (f.scroll:GetVerticalScroll() or 0) >= maxV - 20
+end
+
 local function RefreshWindow(kind)
   local db = DB()
   if ns.IsLogWindowsCombined() then
@@ -65,13 +77,15 @@ local function RefreshWindow(kind)
     local cfg = db.combinedCfg or {}
     local active = cfg.active
     if not DEFAULTS[active] then active = "system"; cfg.active = active end
+    local follow = AtNewest(f) or f.lastActive ~= active
+    f.lastActive = active
     local fnt = f.text.SetFont and f.text:GetFont()
     if fnt then f.text:SetFont(fnt, cfg.fontSize or 11, "") end
     f.text:SetText(BuildLogText(active))
     LayoutScrollText(f)
     if f.UpdateTabs then f:UpdateTabs() end
     if f.pauseBtn then f.pauseBtn:SetText(paused[active] and "Resume" or "Pause") end
-    if f.scroll and f.scroll.SetVerticalScroll then
+    if follow and f.scroll and f.scroll.SetVerticalScroll then
       local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
       f.scroll:SetVerticalScroll(maxV)
     end
@@ -81,20 +95,23 @@ local function RefreshWindow(kind)
   local f = frames[kind]
   if not f or not f:IsShown() then return end
   local cfg = db[kind] or DEFAULTS[kind]
+  local follow = AtNewest(f)
   local fnt = f.text.SetFont and f.text:GetFont()
   if fnt then f.text:SetFont(fnt, cfg.fontSize or 11, "") end
   f.text:SetText(BuildLogText(kind))
   LayoutScrollText(f)
   if f.pauseBtn then f.pauseBtn:SetText(paused[kind] and "Resume" or "Pause") end
-  if f.scroll and f.scroll.SetVerticalScroll then
+  if follow and f.scroll and f.scroll.SetVerticalScroll then
     local maxV = math.max(0, (f.child:GetHeight() or 0) - (f.scroll:GetHeight() or 0))
     f.scroll:SetVerticalScroll(maxV)
   end
 end
 
 local function Append(kind, msg, colorHex)
-  if paused[kind] or type(msg) ~= "string" or msg == "" then return end
+  -- Check for a secret value before comparing: comparing one is an error.
+  if paused[kind] or type(msg) ~= "string" then return end
   if issecretvalue and issecretvalue(msg) then return end
+  if msg == "" then return end
   local list = logs[kind]
   local raw = rawLogs[kind]
   local maxL = DEFAULTS[kind].maxLines
@@ -221,8 +238,9 @@ local function EnsureWindow(kind)
     def.title,
     cfg.w or def.w,
     cfg.h or def.h,
-    cfg.x or def.x,
-    cfg.y or def.y,
+    -- 0.29.x saved x/y without the anchor point; those don't place right.
+    cfg.point and cfg.x or def.x,
+    cfg.point and cfg.y or def.y,
     function()
       local s = DB()[kind]
       if s then s.enabled = false end
@@ -294,8 +312,8 @@ local function EnsureCombinedWindow()
     "EPU Logs",
     cfg.w or 380,
     cfg.h or 280,
-    cfg.x or 0,
-    cfg.y or 120,
+    cfg.point and cfg.x or 0,
+    cfg.point and cfg.y or 120,
     function()
       local d = DB()
       for _, k in ipairs(ORDER) do
@@ -360,7 +378,7 @@ local function EnsureCombinedWindow()
     for _, k in ipairs(ORDER) do
       if d[k] and d[k].enabled then shown[#shown + 1] = k end
     end
-    if #shown == 0 then shown = { "combat", "xp", "system" } end
+    if #shown == 0 then shown = { "xp", "system" } end
     local activeVisible = false
     for _, k in ipairs(shown) do if k == active then activeVisible = true; break end end
     if not activeVisible then active = shown[1]; d.combinedCfg.active = active end
@@ -455,7 +473,6 @@ function ns.SetLogWindowsCombined(on)
 end
 
 function ns.OpenLogWindowsMenu()
-  ns.ToggleLogWindow("combat", true)
   ns.ToggleLogWindow("xp", true)
   ns.ToggleLogWindow("system", true)
 end
@@ -478,13 +495,4 @@ if ns.On then
   ns.On("CHAT_MSG_SYSTEM", function(msg) Append("system", msg, "|cffffff00") end)
   ns.On("CHAT_MSG_LOOT", function(msg) Append("system", msg, "|cff1eff00") end)
   ns.On("CHAT_MSG_MONEY", function(msg) Append("system", msg, "|cffffd100") end)
-
-  for _, ev in ipairs({
-    "CHAT_MSG_COMBAT_SELF_HITS", "CHAT_MSG_COMBAT_SELF_MISSES",
-    "CHAT_MSG_COMBAT_HOSTILEPLAYER_HITS", "CHAT_MSG_COMBAT_CREATURE_VS_SELF_HITS",
-    "CHAT_MSG_SPELL_SELF_DAMAGE", "CHAT_MSG_SPELL_SELF_BUFF",
-    "CHAT_MSG_SPELL_HOSTILEPLAYER_DAMAGE", "CHAT_MSG_SPELL_CREATURE_VS_SELF_DAMAGE",
-  }) do
-    ns.On(ev, function(msg) Append("combat", msg, "|cffff9e64") end)
-  end
 end

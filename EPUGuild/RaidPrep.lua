@@ -36,6 +36,8 @@ ns.RAID_CONSUMABLES = {
   { name = "Greater Arcane Elixir", itemID = 13454, use = "Caster DPS (+35 Spell Power)" },
 }
 
+-- "K" is the quest list kind (QuestMatching.lua), so raid prep uses its own.
+local RAID_KIND = "Z"
 local function RaidStore()
   local g = ns.G and ns.G()
   if not g then return end
@@ -71,14 +73,17 @@ function ns.SyncMyRaidStatus()
   if not store or not ns.me then return end
   local st = ns.GetMyRaidStatus()
   store[ns.me] = st
-  if ns.Send then ns.Send("K", st) end
+  if ns.Send then ns.Send(RAID_KIND, st) end
   return st
 end
 
-ns.comm.K = function(sender, st)
-  if type(st) ~= "table" then return end
-  local who = (ns.Member and ns.Member(st.who or sender)) or sender
+ns.comm[RAID_KIND] = function(sender, st, channel)
+  if channel ~= "GUILD" or type(st) ~= "table" then return end
+  -- Only the sender's own record: a member can't rewrite someone else's.
+  local who = ns.Member and ns.Member(sender)
   if not who then return end
+  local now = ns.Now and ns.Now() or time()
+  if tonumber(st.t) and tonumber(st.t) > now + 300 then return end
   local store = RaidStore()
   if not store then return end
   local cur = store[who]
@@ -103,11 +108,11 @@ function ns.GetRaidRosterReport()
       local role = (rs and rs.role) or "DPS"
       local g = ns.G and ns.G()
       local prof = g and g.profiles and g.profiles[who]
-      if prof then
-        if prof.tank then role = "Tank"
-        elseif prof.healer then role = "Healer"
-        elseif prof.dps then role = "DPS" end
-      end
+      -- Profiles keep roles as letters: "t", "h", "d" (see ns.SetProfile).
+      local pr = prof and type(prof.roles) == "string" and prof.roles or ""
+      if pr:find("t", 1, true) then role = "Tank"
+      elseif pr:find("h", 1, true) then role = "Healer"
+      elseif pr:find("d", 1, true) then role = "DPS" end
       local entry = {
         name = who,
         level = lv,

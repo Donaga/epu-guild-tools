@@ -183,27 +183,23 @@ end
 function ns.CheckGuildStockAndCrafters(itemName, itemID)
   local bankQty, crafters = 0, {}
   local g = ns.G and ns.G()
-  if g and g.bank then
+  -- Bank snapshots keep a plain count per item: g.bank[alt].items[id] = n.
+  if g and g.bank and itemID then
     for _, b in pairs(g.bank) do
-      if b.items and itemID and b.items[itemID] then
-        bankQty = bankQty + (b.items[itemID].qty or 0)
+      if type(b) == "table" and type(b.items) == "table" then
+        bankQty = bankQty + (tonumber(b.items[itemID]) or 0)
       end
     end
   end
-  if g and g.guildBank and g.guildBank.items and itemID and g.guildBank.items[itemID] then
-    bankQty = bankQty + (g.guildBank.items[itemID].qty or 0)
-  end
-  local needle = (itemName or ""):lower()
-  if g and g.recipes and needle ~= "" then
-    for who, rlist in pairs(g.recipes) do
-      for _, rec in ipairs(rlist) do
-        local rname = type(rec) == "table" and rec.name or tostring(rec)
-        if rname:lower():find(needle, 1, true) then
-          local online = ns.roster and ns.roster[who] and ns.roster[who].online
-          crafters[#crafters + 1] = { name = who, online = online and true or false }
-          break
-        end
-      end
+  -- Crafters come from the shared recipe index (Data.lua), by item, then by name.
+  local entry = itemID and ns.RecipeFor and ns.RecipeFor("item:" .. itemID)
+  if not entry and itemName and itemName ~= "" and ns.RecipeByName then entry = ns.RecipeByName(itemName) end
+  local seen = {}
+  for _, c in ipairs(entry and entry.crafters or {}) do
+    if not seen[c.who] then
+      seen[c.who] = true
+      local online = ns.roster and ns.roster[c.who] and ns.roster[c.who].online
+      crafters[#crafters + 1] = { name = c.who, online = online and true or false }
     end
   end
   table.sort(crafters, function(a, b)
@@ -323,6 +319,8 @@ end
 -- =========================================================================
 -- Guild-wide Key / Attunement / Milestone Tracker + Projects & Needs Links
 -- =========================================================================
+-- "L" is the guild map's location kind (GuildMap.lua), so readiness uses its own.
+local READINESS_KIND = "E"
 local function ReadinessStore()
   local g = ns.G and ns.G()
   if not g then return end
@@ -345,7 +343,7 @@ function ns.ToggleMyReadiness(keyId, val)
   store[ns.me].done[keyId] = val and true or nil
   store[ns.me].t = ns.Now and ns.Now() or time()
   if ns.Send then
-    ns.Send("L", { who = ns.me, done = store[ns.me].done, t = store[ns.me].t })
+    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
   end
   if ns.Changed then ns.Changed() end
 end
@@ -363,7 +361,7 @@ function ns.SyncMyKeys()
   end
   if changed then
     store[ns.me].t = ns.Now and ns.Now() or time()
-    if ns.Send then ns.Send("L", { who = ns.me, done = store[ns.me].done, t = store[ns.me].t }) end
+    if ns.Send then ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t }) end
   end
 end
 
@@ -403,7 +401,7 @@ function ns.ToggleMyCampingStation(bpName)
   store[ns.me].camp[bpName] = not store[ns.me].camp[bpName] and true or nil
   store[ns.me].t = ns.Now and ns.Now() or time()
   if ns.Send then
-    ns.Send("L", { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
+    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
   end
 end
 
@@ -423,22 +421,30 @@ function ns.GetGuildCampingCoverage(bpName)
   return owners
 end
 
-ns.comm.L = function(sender, payload)
-  if type(payload) ~= "table" or type(payload.done) ~= "table" then return end
-  local who = ns.Member and ns.Member(payload.who or sender) or sender
+ns.comm[READINESS_KIND] = function(sender, payload, channel)
+  if channel ~= "GUILD" or type(payload) ~= "table" or type(payload.done) ~= "table" then return end
+  -- Only the sender's own record: a member can't rewrite someone else's.
+  local who = ns.Member and ns.Member(sender)
   if not who then return end
+  local now = ns.Now and ns.Now() or time()
+  if tonumber(payload.t) and tonumber(payload.t) > now + 300 then return end
   local store = ReadinessStore()
   if not store then return end
   local cur = store[who]
   if cur and (cur.t or 0) >= (payload.t or 0) then return end
-  local clean, cleanCamp = {}, {}
+  local clean, cleanCamp, n = {}, {}, 0
   for k, v in pairs(payload.done) do
-    if type(k) == "string" and v == true then clean[k] = true end
+    n = n + 1
+    if n > 200 then return end
+    if type(k) == "string" and #k <= 60 and v == true then clean[k] = true end
   end
-  if type(payload.camp) == "table" then
-    for k, v in pairs(payload.camp) do
-      if type(k) == "string" and v == true then cleanCamp[k] = true end
-    end
+  -- A dungeon update without camp keeps the camping stations we already had.
+  local camp = payload.camp
+  if type(camp) ~= "table" then camp = cur and cur.camp or {} end
+  for k, v in pairs(camp) do
+    n = n + 1
+    if n > 400 then return end
+    if type(k) == "string" and #k <= 80 and v == true then cleanCamp[k] = true end
   end
   store[who] = { done = clean, camp = cleanCamp, t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
 end
