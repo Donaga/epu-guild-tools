@@ -161,12 +161,79 @@ function ns.ParseGuildBankLogs()
   for _, e in ipairs(entries) do
     if not Known(e) and not (agedOut and e.t <= agedOut) then ns.AddDonation(e.who, e.item, e.n, e.money, GB_KEY, e.t) end
   end
+  ns.MarkDuplicateDonations(g)
   ns.CreditWithdrawals(withdrawals)
   if moved > movedNoted then
     movedNoted = moved
     ns.Print(moved .. (moved == 1 and " deposit" or " deposits") .. " by bank characters in the guild bank log " .. (moved == 1 and "is" or "are")
       .. " the guild's own stock, so " .. (moved == 1 and "it isn't" or "they aren't") .. " counted as donations.")
   end
+end
+
+---------------------------------------------------------------------------
+-- Two officers (or bank managers) who open the guild bank close together
+-- each read the same deposit before the other's record reaches them, so it's
+-- logged twice, under two ids. Every client works out the same duplicates
+-- from the records it holds and marks them (d.dup): they stay in the data,
+-- so the deposit is never logged a third time, but they aren't listed,
+-- counted or thanked.
+-- Records match when who/what/how much agree and they sit within the same
+-- 3-hour log slack as above. In each run of matching records, the logger
+-- that recorded the most of them is kept (ties: the lowest name), so two
+-- real identical deposits logged by one officer both stay.
+---------------------------------------------------------------------------
+local DUP_WINDOW = 3 * 3600
+
+-- "Chris Baker:1700000000:3" -> "Chris Baker"
+local function Logger(id)
+  id = tostring(id)
+  return id:match("^(.-):%d+:%d+$") or id
+end
+ns.DonationLogger = Logger
+
+function ns.MarkDuplicateDonations(g)
+  g = g or ns.G()
+  if not g or type(g.donations) ~= "table" then return 0 end
+  local groups = {}
+  for id, d in pairs(g.donations) do
+    if type(d) == "table" then
+      d.dup = nil
+      if d.to == GB_KEY and not d.void then
+        local sig = tostring(d.who) .. "|" .. tostring(d.item or "") .. "|" .. tostring(tonumber(d.n) or 0) .. "|" .. tostring(tonumber(d.money) or 0)
+        local list = groups[sig]
+        if not list then list = {}; groups[sig] = list end
+        list[#list + 1] = { id = tostring(id), d = d, by = Logger(id), t = tonumber(d.t) or 0 }
+      end
+    end
+  end
+  local marked = 0
+  for _, list in pairs(groups) do
+    if #list > 1 then
+      table.sort(list, function(a, b) if a.t ~= b.t then return a.t < b.t end return a.id < b.id end)
+      local i = 1
+      while i <= #list do
+        local j = i
+        while j < #list and list[j + 1].t - list[j].t <= DUP_WINDOW do j = j + 1 end
+        if j > i then
+          local count, keep = {}, nil
+          for k = i, j do count[list[k].by] = (count[list[k].by] or 0) + 1 end
+          for by, c in pairs(count) do
+            if not keep or c > count[keep] or (c == count[keep] and by < keep) then keep = by end
+          end
+          for k = i, j do
+            if list[k].by ~= keep then list[k].d.dup = true; marked = marked + 1 end
+          end
+        end
+        i = j + 1
+      end
+    end
+  end
+  return marked
+end
+
+-- A donation that counts: not voided by an officer and not a second copy.
+function ns.DonationCounts(d)
+  return type(d) == "table" and not d.void and not d.dup
 end
 
 ---------------------------------------------------------------------------

@@ -119,8 +119,12 @@ end
 function ns.FeedEntries(days)
   local g = ns.GuildStore()
   local list, cutoff = {}, ns.Now() - (days or 30) * DAY
+  local dons = (ns.G() or {}).donations or {}
   for id, e in pairs((g and g.feed) or {}) do
-    if (e.t or 0) >= cutoff then list[#list + 1] = { id = id, t = e.t, who = e.who, kind = e.kind, text = e.text } end
+    -- a shout-out for a guild bank deposit that another officer also logged shows once
+    local don = type(id) == "string" and id:match("^don:(.+)$")
+    local dup = don and dons[don] and dons[don].dup
+    if (e.t or 0) >= cutoff and not dup then list[#list + 1] = { id = id, t = e.t, who = e.who, kind = e.kind, text = e.text } end
   end
   table.sort(list, function(a, b) return (a.t or 0) > (b.t or 0) end)
   return list
@@ -399,7 +403,7 @@ function ns.Review(name)
   out.gained = ns.LevelsGained(name, 14)
   local cutoff, dons, reqs = now - 30 * DAY, 0, 0
   for _, d in pairs(g.donations) do
-    if chars[d.who or ""] and not d.void and (d.t or 0) >= cutoff then dons = dons + 1 end
+    if chars[d.who or ""] and not d.void and not d.dup and (d.t or 0) >= cutoff then dons = dons + 1 end
   end
   for _, r in pairs(g.requests) do
     if chars[r.who or ""] and (r.t or 0) >= cutoff then reqs = reqs + 1 end
