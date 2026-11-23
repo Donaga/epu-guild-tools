@@ -181,5 +181,16 @@ check("an officer's Clear button takes it off the member's list", B.ev('__ns.cdb
 P.ex('__ns.ShowNeededMats()')
 check("members don't get Clear buttons on others' entries", P.ev('#EPUGuildNeededMats.buttons') == 0)
 
+A.ex('__ns.UI:Show(); __ns.UI:SetView("neededmats"); __ns.UI:Refresh()')
+check('the main window has a Needed mats page listing who needs what', A.ev("""
+(function()
+  if __ns.UI.view ~= "neededmats" then return false end
+  for _, row in ipairs(__ns.UI.rows) do
+    local d = row.data
+    if d and d.key == "neededmat:2589" then return d.sub:find("Needed by", 1, true) ~= nil and d.sub:find("Tyler Baker|r x10", 1, true) ~= nil end
+  end
+  return false
+end)()
+"""))
 check('no addon runtime errors', all((c.ev('__errors') or 0) == 0 for c in clients.values()))
 sys.exit(1 if check.failed else 0)

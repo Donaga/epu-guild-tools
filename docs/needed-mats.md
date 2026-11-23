@@ -6,9 +6,11 @@ Crafters can list the materials they still need, for leveling a profession or a 
 
 Online guildmates are green, an amount shows when one was given, and after three names the line ends with "+N more". Your own characters' entries come first, as "you".
 
+The main window has a **Needed mats** page under **Professions** that lists every material guildmates need, with who needs it and how many. Check it before a vendor or auction house run.
+
 ## Adding and removing
 
-- Open **Member tools → Needed mats** in the sidebar, or type `/epu mats`. Shift-click or drag a material into the box, type an amount if you want one, and press **Add**. **Remove** takes it off again.
+- Press **My needed mats** on the Needed mats page, open **Member tools → Needed mats**, or type `/epu mats`. Shift-click or drag a material into the box, type an amount if you want one, and press **Add**. **Remove** takes it off again.
 - Or type `/epu mats add [item] 20` (shift-click the item into the chat line). `/epu mats [item]` works too, and the amount is optional.
 - `/epu mats remove [item]`, `/epu mats list` and `/epu mats clear` (your whole list).
 
