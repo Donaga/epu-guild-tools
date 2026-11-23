@@ -152,7 +152,7 @@ local ITEMS = { [6948] = "Hearthstone", [2589] = "Linen Cloth", [2996] = "Bolt o
 for i = 30000, 30200 do ITEMS[i] = "Test Item " .. i end
 function __link(id) return "|cffffffff|Hitem:" .. id .. "::::::::20:::::|h[" .. ITEMS[id] .. "]|h|r" end
 function GetItemInfo(x)
-  local id = tonumber(x)
+  local id = tonumber(x) or (type(x) == "string" and tonumber(x:match("item:(%d+)")))   -- an ID, a link or a name, like the game
   if not id then for k, v in pairs(ITEMS) do if v == x then id = k end end end
   if not id or not ITEMS[id] then return nil end
   local cls = __cls and __cls[id]   -- { classID, subType } for recipe items in tests

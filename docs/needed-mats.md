@@ -35,6 +35,15 @@ Members get the button on their own entries. Officers and bank managers get it o
 - **An officer clears it.** Officers see a **Clear** button on everyone's entries in the Needed mats window. The member is told who cleared what.
 - **Nobody has seen the list for 30 days.** Your client re-sends your list when you log in, so it only ages out if that character hasn't been online for a month. Lists from people who left the guild are never shown.
 
+## At vendors and the auction house
+
+- **Auto-sell never sells a needed material.** If a grey item is on anyone's needed mats list (yours included), EPU's auto-sell skips it and says how many it kept.
+- **Opening a vendor** prints one chat line listing the needed mats in your bags and who needs them, for example "Needed mats in your bags, so don't sell: [Linen Cloth] (Tyler (x20))".
+- **Selling one by hand** (right-click at a vendor) prints who needs it and reminds you that the vendor's **Buyback** tab gets it back. EPU can't stop the sale itself without breaking the game's bag buttons, so the warning comes as you sell.
+- **The auction house** warns as soon as you put a needed material in the sell slot, before you post it. On clients with the newer auction house, the warning comes when you post, with a reminder that you can cancel it on the Auctions tab.
+
+Turn these warnings off in the main window under **Settings → Travel, vendor and tooltips** (or `/epu qol`): **Warn Before Selling or Auctioning a Mat a Guildmate Needs**. Auto-sell keeps needed mats either way.
+
 ## Sync
 
 Lists sync like shared gathering spots: a member can only publish their own, officers keep the guild's copy and pass it to members who log in later, and `/epu tooltips` turns the tooltip line off along with EPU's other tooltip lines. Guildmates need this version of EPU to see or share lists.
