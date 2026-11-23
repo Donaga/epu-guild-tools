@@ -56,6 +56,8 @@ jobs:
           sed -i "/^## Version:/a ## X-CurseForge-Version: ${VERSION}" EPUGuild/EPUGuild.toc
           mkdir -p dist
           zip -r "dist/EPUGuild-${VERSION}.zip" EPUGuild
+          # Only EPUGuild, an empty Inbox.lua, every loaded file, the right version.
+          python tools/check_addon_zip.py "dist/EPUGuild-${VERSION}.zip" "${VERSION}"
           zip -r "dist/epu-discord-${VERSION}.zip" epu-discord -x "epu-discord/config.json" "epu-discord/state.json" "epu-discord/items.*"
           (cd updater && zip -r "../dist/EPU-Updater-${VERSION}.zip" .)
           # WowUp reads release.json to find the right zip (Install from URL with the repo link).
@@ -85,4 +87,5 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/curseforge"
           CF_ZIP="${RUNNER_TEMP}/curseforge/EPUGuild-${VERSION}.zip"
           zip -r "$CF_ZIP" EPUGuild
+          python tools/check_addon_zip.py "$CF_ZIP" "${VERSION}"
           python tools/curseforge_upload.py "$CF_ZIP" "${VERSION}" CHANGELOG.md
