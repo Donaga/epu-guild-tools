@@ -2538,11 +2538,23 @@ Views.settings = {
         onClick=function() SlashCmdList.EPUGUILD("map") end},
       {key="chat", title="Chat history", sub="Keep whispers, guild chat and officer chat after a reload.",
         icon="Interface\\Icons\\INV_Letter_15", onClick=function() ns.ShowChatHistory() end},
+      -- windows that used to open only by slash command (/epu logs, bars, qol)
+      {key="logs", title="Pop-out chat and log windows", sub="Combat, XP and rep, and server and loot windows, plus pop-out chat tabs (/epu logs).",
+        icon="Interface\\Icons\\INV_Scroll_03", available=function() return ns.OpenPopoutChatSettings~=nil end,
+        onClick=function() ns.OpenPopoutChatSettings() end},
+      {key="infobars", title="Info bars", sub="Bars along the screen edges showing gold, XP, durability, friends and more (/epu bars).",
+        icon="Interface\\Icons\\INV_Misc_Spyglass_02", available=function() return ns.OpenInfoBarsSettings~=nil end,
+        onClick=function() ns.OpenInfoBarsSettings() end},
+      {key="qol", title="Travel, vendor and tooltips", sub="Map coordinates, waypoints, flight timer, auto-sell and repair, tooltip extras (/epu qol).",
+        icon="Interface\\Icons\\Ability_Mount_RidingHorse", available=function() return ns.OpenWorldQoLSettings~=nil end,
+        onClick=function() ns.OpenWorldQoLSettings() end},
       {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
         onClick=function() ns.ShowMinimapButtonSettings() end},
     }
     local rows={}
-    for _, row in ipairs(options) do if Match(query,row.title,row.sub) then rows[#rows+1]=row end end
+    for _, row in ipairs(options) do
+      if (not row.available or row.available()) and Match(query,row.title,row.sub) then rows[#rows+1]=row end
+    end
     return rows
   end,
   empty="No settings match your search.",
@@ -4154,7 +4166,7 @@ do
       invites="Invite requests for new members.",
       membertools="Quest guides, the zone guide, leveling and dungeon tools, gold tracking, catch-up and notifications.",
       onboarding="Your guild checklist for getting started.",
-      settings="Notifications, map sharing and the minimap button.",
+      settings="Notifications, map sharing, log windows, info bars, travel and vendor helpers, and the minimap button.",
       sync="How up to date your guild data is and who has shared it.",
       officer="Officer tools: Discord updates, member review and the officer log.",
     })[key]
