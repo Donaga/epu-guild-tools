@@ -1497,7 +1497,9 @@ local function Opt()
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
-  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
+  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Loot", sources={system=true,...} } }
+  -- The Combat Log source is gone (it never had any lines); a tab that used it keeps its other sources.
+  for _, ct in ipairs(o.customTabs) do if type(ct) == "table" and type(ct.sources) == "table" then ct.sources.combat = nil end end
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -2186,7 +2188,7 @@ local function BuildWindow(id)
       if tabDef and tabDef.sources then
         for src, on in pairs(tabDef.sources) do
           if on then
-            if src == "combat" or src == "xp" or src == "system" then
+            if src == "xp" or src == "system" then
               for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
                 merged[#merged + 1] = { t = e.t, seq = e.seq, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
               end
@@ -2937,7 +2939,6 @@ function ns.OpenPopoutChatSettings()
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
         Heading("Customizable Log Windows")
         Row({
-          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 118, function() ns.ToggleLogWindow("combat"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
@@ -2956,7 +2957,7 @@ function ns.OpenPopoutChatSettings()
       end
 
       Heading("Custom Pop-out Tabs")
-      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Combat, City)..."))
+      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Loot, City)..."))
       nameBox:SetPoint("TOPLEFT", 4, y)
       local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
       addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
@@ -2964,13 +2965,13 @@ function ns.OpenPopoutChatSettings()
         local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
         if nm == "" then return ns.Print("Enter a name for the custom tab.") end
         o.customTabs = o.customTabs or {}
-        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { combat = true } }
+        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { system = true } }
         SyncUI()
       end)
       y = y - 28
 
       local STREAM_SOURCES = {
-        { "combat", "Combat Log" }, { "xp", "XP & Rep" }, { "system", "Server & Loot" },
+        { "xp", "XP & Rep" }, { "system", "Server & Loot" },
         { "whisper", "Whispers" }, { "guild", "Guild" }, { "officer", "Officer" },
         { "party", "Party" }, { "raid", "Raid" }, { "instance", "Instance / BG" },
         { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },
