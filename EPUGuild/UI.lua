@@ -2539,7 +2539,7 @@ Views.settings = {
       {key="chat", title="Chat history", sub="Keep whispers, guild chat and officer chat after a reload.",
         icon="Interface\\Icons\\INV_Letter_15", onClick=function() ns.ShowChatHistory() end},
       -- windows that used to open only by slash command (/epu logs, bars, qol)
-      {key="logs", title="Pop-out chat and log windows", sub="Combat, XP and rep, and server and loot windows, plus pop-out chat tabs (/epu logs).",
+      {key="logs", title="Pop-out chat and log windows", sub="XP and rep, and server and loot log windows, plus pop-out chat tabs (/epu logs).",
         icon="Interface\\Icons\\INV_Scroll_03", available=function() return ns.OpenPopoutChatSettings~=nil end,
         onClick=function() ns.OpenPopoutChatSettings() end},
       {key="infobars", title="Info bars", sub="Bars along the screen edges showing gold, XP, durability, friends and more (/epu bars).",
