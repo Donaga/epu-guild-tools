@@ -48,6 +48,9 @@ function ns.CacheItemNames()
   for _, m in pairs(g.mats or {}) do
     for i = 1, #(m.r or {}), 2 do add(m.r[i]) end
   end
+  for _, r in pairs(g.neededMats or {}) do          -- the companion's daily "guild needs" post
+    for id in pairs(type(r) == "table" and type(r.i) == "table" and r.i or {}) do add(id) end
+  end
 end
 
 ns.On("PLAYER_LOGOUT", function()

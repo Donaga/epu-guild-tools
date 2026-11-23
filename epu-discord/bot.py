@@ -90,11 +90,33 @@ def load_config() -> dict:
     cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
     cfg.setdefault("level_milestones", [60])
     cfg.setdefault("members_intent", False)       # needed only for /link_suggestions (turn it on in the Developer Portal)
+    cfg.setdefault("guild_needs_post", False)     # a short daily list of the mats guildmates need (from EPU's needed mats)
+    cfg.setdefault("guild_needs_channel_id", "")  # blank: the milestones channel (feed_channel_id)
+    cfg.setdefault("guild_needs_time", "18:00")   # 24-hour time on this PC's clock
+    cfg.setdefault("guild_needs_max_items", 15)
     cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
+    cfg["guild_needs_channel_id"] = cfg.get("guild_needs_channel_id") or cfg["feed_channel_id"]
+    if parse_clock(cfg["guild_needs_time"]) is None:
+        print(f"guild_needs_time {cfg['guild_needs_time']!r} isn't a 24-hour time like \"18:00\"; using 18:00.")
+        cfg["guild_needs_time"] = "18:00"
+    try:
+        cfg["guild_needs_max_items"] = max(1, min(40, int(cfg["guild_needs_max_items"])))
+    except (TypeError, ValueError):
+        cfg["guild_needs_max_items"] = 15
     return cfg
+
+
+def parse_clock(text) -> tuple[int, int] | None:
+    """ "18:00" or "6:30" -> (18, 0) / (6, 30); anything else -> None."""
+    try:
+        hh, mm = str(text).strip().split(":")
+        h, m = int(hh), int(mm)
+    except (TypeError, ValueError):
+        return None
+    return (h, m) if 0 <= h <= 23 and 0 <= m <= 59 and len(mm.strip()) == 2 else None
 
 
 cfg = load_config()
@@ -410,6 +432,7 @@ def help_embed() -> discord.Embed:
         "`/bank search:` look up an item, e.g. `/bank search:potion`.\n"
         "`/requests`: all open requests.\n"
         "`/craft item:` who in the guild can make something, and what it takes (\u2b50 = guild crafter).\n"
+        "`/neededmats`: materials guildmates are collecting for their professions. Send them a stack before you vendor it.\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
     e.add_field(name="Getting something crafted", inline=False, value=(
         "In game, open the addon's **Recipes** page, pick the recipe and click **Ask ... to craft**. Choose who "
@@ -551,6 +574,77 @@ async def check_release(announce: bool = True):
 @tasks.loop(minutes=30)
 async def release_loop():
     await check_release()
+
+
+# ---------------------------------------------------------------------------
+# Daily guild needs (from the addon's needed mats lists)
+# ---------------------------------------------------------------------------
+def guild_needs_embed(gd: core.GuildData, now: float | None = None, saved_at: float | None = None) -> discord.Embed | None:
+    """The needed mats post, or None when nobody needs anything."""
+    rows = gd.needed_mats(now)
+    if not rows:
+        return None
+    groups, left_out = core.needed_mats_groups(rows, cfg["guild_needs_max_items"])
+    e = discord.Embed(title="Guild needs", color=discord.Color.teal(),
+                      description="Materials guildmates are collecting. Mail or trade them a stack before you vendor or auction it.")
+    for prof, lines in groups[:24]:
+        e.add_field(name=prof, value=_clip(lines, 1000), inline=False)
+    if left_out:
+        e.add_field(name="\u200b", value=f"...and {left_out} more. In game: **Professions > Needed mats**.", inline=False)
+    e.set_footer(text="Add yours in game with /epu mats." + (" From the officer save" if saved_at else ""))
+    if saved_at:
+        e.timestamp = datetime.fromtimestamp(saved_at, timezone.utc)   # Discord shows it in each reader's time
+    return e
+
+
+def guild_needs_due(now: datetime, last_day: str | None) -> bool:
+    """Once a day, at or after guild_needs_time on this PC's clock."""
+    h, m = parse_clock(cfg["guild_needs_time"]) or (18, 0)
+    return last_day != now.date().isoformat() and (now.hour, now.minute) >= (h, m)
+
+
+async def post_guild_needs(now: datetime | None = None) -> bool:
+    """Post today's list if it's due. Returns True if something was posted."""
+    now = now or datetime.now()
+    if not cfg["guild_needs_post"] or not guild_needs_due(now, state.data.get("guild_needs_day")):
+        return False
+    gd = read_latest()
+    if gd is None:
+        return False                      # no SavedVariables yet: try again next minute
+    e = guild_needs_embed(gd, now.timestamp(), latest_source_mtime or None)
+    if e is not None:
+        ch = client.get_channel(int(cfg["guild_needs_channel_id"]))
+        if ch is None:
+            log.warning("guild_needs_channel_id %s isn't a channel the bot can see; skipping today's guild needs post.",
+                        cfg["guild_needs_channel_id"])
+        else:
+            try:
+                await ch.send(embed=e)
+            except Exception as ex:
+                explain(ex, "post the daily guild needs", cfg["guild_needs_channel_id"])
+                return False              # try again next minute
+    state.data["guild_needs_day"] = now.date().isoformat()   # an empty list counts as done for today
+    state.save()
+    return e is not None
+
+
+@tasks.loop(minutes=1)
+async def guild_needs_loop():
+    try:
+        await post_guild_needs()
+    except Exception:
+        log.exception("Couldn't build the daily guild needs post; will retry")
+
+
+@tree.command(name="neededmats", description="Materials guildmates are collecting (from EPU's needed mats)", guild=GUILD)
+async def neededmats_cmd(interaction: discord.Interaction):
+    gd = read_latest()
+    e = guild_needs_embed(gd, saved_at=latest_source_mtime or None) if gd else None
+    if e is None:
+        await interaction.response.send_message("Nobody in the guild has listed needed mats. Add yours in game with `/epu mats`.",
+                                                ephemeral=True)
+        return
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
 
 @tree.command(name="download", description="How to install EPU Guild Tools (CurseForge, WowUp or the updater)", guild=GUILD)
@@ -1821,6 +1915,8 @@ async def on_ready():
     # needed for startup or autocomplete. Legacy item_db settings are harmless.
     if not release_loop.is_running():
         release_loop.start()
+    if cfg["guild_needs_post"] and not guild_needs_loop.is_running():
+        guild_needs_loop.start()
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

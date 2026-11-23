@@ -32,5 +32,9 @@
   "adopt_existing_roles": "rank",
   "officer_log_channel_id": "",
   "level_milestones": [60],
-  "members_intent": false
+  "members_intent": false,
+  "guild_needs_post": false,
+  "guild_needs_channel_id": "",
+  "guild_needs_time": "18:00",
+  "guild_needs_max_items": 15
 }

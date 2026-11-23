@@ -1,5 +1,16 @@
 # EPU Discord companion
 
+## Daily guild needs post
+
+Once a day the bot can post a short **Guild needs** list: the materials guildmates are collecting with EPU's [needed mats](../docs/needed-mats.md), most-wanted first, grouped by profession, with who needs each one and how many. For example, under *Tailoring*: **Linen Cloth** x30: Tyler Baker (20), Pip Baker (10). It's off until you turn it on:
+
+- `"guild_needs_post": true` turns it on (default `false`).
+- `"guild_needs_channel_id"`: where it goes. Blank means the milestones channel (`feed_channel_id`, which itself falls back to the request channel).
+- `"guild_needs_time"`: when, as a 24-hour time on this PC's clock (default `"18:00"`). If the bot starts later in the day than that, it posts when it starts. It posts once a day, and skips the day when nobody needs anything.
+- `"guild_needs_max_items"`: how many materials to list (default 15, up to 40). The rest are counted at the end.
+
+The list comes from the officer's last save, like the status post, so it's as fresh as the last `/reload`, `/epu save` or logout on this PC. It follows the addon's rules: only characters still in the guild, and only lists refreshed in the last 30 days. Anyone can see the same list privately with `/neededmats`. Restart the bot after changing these settings.
+
 ## Guild chat history for EPU (0.28)
 
 The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into Inbox.lua. At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
