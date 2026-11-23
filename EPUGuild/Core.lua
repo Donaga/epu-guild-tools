@@ -501,6 +501,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end
   elseif cmd == "way" then
     if ns.HandleWayCommand then ns.HandleWayCommand(args) end
+  elseif cmd == "gold" or cmd == "budget" then
+    if ns.OpenGoldTracker then ns.OpenGoldTracker() end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")
