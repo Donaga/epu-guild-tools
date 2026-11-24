@@ -382,6 +382,7 @@ local HELP = {
   "|cffffd100/epu who|r - guildmates online and where they are (/epu who <item> asks who can craft it)",
   "|cffffd100/epu link <code>|r - link your characters to Discord with the code from /link there; /epu link off stops",
   "|cffffd100/epu mail <member>|r - combine their approved bank requests into one mail draft",
+  "|cffffd100/epu mailtools|r - Take all on one mail, and collect only the gold from auction house mail (/epu ahgold at a mailbox)",
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
@@ -459,6 +460,10 @@ SlashCmdList.EPUGUILD = function(msg)
     ns.FullSync()
   elseif cmd == "mail" then
     ns.MailMemberRequests(args)
+  elseif cmd == "mailtools" then
+    if ns.OpenMailTools then ns.OpenMailTools() end
+  elseif cmd == "ahgold" then
+    if ns.MailTools then ns.MailTools.CollectAHGold() end
   elseif (cmd == "mats" or cmd == "neededmats") and (args or ""):lower():match("^%s*bank%s*$") and ns.ShowNeededMatsBank then
     ns.ShowNeededMatsBank()
   elseif cmd == "mats" or cmd == "neededmats" then
