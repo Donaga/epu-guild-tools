@@ -61,6 +61,21 @@ check("not approved yet: wait", core.release_step("v0.31.1", "v0.32.0", True, Tr
 check("CurseForge unreachable: wait", core.release_step("v0.31.1", "v0.32.0", True, True, None) == "wait")
 check("approved: announce", core.release_step("v0.31.1", "v0.32.0", True, True, True) == "announce")
 check("not gated: announce at once", core.release_step("v0.31.1", "v0.32.0", True, False, None) == "announce")
+check("waited long enough: announce though CurseForge never confirmed",
+      core.release_step("v0.31.1", "v0.32.0", True, True, None, overdue=True) == "announce"
+      and core.release_step("v0.31.1", "v0.32.0", True, True, False, overdue=True) == "announce")
+check("overdue doesn't post on a first run", core.release_step(None, "v0.32.0", True, True, None, overdue=True) == "remember")
+
+# --- Announcing anyway when CurseForge can't be read (an unlisted project, say) --------
+pub = core.parse_github_time("2026-11-24T04:00:31Z")
+check("GitHub's release time is read", pub == 1795492831.0)
+check("an odd release time reads as unknown", core.parse_github_time(None) is None and core.parse_github_time("soon") is None)
+check("release_info carries the publish time", core.release_info({"tag_name": "v0.34.0", "published_at": "2026-11-24T04:00:31Z"})["published"] == pub)
+check("under the wait: not overdue", not core.release_overdue(pub, 12, pub + 11.9 * 3600))
+check("past the wait: overdue", core.release_overdue(pub, 12, pub + 12 * 3600))
+check("a bad wait setting means 12 hours", not core.release_overdue(pub, "x", pub + 11 * 3600) and core.release_overdue(pub, "x", pub + 13 * 3600))
+check("wait 0: never waits", core.release_overdue(None, 0, pub))
+check("unknown release time: keeps waiting for CurseForge", not core.release_overdue(None, 12, pub + 999 * 3600))
 
 # --- The companion's release check -----------------------------------------------------
 cfgdir = tempfile.mkdtemp()
@@ -72,12 +87,19 @@ sys.path.insert(0, cfgdir)
 bot = importlib.import_module("bot")
 check("announcements default on, waiting for CurseForge", bot.cfg["announce_releases"] is True
       and bot.cfg["announce_after_curseforge"] is True and bot.core.curseforge_source(bot.cfg) == "widget")
+check("waits at most 12 hours by default", bot.cfg["curseforge_wait_hours"] == 12)
+check("release_channel_id blank: the request channel", bot.cfg["release_channel_id"] == "2")
 
 sent = []
+sent_to = []
+visible = {"on": True}
 class FakeChannel:
+    def __init__(self, cid):
+        self.cid = cid
     async def send(self, **kw):
         sent.append(kw["embed"])
-bot.client.get_channel = lambda cid: FakeChannel()
+        sent_to.append(self.cid)
+bot.client.get_channel = lambda cid: FakeChannel(cid) if visible["on"] else None
 gh = {"tag": "v0.32.0", "version": "0.32.0", "page": "https://github.com/x/releases/v0.32.0", "addon": "a", "updater": "u",
       "notes": "Notes", "draft": False, "prerelease": False}
 cf = {"files": [{"display": "EPU Guild Tools 0.31.1", "name": "EPUGuild-0.31.1.zip"}], "fail": False, "calls": 0}
@@ -123,6 +145,39 @@ bot.state.data.pop("last_release")
 gh.update(tag="v0.32.3", version="0.32.3")
 asyncio.run(bot.check_release())
 check("first run remembers the current release without a post", len(sent) == 2 and bot.state.data["last_release"] == "v0.32.3")
+
+
+# A release the bot can't see approved (CFWidget can't read an unlisted project) posts after the wait.
+bot.cfg["release_channel_id"] = "1566873402952777788"
+now = {"t": 1795492831.0}
+bot.time.time = lambda: now["t"]
+gh.update(tag="v0.34.0", version="0.34.0", published=1795492831.0)
+cf["fail"] = True
+before = len(sent)
+asyncio.run(bot.check_release())
+check("CurseForge unreadable: waits at first", len(sent) == before and bot.state.data.get("release_waiting") == "v0.34.0")
+now["t"] += 11 * 3600
+asyncio.run(bot.check_release())
+check("still waiting at 11 hours", len(sent) == before)
+now["t"] += 1 * 3600
+visible["on"] = False
+asyncio.run(bot.check_release())
+check("release channel not visible: not posted and not marked announced",
+      len(sent) == before and bot.state.data["last_release"] == "v0.32.3")
+visible["on"] = True
+asyncio.run(bot.check_release())
+check("after 12 hours it's posted anyway", len(sent) == before + 1 and sent[-1].title == "EPU Guild Tools 0.34.0 is out")
+check("in the release channel", sent_to[-1] == 1566873402952777788)
+check("its footer doesn't claim CurseForge has it", "approves it" in sent[-1].footer.text)
+check("and it's marked announced", bot.state.data["last_release"] == "v0.34.0" and "release_waiting" not in bot.state.data)
+
+# Approved before the wait runs out: posted at once, with the live footer.
+gh.update(tag="v0.34.1", version="0.34.1", published=now["t"])
+cf["fail"] = False
+cf["files"].insert(0, {"display": "EPU Guild Tools 0.34.1", "name": "EPUGuild-0.34.1.zip"})
+asyncio.run(bot.check_release())
+check("approved within the wait: posted with the live footer",
+      len(sent) == before + 2 and "live on CurseForge" in sent[-1].footer.text and sent_to[-1] == 1566873402952777788)
 
 print("Release announcement checks:", failed, "failed")
 sys.exit(bool(failed))

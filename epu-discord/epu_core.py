@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import csv
+import datetime
 import glob
 import hashlib
 import io
@@ -1514,7 +1515,17 @@ def release_info(rel: dict) -> dict:
         "notes": (rel.get("body") or "").strip(),
         "draft": bool(rel.get("draft")),
         "prerelease": bool(rel.get("prerelease")),
+        "published": parse_github_time(rel.get("published_at") or rel.get("created_at")),
     }
+
+
+def parse_github_time(text) -> float | None:
+    """GitHub's '2026-11-24T04:00:31Z' as a Unix time, or None."""
+    try:
+        return datetime.datetime.strptime(str(text), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 def fetch_latest_release(repo: str, timeout: int = 30) -> dict:
@@ -1608,17 +1619,34 @@ def fetch_curseforge_files(cfg: dict, timeout: int = 30) -> list[dict]:
     return []
 
 
-def release_step(seen: str | None, tag: str, enabled: bool, gated: bool, approved: bool | None) -> str:
+def release_overdue(published: float | None, wait_hours, now: float) -> bool:
+    """True once a release has been on GitHub longer than curseforge_wait_hours.
+
+    CurseForge usually approves a file within a day, but the bot can't always
+    see that: CFWidget may not list an unlisted project, and the network can
+    fail. After this long the release is announced anyway."""
+    try:
+        hours = float(wait_hours)
+    except (TypeError, ValueError):
+        hours = 12.0
+    if hours <= 0 or published is None:
+        return hours <= 0
+    return now - published >= hours * 3600
+
+
+def release_step(seen: str | None, tag: str, enabled: bool, gated: bool, approved: bool | None,
+                 overdue: bool = False) -> str:
     """What the release check does with GitHub's latest release.
 
     "none": already announced. "remember": note it without a post (first run,
     or announcements off). "wait": CurseForge hasn't approved it yet, or
     couldn't be asked (approved is None); check again later and leave it
-    unannounced. "announce": post it now."""
+    unannounced. "announce": post it now, either because CurseForge approved
+    it or because it has waited curseforge_wait_hours (overdue)."""
     if not tag or seen == tag:
         return "none"
     if seen is None or not enabled:
         return "remember"
-    if gated and not approved:
+    if gated and not approved and not overdue:
         return "wait"
     return "announce"

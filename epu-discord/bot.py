@@ -76,6 +76,8 @@ def load_config() -> dict:
     cfg.setdefault("github_repo", "Donaga/epu-guild-tools")
     cfg.setdefault("announce_releases", True)
     cfg.setdefault("announce_after_curseforge", True)  # wait until CurseForge approves the release's file
+    cfg.setdefault("curseforge_wait_hours", 12)   # ...but announce anyway after this long if the bot can't see the approval
+    cfg.setdefault("release_channel_id", "")      # where release announcements go (e.g. #updates); blank: the request channel
     cfg.setdefault("auto_update", True)           # move this clone to each new release and restart (start.bat only)
     cfg.setdefault("curseforge_project_id", "")   # optional: numeric project ID (else the slug in curseforge_url)
     cfg.setdefault("curseforge_api_key", "")      # optional: CurseForge API key; with the project ID, asks CurseForge itself
@@ -117,6 +119,7 @@ def load_config() -> dict:
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
+    cfg["release_channel_id"] = cfg.get("release_channel_id") or cfg["channel_id"]
     cfg["guild_needs_channel_id"] = cfg.get("guild_needs_channel_id") or cfg["feed_channel_id"]
     cfg["group_board_channel_id"] = cfg.get("group_board_channel_id") or cfg.get("events_channel_id") or cfg["feed_channel_id"]
     if parse_clock(cfg["guild_needs_time"]) is None:
@@ -569,6 +572,7 @@ async def ensure_help_post():
 # Releases: announce new versions, /download
 # ---------------------------------------------------------------------------
 latest_release: dict | None = None
+_cf_note: tuple | None = None   # the last CurseForge problem logged
 
 
 def download_embed(rel: dict | None) -> discord.Embed:
@@ -602,8 +606,10 @@ async def check_release(announce: bool = True):
     """Announce a new GitHub release, once CurseForge has approved its file.
 
     The version only counts as announced once it's posted, so a release that
-    waits for CurseForge is checked again on every run of the loop."""
-    global latest_release
+    waits for CurseForge is checked again on every run of the loop. If the bot
+    can't see CurseForge approve it within curseforge_wait_hours, it's
+    announced anyway, with a footer that doesn't promise the CurseForge app has it."""
+    global latest_release, _cf_note
     try:
         rel = await asyncio.to_thread(core.fetch_latest_release, cfg["github_repo"])
     except Exception as e:
@@ -614,36 +620,48 @@ async def check_release(announce: bool = True):
     latest_release = rel
     seen = state.data.get("last_release")
     gated = core.curseforge_source(cfg) is not None
+    enabled = announce and cfg["announce_releases"]
     approved = None
-    if gated and seen not in (None, rel["tag"]) and announce and cfg["announce_releases"]:
+    if gated and seen not in (None, rel["tag"]) and enabled:
         try:
             files = await asyncio.to_thread(core.fetch_curseforge_files, cfg)
             approved = core.curseforge_has_version(files, rel["version"])
         except Exception as e:
-            log.debug("CurseForge check failed: %s", e)
-    step = core.release_step(seen, rel["tag"], announce and cfg["announce_releases"], gated, approved)
+            note = (rel["tag"], str(e))
+            if note != _cf_note:          # once per release and problem, not every 30 minutes
+                _cf_note = note
+                log.warning("Couldn't ask CurseForge whether %s is approved (%s). The announcement waits up to "
+                            "%s hours from the release, then posts anyway.", rel["version"], e, cfg["curseforge_wait_hours"])
+    overdue = core.release_overdue(rel.get("published"), cfg["curseforge_wait_hours"], time.time())
+    step = core.release_step(seen, rel["tag"], enabled, gated, approved, overdue)
     if step == "none":
         return
     if step == "wait":
         if state.data.get("release_waiting") != rel["tag"]:
             state.data["release_waiting"] = rel["tag"]
             state.save()
-            log.info("EPU Guild Tools %s is on GitHub; announcing it once CurseForge approves it.", rel["version"])
+            log.info("EPU Guild Tools %s is on GitHub; announcing it once CurseForge approves it "
+                     "(or after %s hours).", rel["version"], cfg["curseforge_wait_hours"])
+        return
+    ch = client.get_channel(int(cfg["release_channel_id"])) if step == "announce" else None
+    if step == "announce" and ch is None:
+        note = (rel["tag"], "channel")
+        if note != _cf_note:            # left unannounced, so it posts once the channel is fixed
+            _cf_note = note
+            log.warning("Can't see the release channel %s, so %s isn't announced yet. Check release_channel_id "
+                        "and that the bot can view and post in that channel.", cfg["release_channel_id"], rel["version"])
         return
     state.data["last_release"] = rel["tag"]
     state.data.pop("release_waiting", None)
     state.save()
     if step == "remember":
         return                          # first run, or announcements off: remember the version without a post
-    ch = channel()
-    if ch is None:
-        return
     e = download_embed(rel)
     e.title = f"EPU Guild Tools {rel['version']} is out"
     notes = rel["notes"][:900] + ("..." if len(rel["notes"]) > 900 else "")
     if notes:
         e.description = notes
-    if gated:
+    if gated and approved:
         e.set_footer(text="It's live on CurseForge, so the CurseForge app offers it as an update. "
                           "WowUp and the updater have it too. Then /reload in game.")
     else:
@@ -651,8 +669,9 @@ async def check_release(announce: bool = True):
                           "WowUp and the updater have it now. Then /reload in game.")
     try:
         await ch.send(embed=e)
+        log.info("Announced EPU Guild Tools %s in channel %s.", rel["version"], cfg["release_channel_id"])
     except Exception as ex:
-        explain(ex, "announce the new release", cfg["channel_id"])
+        explain(ex, "announce the new release", cfg["release_channel_id"])
 
 
 # ---------------------------------------------------------------------------

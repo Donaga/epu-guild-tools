@@ -24,6 +24,8 @@
   "github_repo": "Donaga/epu-guild-tools",
   "announce_releases": true,
   "announce_after_curseforge": true,
+  "curseforge_wait_hours": 12,
+  "release_channel_id": "",
   "auto_update": true,
   "curseforge_project_id": "",
   "curseforge_api_key": "",
