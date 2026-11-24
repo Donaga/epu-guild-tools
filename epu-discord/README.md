@@ -129,6 +129,16 @@ Double-click **start.bat**. The first run creates a private Python environment a
 
 Leave the window open while you play. It should say `Logged in as ... Watching ...EPUGuild.lua`.
 
+### 5. Start it at logon (optional, once)
+To have the bot start by itself whenever you log in to Windows, close the bot window, open **PowerShell** (Start, type PowerShell, press Enter; no administrator needed) and run, with your own path to this folder:
+
+```
+cd "$env:USERPROFILE\Documents\GitHub\epu-guild-tools\epu-discord"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-Autostart.ps1
+```
+
+It adds a Task Scheduler task, **EPU Discord bot**, and starts the bot now in a minimized window with that title. To stop starting it at logon, run the same command with `-Remove` at the end. See [Updates and starting at logon](#updates-and-starting-at-logon).
+
 ### Folder permissions
 If it says it can't write the Discord inbox, or that Windows won't let it make **EPUGuild_Inbox**, Windows is blocking writes to `Program Files`. Make the folder once and let your Windows user change it. Open **PowerShell as administrator** (Start, type PowerShell, right-click it, **Run as administrator**) and run:
 
@@ -162,6 +172,21 @@ to export metadata. Existing requests are preserved.
 - In game, Discord requests appear on the Requests tab marked "(via Discord)". Approve, Reject or Fill them as usual.
 - Mailing the item still marks it filled automatically. The Discord post updates after your next `/epu save` or logout.
 
+## Updates and starting at logon
+**The bot updates itself.** On the same 30-minute check that announces releases, a bot started with `start.bat` from a git clone of the repo looks at the latest GitHub release. If it's newer than the clone, the bot fetches the release tag, fast-forwards `main` to it, reinstalls `requirements.txt` if it changed, checks that the new code loads and restarts on it. Release announcements are unaffected: they still wait for CurseForge.
+
+It only updates when it's safe, and otherwise changes nothing, logs why once and keeps running the version it has:
+- the clone must be on `main` with no changes to tracked files (commit or undo them and it updates on the next check),
+- `main` mustn't have commits the release lacks (it never merges, resets or forces),
+- git must be on PATH and GitHub reachable,
+- the bot must have been started with `start.bat` (a bot run as `python bot.py`, or from the release zip, doesn't update itself).
+
+If the new requirements won't install or the new code won't load, it puts `main` back where it was and keeps running; it tries again at the next release, not this one. `config.json`, `state.json`, `items.*` and `.venv` are ignored by git, so an update never touches them. Each update and each problem goes in `updates.log` in this folder; nothing is posted to Discord. Set `"auto_update": false` in config.json to turn it off.
+
+**start.bat keeps it running.** It runs `supervise.py`, which starts the bot again after it updates itself and after a crash (10 seconds later, growing to 5 minutes if it keeps crashing). It stops for good when config.json needs fixing, so read the window then. Only one copy of the bot runs at a time: a second `start.bat` says the bot is already running and stops. Close the window, or press Ctrl+C, to stop the bot.
+
+**Starting at logon.** `Install-Autostart.ps1` (step 5 of the setup) adds a Task Scheduler task for your Windows user that opens `start.bat` minimized 30 seconds after you log in. It also lists anything else it finds that starts the bot, such as an old Startup-folder shortcut, so you can delete it. `-NoStart` adds the task without starting the bot now; `-Remove` deletes the task.
+
 ## Trying it without WoW
 `testkit.py` builds a fake WoW folder with you and a few made-up guildmates, so you can test the whole Discord side before you can log in:
 
@@ -175,5 +200,7 @@ to export metadata. Existing requests are preserved.
 
 ## Files
 - `bot.py`: the Discord bot
+- `start.bat` and `supervise.py`: start the bot and keep it running; `self_update.py`: moves the clone to each new release
+- `Install-Autostart.ps1`: starts the bot at logon (run once)
 - `epu_core.py`: reads and writes the addon's files (no Discord code)
 - `state.json`: created automatically; holds linked characters, which Discord message belongs to which request, and queued Discord actions. Back it up if you move PCs.

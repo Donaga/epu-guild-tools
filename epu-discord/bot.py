@@ -27,6 +27,7 @@ from discord.ext import tasks
 import epu_core as core
 import shared_bridge as bridge
 import links_roles as lr
+import self_update
 from event_sync import EventSync, KINDS as EVENT_KINDS, time_zone_choices
 from group_board import GroupBoard
 
@@ -50,14 +51,20 @@ CLASS_ROLE_COLORS = {
 }
 
 
+def config_error(message: str):
+    """Stop for something only an edit to config.json fixes, so start.bat doesn't keep retrying."""
+    print(message, file=sys.stderr)
+    sys.exit(self_update.CONFIG_ERROR_CODE)
+
+
 def load_config() -> dict:
     path = os.path.join(HERE, "config.json")
     if not os.path.exists(path):
-        sys.exit("config.json is missing. Copy config.example.json to config.json and fill it in.")
+        config_error("config.json is missing. Copy config.example.json to config.json and fill it in.")
     with open(path, encoding="utf-8") as f:
         cfg = json.load(f)
     if not cfg.get("token") or "PASTE" in cfg.get("token", ""):
-        sys.exit("Put your bot token in config.json first (see README.md).")
+        config_error("Put your bot token in config.json first (see README.md).")
     cfg.setdefault("wow_path", r"C:\Program Files (x86)\World of Warcraft\_forever_")
     cfg.setdefault("officer_role", "Officer")
     cfg.setdefault("post_donations", True)
@@ -69,6 +76,7 @@ def load_config() -> dict:
     cfg.setdefault("github_repo", "Donaga/epu-guild-tools")
     cfg.setdefault("announce_releases", True)
     cfg.setdefault("announce_after_curseforge", True)  # wait until CurseForge approves the release's file
+    cfg.setdefault("auto_update", True)           # move this clone to each new release and restart (start.bat only)
     cfg.setdefault("curseforge_project_id", "")   # optional: numeric project ID (else the slug in curseforge_url)
     cfg.setdefault("curseforge_api_key", "")      # optional: CurseForge API key; with the project ID, asks CurseForge itself
     cfg.setdefault("item_db", True)               # download the full Forever item list from wago.tools
@@ -647,9 +655,51 @@ async def check_release(announce: bool = True):
         explain(ex, "announce the new release", cfg["channel_id"])
 
 
+# ---------------------------------------------------------------------------
+# Updating itself to each new release
+# ---------------------------------------------------------------------------
+restart_requested = False
+_update_note: tuple | None = None   # the last problem logged, so a skip isn't logged every 30 minutes
+
+
+def update_wanted(rel: dict | None) -> bool:
+    if not cfg["auto_update"] or not rel or rel.get("draft") or not rel.get("tag"):
+        return False
+    if os.environ.get("EPU_SUPERVISED") != "1":
+        return False                    # run through start.bat, which starts it again after an update
+    return state.data.get("update_failed") != rel["tag"]
+
+
+async def maybe_update():
+    """Fast-forward this clone to the latest release and restart, if it's safe (see self_update.py)."""
+    global restart_requested, _update_note
+    rel = latest_release
+    if not update_wanted(rel):
+        return
+    result = await asyncio.to_thread(self_update.update_to, rel["tag"])
+    if result.status == "current":
+        _update_note = None
+        return
+    if result.status == "updated":
+        log.info("Bot %s; restarting.", result.message)
+        self_update.log_line(result.message)
+        restart_requested = True
+        await client.close()
+        return
+    if result.status == "failed":
+        state.data["update_failed"] = rel["tag"]   # wait for the next release rather than retry this one
+        state.save()
+    note = (rel["tag"], result.message)
+    if note != _update_note:
+        _update_note = note
+        log.warning("Not updating the bot to %s: %s", rel["tag"], result.message)
+        self_update.log_line(f"not updated to {rel['tag']}: {result.message}")
+
+
 @tasks.loop(minutes=30)
 async def release_loop():
     await check_release()
+    await maybe_update()
 
 
 # ---------------------------------------------------------------------------
@@ -2098,12 +2148,21 @@ board=GroupBoard(cfg,state,client)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    instance = self_update.InstanceLock(os.path.join(HERE, "bot.lock"))
+    if not instance.acquire():
+        print("The EPU bot is already running (another window, or the copy that starts at logon). "
+              "Not starting a second one.", file=sys.stderr)
+        sys.exit(self_update.ALREADY_RUNNING_CODE)
     try:
         client.run(cfg["token"], log_handler=None)
     except discord.errors.PrivilegedIntentsRequired:
         if cfg["members_intent"]:
-            sys.exit("members_intent is on, but the bot's Server Members Intent is off. Developer Portal > your application > Bot > "
-                     "Privileged Gateway Intents > turn on SERVER MEMBERS INTENT > Save. Or set members_intent to false.")
-        sys.exit("To read announcement/invite-request messages the bot needs the Message Content Intent.\n"
-                 "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
-                 "Or leave import_channel_id, invite_requests_channel_id and ingame_chat_channel blank to disable message imports.")
+            config_error("members_intent is on, but the bot's Server Members Intent is off. Developer Portal > your application > Bot > "
+                         "Privileged Gateway Intents > turn on SERVER MEMBERS INTENT > Save. Or set members_intent to false.")
+        config_error("To read announcement/invite-request messages the bot needs the Message Content Intent.\n"
+                     "Discord Developer Portal > your application > Bot > Privileged Gateway Intents > turn on MESSAGE CONTENT INTENT > Save.\n"
+                     "Or leave import_channel_id, invite_requests_channel_id and ingame_chat_channel blank to disable message imports.")
+    finally:
+        instance.release()
+    if restart_requested:
+        sys.exit(self_update.RESTART_CODE)

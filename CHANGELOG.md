@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **The Discord companion updates itself.** When a new release comes out, the bot moves its git clone to it, reinstalls its Python packages if they changed and restarts on the new version, within half an hour and without anyone touching it. It only does this when it runs from a git clone that's on `main` with no local changes, and through `start.bat`; otherwise it logs why and keeps running the version it has. If the new version won't install or load, it goes back to the old one and waits for the next release. `config.json`, `state.json` and the bot's other local files are never touched. Each update is logged in `epu-discord/updates.log`. `"auto_update": false` turns it off. Update the bot by hand one last time to get this version (stop it, `git pull`, start `start.bat`); later releases arrive by themselves.
+- **The companion keeps itself running.** `start.bat` now restarts the bot after a crash (waiting 10 seconds, up to 5 minutes if it keeps crashing), and a second copy refuses to start, so two windows never post everything twice. Run `Install-Autostart.ps1` once to start it minimized whenever you log in to Windows. Setup: [epu-discord/README.md](epu-discord/README.md#updates-and-starting-at-logon).
+
 ## 0.34.0
 
 - **Rested XP across your alts.** A new **Rested XP** tab in Personal trackers (`/epu rested`, or the **Personal trackers** tile in **Member tools**) shows how much rested XP each of your characters on this realm has built up: as a share of a level, in bubbles and in XP, with how long until it's full. Each character saves its rested XP, level and whether it was resting when it logged out, and EPU estimates the rest from the classic rates: 5% of a level every 8 hours in an inn or city, a quarter of that anywhere else, up to 1.5 levels. The character you're on shows its real rested XP. Max-level characters are listed last. A character shows up once you've logged in on it with this version.
