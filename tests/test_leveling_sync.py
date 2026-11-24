@@ -39,7 +39,7 @@ check('a later dungeon update keeps camping stations',
 
 # Forged records are filed under the sender, never the named member.
 A.ex('__fire("CHAT_MSG_ADDON","EPUGuild","S%s"..__ns.Serialize({who="Chris Baker",done={rfc=true},t=__ns.Now()+60}),"GUILD","Tyler Baker")' % rk)
-check('readiness can only update the sender', A.ev('(__ns.G().levelingProgress or {})["Chris Baker"] == nil'))
+check('readiness can only update the sender', not A.ev('(((__ns.G().levelingProgress or {})["Chris Baker"] or {}).done or {}).rfc'))
 A.ex('__fire("CHAT_MSG_ADDON","EPUGuild","S%s"..__ns.Serialize({done={zf=true},t=__ns.Now()+86400*365}),"GUILD","Tyler Baker")' % rk)
 check("far-future readiness is ignored", not A.ev("(__ns.G().levelingProgress or {})[\"Tyler Baker\"].done.zf"))
 

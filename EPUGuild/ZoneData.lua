@@ -1039,7 +1039,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "Autumnal cliffs, Naga ruins, and Blackmaw Hold",
     overview = "Azshara features dramatic cliffs, Bay of Storms fishing, Hydraxian Waterlords, and Forever's Blackmaw Hold dungeon.",
     dungeons = {
-      { name = "Blackmaw Hold (Forever)", levelRange = {55, 60}, x = 55.0, y = 50.0 },
+      { name = "Blackmaw Hold (Forever)", levelRange = {55, 60}, x = 38.4, y = 32.6 },
     },
     flightPaths = {
     },
@@ -1078,7 +1078,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "Prehistoric jungle basin, Marshal's Refuge, and Shaper's Terrace",
     overview = "Un'Goro Crater is a compact 48-55 basin anchored by Marshal's Refuge, Devilsaur Leather, and Forever's Shaper's Terrace dungeon.",
     dungeons = {
-      { name = "Shaper's Terrace (Forever)", levelRange = {58, 60}, x = 50.0, y = 50.0 },
+      { name = "Shaper's Terrace (Forever)", levelRange = {58, 60}, x = 48.1, y = 6.1 },
     },
     flightPaths = {
     },
@@ -1609,7 +1609,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "Rainy marshland, Menethil Harbor, and Excavation Site",
     overview = "Wetlands connects Loch Modan, Arathi Highlands, boats to Darkshore & Theramore, and Forever's Excavation Site dungeon.",
     dungeons = {
-      { name = "Excavation Site (Forever)", levelRange = {24, 29}, x = 50.0, y = 50.0 },
+      { name = "Excavation Site (Forever)", levelRange = {24, 29}, x = 38.0, y = 49.0 },
     },
     flightPaths = {
       { name = "Shellei Brondir", faction = "Alliance", x = 9.5, y = 59.7 },
@@ -1984,7 +1984,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "Dense jungle of Nesingwary, Booty Bay, and The Drowned City",
     overview = "Stranglethorn Vale (STV) is the 30-45 jungle hub with Booty Bay, Grom'gol, Forever's The Drowned City dungeon, and Zul'Gurub.",
     dungeons = {
-      { name = "The Drowned City (Forever)", levelRange = {35, 40}, x = 40.0, y = 50.0 },
+      { name = "The Drowned City (Forever)", levelRange = {35, 40}, x = 21.4, y = 27.9 },
       { name = "Zul'Gurub (Raid)", levelRange = {60, 60}, x = 53.9, y = 17.6 },
     },
     flightPaths = {
@@ -2141,7 +2141,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "WoW: Forever zone and Krol'dok Stronghold",
     overview = "Riverglades is a new WoW: Forever zone featuring goblin and Horde/Alliance outposts and Krol'dok Stronghold.",
     dungeons = {
-      { name = "Krol'dok Stronghold (Forever)", levelRange = {40, 45}, x = 50.0, y = 50.0 },
+      { name = "Krol'dok Stronghold (Forever)", levelRange = {40, 45}, x = 37.5, y = 37.5 },
     },
     flightPaths = {
       { name = "Grakna", faction = "Horde", x = 59.5, y = 45.1 },
@@ -2327,7 +2327,7 @@ ns.ZONE_GUIDE_DATA = {
     tagline = "Dwarven mountain capital, Great Forge, and Hall of Thanes",
     overview = "Ironforge is the Alliance's central AH/bank hub around the Great Forge and home to Forever's Hall of Thanes dungeon.",
     dungeons = {
-      { name = "Hall of Thanes (Forever)", levelRange = {13, 18}, x = 50.0, y = 50.0 },
+      { name = "Hall of Thanes (Forever)", levelRange = {13, 18}, x = 43.5, y = 52.0 },
     },
     flightPaths = {
       { name = "Gryth Thurden", faction = "Alliance", x = 55.9, y = 47.5 },

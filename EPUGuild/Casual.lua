@@ -243,7 +243,8 @@ function ns.PruneCasual()
   local g=ns.CasualStore(); if not g then return end
   for _,f in ipairs(ns.CASUAL_FIELDS) do
     if f~="kitTemplates" and f~='syncHelpers' and f~='guildFocus' and f~='gatherSpots' and f~='discordClaims' then   -- standing records never expire
-      for id,r in pairs(g[f]) do if not Fresh(r) then g[f][id]=nil end end
+      -- your own dungeon and raid ticks stay through a long break (GuildProgress.lua re-stamps them)
+      for id,r in pairs(g[f]) do if not Fresh(r) and not (f=='levelingProgress' and id==ns.me) then g[f][id]=nil end end
     end
   end
 end

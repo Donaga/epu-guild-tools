@@ -68,12 +68,14 @@ function ns.GetMyRaidStatus()
   }
 end
 
-function ns.SyncMyRaidStatus()
+-- fromProgress: called by ns.PublishProgress, which already sent the synced record.
+function ns.SyncMyRaidStatus(fromProgress)
   local store = RaidStore()
   if not store or not ns.me then return end
   local st = ns.GetMyRaidStatus()
   store[ns.me] = st
   if ns.Send then ns.Send(RAID_KIND, st) end
+  if not fromProgress and ns.PublishProgress then ns.PublishProgress() end
   return st
 end
 
@@ -104,7 +106,13 @@ function ns.GetRaidRosterReport()
   for who, r in pairs(ns.roster or {}) do
     local lv = r.level or 1
     if lv >= 55 then
+      -- The synced guild record (GuildProgress.lua) reaches guildmates who were
+      -- offline; the live raid status only reaches whoever was online.
       local rs = store[who]
+      local synced = ns.ProgressStore and (ns.ProgressStore() or {})[who]
+      synced = type(synced) == "table" and synced.raid
+      if synced and (not rs or (rs.t or 0) <= ((ns.ProgressStore() or {})[who].t or 0)) then rs = synced end
+      local attuned = ns.IsAttuned and ns.IsAttuned("attune_onyxia", who)
       local role = (rs and rs.role) or "DPS"
       local g = ns.G and ns.G()
       local prof = g and g.profiles and g.profiles[who]
@@ -118,7 +126,7 @@ function ns.GetRaidRosterReport()
         level = lv,
         online = r.online and true or false,
         role = role,
-        amulet = rs and rs.amulet or false,
+        amulet = (rs and rs.amulet) or attuned or false,
         fireRes = rs and rs.fireRes or 0,
       }
       ready[#ready + 1] = entry

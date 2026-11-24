@@ -2119,7 +2119,7 @@ Views.recipes = {
 local FEED_ICON = {
   level = "Interface\\Icons\\Spell_Holy_SurgeOfLight", prof = "Interface\\Icons\\INV_Misc_Note_01",
   mount = "Interface\\Icons\\Ability_Mount_RidingHorse", donation = "Interface\\Icons\\INV_Misc_Coin_01",
-  join = "Interface\\Icons\\INV_Misc_Head_Human_01",
+  join = "Interface\\Icons\\INV_Misc_Head_Human_01", attune = "Interface\\Icons\\INV_Misc_Key_03",
 }
 Views.news = {
   label = "News", icon = "Interface\\Icons\\INV_Scroll_03",

@@ -249,11 +249,13 @@ local function Render()
         titleColor = isSel and col.gold or col.white,
         bg = isSel and col.selected or col.panel,
         sub = "Key / Attunement: " .. (d.key or "None"),
-        actionText = isSel and "Waypoint" or "Inspect",
+        note = (isSel and not (d.x and d.y)) and "The entrance isn't mapped yet: the zone guide has the area." or nil,
+        actionText = isSel and ((d.x and d.y) and "Waypoint" or "Zone guide") or "Inspect",
         actionWidth = 94,
         onAction = function()
           if isSel then
-            ns.SetZoneWaypoint(d.mapID, d.x, d.y, d.name)
+            if d.x and d.y then ns.SetZoneWaypoint(d.mapID, d.x, d.y, d.name)
+            elseif ns.OpenZoneGuide then ns.OpenZoneGuide(d.zone) end
           else
             state.dungeonId = dId
             win.scroll:SetVerticalScroll(0)
@@ -281,7 +283,8 @@ local function Render()
       local qc = ns.QuestDifficultyColor and ns.QuestDifficultyColor(q.level, pLevel) or col.white
       local status = logMap[q.name:lower()]
       local badge = status and ("  [" .. status .. "]") or ""
-      local qMap, qx, qy, qGiver = selected.mapID, q.x, q.y, q.giver
+      -- A giver in a city or another zone carries its own map.
+      local qMap, qx, qy, qGiver = q.mapID or selected.mapID, q.x, q.y, q.giver
       flow:Card({
         title = string.format("[%d] %s%s", q.level or pLevel, q.name, badge),
         titleColor = qc,
@@ -298,7 +301,7 @@ local function Render()
     flow:Card({
       title = myDone and "Your Status: Completed / Keyed" or "Your Status: Still Needed",
       titleColor = myDone and col.green or col.gold,
-      sub = "Broadcasts your key/attunement readiness to the guild.",
+      sub = "Shared with the guild, including guildmates who log in later. Keys in your bags tick themselves.",
       actionText = myDone and "Mark Needed" or "Mark Ready",
       actionWidth = 110,
       onAction = function() ns.ToggleMyReadiness(selId); Render() end,
@@ -332,6 +335,56 @@ local function Render()
         end,
       })
     end
+
+    -- Raid attunements: the game confirms these from quests or items in your bags.
+    flow:Section("Raid Attunements")
+    for _, a in ipairs(ns.RAID_ATTUNEMENTS or {}) do
+      local aId = a.id
+      local mine = ns.IsAttuned(aId)
+      local done, missing = ns.GetGuildAttunement(aId)
+      local names = {}
+      for i = 1, math.min(20, #done) do names[#names + 1] = done[i].name .. (done[i].online and " (On)" or "") end
+      flow:Card({
+        title = a.name .. (mine and ": you're attuned" or ": not attuned yet"),
+        titleColor = mine and col.green or col.gold,
+        sub = a.note,
+        note = string.format("Attuned (%d): %s\nLevel 55+ still needing it: %d", #done,
+          #names > 0 and table.concat(names, ", ") or "nobody has reported it yet", #missing),
+        actionText = mine and "Mark Needed" or "Mark Done",
+        actionWidth = 110,
+        onAction = function() ns.ToggleMyReadiness(aId); Render() end,
+      })
+    end
+
+    -- Guild reputation with the factions that matter for keys, raids and gear.
+    flow:Section("Guild Reputation")
+    local any = false
+    for _, f in ipairs(ns.GUILD_REP_FACTIONS or {}) do
+      local list = ns.GetGuildRep(f.id)
+      if #list > 0 then
+        any = true
+        local parts = {}
+        for i = 1, math.min(15, #list) do
+          local e = list[i]
+          parts[#parts + 1] = string.format("%s %s%s", e.name, ns.StandingName(e.s),
+            (e.m or 0) > 0 and string.format(" %d/%d", e.v, e.m) or "")
+        end
+        if #list > 15 then parts[#parts + 1] = string.format("and %d more", #list - 15) end
+        flow:Card({ title = string.format("%s (%d)", f.name, #list), titleColor = col.white, note = table.concat(parts, ", ") })
+      end
+    end
+    if not any then
+      flow:Card({ title = "No reputation shared yet", sub = "Guildmates' standings show here once they log in with this version." })
+    end
+    local sharing = ns.ShareRep()
+    flow:Card({
+      title = sharing and "Sharing your reputation with the guild" or "Your reputation is private",
+      titleColor = sharing and col.green or col.gold,
+      sub = "Argent Dawn, Timbermaw, Cenarion Circle, Thorium Brotherhood and other raid factions.",
+      actionText = sharing and "Stop sharing" or "Share",
+      actionWidth = 110,
+      onAction = function() ns.SetShareRep(not sharing); Render() end,
+    })
 
   elseif state.tab == "writs" then
     local pFaction = ns.GetPlayerFaction and ns.GetPlayerFaction() or "Alliance"

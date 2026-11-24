@@ -89,7 +89,9 @@ L.ex('__ns.sync.officerAt = nil; __ns.sync.helloAt = nil')
 L.ex('__ns.WatchOfficers({ ["Chris Baker"] = { online = false, rank = 1 } })')
 L.ex('__ns.WatchOfficers({ ["Chris Baker"] = { online = true, rank = 1 } })')
 check("officer coming online in the roster triggers a hello", L.ev('__ns.sync.helloQueued') == True)
-tick(40)
+# The hello waits about 30 seconds; the answer then carries guildmates' dungeon
+# and raid progress too (every simulated character holds every key).
+tick(60)
 check("and it syncs", status(L).startswith("Synced"))
 
 # --- the guild roster loads late: retry, and hold the officer's data until it does ---
