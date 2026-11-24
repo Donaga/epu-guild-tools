@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Rested XP across your alts.** A new **Rested XP** tab in Personal trackers (`/epu rested`, or the **Personal trackers** tile in **Member tools**) shows how much rested XP each of your characters on this realm has built up: as a share of a level, in bubbles and in XP, with how long until it's full. Each character saves its rested XP, level and whether it was resting when it logged out, and EPU estimates the rest from the classic rates: 5% of a level every 8 hours in an inn or city, a quarter of that anywhere else, up to 1.5 levels. The character you're on shows its real rested XP. Max-level characters are listed last. A character shows up once you've logged in on it with this version.
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:

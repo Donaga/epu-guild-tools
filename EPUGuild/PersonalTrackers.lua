@@ -1,4 +1,4 @@
--- EPU Guild Tools: Personal Trackers (Lockouts, Profession Cooldowns, Farming Session, Consumables, Rep & PvP).
+-- EPU Guild Tools: Personal Trackers (Lockouts, Profession Cooldowns, Farming Session, Consumables, Rep & PvP, Rested XP).
 local _, ns = ...
 
 local function SafeStr(v)
@@ -306,7 +306,7 @@ function ns.OpenPersonalTrackers(tab)
   if tab then activeTab = tab end
   if not win then
     local C = ns.InterfaceColors
-    win = ns.InterfaceWindow("EPUGuildPersonalTrackers", UIParent, "EPU Personal Trackers", 540, 500)
+    win = ns.InterfaceWindow("EPUGuildPersonalTrackers", UIParent, "EPU Personal Trackers", 620, 500)
     win:SetFrameStrata("DIALOG")
 
     local scroll = CreateFrame("ScrollFrame", nil, win)
@@ -314,7 +314,7 @@ function ns.OpenPersonalTrackers(tab)
     scroll:SetPoint("BOTTOMRIGHT", -12, 12)
     scroll:EnableMouseWheel(true)
     local child = CreateFrame("Frame", nil, scroll)
-    child:SetWidth(510); child:SetHeight(420)
+    child:SetWidth(590); child:SetHeight(420)
     scroll:SetScrollChild(child)
     scroll:SetScript("OnMouseWheel", function(self, delta)
       local maxV = math.max(0, child:GetHeight() - self:GetHeight())
@@ -349,7 +349,7 @@ function ns.OpenPersonalTrackers(tab)
       local function Line(txt, col)
         local f = pool:Font(11, col or C.text, "line")
         f:SetPoint("TOPLEFT", 4, y)
-        f:SetWidth(500)
+        f:SetWidth(580)
         f:SetJustifyH("LEFT")
         f:SetText(txt)
         y = y - 18
@@ -361,6 +361,7 @@ function ns.OpenPersonalTrackers(tab)
         { "Session", 76, function() activeTab = "session" end, activeTab == "session" and "accent" or nil },
         { "Consumables", 104, function() activeTab = "consumables" end, activeTab == "consumables" and "accent" or nil },
         { "Rep & PvP", 92, function() activeTab = "reppvp" end, activeTab == "reppvp" and "accent" or nil },
+        { "Rested XP", 84, function() activeTab = "rested" end, activeTab == "rested" and "accent" or nil },
       })
 
       local realm = RealmName()
@@ -495,6 +496,47 @@ function ns.OpenPersonalTrackers(tab)
           Line(string.format("%s: |cff4ade80+%d|r (%d/hr)%s", fac, st.gained, rph, eta))
         end
         if not anyRep then Line("Earn reputation with any faction this session to see Rep/hr & ETA.", C.muted) end
+
+      elseif activeTab == "rested" and ns.RestedAlts then
+        if ns.RecordRested then ns.RecordRested(false) end
+        Heading("Rested XP Across Alts (" .. realm .. ")")
+        local alts = ns.RestedAlts(now)
+        local anyAway = false
+        for _, a in ipairs(alts) do
+          local rec = a.rec
+          local who = ClassHex(rec.classFile) .. (ns.Short and ns.Short(a.name) or a.name) .. "|r"
+          local lvl = "Level " .. (rec.level or "?")
+          if a.live then lvl = lvl .. ", this character" end
+          Line(who .. "  |cff888888" .. lvl .. "|r")
+          if rec.xpOff then
+            Line("   XP gain is turned off on this character.", C.muted)
+          elseif rec.maxed then
+            Line("   Max level, so rested XP doesn't matter.", C.muted)
+          else
+            local pct = math.floor(a.pct * 100 + 0.5)
+            local col = a.toFull == 0 and "|cff4ade80" or (pct >= 50 and "|cff4fc3f7" or "|cffffd100")
+            local txt = string.format("   %s%d%% of a level|r (%d bubbles, %d XP)", col, pct, math.floor(pct / 5), a.rested)
+            if a.toFull == 0 then
+              txt = txt .. "  -  |cff4ade80Full|r"
+            else
+              txt = txt .. "  -  full in " .. FormatDuration(a.toFull)
+            end
+            Line(txt)
+            local where
+            if a.live then
+              where = rec.resting and "Resting now" or "Not resting now"
+            else
+              where = (rec.resting and "Logged out resting, " or "Logged out outside an inn or city, ")
+                .. FormatDuration(now - (rec.logout or rec.seen or now)) .. " ago (estimate)"
+              if not rec.resting and a.toFull > 0 then anyAway = true end
+            end
+            Line("   |cff888888" .. where .. "|r")
+          end
+        end
+        if #alts == 0 then Line("Log in on each character once to start tracking its rested XP.", C.muted) end
+        if anyAway then
+          Line("Characters logged out in an inn or city build rested XP four times faster.", C.muted)
+        end
       end
 
       child:SetHeight(math.max(420, -y + 20))

@@ -31,7 +31,7 @@ local memberTools={
     icon="Interface\\Icons\\INV_Misc_Coin_01", available=function() return ns.OpenGoldTracker~=nil end,
     open=function() ns.OpenGoldTracker() end},
   -- Personal trackers (PersonalTrackers.lua); hidden if that file isn't loaded.
-  {key="trackers", title="Personal trackers", hint="Lockouts and profession cooldowns across your alts, farming sessions, consumables, rep and PvP (/epu trackers).",
+  {key="trackers", title="Personal trackers", hint="Lockouts, profession cooldowns and rested XP across your alts, farming sessions, consumables, rep and PvP (/epu trackers).",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_02", available=function() return ns.OpenPersonalTrackers~=nil end,
     open=function() ns.OpenPersonalTrackers() end},
   {key="chat", title="Chat history", hint="Whispers (and, if you choose, guild and officer chat) kept after a reload.",
