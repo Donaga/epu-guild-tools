@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:
   - **Lockouts:** raid and dungeon lockouts for every character you've logged in, with boss progress and time to reset. `/epu lockouts` opens this tab.
