@@ -1,8 +1,19 @@
 # EPU Discord companion
 
+## Daily guild needs post
+
+Once a day the bot can post a short **Guild needs** list: the materials guildmates are collecting with EPU's [needed mats](../docs/needed-mats.md), most-wanted first, grouped by profession, with who needs each one and how many. For example, under *Tailoring*: **Linen Cloth** x30: Tyler Baker (20), Pip Baker (10). It's off until you turn it on:
+
+- `"guild_needs_post": true` turns it on (default `false`).
+- `"guild_needs_channel_id"`: where it goes. Blank means the milestones channel (`feed_channel_id`, which itself falls back to the request channel).
+- `"guild_needs_time"`: when, as a 24-hour time on this PC's clock (default `"18:00"`). If the bot starts later in the day than that, it posts when it starts. It posts once a day, and skips the day when nobody needs anything.
+- `"guild_needs_max_items"`: how many materials to list (default 15, up to 40). The rest are counted at the end.
+
+The list comes from the officer's last save, like the status post, so it's as fresh as the last `/reload`, `/epu save` or logout on this PC. It follows the addon's rules: only characters still in the guild, and only lists refreshed in the last 30 days. Anyone can see the same list privately with `/neededmats`. Restart the bot after changing these settings.
+
 ## Guild chat history for EPU (0.28)
 
-The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into Inbox.lua. At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
+The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into the Discord inbox (see below). At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.
 
 ## Linking and class/rank roles (0.23)
 
@@ -14,7 +25,7 @@ The bot reads the last day of the Discord channel linked to guild chat in game (
 
 ## Shared-folder volunteers and guild invitations (0.18)
 
-See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge.
+See [guild invite setup](../docs/guild-invites.md) and [helper instructions](../sync-helper/README.md). Set `invite_requests_channel_id` and keep `sync_helpers` credentials in the private config. Each helper can have OneDrive and/or Google Drive folder locations; volunteers run the standalone Windows helper, not another copy of this bot. Privileged actions remain on the officer bridge, except on helpers marked `"officer": true`: then any officer running the helper carries Discord approvals and announcements while you're away (see [officer helpers](../docs/guild-invites.md#officer-helpers-any-officers-pc-can-carry-discord)).
 
 ## 0.10 identity and recovery changes
 
@@ -22,7 +33,7 @@ Upgrade this companion together with the addon. Old, unverified Discord links ar
 
 Approval also queues the Discord onboarding checklist step for the next officer login/reload. Existing guild role checks still protect approvals. The companion records link approvals in its local audit and writes a previous-state recovery copy at `state.json.bak` before replacing state. Back up state.json and config.json with the companion stopped; the recovery copy can contain guild information and should stay on the officer PC.
 
-The bot periodically restores Inbox.lua if an addon manager replaced it, and defers writes during an EPU updater install. Discord changes remain queued until the game imports them on login/reload. Partial-delivery counts are shown on request messages and reduce the outstanding shopping quantity.
+The bot keeps the Discord inbox in a small addon of its own, `Interface\AddOns\EPUGuild_Inbox` (it shows in the AddOns list as **EPU Guild Tools: Discord inbox**). No EPU download contains that folder, so updating EPU through CurseForge, WowUp, the EPU updater or a folder copy can't replace what's queued there. It's created the first time the bot runs with this version of EPU installed; WoW only notices a new addon folder when the game starts, so restart the game once afterwards (a /reload isn't enough), and keep it enabled. Until EPU has loaded it, the bot also writes the same updates into the old `EPUGuild\Inbox.lua`, which EPU applies once by id; after that the old file is left empty. Anything that was only in the old file is moved into the bot's queue the first time it starts. With an older EPU installed, the bot writes only the old file, as before. Discord changes remain queued until the game imports them on login/reload. Partial-delivery counts are shown on request messages and reduce the outstanding shopping quantity.
 
 Connects the **EPU Guild Tools** addon to a Discord channel.
 
@@ -31,7 +42,10 @@ Connects the **EPU Guild Tools** addon to a Discord channel.
 - **Pinned status post:** one "Guild Bank Status" message that the bot edits in place on every refresh. It shows each need's stock (red under half, yellow below target, green stocked), the shopping list, the guild focus professions officers have set (with progress toward each skill goal), gold on hand, open request counts and who holds the stock.
 - **Pinned how-to post:** a "How to use the Guild Bank bot" guide, pinned in the request channel and refreshed each time the bot starts. `/help` shows it privately. Turn it off with `"help_post": false`. `addon_url` sets its download link.
 - **Bank catalog and quantities:** `/request` offers only items the guild bank currently holds or has stocked before. Choices show banked and available quantities. Sold-out items remain requestable and are marked **Out of stock**; requests needing more stock show **Awaiting restock**. Direct links and IDs must belong to this catalog too. Open requests, including Discord requests not yet imported into WoW, reduce available stock. These are estimates from the latest officer save, not live reservations. Craft requests remain separate. The bot no longer downloads the complete game item list at startup; old `item_db` settings are ignored there.
-- **Release announcements:** checks GitHub every 30 minutes and posts when you publish a new release, with download links. `/download` shows the links any time (the updater, the addon zip, and WowUp instructions). Turn announcements off with `"announce_releases": false`.
+- **Release announcements:** checks GitHub every 30 minutes for a new release and posts it with download links once CurseForge has approved its file, so the CurseForge app already offers the update when guildmates read the post (CurseForge usually approves within a day). `/download` shows the links any time (the updater, the addon zip, and WowUp instructions). Turn announcements off with `"announce_releases": false`.
+  - **How it sees the approval.** With nothing to set up, it asks CFWidget (`api.cfwidget.com`), a public mirror of the project page from `curseforge_url` that only lists files anyone can download. For the most reliable check, ask CurseForge itself: get an API key at [console.curseforge.com](https://console.curseforge.com) (sign in, then **API keys**), and put it in `"curseforge_api_key"` with the numeric **Project ID** from the right-hand side of the project's CurseForge page in `"curseforge_project_id"`.
+  - The version is only marked as announced once it's posted, so while it waits the bot tries again every 30 minutes, and the bot's console says once that it's waiting. If neither check can be reached, it keeps waiting.
+  - `"announce_after_curseforge": false` posts as soon as the GitHub release appears, as before.
 - **Lookups:** `/needs` shows what the bank is short on. `/bank <search>` shows what it holds. `/requests` lists open requests. `/craft` shows who can make an item, guild crafters first.
 
 ## How it works (and the one catch)
@@ -40,7 +54,7 @@ WoW addons can't use the internet, so this program runs on **your PC**, next to 
 | Direction | File | When it updates |
 |---|---|---|
 | Game → Discord | `WTF\Account\<you>\SavedVariables\EPUGuild.lua` | WoW only writes this on **/reload** or logout. `/epu save` does a reload. |
-| Discord → game | `Interface\AddOns\EPUGuild\Inbox.lua` | WoW only reads this at **login** or **/reload**. |
+| Discord → game | `Interface\AddOns\EPUGuild_Inbox\Inbox.lua` | WoW only reads this at **login** or **/reload**. |
 
 So it isn't instant. A Discord request shows up in game the next time you /reload or log in. A request made in game shows up in Discord the next time you /reload or log out. Typing `/epu save` before you log off for the night pushes everything at once.
 
@@ -95,7 +109,18 @@ Double-click **start.bat**. The first run creates a private Python environment a
 
 Leave the window open while you play. It should say `Logged in as ... Watching ...EPUGuild.lua`.
 
-If it says it can't write **Inbox.lua**, Windows is blocking writes to `Program Files`. Right-click `...\_forever_\Interface\AddOns\EPUGuild` → **Properties → Security → Edit**, select **Users**, and tick **Modify**. Or run start.bat once as administrator.
+### Folder permissions
+If it says it can't write the Discord inbox, or that Windows won't let it make **EPUGuild_Inbox**, Windows is blocking writes to `Program Files`. Make the folder once and let your Windows user change it. Open **PowerShell as administrator** (Start, type PowerShell, right-click it, **Run as administrator**) and run:
+
+```
+cd "C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns"
+New-Item -ItemType Directory -Force EPUGuild_Inbox
+icacls EPUGuild_Inbox /grant "Users:(OI)(CI)M"
+```
+
+Change the first line if WoW is installed somewhere else. Then restart the bot, and restart the game once so WoW finds the new folder. Until then the bot keeps using the old `EPUGuild\Inbox.lua`, as before.
+
+Never copy an EPU folder over this one, and don't delete it while requests are waiting.
 
 ## Using it
 Sold-out weapons and armor are excluded from `/bank` and `/request`; other

@@ -1048,7 +1048,7 @@ ns.On("PLAYER_LOGIN", function()
 end)
 
 -- Guild chat from the guild's linked Discord channel. The EPU Discord bot
--- writes the last day of it into Inbox.lua (EPUGuildDiscordChat); at login
+-- writes the last day of it into its inbox (ns.InboxChat); at login
 -- EPU adds the lines it missed while you were offline. Discord shows the
 -- person, not the character, so a line names their main (or their Discord
 -- name) and lists their linked characters in `chars` for matching.
@@ -1067,7 +1067,7 @@ local function DiscordGuildOk(g)
   return type(g) == "string" and key ~= nil and (key == g or key:sub(1, #g + 3) == g .. " - ")
 end
 function ns.MergeDiscordChat(list)
-  list = list or EPUGuildDiscordChat
+  list = list or (ns.InboxChat and ns.InboxChat()) or EPUGuildDiscordChat
   if type(list) ~= "table" or not ns.ChatKeep("guild") then return 0 end
   local c = ChatDB()
   if not c then return 0 end
@@ -1401,6 +1401,12 @@ end
 
 local function Send(key, text)
   if type(text) ~= "string" or text:gsub("%s", "") == "" or not SendChatMessage then return false end
+  -- A slash command (/inv, /dance, /epu) goes to WoW's own chat box instead
+  -- of being posted as text; pressing Enter there runs it as usual.
+  if text:match("^%s*/") then
+    if ChatFrame_OpenChat then ChatFrame_OpenChat((text:gsub("^%s+", ""))) end
+    return true
+  end
   text = text:sub(1, 255)
   if CHANNELS[key] and CHANNELS[key].channelBase then
     local cid = ResolvePublicChannelID(CHANNELS[key].channelBase)
@@ -1491,7 +1497,9 @@ local function Opt()
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
-  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Combat", sources={combat=true,...} } }
+  o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Loot", sources={system=true,...} } }
+  -- The Combat Log source is gone (it never had any lines); a tab that used it keeps its other sources.
+  for _, ct in ipairs(o.customTabs) do if type(ct) == "table" and type(ct.sources) == "table" then ct.sources.combat = nil end end
   o.words = o.words or {}
   o.sounds = o.sounds or {}
   if o.sounds.mention == nil then o.sounds.mention = 3081 end
@@ -2111,6 +2119,14 @@ local function BuildWindow(id)
   end
   function f:Update()
     local st = WState(id)
+    -- Is the reader at the newest message right now (before the rebuild)?
+    if self.scroll and self.scroll.GetVerticalScroll and self.child then
+      local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
+      local cur = self.scroll:GetVerticalScroll() or 0
+      local oldest = Opt().oldestFirst and true or false
+      self.wasAtNewest = self.scrollOldest ~= oldest or (oldest and cur >= maxV - 20) or (not oldest and cur <= 20)
+      self.scrollOldest = oldest
+    end
     if not single and not MState().key then
       local first = ns.ChatConversations()[1]
       MState().key = first and ("w:" .. first.who) or (ns.ChatKeep("guild") and "guild" or nil)
@@ -2172,7 +2188,7 @@ local function BuildWindow(id)
       if tabDef and tabDef.sources then
         for src, on in pairs(tabDef.sources) do
           if on then
-            if src == "combat" or src == "xp" or src == "system" then
+            if src == "xp" or src == "system" then
               for _, e in ipairs(ns.GetLogStreamLines and ns.GetLogStreamLines(src) or {}) do
                 merged[#merged + 1] = { t = e.t, seq = e.seq, text = string.format("|cff888888%s|r %s%s|r", date("%H:%M", e.t or 0), e.color or "|cffffffff", e.msg or "") }
               end
@@ -2189,9 +2205,12 @@ local function BuildWindow(id)
           end
         end
       end
-      local oldest = Opt().oldestFirst
-      StableSortByTime(merged, not oldest)
+      -- Keep the newest 100, then show them in the chosen order.
+      StableSortByTime(merged, true)
       for i = 1, math.min(100, #merged) do out[#out + 1] = merged[i].text end
+      if Opt().oldestFirst then
+        for i = 1, math.floor(#out / 2) do out[i], out[#out + 1 - i] = out[#out + 1 - i], out[i] end
+      end
       empty = "|cff888888No messages in this custom tab yet. Pick channels in Opts -> Custom Pop-out Tabs.|r"
     elseif key then
       local lines, channel = ThreadLines(key, 100)
@@ -2207,9 +2226,14 @@ local function BuildWindow(id)
     self.find:SetShown(self.searching and true or false)
     self.findBtn:SetOn(self.searching and true or false)
     self:Layout()
+    -- Jump to the newest message only for a new conversation or when the
+    -- reader was already there; otherwise a busy channel (Trade, General)
+    -- keeps pulling them back while they scroll up to read.
     if not self.searching and self.scroll and self.scroll.SetVerticalScroll and self.child then
       local maxV = math.max(0, (self.child:GetHeight() or 0) - (self.scroll:GetHeight() or 0))
-      self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0)
+      local follow = self.scrollKey ~= key or self.wasAtNewest ~= false
+      if follow then self.scroll:SetVerticalScroll(Opt().oldestFirst and maxV or 0) end
+      self.scrollKey = key
     end
     if not single then self:Tabs() end
     ns.RefreshChatBubble()
@@ -2742,17 +2766,16 @@ function ns.OpenPopoutChatSettings()
     end)
     popOptsWin.scroll = scroll
     popOptsWin.child = child
-    popOptsWin.widgets = {}
+    popOptsWin.pool = ns.NewWidgetPool(child)
 
     function popOptsWin:Refresh()
       local curScroll = self.scroll:GetVerticalScroll() or 0
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
 
       local o = Opt()
       local c = ChatDB()
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function SyncUI()
         for _, w in pairs(Windows) do
@@ -2768,14 +2791,14 @@ function ns.OpenPopoutChatSettings()
       end
       local function Heading(text)
         y = y - 6
-        local h = Track(ns.InterfaceFont(self.child, 12, C2.gold))
+        local h = pool:Font(12, C2.gold)
         h:SetPoint("TOPLEFT", 4, y); h:SetText(text)
         y = y - 20
       end
       local function Row(btns)
         local x = 4
         for _, spec in ipairs(btns) do
-          local b = Track(ns.InterfaceButton(self.child, spec[1], spec[2] or 180, 22))
+          local b = pool:Button(spec[1], spec[2] or 180, 22)
           b:SetPoint("TOPLEFT", x, y)
           b:SetScript("OnClick", spec[3])
           x = x + (spec[2] or 180) + 6
@@ -2890,9 +2913,9 @@ function ns.OpenPopoutChatSettings()
         { ChatColor("mention") .. "Color|r", 64, function() ns.PickChatColor("mention") end },
         { Check(o.mentionGame, "In game chat too"), 154, function() o.mentionGame = not o.mentionGame; SyncUI() end },
       })
-      local wordBox = Track(ns.InterfaceInput(self.child, 230, "Add mention word..."))
+      local wordBox = pool:Input(230, "Add mention word...", "word")
       wordBox:SetPoint("TOPLEFT", 4, y)
-      local addWordBtn = Track(ns.InterfaceButton(self.child, "+ Add Word", 110, 22))
+      local addWordBtn = pool:Button("+ Add Word", 110, 22)
       addWordBtn:SetPoint("LEFT", wordBox, "RIGHT", 6, 0)
       addWordBtn:SetScript("OnClick", function()
         local w = (wordBox:GetText() or ""):lower():match("^%s*(.-)%s*$")
@@ -2915,7 +2938,6 @@ function ns.OpenPopoutChatSettings()
       if ns.ToggleLogWindow and ns.IsLogWindowEnabled then
         Heading("Customizable Log Windows")
         Row({
-          { Check(ns.IsLogWindowEnabled("combat"), "Combat Log"), 118, function() ns.ToggleLogWindow("combat"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("xp"), "XP & Rep"), 102, function() ns.ToggleLogWindow("xp"); SyncUI() end },
           { Check(ns.IsLogWindowEnabled("system"), "Server & Loot"), 118, function() ns.ToggleLogWindow("system"); SyncUI() end },
         })
@@ -2934,21 +2956,21 @@ function ns.OpenPopoutChatSettings()
       end
 
       Heading("Custom Pop-out Tabs")
-      local nameBox = Track(ns.InterfaceInput(self.child, 230, "New tab name (e.g. Combat, City)..."))
+      local nameBox = pool:Input(230, "New tab name (e.g. Loot, City)...", "tabname")
       nameBox:SetPoint("TOPLEFT", 4, y)
-      local addBtn = Track(ns.InterfaceButton(self.child, "+ Add Tab", 110, 22))
+      local addBtn = pool:Button("+ Add Tab", 110, 22)
       addBtn:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
       addBtn:SetScript("OnClick", function()
         local nm = (nameBox:GetText() or ""):match("^%s*(.-)%s*$")
         if nm == "" then return ns.Print("Enter a name for the custom tab.") end
         o.customTabs = o.customTabs or {}
-        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { combat = true } }
+        o.customTabs[#o.customTabs + 1] = { id = "t" .. time() .. math.random(10, 99), label = nm:sub(1, 14), sources = { system = true } }
         SyncUI()
       end)
       y = y - 28
 
       local STREAM_SOURCES = {
-        { "combat", "Combat Log" }, { "xp", "XP & Rep" }, { "system", "Server & Loot" },
+        { "xp", "XP & Rep" }, { "system", "Server & Loot" },
         { "whisper", "Whispers" }, { "guild", "Guild" }, { "officer", "Officer" },
         { "party", "Party" }, { "raid", "Raid" }, { "instance", "Instance / BG" },
         { "say", "Say" }, { "yell", "Yell" }, { "general", "General" },
@@ -2974,21 +2996,20 @@ function ns.OpenPopoutChatSettings()
             t:SetPoint(side[1]); t:SetPoint(side[2])
             if side[3] then t:SetHeight(1) else t:SetWidth(1) end
           end
-          dd.items = {}
+          dd.pool = ns.NewWidgetPool(dd)
           dd.catcher = catcher
           popOptsWin.multiDrop = dd
         end
         local dd = popOptsWin.multiDrop
         if not keepOpen and dd:IsShown() and dd.tabId == ct.id then dd:Hide(); dd.catcher:Hide(); return end
         dd.tabId = ct.id
-        for _, b in ipairs(dd.items) do b:Hide(); b:SetParent(nil) end
-        dd.items = {}
+        dd.pool:ReleaseAll()
         local dy = -6
         for _, src in ipairs(STREAM_SOURCES) do
           local sk, sl = src[1], src[2]
           if sk ~= "officer" or CanOfficerChat() then
             local on = ct.sources and ct.sources[sk]
-            local b = ns.InterfaceButton(dd, Check(on, sl), 194, 20)
+            local b = dd.pool:Button(Check(on, sl), 194, 20)
             b:SetPoint("TOPLEFT", 8, dy)
             b:SetScript("OnClick", function()
               ct.sources = ct.sources or {}
@@ -2996,14 +3017,12 @@ function ns.OpenPopoutChatSettings()
               SyncUI()
               OpenMultiSelect(anchorBtn, ct, true)
             end)
-            dd.items[#dd.items + 1] = b
             dy = dy - 22
           end
         end
-        local done = ns.InterfaceButton(dd, "Done", 194, 20)
+        local done = dd.pool:Button("Done", 194, 20)
         done:SetPoint("TOPLEFT", 8, dy - 4)
         done:SetScript("OnClick", function() dd:Hide(); dd.catcher:Hide() end)
-        dd.items[#dd.items + 1] = done
         dd:SetHeight(-dy + 32)
         if not keepOpen then
           dd:ClearAllPoints()
@@ -3018,12 +3037,12 @@ function ns.OpenPopoutChatSettings()
         local cnt = 0
         for _, v in pairs(ct.sources or {}) do if v then cnt = cnt + 1 end end
         local x = 4
-        local lblBtn = Track(ns.InterfaceButton(self.child, ct.label, 140, 22))
+        local lblBtn = pool:Button(ct.label, 140, 22)
         lblBtn:SetPoint("TOPLEFT", x, y)
-        local dropBtn = Track(ns.InterfaceButton(self.child, string.format("Channels (%d) v", cnt), 150, 22))
+        local dropBtn = pool:Button(string.format("Channels (%d) v", cnt), 150, 22)
         dropBtn:SetPoint("LEFT", lblBtn, "RIGHT", 6, 0)
         dropBtn:SetScript("OnClick", function(btn) OpenMultiSelect(btn, ctCopy) end)
-        local delBtn = Track(ns.InterfaceButton(self.child, "Delete", 74, 22))
+        local delBtn = pool:Button("Delete", 74, 22)
         delBtn:SetPoint("LEFT", dropBtn, "RIGHT", 6, 0)
         delBtn:SetScript("OnClick", function()
           if popOptsWin.multiDrop then popOptsWin.multiDrop:Hide() end

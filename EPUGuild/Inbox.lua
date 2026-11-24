@@ -1,4 +1,4 @@
--- Written by the EPU Discord companion. Leave this file in place; it is
--- replaced automatically. Entries here are applied by an officer's client
--- at login or /reload.
+-- Written by the EPU Discord companion for older copies of EPU. EPU now reads
+-- the inbox from the EPUGuild_Inbox addon beside this one, which addon updates
+-- can't replace. Entries here are applied once, by id, at login or /reload.
 EPUGuildInbox = {}

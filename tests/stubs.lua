@@ -152,7 +152,7 @@ local ITEMS = { [6948] = "Hearthstone", [2589] = "Linen Cloth", [2996] = "Bolt o
 for i = 30000, 30200 do ITEMS[i] = "Test Item " .. i end
 function __link(id) return "|cffffffff|Hitem:" .. id .. "::::::::20:::::|h[" .. ITEMS[id] .. "]|h|r" end
 function GetItemInfo(x)
-  local id = tonumber(x)
+  local id = tonumber(x) or (type(x) == "string" and tonumber(x:match("item:(%d+)")))   -- an ID, a link or a name, like the game
   if not id then for k, v in pairs(ITEMS) do if v == x then id = k end end end
   if not id or not ITEMS[id] then return nil end
   local cls = __cls and __cls[id]   -- { classID, subType } for recipe items in tests
@@ -206,6 +206,18 @@ C_Container = {
   GetContainerNumFreeSlots = function() return 5 end,
 }
 function GetMoney() return __money end
+-- Merchant repair, like the game: guild repairs spend guild gold, not the player's.
+__repairCost = 0; __canGuildRepair = false; __gbWithdraw = 0; __repaired = nil
+function CanMerchantRepair() return __repairCost > 0 end
+function GetRepairAllCost() return __repairCost, __repairCost > 0 end
+function CanGuildBankRepair() return __canGuildRepair end
+function GetGuildBankWithdrawMoney() return __gbWithdraw end
+function RepairAllItems(guild) __repaired = guild and "guild" or "own" end
+-- Flight masters, like the game: the server boards you a moment after TakeTaxiNode.
+__onTaxi = false
+function TakeTaxiNode(slot) end
+function TaxiNodeName(slot) return "Ironforge" end
+function UnitOnTaxi(unit) return __onTaxi end
 function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, "subj", m.money or 0, 0 end end
 function GetInboxItemLink(i, a) local m = __inbox[i]; if m and m.items[a] then return __link(m.items[a][1]) end end
 function GetInboxItem(i, a) local m = __inbox[i]; if m and m.items[a] then return "x", m.items[a][1], "tex", m.items[a][2] end end

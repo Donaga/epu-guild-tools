@@ -1299,10 +1299,10 @@ local function Match(q, ...)
 end
 
 local Views = {}
-local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
+local ORDER = { "home", "activities", "roster", "quests", "chat", "bank", "requests", "needs", "shopping", "donations", "market", "crafters", "recipes", "neededmats", "projects", "invites", "news", "membertools", "onboarding", "settings", "sync", "officer" }
 local GROUPS = {
   {label="Bank", first="bank", iconView="bank", "bank", "requests", "needs", "shopping", "donations"},
-  {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes"},
+  {label="Professions", first="market", iconView="crafters", "market", "crafters", "recipes", "neededmats"},
   {label="Guild", first="news", iconView="news", "news", "projects", "invites"},
   {label="Member tools", first="membertools", iconView="membertools", "membertools", "onboarding"},
 }
@@ -1747,7 +1747,8 @@ Views.donations = {
   label = "Donations", icon = "Interface\\Icons\\INV_Misc_Gift_01",
   rows = function(g, q)
     local list = {}
-    for id, d in pairs(g.donations) do list[#list + 1] = { id = id, d = d } end
+    -- a guild bank deposit two officers both logged is listed once
+    for id, d in pairs(g.donations) do if not d.dup then list[#list + 1] = { id = id, d = d } end end
     table.sort(list, function(a, b) return (a.d.t or 0) > (b.d.t or 0) end)
     local out = {}
     for _, e in ipairs(list) do
@@ -1771,7 +1772,7 @@ Views.donations = {
   footer = function(g)
     local cutoff, counts = ns.Now() - 30 * 86400, {}
     for _, d in pairs(g.donations) do
-      if not d.void and (d.t or 0) > cutoff and d.who then
+      if ns.DonationCounts(d) and (d.t or 0) > cutoff and d.who then
         local p = ns.MainOf(d.who)
         counts[p] = (counts[p] or 0) + 1
       end
@@ -2290,7 +2291,7 @@ Views.roster = {
 local function InboxWaiting()
   local n = 0
   local done = (ns.db and ns.db.inboxDone) or {}
-  for _, e in ipairs(EPUGuildInbox or {}) do
+  for _, e in ipairs(ns.InboxEntries()) do
     if type(e) == "table" and e.id and not done[e.id] then n = n + 1 end
   end
   return n
@@ -2343,6 +2344,51 @@ ns.UIKit={FONT=FONT,FallbackFont=fallbackFont,Btn=Btn,Match=Match,C=C,OpenMenu=O
 if ns.InstallCasualViews then ns.InstallCasualViews(Views,ns.UIKit) end
 
 Views.market = { label = "Market", icon = "Interface\\Icons\\INV_Misc_Coin_02" }
+-- Needed mats: what guildmates (and you) still need for their crafting -----
+Views.neededmats = {
+  label = "Needed mats", icon = "Interface\\Icons\\INV_Fabric_Linen_01",
+  tools = function(bar)
+    bar:Add(Btn(bar, "My needed mats", 120, 22, "accent"), "right", function() ns.ShowNeededMats() end,
+      "Add or remove the materials you need. Guildmates see them on the item's tooltip.")
+    if ns.ShowNeededMatsBank then
+      UI.neededBankBtn = bar:Add(Btn(bar, "In the guild bank", 130, 22), "right", function() ns.ShowNeededMatsBank() end,
+        "Needed mats the bank already holds, with a Pull or Request button for whoever needs them.")
+    end
+  end,
+  rows = function(g, q)
+    local ids, seen, out = {}, {}, {}
+    for _, e in ipairs(ns.MyNeededMats()) do if not seen[e.id] then seen[e.id] = true; ids[#ids + 1] = e.id end end
+    for _, e in ipairs(ns.GuildNeededMats()) do if not seen[e.id] then seen[e.id] = true; ids[#ids + 1] = e.id end end
+    for _, id in ipairs(ids) do
+      local name = ns.ItemName(id, true)
+      local list = ns.NeededBy(id)
+      local names, total, profs = {}, 0, {}
+      for _, c in ipairs(list) do
+        local n = c.me and "you" or c.who
+        if not c.me and c.online then n = "|cff4ade80" .. n .. "|r" end
+        names[#names + 1] = n .. (c.n > 0 and (" x" .. c.n) or "")
+        total = total + c.n
+        if c.p then profs[c.p] = true end
+      end
+      local plist = {}
+      for p in pairs(profs) do plist[#plist + 1] = p end
+      table.sort(plist)
+      if #list > 0 and Match(q, name, table.concat(names, " "), table.concat(plist, " ")) then
+        out[#out + 1] = {
+          key = "neededmat:" .. id, item = id, sortName = (name or "") .. "\031" .. id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
+          title = name .. (#plist > 0 and ("  |cff7e8590" .. table.concat(plist, ", ") .. "|r") or ""),
+          sub = "Needed by " .. table.concat(names, ", "),
+          right = total > 0 and ("x" .. total) or "", rightColor = C.gold,
+          onClick = function() ns.ShowNeededMats() end,
+        }
+      end
+    end
+    table.sort(out, function(a, b) return a.sortName < b.sortName end)
+    return out
+  end,
+  footer = function() return "Before you vendor or list a material, check here. Add your own with My needed mats or /epu mats add [item] 20." end,
+  empty = "No guildmate has listed a needed material yet. Add yours with My needed mats.",
+}
 Views.home = {
   label = "Home", icon = "Interface\\Icons\\INV_Misc_Map_01",
   rows = function(g, query)
@@ -2538,11 +2584,23 @@ Views.settings = {
         onClick=function() SlashCmdList.EPUGUILD("map") end},
       {key="chat", title="Chat history", sub="Keep whispers, guild chat and officer chat after a reload.",
         icon="Interface\\Icons\\INV_Letter_15", onClick=function() ns.ShowChatHistory() end},
+      -- windows that used to open only by slash command (/epu logs, bars, qol)
+      {key="logs", title="Pop-out chat and log windows", sub="XP and rep, and server and loot log windows, plus pop-out chat tabs (/epu logs).",
+        icon="Interface\\Icons\\INV_Scroll_03", available=function() return ns.OpenPopoutChatSettings~=nil end,
+        onClick=function() ns.OpenPopoutChatSettings() end},
+      {key="infobars", title="Info bars", sub="Bars along the screen edges showing gold, XP, durability, friends and more (/epu bars).",
+        icon="Interface\\Icons\\INV_Misc_Spyglass_02", available=function() return ns.OpenInfoBarsSettings~=nil end,
+        onClick=function() ns.OpenInfoBarsSettings() end},
+      {key="qol", title="Travel, vendor and tooltips", sub="Map coordinates, waypoints, flight timer, auto-sell and repair, needed mats sale warning, tooltip extras (/epu qol).",
+        icon="Interface\\Icons\\Ability_Mount_RidingHorse", available=function() return ns.OpenWorldQoLSettings~=nil end,
+        onClick=function() ns.OpenWorldQoLSettings() end},
       {key="minimap", title="Minimap button", sub="Position, spacing and visibility.", icon=ns.LOGO_SMALL,
         onClick=function() ns.ShowMinimapButtonSettings() end},
     }
     local rows={}
-    for _, row in ipairs(options) do if Match(query,row.title,row.sub) then rows[#rows+1]=row end end
+    for _, row in ipairs(options) do
+      if (not row.available or row.available()) and Match(query,row.title,row.sub) then rows[#rows+1]=row end
+    end
     return rows
   end,
   empty="No settings match your search.",
@@ -3050,7 +3108,7 @@ do
   UI.inboxHint = h4
   local applyInbox = Btn(officerPage, "Apply inbox now", 120, 22)
   applyInbox:SetPoint("TOPRIGHT", -146, lineY)
-  applyInbox.tip = "Apply requests and approvals made in Discord that have arrived in Inbox.lua."
+  applyInbox.tip = "Apply requests and approvals made in Discord that have arrived. The Discord companion keeps them in the EPU Guild Tools: Discord inbox addon beside EPU, which addon updates never replace."
   applyInbox:SetScript("OnClick", function() ns.ProcessInbox(); UI:Refresh() end)
   local saveDiscord = Btn(officerPage, "Save for Discord", 126, 22)
   saveDiscord:SetPoint("TOPRIGHT", -14, lineY)
@@ -3156,7 +3214,9 @@ local function RefreshOfficerPage(g)
     if rv.promote then promote = promote + 1 end
   end
   local waiting = InboxWaiting()
-  UI.inboxHint:SetText(waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
+  local source = ns.InboxSource and ns.InboxSource()
+  UI.inboxHint:SetText((waiting > 0 and ("|cfff2c14e" .. waiting .. " update(s) from Discord waiting|r") or "Nothing waiting from Discord")
+    .. (source == "off" and " |cffff6060(Discord inbox addon is turned off)|r" or ""))
   local open, pending, members, fulfillment = 0, 0, 0, 0
   for _, r in pairs(g.requests) do
     if ns.IsActiveRequest(r) then open = open + 1 end
@@ -3995,7 +4055,7 @@ function UI:FillDetails()
     if not d then return UI:CloseDetails() end
     local name = d.item and ns.ItemName(d.item, true) or Money(d.money)
     det:Reset(d.item and ns.ItemIcon(d.item) or "Interface\\Icons\\INV_Misc_Coin_01", d.item and Quality(d.item) or 1,
-      name, Ago(d.t) .. (d.void and "  ·  voided" or ""))
+      name, Ago(d.t) .. (d.void and "  ·  voided" or "") .. (d.dup and "  ·  also logged by another officer" or ""))
     det:Text("From " .. ns.WhoLabel(d.who or "?"))
     det:Text("Received by " .. tostring(d.to) .. " on " .. date("%b %d %H:%M", d.t), C.muted)
     if d.item then det:Text("Quantity: " .. (d.n or 1), C.muted) end
@@ -4149,12 +4209,13 @@ do
       market="Prices guildmates ask for gathered materials and crafts.",
       crafters="Who can craft what, and their profession skill.",
       recipes="Every recipe guildmates know. Ask someone to craft one.",
+      neededmats="Materials guildmates need for their crafting, and your own list.",
       news="Guild announcements and milestones.",
       projects="Guild crafting projects and who is working on which part.",
       invites="Invite requests for new members.",
-      membertools="Quest guides, catch-up help and your notifications.",
+      membertools="Quest guides, the zone guide, leveling and dungeon tools, gold tracking, catch-up and notifications.",
       onboarding="Your guild checklist for getting started.",
-      settings="Notifications, map sharing and the minimap button.",
+      settings="Notifications, map sharing, log windows, info bars, travel and vendor helpers, and the minimap button.",
       sync="How up to date your guild data is and who has shared it.",
       officer="Officer tools: Discord updates, member review and the officer log.",
     })[key]
@@ -4236,7 +4297,7 @@ for _, group in ipairs(GROUPS) do
   end
   local groupDesc = ({Bank="Bank stock, item requests, needs, what to buy and donations.",
     Professions="Market prices, crafters and recipes.", Guild="News, crafting projects and invites.",
-    ["Member tools"]="Quest guides, catch-up help and your getting-started checklist."})[group.label]
+    ["Member tools"]="Quest guides, zone guide, leveling tools, gold tracking, catch-up and your getting-started checklist."})[group.label]
   button:SetScript("OnEnter", function(self)
     self.hovered=true; self:SetOn(self.on)
     if groupDesc then

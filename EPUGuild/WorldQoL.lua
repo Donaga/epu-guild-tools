@@ -1,5 +1,8 @@
 -- EPU Guild Tools: World travel, waypoints, flight timer, vendor QoL, and item tooltip extras.
 local _, ns = ...
+-- Newer clients keep this under C_Item; the old global only exists when the
+-- game's "deprecated API" fallback is on (see Core.lua).
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 local function SafeStr(v)
   if type(v) ~= "string" or (issecretvalue and issecretvalue(v)) then return nil end
@@ -20,8 +23,12 @@ local function DB()
   if db.flightTimer == nil then db.flightTimer = true end
   if db.autoSellGrey == nil then db.autoSellGrey = true end
   if db.autoRepair == nil then db.autoRepair = true end
-  if db.guildRepair == nil then db.guildRepair = true end
+  -- Paying repairs from the guild bank is the player's choice, not a default.
+  -- 0.30.x saved it as on for everyone, so reset it once; the toggle below
+  -- marks it chosen.
+  if not db.guildRepairChosen then db.guildRepair = false end
   if db.tooltipExtras == nil then db.tooltipExtras = true end
+  if db.neededMatsWarn == nil then db.neededMatsWarn = true end
   db.flightTimes = db.flightTimes or {}
   db.altItems = db.altItems or {}
   return db
@@ -247,14 +254,25 @@ local function EnsureFlightFrame()
 
   f:SetScript("OnUpdate", function()
     if not curFlight or not DB().flightTimer then f:Hide(); return end
-    if UnitOnTaxi and not UnitOnTaxi("player") then
-      local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
-      if elapsed >= 3 and curFlight.key then
-        DB().flightTimes[curFlight.key] = elapsed
+    -- The server puts us on the taxi a moment after TakeTaxiNode, so wait
+    -- for boarding (and time the flight from then) before treating "not on
+    -- a taxi" as landed. No boarding within 10 seconds means no flight.
+    local onTaxi = UnitOnTaxi and UnitOnTaxi("player")
+    if onTaxi and not curFlight.boarded then
+      curFlight.boarded = true
+      curFlight.startedAt = GetTime()
+    elseif not onTaxi then
+      if curFlight.boarded then
+        local elapsed = math.floor((GetTime() - curFlight.startedAt) + 0.5)
+        if elapsed >= 3 and curFlight.key then
+          DB().flightTimes[curFlight.key] = elapsed
+        end
       end
-      curFlight = nil
-      f:Hide()
-      return
+      if curFlight.boarded or GetTime() - curFlight.startedAt > 10 then
+        curFlight = nil
+        f:Hide()
+        return
+      end
     end
     local elapsed = GetTime() - curFlight.startedAt
     if curFlight.expected and curFlight.expected > 0 then
@@ -288,17 +306,55 @@ if hooksecurefunc and TakeTaxiNode then
 end
 
 ---------------------------------------------------------------------------
+-- Needed mats (NeededMats.lua): who in the guild still needs an item.
+---------------------------------------------------------------------------
+local function ItemIDOf(link)
+  link = SafeStr(link)
+  return link and tonumber(link:match("item:(%d+)"))
+end
+
+-- Everyone who needs it, you included: { {who, n, me}, ... } or nil
+local function NeededList(id)
+  id = tonumber(id)
+  if not id or not ns.NeededBy then return nil end
+  local list = ns.NeededBy(id)
+  return (#list > 0) and list or nil
+end
+
+local function IsNeeded(id) return NeededList(id) ~= nil end
+
+-- "Tyler (x20), Ana and you", or nil when nobody needs it.
+local function WhoNeeds(id)
+  local list = NeededList(id)
+  if not list then return nil end
+  local names = {}
+  for i = 1, math.min(3, #list) do
+    local c = list[i]
+    local n = c.me and "you" or ((c.who and c.who:match("^(%S+)")) or c.who or "?")
+    if (tonumber(c.n) or 0) > 0 then n = n .. " (x" .. c.n .. ")" end
+    names[#names + 1] = n
+  end
+  if #list > 3 then names[#names + 1] = (#list - 3) .. " more" end
+  -- the verb to follow: "Tyler needs", "you need", "Tyler and Ana need"
+  local verb = (#list == 1 and not list[1].me) and "needs" or "need"
+  if #names == 1 then return names[1], verb end
+  return table.concat(names, ", ", 1, #names - 1) .. " and " .. names[#names], verb
+end
+
+---------------------------------------------------------------------------
 -- 4. Auto-Sell Grey Junk & Auto-Repair at Merchants (hold Shift to skip)
 ---------------------------------------------------------------------------
 local function OnMerchantShow()
   if IsShiftKeyDown and IsShiftKeyDown() then return end
+  -- A bank alt's bags and gold are the guild's: leave them alone.
+  if ns.IsBankAlt and ns.IsBankAlt() then return end
   local db = DB()
 
   if db.autoSellGrey then
     local getSlots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
     local getInfo = C_Container and C_Container.GetContainerItemInfo
     local useItem = C_Container and C_Container.UseContainerItem or UseContainerItem
-    local soldCount, soldCopper = 0, 0
+    local soldCount, soldCopper, keptCount = 0, 0, 0
     for bag = 0, (NUM_BAG_SLOTS or 4) do
       local n = getSlots and SafeNum(getSlots(bag)) or 0
       for slot = 1, (n or 0) do
@@ -310,7 +366,9 @@ local function OnMerchantShow()
           local _, c, _, q, _, _, l = GetContainerItemInfo(bag, slot)
           link, quality, count = l, q, c
         end
-        if quality == 0 and SafeStr(link) then
+        if quality == 0 and SafeStr(link) and IsNeeded(ItemIDOf(link)) then
+          keptCount = keptCount + 1
+        elseif quality == 0 and SafeStr(link) then
           local sellPrice = GetItemInfo and select(11, GetItemInfo(link))
           sellPrice = SafeNum(sellPrice) or 0
           if sellPrice > 0 and useItem then
@@ -324,6 +382,9 @@ local function OnMerchantShow()
     if soldCount > 0 then
       ns.Print(string.format("Sold %d grey item%s for %s.", soldCount, soldCount == 1 and "" or "s", FormatMoneyText(soldCopper)))
     end
+    if keptCount > 0 then
+      ns.Print(string.format("Kept %d grey item%s a guildmate has on their needed mats list.", keptCount, keptCount == 1 and "" or "s"))
+    end
   end
 
   if db.autoRepair and CanMerchantRepair and CanMerchantRepair() then
@@ -331,8 +392,12 @@ local function OnMerchantShow()
     cost = SafeNum(cost) or 0
     if canRepair and cost > 0 then
       if db.guildRepair and CanGuildBankRepair and CanGuildBankRepair() then
+        -- What the guild can pay: today's withdrawal limit (-1 = no limit),
+        -- but never more than the guild bank holds.
         local gLimit = GetGuildBankWithdrawMoney and SafeNum(GetGuildBankWithdrawMoney()) or 0
-        if gLimit == -1 or gLimit >= cost then
+        local inBank = GetGuildBankMoney and SafeNum(GetGuildBankMoney()) or 0
+        local canPay = gLimit == -1 and inBank or math.min(gLimit, inBank)
+        if canPay >= cost then
           RepairAllItems(true)
           ns.Print("Repaired using guild bank funds: " .. FormatMoneyText(cost))
           return
@@ -347,6 +412,125 @@ local function OnMerchantShow()
 end
 
 ---------------------------------------------------------------------------
+-- 4b. Needed mats at vendors and the auction house
+-- Auto-sell never sells a material on anyone's needed mats list (above).
+-- With the warning on (/epu qol), EPU also says in chat which needed mats are
+-- in your bags when a vendor opens, when you sell one by hand, and when you
+-- put one up for auction, naming who needs it. These are post-hooks only:
+-- replacing the game's sell or post functions would taint the bag buttons.
+---------------------------------------------------------------------------
+local function Warn(msg) ns.Print("|cffffb347" .. msg .. "|r") end
+
+local function WarnOn() return DB().neededMatsWarn ~= false end
+
+local function ItemAt(bag, slot)
+  local getInfo = C_Container and C_Container.GetContainerItemInfo
+  if getInfo then
+    local info = getInfo(bag, slot)
+    if info then return SafeNum(info.itemID) or ItemIDOf(info.hyperlink), SafeNum(info.stackCount) or 1 end
+  elseif GetContainerItemInfo then
+    local _, c, _, _, _, _, l, _, _, id = GetContainerItemInfo(bag, slot)
+    return SafeNum(id) or ItemIDOf(l), SafeNum(c) or 1
+  end
+end
+
+local function MerchantOpen() return MerchantFrame and MerchantFrame.IsShown and MerchantFrame:IsShown() end
+
+-- When a vendor opens: one line listing the needed mats in your bags.
+local function NoticeBags()
+  if not WarnOn() then return end
+  local getSlots = C_Container and C_Container.GetContainerNumSlots or GetContainerNumSlots
+  local seen, parts = {}, {}
+  for bag = 0, (NUM_BAG_SLOTS or 4) do
+    local n = getSlots and SafeNum(getSlots(bag)) or 0
+    for slot = 1, (n or 0) do
+      local id = ItemAt(bag, slot)
+      if id and not seen[id] then
+        seen[id] = true
+        local who = WhoNeeds(id)
+        if who then parts[#parts + 1] = ns.ItemLink(id) .. " (" .. who .. ")" end
+      end
+    end
+  end
+  if #parts == 0 then return end
+  table.sort(parts)
+  local more = #parts > 3 and (" and " .. (#parts - 3) .. " more") or ""
+  Warn("Needed mats in your bags, so don't sell: " .. table.concat(parts, ", ", 1, math.min(3, #parts)) .. more .. ".")
+end
+
+-- Selling by hand is a right-click on a bag item while a vendor is open. The
+-- item is still in its slot (locked) until the server takes it.
+local lastSale = {}
+local function OnUseContainerItem(bag, slot)
+  if not WarnOn() or not MerchantOpen() then return end
+  local id, count = ItemAt(bag, slot)
+  if not id then return end
+  local who, verb = WhoNeeds(id)
+  if not who then return end
+  local price = GetItemInfo and SafeNum(select(11, GetItemInfo(id))) or 0
+  if price <= 0 then return end                 -- vendors won't buy it, so nothing sold
+  local key = bag .. ":" .. slot .. ":" .. id
+  local now = GetTime and GetTime() or 0
+  if lastSale[key] and now - lastSale[key] < 0.5 then return end   -- one right-click, two hooked names
+  lastSale[key] = now
+  Warn("You sold " .. ns.ItemLink(id) .. ((count or 1) > 1 and (" x" .. count) or "") .. ", which " .. who
+    .. " " .. verb .. ". Buy it back on the vendor's Buyback tab if that was a mistake.")
+end
+
+-- Auction house (classic): warn when a needed mat goes into the sell slot,
+-- before it's posted. Once per item placed.
+local auctionWarned
+local function OnNewAuction()
+  if not GetAuctionSellItemInfo then return end
+  local name, _, count, _, _, _, _, _, _, id = GetAuctionSellItemInfo()
+  name, id = SafeStr(name), SafeNum(id)
+  if not name then auctionWarned = nil; return end
+  if not id and GetItemInfo then id = ItemIDOf(select(2, GetItemInfo(name))) end
+  if not id or auctionWarned == id then return end
+  auctionWarned = id
+  if not WarnOn() then return end
+  local who = WhoNeeds(id)
+  if who then
+    Warn(ns.ItemLink(id) .. " is on the needed mats list of " .. who .. ". Consider offering it in guild instead of posting it.")
+  end
+end
+
+-- Auction house (newer clients): warn after posting, since the post is one call.
+local function OnPostItemLocation(loc, _, quantity)
+  if not WarnOn() or type(loc) ~= "table" then return end
+  local id = C_Item and C_Item.GetItemID and SafeNum(C_Item.GetItemID(loc))
+  if not id then return end
+  local who, verb = WhoNeeds(id)
+  if who then
+    Warn("You listed " .. ns.ItemLink(id) .. ((tonumber(quantity) or 1) > 1 and (" x" .. quantity) or "") .. ", which "
+      .. who .. " " .. verb .. ". You can cancel it on the Auctions tab.")
+  end
+end
+
+-- Hook when the vendor or auction house opens, so the functions exist. Each
+-- function is hooked once.
+local hooked = {}
+local function Hook(tbl, key, name, fn)
+  if hooked[key] or not hooksecurefunc then return end
+  if tbl then
+    if type(tbl[name]) ~= "function" then return end
+    hooksecurefunc(tbl, name, fn)
+  else
+    if type(_G[name]) ~= "function" then return end
+    hooksecurefunc(name, fn)
+  end
+  hooked[key] = true
+end
+local function HookVendor()
+  Hook(C_Container, "C_Container.UseContainerItem", "UseContainerItem", OnUseContainerItem)
+  Hook(nil, "UseContainerItem", "UseContainerItem", OnUseContainerItem)
+end
+local function HookAuctionHouse()
+  Hook(C_AuctionHouse, "C_AuctionHouse.PostItem", "PostItem", OnPostItemLocation)
+  Hook(C_AuctionHouse, "C_AuctionHouse.PostCommodity", "PostCommodity", OnPostItemLocation)
+end
+
+---------------------------------------------------------------------------
 -- 5. Item Tooltip Extras (Alt/Bank item counts, vendor sell price, stack)
 ---------------------------------------------------------------------------
 local function ScanCharacterItems(includeBank)
@@ -355,7 +539,8 @@ local function ScanCharacterItems(includeBank)
   if not db.altItems then return end
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   db.altItems[realm] = db.altItems[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   local rec = db.altItems[realm][ns.me] or { bags = {}, bank = {} }
   rec.classFile = cf
   rec.bags = {}
@@ -395,7 +580,11 @@ local function AppendItemTooltip(tt, itemLinkOrID)
   local itemID = type(itemLinkOrID) == "number" and itemLinkOrID or (SafeStr(itemLinkOrID) and tonumber(itemLinkOrID:match("item:(%d+)")))
   if not itemID then return end
 
-  local _, _, _, _, _, _, _, maxStack, _, _, sellPrice = GetItemInfo and GetItemInfo(itemID)
+  local maxStack, sellPrice
+  if GetItemInfo then
+    local info = { GetItemInfo(itemID) }
+    maxStack, sellPrice = info[8], info[11]
+  end
   maxStack = SafeNum(maxStack)
   sellPrice = SafeNum(sellPrice)
 
@@ -454,17 +643,16 @@ function ns.OpenWorldQoLSettings()
     local C = ns.InterfaceColors
     qolWin = ns.InterfaceWindow("EPUGuildWorldQoLConfig", UIParent, "EPU Travel, Vendor & Tooltips", 410, 360)
     qolWin:SetFrameStrata("DIALOG")
-    qolWin.widgets = {}
+    qolWin.pool = ns.NewWidgetPool(qolWin)
 
     function qolWin:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local y = -44
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function AddToggle(label, key, onChange)
-        local b = Track(K.Btn(qolWin, Check(db[key], label), 370, 22))
+        local b = pool:Button(Check(db[key], label), 370, 22)
         b:SetPoint("TOPLEFT", 18, y)
         b:SetScript("OnClick", function()
           db[key] = not db[key]
@@ -485,10 +673,11 @@ function ns.OpenWorldQoLSettings()
       end)
       AddToggle("Auto-Sell Grey Junk at Vendors (hold Shift to skip)", "autoSellGrey")
       AddToggle("Auto-Repair Gear at Vendors (hold Shift to skip)", "autoRepair")
-      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair")
+      AddToggle("Use Guild Bank Funds for Auto-Repair when allowed", "guildRepair", function() db.guildRepairChosen = true end)
+      AddToggle("Warn Before Selling or Auctioning a Mat a Guildmate Needs", "neededMatsWarn")
       AddToggle("Item Tooltip Extras (Alt/Bank counts, Sell price, Stack)", "tooltipExtras")
 
-      local note = Track(K.Font(qolWin, 11, C.muted))
+      local note = pool:Font(11, C.muted, "note")
       note:SetPoint("TOPLEFT", 18, y - 6)
       note:SetWidth(370)
       note:SetJustifyH("LEFT")
@@ -508,4 +697,7 @@ if ns.On then
   ns.On("BANKFRAME_OPENED", function() ScanCharacterItems(true) end)
   ns.On("PLAYERBANKSLOTS_CHANGED", function() ScanCharacterItems(true) end)
   ns.On("MERCHANT_SHOW", OnMerchantShow)
+  ns.On("MERCHANT_SHOW", function() HookVendor(); NoticeBags() end)
+  ns.On("AUCTION_HOUSE_SHOW", function() auctionWarned = nil; HookAuctionHouse() end)
+  ns.On("NEW_AUCTION_UPDATE", OnNewAuction)
 end

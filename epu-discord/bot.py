@@ -67,6 +67,9 @@ def load_config() -> dict:
     cfg.setdefault("wowhead", "https://www.wowhead.com/forever")
     cfg.setdefault("github_repo", "Donaga/epu-guild-tools")
     cfg.setdefault("announce_releases", True)
+    cfg.setdefault("announce_after_curseforge", True)  # wait until CurseForge approves the release's file
+    cfg.setdefault("curseforge_project_id", "")   # optional: numeric project ID (else the slug in curseforge_url)
+    cfg.setdefault("curseforge_api_key", "")      # optional: CurseForge API key; with the project ID, asks CurseForge itself
     cfg.setdefault("item_db", True)               # download the full Forever item list from wago.tools
     cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
@@ -90,11 +93,33 @@ def load_config() -> dict:
     cfg.setdefault("officer_log_channel_id", "")  # joins, leaves, rank changes, links (an officers-only channel)
     cfg.setdefault("level_milestones", [60])
     cfg.setdefault("members_intent", False)       # needed only for /link_suggestions (turn it on in the Developer Portal)
+    cfg.setdefault("guild_needs_post", False)     # a short daily list of the mats guildmates need (from EPU's needed mats)
+    cfg.setdefault("guild_needs_channel_id", "")  # blank: the milestones channel (feed_channel_id)
+    cfg.setdefault("guild_needs_time", "18:00")   # 24-hour time on this PC's clock
+    cfg.setdefault("guild_needs_max_items", 15)
     cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
+    cfg["guild_needs_channel_id"] = cfg.get("guild_needs_channel_id") or cfg["feed_channel_id"]
+    if parse_clock(cfg["guild_needs_time"]) is None:
+        print(f"guild_needs_time {cfg['guild_needs_time']!r} isn't a 24-hour time like \"18:00\"; using 18:00.")
+        cfg["guild_needs_time"] = "18:00"
+    try:
+        cfg["guild_needs_max_items"] = max(1, min(40, int(cfg["guild_needs_max_items"])))
+    except (TypeError, ValueError):
+        cfg["guild_needs_max_items"] = 15
     return cfg
+
+
+def parse_clock(text) -> tuple[int, int] | None:
+    """ "18:00" or "6:30" -> (18, 0) / (6, 30); anything else -> None."""
+    try:
+        hh, mm = str(text).strip().split(":")
+        h, m = int(hh), int(mm)
+    except (TypeError, ValueError):
+        return None
+    return (h, m) if 0 <= h <= 23 and 0 <= m <= 59 and len(mm.strip()) == 2 else None
 
 
 cfg = load_config()
@@ -142,7 +167,24 @@ def read_latest(force=False) -> core.GuildData | None:
     return combined
 
 
+inbox_where=''
+
+
+def adopt_legacy_inbox():
+    """Once: carry anything left in the old EPUGuild\\Inbox.lua into the queue."""
+    if not core.addon_reads_inbox_addon(cfg["wow_path"]) or state.data.get("legacy_inbox_adopted"):
+        return
+    try:
+        n=state.adopt_legacy_inbox(core.read_legacy_inbox(cfg["wow_path"]))
+    except (OSError,ValueError,KeyError,TypeError):
+        log.exception("Couldn't read the old Inbox.lua; it's left in place and EPU still reads it.")
+        return
+    if n:
+        log.info("Moved %d queued update(s) from the old Inbox.lua into EPUGuild_Inbox.",n)
+
+
 def flush_inbox():
+    global inbox_where
     try:
         bridge.reconcile_helper_acks(cfg,state)
         bridge.publish(cfg,state)
@@ -160,9 +202,20 @@ def flush_inbox():
         entries=[e for e in entries if e.get('kind') not in unsupported]
         entries=[dict(e,guild=cfg['guild_key']) if e.get('kind')=='guild_invite' else e for e in entries]
         chat=core.ingame_chat_list(ingame_chat) if ingame_chat_id else None
-        core.write_inbox(core.inbox_path(cfg["wow_path"]), entries, chat)
+        # The old EPUGuild\Inbox.lua is emptied once EPU says it loaded EPUGuild_Inbox.
+        seen=latest.db.get('inboxDropSeen') if latest else 0
+        where=core.write_inbox_files(cfg["wow_path"], entries, chat, seen_at=seen if isinstance(seen,(int,float)) else 0)
+        if where!=inbox_where:
+            if where=='addon':
+                log.info("Discord updates go to %s, which EPU updates never replace.",core.inbox_drop_path(cfg["wow_path"]))
+            elif where=='denied':
+                log.warning("Windows won't let me make %s, so Discord updates still go to Inbox.lua inside EPUGuild, "
+                            "where an addon update can replace them until I rewrite it. See README (Folder permissions).",core.inbox_addon_dir(cfg["wow_path"]))
+            elif where=='legacy':
+                log.info("The installed EPU is older and reads Inbox.lua inside EPUGuild. Update EPU so Discord updates are kept where addon updates can't replace them.")
+            inbox_where=where
     except (OSError,ValueError,KeyError,TypeError) as e:
-        log.error("Couldn't write Inbox.lua (%s). Check folder permissions; see README.", e)
+        log.error("Couldn't write the Discord inbox (%s). Check folder permissions; see README.", e)
 
 
 def is_officer(member) -> bool:
@@ -410,6 +463,7 @@ def help_embed() -> discord.Embed:
         "`/bank search:` look up an item, e.g. `/bank search:potion`.\n"
         "`/requests`: all open requests.\n"
         "`/craft item:` who in the guild can make something, and what it takes (\u2b50 = guild crafter).\n"
+        "`/neededmats`: materials guildmates are collecting for their professions. Send them a stack before you vendor it.\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
     e.add_field(name="Getting something crafted", inline=False, value=(
         "In game, open the addon's **Recipes** page, pick the recipe and click **Ask ... to craft**. Choose who "
@@ -516,6 +570,10 @@ def download_embed(rel: dict | None) -> discord.Embed:
 
 
 async def check_release(announce: bool = True):
+    """Announce a new GitHub release, once CurseForge has approved its file.
+
+    The version only counts as announced once it's posted, so a release that
+    waits for CurseForge is checked again on every run of the loop."""
     global latest_release
     try:
         rel = await asyncio.to_thread(core.fetch_latest_release, cfg["github_repo"])
@@ -526,12 +584,28 @@ async def check_release(announce: bool = True):
         return
     latest_release = rel
     seen = state.data.get("last_release")
-    if seen == rel["tag"]:
+    gated = core.curseforge_source(cfg) is not None
+    approved = None
+    if gated and seen not in (None, rel["tag"]) and announce and cfg["announce_releases"]:
+        try:
+            files = await asyncio.to_thread(core.fetch_curseforge_files, cfg)
+            approved = core.curseforge_has_version(files, rel["version"])
+        except Exception as e:
+            log.debug("CurseForge check failed: %s", e)
+    step = core.release_step(seen, rel["tag"], announce and cfg["announce_releases"], gated, approved)
+    if step == "none":
+        return
+    if step == "wait":
+        if state.data.get("release_waiting") != rel["tag"]:
+            state.data["release_waiting"] = rel["tag"]
+            state.save()
+            log.info("EPU Guild Tools %s is on GitHub; announcing it once CurseForge approves it.", rel["version"])
         return
     state.data["last_release"] = rel["tag"]
+    state.data.pop("release_waiting", None)
     state.save()
-    if seen is None or not announce or not cfg["announce_releases"]:
-        return                          # first run: remember the current version without announcing it
+    if step == "remember":
+        return                          # first run, or announcements off: remember the version without a post
     ch = channel()
     if ch is None:
         return
@@ -540,8 +614,12 @@ async def check_release(announce: bool = True):
     notes = rel["notes"][:900] + ("..." if len(rel["notes"]) > 900 else "")
     if notes:
         e.description = notes
-    e.set_footer(text="CurseForge app: it shows up as an update once CurseForge approves it (usually within a day). "
-                      "WowUp and the updater have it now. Then /reload in game.")
+    if gated:
+        e.set_footer(text="It's live on CurseForge, so the CurseForge app offers it as an update. "
+                          "WowUp and the updater have it too. Then /reload in game.")
+    else:
+        e.set_footer(text="CurseForge app: it shows up as an update once CurseForge approves it (usually within a day). "
+                          "WowUp and the updater have it now. Then /reload in game.")
     try:
         await ch.send(embed=e)
     except Exception as ex:
@@ -551,6 +629,77 @@ async def check_release(announce: bool = True):
 @tasks.loop(minutes=30)
 async def release_loop():
     await check_release()
+
+
+# ---------------------------------------------------------------------------
+# Daily guild needs (from the addon's needed mats lists)
+# ---------------------------------------------------------------------------
+def guild_needs_embed(gd: core.GuildData, now: float | None = None, saved_at: float | None = None) -> discord.Embed | None:
+    """The needed mats post, or None when nobody needs anything."""
+    rows = gd.needed_mats(now)
+    if not rows:
+        return None
+    groups, left_out = core.needed_mats_groups(rows, cfg["guild_needs_max_items"])
+    e = discord.Embed(title="Guild needs", color=discord.Color.teal(),
+                      description="Materials guildmates are collecting. Mail or trade them a stack before you vendor or auction it.")
+    for prof, lines in groups[:24]:
+        e.add_field(name=prof, value=_clip(lines, 1000), inline=False)
+    if left_out:
+        e.add_field(name="\u200b", value=f"...and {left_out} more. In game: **Professions > Needed mats**.", inline=False)
+    e.set_footer(text="Add yours in game with /epu mats." + (" From the officer save" if saved_at else ""))
+    if saved_at:
+        e.timestamp = datetime.fromtimestamp(saved_at, timezone.utc)   # Discord shows it in each reader's time
+    return e
+
+
+def guild_needs_due(now: datetime, last_day: str | None) -> bool:
+    """Once a day, at or after guild_needs_time on this PC's clock."""
+    h, m = parse_clock(cfg["guild_needs_time"]) or (18, 0)
+    return last_day != now.date().isoformat() and (now.hour, now.minute) >= (h, m)
+
+
+async def post_guild_needs(now: datetime | None = None) -> bool:
+    """Post today's list if it's due. Returns True if something was posted."""
+    now = now or datetime.now()
+    if not cfg["guild_needs_post"] or not guild_needs_due(now, state.data.get("guild_needs_day")):
+        return False
+    gd = read_latest()
+    if gd is None:
+        return False                      # no SavedVariables yet: try again next minute
+    e = guild_needs_embed(gd, now.timestamp(), latest_source_mtime or None)
+    if e is not None:
+        ch = client.get_channel(int(cfg["guild_needs_channel_id"]))
+        if ch is None:
+            log.warning("guild_needs_channel_id %s isn't a channel the bot can see; skipping today's guild needs post.",
+                        cfg["guild_needs_channel_id"])
+        else:
+            try:
+                await ch.send(embed=e)
+            except Exception as ex:
+                explain(ex, "post the daily guild needs", cfg["guild_needs_channel_id"])
+                return False              # try again next minute
+    state.data["guild_needs_day"] = now.date().isoformat()   # an empty list counts as done for today
+    state.save()
+    return e is not None
+
+
+@tasks.loop(minutes=1)
+async def guild_needs_loop():
+    try:
+        await post_guild_needs()
+    except Exception:
+        log.exception("Couldn't build the daily guild needs post; will retry")
+
+
+@tree.command(name="neededmats", description="Materials guildmates are collecting (from EPU's needed mats)", guild=GUILD)
+async def neededmats_cmd(interaction: discord.Interaction):
+    gd = read_latest()
+    e = guild_needs_embed(gd, saved_at=latest_source_mtime or None) if gd else None
+    if e is None:
+        await interaction.response.send_message("Nobody in the guild has listed needed mats. Add yours in game with `/epu mats`.",
+                                                ephemeral=True)
+        return
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
 
 @tree.command(name="download", description="How to install EPU Guild Tools (CurseForge, WowUp or the updater)", guild=GUILD)
@@ -1811,7 +1960,7 @@ async def on_ready():
     await tree.sync(guild=GUILD)
     path = sv_path()
     log.info("Logged in as %s. Watching %s", client.user, path or "(no EPUGuild SavedVariables yet - log in once with the addon)")
-    queue_helper_whitelist();flush_inbox()
+    adopt_legacy_inbox();queue_helper_whitelist();flush_inbox()
     for cid in dict.fromkeys([cfg["channel_id"], cfg["status_channel_id"]]):
         check_channel(cid)
     await ensure_help_post()
@@ -1821,6 +1970,8 @@ async def on_ready():
     # needed for startup or autocomplete. Legacy item_db settings are harmless.
     if not release_loop.is_running():
         release_loop.start()
+    if cfg["guild_needs_post"] and not guild_needs_loop.is_running():
+        guild_needs_loop.start()
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

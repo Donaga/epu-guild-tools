@@ -16,7 +16,7 @@ Editing an accepted message updates its name. Removing the Character line, delet
 
 ## In game
 
-After the companion-running officer or a whitelisted shared-folder helper logs in or `/reload`s, the addon imports requests and shares them through normal guild sync. This is not an instant internet connection: WoW does not read changed Inbox.lua files during a session.
+After the companion-running officer or a whitelisted shared-folder helper logs in or `/reload`s, the addon imports requests and shares them through normal guild sync. This is not an instant internet connection: WoW does not read a changed Discord inbox (`EPUGuild_Inbox\Inbox.lua`) during a session.
 
 Only characters for whom the game reports `CanGuildInvite()` receive invite notifications. This is independent of EPU's officer-rank setting, so a non-officer with invite permission can receive them. Notifications follow quiet hours, sound and Instant/Digest/Off preferences. A request is not proof of character ownership.
 
@@ -32,7 +32,7 @@ Native success messages and roster joins create a synced outcome. The bot reacts
 
 Set `invite_requests_channel_id` in `epu-discord/config.json` to the text channel's ID. Leave it blank to disable this feature. Enable the bot's **Message Content Intent** in the Discord Developer Portal for labelled-message imports, and allow the bot to View Channel and Read Message History there. The command is registered in the configured server and accepts submissions only in the configured channel. No channel permissions are changed automatically.
 
-Update the addon before importing. The companion holds invite entries out of Inbox.lua until the installed addon lists `InviteRequests.lua`, so an older addon cannot consume them as unknown actions. Normal bank/announcement entries continue using the existing bridge. Keep the existing bot token private.
+Update the addon before importing. The companion holds invite entries out of the Discord inbox until the installed addon lists `InviteRequests.lua`, so an older addon cannot consume them as unknown actions. Normal bank/announcement entries continue using the existing bridge. Keep the existing bot token private.
 
 ## Shared-folder helper setup
 
@@ -44,6 +44,10 @@ Configuring the private helper character list queues whitelist grants in the loc
 
 An officer can also run `/epu synchelper rank Chron & Lib` to approve in-game sync for characters with that exact roster rank. Use `rank off` to turn off the rule. Explicit character approvals and removals take precedence. Each volunteer still needs their own connection folder, and the bot must list the characters allowed to use that folder. Guild invite and officer permissions come from their existing settings.
 
-The helper stages only invite requests and new bank requests awaiting approval. Approvals/status changes, officer news and whitelist grants stay on the officer's bridge. Public game bank/request/crafter data and invite outcomes can return through a helper. Officer notes, logs, identity proofs, account preferences and location history are excluded. Confirmed-record revisions win over older snapshots; helper data does not grant in-game approval rights.
+A member's helper stages only invite requests and new bank requests awaiting approval. Approvals/status changes, officer news, onboarding steps and whitelist grants stay on the officer's bridge, unless the organiser marks a helper as an officer's (`"officer": true`, see below). Public game bank/request/crafter data and invite outcomes can return through a helper. Officer notes, logs, identity proofs, account preferences and location history are excluded. Confirmed-record revisions win over older snapshots; helper data does not grant in-game approval rights.
+
+### Officer helpers: any officer's PC can carry Discord
+
+Without this, Discord approvals, `/announce`, onboarding steps and whitelist grants reach the game only when the officer whose PC runs the bot logs in or `/reload`s, and in-game announcements, milestones and the guild MOTD reach Discord only from that officer's game. Add `"officer": true` to a helper's `sync_helpers` entry for each officer who runs the helper, then restart the bot. That helper is then sent the officer actions too, and exports announcements, milestones and the MOTD. The addon applies officer actions only on an officer's character (anyone else's client leaves them waiting), and only officer helpers' announcements are taken. Each action has a fixed id, so when two officers carry the same approval or announcement they change one record, and the bot posts it once. The bot drops an action from its queue as soon as any officer's game reports it applied. Officer helpers need this helper version; older ones keep getting member actions only. The bot itself still runs on one PC: if that PC is off, nothing moves.
 
 Disable an individual helper in the private config and restart the bot to stop accepting its uploads and publish a disabled feed. Remove its in-game character grants as well. Fresh feeds expire after 24 hours; protocol signatures and saved sequence numbers reject modified, wrong-guild or older cloud copies. Both desktop sync clients and the central bot must be running. Cloud sharing cannot be completed until the recipient's provider/account is known.

@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.32.0
+
+**Before you update (officers).** This version moves the Discord inbox into its own small addon, so do these in order:
+
+1. On the PC that runs the Discord companion (bot), update EPU to this version first, then update the companion to this version and restart it. Once it sees this EPU installed, it makes the `EPUGuild_Inbox` addon folder and moves anything waiting in the old file.
+2. Fully restart WoW once after that first run (a /reload isn't enough), so the game finds the new addon. Keep **EPU Guild Tools: Discord inbox** enabled in the AddOns list.
+3. If other officers' PCs should carry Discord too, add `"officer": true` to each of them under `sync_helpers` in the bot's config.json, and have them install this version's sync helper.
+4. Optional: turn on the daily guild needs post with `"guild_needs_post": true` and `"guild_needs_channel_id"` in the bot's config.json.
+5. Optional: for the most reliable "approved on CurseForge" check before release announcements, add `"curseforge_api_key"` (from console.curseforge.com) and `"curseforge_project_id"` to the bot's config.json. Without them the bot uses a public mirror of the CurseForge page.
+
+**Everyone:** if you used guild-paid auto-repair in 0.30.x or 0.31.x, it's now off until you turn it on again in **Travel, vendor and tooltips** (`/epu qol`).
+
+- **Needed mats.** Crafters can list the materials they still need (`/epu mats`, or the new **Professions → Needed mats** page in the main window). Everyone in the guild sees it on the item's tooltip, for example "Needed by: Tyler (x20), Ana", so the stack goes to a guildmate instead of a vendor or the auction house. Lists are per character, up to 40 materials, with an optional amount; an entry comes off by itself once that many have arrived in your bags. Officers can clear entries, and a list ages out after 30 days without its character logging in. Details: [docs/needed-mats.md](docs/needed-mats.md).
+- **Needed mats already in the bank.** **In the guild bank** on the Needed mats page (or `/epu mats bank`) lists every needed material the guild bank or a bank alt holds: how many, which guild bank tab, and who needs it. One button does the rest. At the open guild bank, **Pull** takes what you need straight into your bags, from tabs your rank can withdraw from and within today's withdrawal limit. Otherwise **Request** files a bank request for the bank managers. Officers and bank managers get the button on everyone's entries: Pull fills the member's request (approving it if it was waiting) and leaves it ready for **Mail it**. Details: [docs/needed-mats.md](docs/needed-mats.md#already-in-the-guild-bank).
+- **Needed mats are safe at vendors and the auction house.** Auto-sell never sells a material on anyone's needed mats list. When a vendor opens, EPU lists the needed mats in your bags and who needs them; selling one by hand names who needed it and points you to the Buyback tab; and putting one in the auction sell slot warns you before you post. Turn the warnings off in **Settings → Travel, vendor and tooltips** (`/epu qol`).
+- **Every tool opens from the main window.** **Member tools** has tiles for the **Zone guide**, **Leveling and dungeons** and **Gold and budget**. **Settings** has rows for the pop-out chat and log windows, **Info bars**, and **Travel, vendor and tooltips**. The slash commands still work.
+- **Release announcements wait for CurseForge.** The Discord companion now posts a new EPU version once CurseForge has approved its file, instead of as soon as the GitHub release appears, so the CurseForge app already offers the update when guildmates see the post. It checks every 30 minutes and only marks a version announced once it has posted it. It reads CurseForge's own API when `curseforge_api_key` and `curseforge_project_id` are set, and otherwise a public mirror of the project page (CFWidget). `"announce_after_curseforge": false` posts at once, as before. Details: [epu-discord/README.md](epu-discord/README.md).
+- **Daily guild needs post on Discord.** The Discord companion can post a short list once a day of the materials guildmates need, from their needed mats lists: most-wanted first, grouped by profession, with who needs each one and how many. `/neededmats` shows the same list privately any time. It's off until an officer turns it on in the bot's config.json (`guild_needs_post`, `guild_needs_channel_id`, `guild_needs_time`). Setup: [epu-discord/README.md](epu-discord/README.md#daily-guild-needs-post).
+- **Guild-funded auto-repair is off until you turn it on.** 0.30.0 switched it on for everyone with repair rights, so the guild bank paid at every vendor without asking. If you want it, turn it on again in **Travel, vendor and tooltips** (`/epu qol`). When it's on, EPU checks what the guild can actually pay (today's limit and the gold in the bank); if it can't cover the repair, you pay instead of the repair failing. Bank alts never auto-sell or auto-repair.
+- **The Combat Log window is gone.** It listened for combat messages the game no longer sends, so it never showed anything. Its window, its tab in the combined log window, its Chat Settings checkbox, its source for custom tabs, and `/epu combatlog` and `/epu logs combat` are removed. Settings it saved are cleared the first time you load this version; custom tabs keep their other sources.
+- **EPU updates can't wipe what's waiting from Discord.** The Discord companion used to keep requests, approvals and guild chat from Discord in `EPUGuild\Inbox.lua`, and every update through CurseForge, WowUp or a folder copy replaced that folder, leaving the empty file EPU ships. The companion now keeps them in a small addon of its own beside EPU, **EPU Guild Tools: Discord inbox** (`Interface\AddOns\EPUGuild_Inbox`), which no EPU download contains. Update the companion with this version; it makes the folder and moves anything left in the old file. Restart the game once afterwards so WoW finds the new addon, and keep it enabled. EPU still reads the old file, so an officer on an older companion keeps working, and each update is applied once. The Officer page shows if the inbox addon is turned off, and officers get a chat reminder at login. Sync helpers move to it the same way. If Windows won't let the companion make the folder, see "Folder permissions" in the companion's README.
+- **Any officer's PC can carry Discord, not only the one running the bot.** Discord approvals, `/announce`, onboarding steps and helper whitelist grants used to reach the game only when the officer whose PC runs the bot logged in, and in-game announcements, milestones and the guild MOTD reached Discord only from that officer's game. The organiser can now mark an officer's sync helper with `"officer": true` in the bot config; that helper carries the officer actions too and sends announcements, milestones and the MOTD back. They apply only on an officer's character. When several officers carry the same action, it changes one record, so Discord gets one post, and the bot drops it from its queue once any officer's game has applied it. Officers need the updated sync helper; older helpers keep getting member actions only. The bot itself still runs on one PC. Setup: [docs/guild-invites.md](docs/guild-invites.md#officer-helpers-any-officers-pc-can-carry-discord).
+- **A guild bank deposit counts once when two officers log it.** When two officers or bank managers opened the guild bank close together, each logged the same deposits before the other's records arrived, so every gift showed twice in Donations, counted twice for top donors, and got two News shout-outs and two Discord thank-yous. Every client now spots the second copy (same person, item and amount within the log's 3-hour slack, logged by a different officer) and leaves it out of the list, the counts, News and Discord. It stays in the data so nobody logs it a third time. Two real identical gifts logged by one officer both still count, and one officer alone still logs everything. The donation's details show "also logged by another officer" on a hidden copy.
+- **Dungeon readiness and raid prep reach the guild.** Since 0.29.0 they used the same message kinds as the guild map and quest sharing, so nobody ever received them. Everyone needs this version for readiness and raid status to show. A guildmate can no longer overwrite someone else's record.
+- **Officer run log counts each run once.** Only one officer in the group logs a boss kill (before, each officer logged it, tripling attendance), runs only count when sent on officer chat, and entering a new instance starts a new run.
+- **Raid prep and guild stats read roles from profiles**, so tanks and healers are counted again and the squad builder shows how many guildmates it's working with.
+- **Leveling advisor** no longer stops with an error when a bank alt holds a listed item, and finds crafters again.
+- **Gold tracker: gold you move isn't spending.** Gold mailed to (or taken from mail sent by) your own characters, and gold put in or taken out of the guild bank, no longer count as income or spending or against your daily and weekly budget. They show on their own "Moved, not earned or spent" line, in the breakdown and in the transaction list. Postage still counts as mail spending.
+- **Gold tracker labels:** grey items sold at the same visit as a repair stay under Vendor, and the repair goes under Repairs.
+- **Windows no longer grow over a long session.** The gold tracker (every time your gold changed), info bar settings, travel and vendor settings, chat settings, zone guide, leveling tools and needed mats window made new frames each time they redrew. They now reuse them, so memory use stays flat.
+- **Slash commands typed in EPU chat run.** With "Enter key -> EPU chat" on, `/inv Name` or `/dance` typed in the EPU box was posted as text; now it runs.
+- **Chat and log windows stay where you scrolled** while new lines arrive, and only follow new lines when you're at the newest one. Custom tabs set to oldest on top keep showing new lines after 100.
+- **Log windows you moved in 0.29.x** reopen on screen instead of clamped to an edge.
+- **Flight timer** waits until you're on the flight path before timing it, so it learns route times.
+- **Hearthstone cooldown, tooltip sell price and stack size, and alt class colors** show again. The info bar Guild widget opens the online roster instead of the help text.
+- **World Map guide button** shows and hides with the map during combat.
+
+## 0.31.1
+
+- Guide notices explain the five dungeon entries per hour limit and the Vampiric Embrace group healing adjustment.
+- Method Skinning is available through skill 299 after review of its added later sections.
+
+## 0.31.0
+
+- **Gold & Budget tracker** (`/epu gold` or `/epu budget`). EPU sorts the gold you earn and spend into Loot & Quests, Vendor, Repairs, Auction House, Mail, Training & Riding, Flight Paths, Player Trade, Guild Bank and Other. Look at this session, today, 7 days, 30 days or everything, for this character or all of them, with a spending pie chart, a bar graph and a 7-day in-and-out trend. You can set a daily and weekly spending budget and get a chat warning when you reach it. The info bar Gold widget shows today's in and out and the budget left; right-click it to open the tracker.
+- Floating log windows reopen where you left them after a reload.
+
+## 0.30.1
+
+- **Whispers in the pop-out chat window:** on the Tells tab, the conversation list shows whispers only, most recent first, with each person's online or offline status.
+
+## 0.30.0
+
+- **Info bars** (`/epu bars`). Add a bar to the top, bottom, left or right edge of the screen and choose what it shows: FPS, latency and addon memory, gold (with your alts' totals and this session's net), durability, bag space, currencies, reputation, XP and item level, clock, zone and coordinates, movement speed, Hearthstone, guildmates and friends online, mail, EPU chat and events, and volume. Each has a tooltip and a click action. Bars can be resized, faded, hidden in combat or shown only on mouseover.
+- **Travel, vendor and tooltips** (`/epu qol`): your and the cursor's coordinates on the World Map, waypoints with `/epu way x y [label]` (and `/epu way clear`), a flight timer that learns how long each route takes, auto-sell grey items and auto-repair at vendors (hold Shift to skip), and item tooltips with how many your alts and banks hold, the sell price and the stack size.
+
+## 0.29.4
+
+- **Chat order:** messages sent in the same second by the same person no longer swap places.
+- **Class-colored names** in chat and in custom pop-out tabs.
+- **Log windows** stay under your bags and panels, aren't closed by Esc, can be resized from the corner, and remember their size, place and whether they're open. Chat Settings can combine them into one window with tabs.
+
+## 0.29.3
+
+- **Enter key to EPU chat** (optional, in Options and Chat Settings): Enter opens EPU's chat box instead of the game's.
+- Chat and log windows scroll to new lines whichever way they're sorted.
+- The pop-out Chat Settings window has every chat setting, with three more fonts: Inter SemiBold, 2002 and 2002 Bold.
+- Class icons in the chat conversation list show properly.
+- The World Map guide button no longer causes "blocked action" pop-ups.
+
+## 0.29.2
+
+- **More chat channels:** Say, Yell, Instance/Battleground and WorldDefense can be kept too (off until you turn them on in Chat settings), each with its own row, color, sound and reply box.
+- **Pop-out chat window:** choose which kept channels get a tab, and open Chat Settings from its **Opts** button.
+- **Custom pop-out tabs:** make your own tab and pick any mix of channels and log streams for it.
+- **Floating log windows** (`/epu logs`): movable windows for XP & reputation (with XP per hour this session), and server and loot messages. A Combat Log window was also added, but it never showed anything and has since been removed.
+
+## 0.29.1
+
+- **Public chat:** General, Trade, LookingForGroup and LocalDefense can be kept in EPU chat (off until you turn them on in Chat settings), each with its own row, pop-out tab, color, sound and reply box.
+- **Sort order:** choose newest or oldest messages on top, and newest or oldest conversations first, in Chat settings.
+
+## 0.29.0
+
+- **Zone Visitor's Guide** (`/epu zone [name]`, or the guide button on the World Map, which follows the zone you're viewing): 43 WoW: Forever and Classic zones with level ranges, flight paths, fishing, trainers, vendors and their recipes, guildmates there now, gathering spots, quests colored by level, and waypoints you can click.
+- **Leveling tools** (`/epu leveling`): zones and dungeons for your level and milestones to aim for, with quest items you might be missing checked against the guild bank and crafters, so you can ask for them in one click.
+- **Dungeons** (`/epu dungeons`): a warning when someone in your group is 12 or more levels apart (they'd get no XP), keys and attunements, quests to pick up first, and who in the guild has done each dungeon and who still needs it.
+- **Gear** (`/epu gear`): dungeons and notable drops for your level, class and role.
+- **Writs** (`/epu writs`): Waylaid Crates and Craftsman's Writs, with waypoints, a bag check against the guild bank and crafters, and the daily writ cooldown.
+- **Camping blueprints** (`/epu camping`): where Tier 2 and Tier 3 blueprints drop, which you've learned, and which camping stations the guild covers.
+- **Raid prep** (`/epu raid`) for December 9: Barrow Deeps (10), Hyjal Summit (20) and Onyxia's Lair (40), with Drakefire Amulet and fire resistance tracking, a squad builder and raid consumables for the bank.
+- **Guild run log for officers** (`/epu runs`): dungeon runs logged from boss kills or in one click, who has done what, attendance over 30 days and guild stats.
+
 ## 0.28.6
 
 - **Pull for request.** At the guild bank, officers and bank managers can take exactly what an approved request still needs out of the guild bank in one click: **Pull for request** in the request's details (or the bag icon on its row while the guild bank is open). EPU moves whole stacks where they fit and splits one for the rest, one move at a time, into empty bag slots. Then take it to a mailbox and click **Mail it** as usual. It checks your bag space and today's guild bank withdrawal limit first, and if the guild bank has less than is owed it takes what there is and says so. Pulling doesn't mark the request filled; sending the mail does.

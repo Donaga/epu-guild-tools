@@ -105,7 +105,8 @@ local function RecordAltGold()
   if not db.altGold then return end
   local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
   db.altGold[realm] = db.altGold[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf
+  if UnitClass then cf = select(2, UnitClass("player")) end
   db.altGold[realm][ns.me] = { money = m, classFile = cf }
 end
 
@@ -651,7 +652,7 @@ MODULES.guild = {
     tt:AddLine(" ")
     tt:AddLine("Click: Open EPU Roster", 0.5, 0.8, 1)
   end,
-  onClick = function() if SlashCmdList and SlashCmdList.EPUGUILD then SlashCmdList.EPUGUILD("roster") end end,
+  onClick = function() if SlashCmdList and SlashCmdList.EPUGUILD then SlashCmdList.EPUGUILD("online") end end,
 }
 
 MODULES.friends = {
@@ -696,7 +697,8 @@ MODULES.mail = {
   tooltip = function(tt)
     tt:AddLine("Mailbox", 1, 0.84, 0.35)
     if HasNewMail and HasNewMail() then
-      local s1, s2, s3 = GetLatestThreeSenders and GetLatestThreeSenders()
+      local s1, s2, s3
+      if GetLatestThreeSenders then s1, s2, s3 = GetLatestThreeSenders() end
       tt:AddLine("You have unread mail" .. (s1 and " from:" or "."), 0.4, 0.9, 0.5)
       for _, s in ipairs({ s1, s2, s3 }) do if SafeStr(s) then tt:AddLine("  " .. s, 1, 1, 1) end end
     else
@@ -805,7 +807,8 @@ MODULES.hearth = {
   text = function()
     local loc = GetBindLocation and SafeStr(GetBindLocation()) or "Hearth"
     local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
-    local start, dur = getCD and getCD(6948)
+    local start, dur
+    if getCD then start, dur = getCD(6948) end
     start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
     if start > 0 and dur > 1.5 then
       local rem = math.max(0, math.ceil((start + dur) - GetTime()))
@@ -819,7 +822,8 @@ MODULES.hearth = {
     tt:AddLine("Hearthstone", 1, 0.84, 0.35)
     tt:AddDoubleLine("Bind Location:", loc, 0.85, 0.85, 0.85, 1, 1, 1)
     local getCD = C_Container and C_Container.GetItemCooldown or GetItemCooldown
-    local start, dur = getCD and getCD(6948)
+    local start, dur
+    if getCD then start, dur = getCD(6948) end
     start, dur = SafeNum(start) or 0, SafeNum(dur) or 0
     if start > 0 and dur > 1.5 then
       local rem = math.max(0, math.ceil((start + dur) - GetTime()))
@@ -980,7 +984,6 @@ function ns.OpenInfoBarsSettings()
     local C = ns.InterfaceColors
     cfgWin = ns.InterfaceWindow("EPUGuildInfoBarsConfig", UIParent, "EPU Info Bars", 440, 500)
     cfgWin:SetFrameStrata("DIALOG")
-    cfgWin.widgets = {}
 
     local scroll = CreateFrame("ScrollFrame", nil, cfgWin)
     scroll:SetPoint("TOPLEFT", 12, -44)
@@ -994,19 +997,19 @@ function ns.OpenInfoBarsSettings()
       self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
     end)
     cfgWin.scroll, cfgWin.child = scroll, child
+    cfgWin.pool = ns.NewWidgetPool(child)
 
     function cfgWin:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local cfg = db.bars[selectedBar]
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
       local function Row(items)
         local x = 0
         for _, it in ipairs(items) do
-          local b = Track(K.Btn(child, it[1], it[2], 22, it[4]))
+          local b = pool:Button(it[1], it[2], 22, it[4])
           b:SetPoint("TOPLEFT", x, y)
           b:SetScript("OnClick", function() it[3](); ns.RefreshInfoBars(); cfgWin:Refresh() end)
           x = x + it[2] + 6
@@ -1014,7 +1017,7 @@ function ns.OpenInfoBarsSettings()
         y = y - 28
       end
       local function Heading(t)
-        local h = Track(K.Font(child, 12, C.gold or C.white))
+        local h = pool:Font(12, C.gold or C.white)
         h:SetPoint("TOPLEFT", 0, y - 4)
         h:SetText(t)
         y = y - 24
@@ -1058,7 +1061,7 @@ function ns.OpenInfoBarsSettings()
 
       Heading("Active Widgets on " .. BAR_LABELS[selectedBar])
       if #cfg.widgets == 0 then
-        local t = Track(K.Font(child, 11, C.muted))
+        local t = pool:Font(11, C.muted)
         t:SetPoint("TOPLEFT", 0, y)
         t:SetText("No widgets on this bar. Add some below.")
         y = y - 22

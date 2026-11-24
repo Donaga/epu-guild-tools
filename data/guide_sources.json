@@ -16,7 +16,8 @@
     "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-6-2026/2403040",
     "https://us.forums.blizzard.com/en/wow/t/dungeon-enemy-xp-increased-november-8/2406595/1",
     "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-13-2026/2403040/1",
-    "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-13-2026/2403040/9"
+    "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-13-2026/2403040/9",
+    "https://us.forums.blizzard.com/en/wow/t/wow-forever-hotfixes-november-20-2026/2403040/1"
   ],
   "guides": [
     {
@@ -40,7 +41,7 @@
       "updated": "2026-11-04",
       "pageHash": "f17c1031738e3f7fd4409a40587b2be0db4b9a26477daa1efe6e263a58140a66",
       "focus": "Feral",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-druid",
@@ -63,7 +64,7 @@
       "updated": "2026-11-07",
       "pageHash": "a1678f9105ece4aa8c10702ef99cef6e7781a3e88016bfe78f40257b32fae342",
       "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-druid",
@@ -126,7 +127,7 @@
       "spec": "Balance",
       "updated": "2026-11-04",
       "pageHash": "fb6518bdc1ad931b1a40f06a74329e37f518226581e5247350791f6be16177c4",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-druid-feral",
@@ -149,7 +150,7 @@
       "spec": "Feral",
       "updated": "2026-11-04",
       "pageHash": "8e0d81a8a9acee5e333f72a80c27c8f077288c31a90a447869d9445a38dc9419",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-druid-restoration",
@@ -172,7 +173,7 @@
       "spec": "Restoration",
       "updated": "2026-11-04",
       "pageHash": "ae35871d7e8385fa12630d0179cb415561f258704f701a4c77b171378c9b7f69",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-hunter",
@@ -194,7 +195,7 @@
       "class": "HUNTER",
       "updated": "2026-11-08",
       "focus": "Beast Mastery",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-hunter",
@@ -217,7 +218,7 @@
       "updated": "2026-11-08",
       "pageHash": "e9e541c92eb4e5ae2e5d9f9c5038cc3c7a1c70f3adf8d923b770f3ae4a940981",
       "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-hunter",
@@ -280,7 +281,7 @@
       "spec": "Beast Mastery",
       "updated": "2026-11-04",
       "pageHash": "288fe8e782755f774fee0729137948af6588f13f910f0fbe11ee9ca3d35e45e2",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-hunter-marksmanship",
@@ -303,7 +304,7 @@
       "spec": "Marksmanship",
       "updated": "2026-11-04",
       "pageHash": "28b33755d192d7835dfdb713b3afb2b65cdf999f39269b63305a7a6858795285",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-hunter-survival",
@@ -326,7 +327,7 @@
       "spec": "Survival",
       "updated": "2026-11-04",
       "pageHash": "d5efa5586f4901910bc7ae0feb392ab85c40eddccece48c115886d7644985ad8",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-mage",
@@ -349,7 +350,7 @@
       "updated": "2026-11-04",
       "pageHash": "4a5ee7a76a3b83c897224b15deba89653c728e6a5cf62b5e0effe2ecedc48223",
       "focus": "Frost",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-mage",
@@ -372,7 +373,7 @@
       "updated": "2026-11-08",
       "pageHash": "58a52c7b064fa78107b291f1871217124467ac55afd23383f2b532adc8c2e95b",
       "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-mage",
@@ -435,7 +436,7 @@
       "spec": "Arcane",
       "updated": "2026-11-04",
       "pageHash": "a915782275fd13eae7e13535f9e86a0ac47175e86ee1235a7a202cde01ddd760",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-mage-fire",
@@ -458,7 +459,7 @@
       "spec": "Fire",
       "updated": "2026-11-04",
       "pageHash": "582a412bbc5f211ccff859846c904fc5535f5562dbace902434beceed6877045",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-mage-frost",
@@ -481,7 +482,7 @@
       "spec": "Frost",
       "updated": "2026-11-04",
       "pageHash": "f68ee7bfd38e8f194a15f591842b563dfb595d9e4ba5079784cf0c54e07f53c9",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-paladin",
@@ -503,7 +504,7 @@
       "class": "PALADIN",
       "updated": "2026-11-09",
       "focus": "Retribution",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-paladin",
@@ -525,7 +526,7 @@
       "class": "PALADIN",
       "updated": "2026-11-09",
       "pageHash": "1edc81fbf18b77d717162bbbaed0c5cf73a011deadeae4ea368b2570c8c501ed",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-paladin",
@@ -588,7 +589,7 @@
       "spec": "Holy",
       "updated": "2026-11-04",
       "pageHash": "b2da5d0c49796e3053fad6f4ed3be26c9722ecf80d667f80be98c095e431a694",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-paladin-protection",
@@ -611,7 +612,7 @@
       "spec": "Protection",
       "updated": "2026-11-04",
       "pageHash": "11f68e16a133bfa551709f74e2a70b8fe41e7e3744572918d9bede38075a8af3",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-paladin-retribution",
@@ -634,7 +635,7 @@
       "spec": "Retribution",
       "updated": "2026-11-04",
       "pageHash": "cbc651f72fd9cd8cd6c0ba224882957ef97ba52dc6181acddc40163cf4c1d154",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-priest",
@@ -650,13 +651,13 @@
       "group": "priest-leveling",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-09",
+      "reviewed": "2026-11-23",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "PRIEST",
-      "updated": "2026-11-04",
+      "updated": "2026-11-21",
       "focus": "Shadow",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "November maintenance reduced Vampiric Embrace group healing to 10% of Shadow damage. The caster receives double that healing; solo healing is unchanged. Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-priest",
@@ -678,7 +679,7 @@
       "class": "PRIEST",
       "updated": "2026-11-06",
       "pageHash": "e1c6b73a5a9a8d86a707c0f78bceae6ddf9935ce6ae1bda612e1a8da0e0b4a24",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-priest",
@@ -741,7 +742,7 @@
       "spec": "Discipline",
       "updated": "2026-11-04",
       "pageHash": "0d8d14a205493d36048a9fb14a8ae4eb124c96bf9dac103c2855aedee23e019c",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-priest-holy",
@@ -764,7 +765,7 @@
       "spec": "Holy",
       "updated": "2026-11-04",
       "pageHash": "275bea61f6842068cdc408bbcff481fce32f79ca2b25227174fc37360eb05e7b",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-priest-shadow",
@@ -780,14 +781,13 @@
       "group": "priest-focus",
       "priority": 1,
       "status": "reviewed",
-      "reviewed": "2026-11-07",
+      "reviewed": "2026-11-23",
       "minLevel": 1,
       "maxLevel": 59,
       "class": "PRIEST",
       "spec": "Shadow",
-      "updated": "2026-11-04",
-      "pageHash": "d8a28b83e4ed06fd4e5c4d64908e7e2735d33369b2c0261a4ddc530321fb440a",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "updated": "2026-11-17",
+      "notice": "November maintenance reduced Vampiric Embrace group healing to 10% of Shadow damage. The caster receives double that healing; solo healing is unchanged. Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-rogue",
@@ -809,7 +809,7 @@
       "class": "ROGUE",
       "updated": "2026-11-05",
       "focus": "Combat",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-rogue",
@@ -831,7 +831,7 @@
       "class": "ROGUE",
       "updated": "2026-11-07",
       "pageHash": "0cb0c13390d7d934afe4a020bc0f82e442f6548d8bf82694c20ac8cc00d6fa22",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-rogue",
@@ -894,7 +894,7 @@
       "spec": "Assassination",
       "updated": "2026-11-04",
       "pageHash": "378501b3bb472a5f092cfccd0f15470d8b5d97655358865fd642c2aa86d06adf",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-rogue-combat",
@@ -917,7 +917,7 @@
       "spec": "Combat",
       "updated": "2026-11-04",
       "pageHash": "5d65f8940805ddbf55685a74e6f148d1cf644adade4c339aff0e82b49966c9e0",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-rogue-subtlety",
@@ -940,7 +940,7 @@
       "spec": "Subtlety",
       "updated": "2026-11-04",
       "pageHash": "68b194feb20b57da897303028e15803a6e080f00d7d7bfd0587548c60859f963",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-shaman",
@@ -962,7 +962,7 @@
       "class": "SHAMAN",
       "updated": "2026-11-13",
       "focus": "Enhancement",
-      "notice": "Enhancement tuning went live November 12. Stormstrike has an 8-second cooldown and Mental Dexterity converts less Intellect to Attack Power. This source now prioritizes Strength and Attack Power. November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Enhancement tuning went live November 12. Stormstrike has an 8-second cooldown and Mental Dexterity converts less Intellect to Attack Power. This source now prioritizes Strength and Attack Power. Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-shaman",
@@ -985,7 +985,7 @@
       "updated": "2026-11-08",
       "pageHash": "28a37d55266d1c655a07208adafbc11adadddc3e859bf424c50f198570b25762",
       "researchNote": "The body still contains pre-release assumptions; compare current in-game tooltips.",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-shaman",
@@ -1048,7 +1048,7 @@
       "spec": "Elemental",
       "updated": "2026-11-04",
       "pageHash": "0a22e401e24d1a4685d97d436f103099ef905a27a25dee0e4d33f62c9f0cf503",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-shaman-enhancement",
@@ -1070,7 +1070,7 @@
       "class": "SHAMAN",
       "spec": "Enhancement",
       "updated": "2026-11-13",
-      "notice": "Enhancement tuning went live November 12. Stormstrike has an 8-second cooldown and Mental Dexterity converts less Intellect to Attack Power. This source still ranks Intellect above Strength for leveling; compare gearing advice with live tooltips. November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Enhancement tuning went live November 12. Stormstrike has an 8-second cooldown and Mental Dexterity converts less Intellect to Attack Power. This source still ranks Intellect above Strength for leveling; compare gearing advice with live tooltips. Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-shaman-restoration",
@@ -1093,7 +1093,7 @@
       "spec": "Restoration",
       "updated": "2026-11-04",
       "pageHash": "260df27c926bed0141b7e52e444cccf14fd39722393082918c23ab19ee5e2ef8",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-warlock",
@@ -1114,7 +1114,7 @@
       "maxLevel": 59,
       "class": "WARLOCK",
       "updated": "2026-11-06",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-warlock",
@@ -1136,7 +1136,7 @@
       "class": "WARLOCK",
       "updated": "2026-11-08",
       "pageHash": "c29d5447d1b5d3baf2adcb18fbe41d0fc048ae6f8e2231cd75aa9c1d0f60e25a",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-warlock",
@@ -1199,7 +1199,7 @@
       "spec": "Affliction",
       "updated": "2026-11-04",
       "pageHash": "86819049204d0afc879fc463e56e708b82b9a921a98acbf99d01fc82eaab3944",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-warlock-demonology",
@@ -1222,7 +1222,7 @@
       "spec": "Demonology",
       "updated": "2026-11-04",
       "pageHash": "29a46a7e7212944fbe0171701cf5899ed0ddbc34759dc57acc0a610d5e18d15e",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-warlock-destruction",
@@ -1245,7 +1245,7 @@
       "spec": "Destruction",
       "updated": "2026-11-04",
       "pageHash": "2995da36f38aca6c17ae17a4ce9a8b85dbd93f7eaabbfbc81d6414928f5b4e52",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "moba-warrior",
@@ -1267,7 +1267,7 @@
       "class": "WARRIOR",
       "updated": "2026-11-09",
       "pageHash": "4dded1bd8062d3de4d4efb2fe0af6595430e7e9c2f24c8306ca7adfe957c7676",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "method-warrior",
@@ -1289,7 +1289,7 @@
       "class": "WARRIOR",
       "updated": "2026-11-04",
       "pageHash": "fcc4362b7320f35fd704adbcd4a3e23d28a897ff7bbd41af1a7c46699f2c3e93",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "overview-warrior",
@@ -1352,7 +1352,7 @@
       "spec": "Arms",
       "updated": "2026-11-04",
       "pageHash": "e43c07eba6c88435d424b38a64eab1644d0ed317b051c4d847b7057b3c14ca03",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-warrior-fury",
@@ -1375,7 +1375,7 @@
       "spec": "Fury",
       "updated": "2026-11-04",
       "pageHash": "8dbf137f54f5e371c967244d596025baa5af02aa1509f1eddb245086ba353070",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "spec-warrior-protection",
@@ -1398,7 +1398,7 @@
       "spec": "Protection",
       "updated": "2026-11-04",
       "pageHash": "07f91f99f5a0eab325f082a563f52ba89475821ddae9d0bd6ed77b04c7d0136b",
-      "notice": "November 8: dungeon kills grant 50% more XP. Since November 13, a kill gives the party zero XP if trivial to any member."
+      "notice": "Dungeon kills give +50% XP; zero XP if trivial to any party member (Nov 13). Since Nov 20, each dungeon allows 5 entries/hour."
     },
     {
       "id": "route-alchemy",
@@ -2173,20 +2173,20 @@
       "url": "https://www.method.gg/wow-forever/skinning-in-wow-forever-leveling-guide-skinning-items-enchants-trainers",
       "publisher": "Method",
       "author": "Tayder",
-      "summary": "Trainer locations and an early Skinning route through skill 225. The author still marks the 225-300 extension as unfinished; choose a broader route from skill 225.",
+      "summary": "A Skinning route with trainer locations and gathering zones through skill 300. The added later sections cover Riverglades, the Hinterlands and UnGoro Crater.",
       "topics": [
         "professions"
       ],
       "group": "skinning-route",
       "priority": 1,
-      "status": "prelaunch",
-      "reviewed": "2026-11-09",
+      "status": "reviewed",
+      "reviewed": "2026-11-23",
       "minLevel": 1,
       "maxLevel": 60,
       "profession": 393,
-      "updated": "2026-11-06",
-      "pageHash": "0645a5ce25195214ba81d1f32109b49caed3f189a7e789a6bc295e097023dd18",
-      "maxSkill": 224
+      "updated": "2026-11-14",
+      "maxSkill": 299,
+      "notice": "The introduction still mentions coverage through 225, but the article now includes a 225-300 section. Choose targets appropriate to your level and check their live skinning requirements."
     },
     {
       "id": "reference-skinning",

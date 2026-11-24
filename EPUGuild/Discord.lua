@@ -5,9 +5,16 @@
 --   * game -> Discord: it reads this addon's SavedVariables, which WoW writes
 --     on /reload and logout (/epu save does a /reload).
 --   * Discord -> game: it writes requests and approvals made in Discord into
---     Inbox.lua in this folder, which WoW loads at login and /reload.
--- Only officers' clients apply inbox entries, so the companion should run
--- on an officer's PC.
+--     EPUGuild_Inbox\Inbox.lua (EPUGuildInboxDrop), a small addon of its own
+--     beside this one, which WoW loads at login and /reload. The EPU download
+--     doesn't contain that folder, so an update through CurseForge, WowUp or
+--     a folder copy can't replace it. Older companions wrote Inbox.lua in this
+--     folder (EPUGuildInbox); EPU still reads both and applies each id once.
+-- Only officers' clients apply approvals, announcements and other officer
+-- actions. The companion runs on one officer's PC; other officers can carry
+-- the same actions with the sync helper (marked "officer" in the bot's
+-- config), so Discord keeps moving while the organiser is away. Each action
+-- has a fixed id, so two officers applying it change one record.
 local ADDON, ns = ...
 -- Newer clients keep these under C_Item; the old global names only exist when
 -- the game's "deprecated API" fallback is on, which varies from PC to PC.
@@ -48,6 +55,9 @@ function ns.CacheItemNames()
   for _, m in pairs(g.mats or {}) do
     for i = 1, #(m.r or {}), 2 do add(m.r[i]) end
   end
+  for _, r in pairs(g.neededMats or {}) do          -- the companion's daily "guild needs" post
+    for id in pairs(type(r) == "table" and type(r.i) == "table" and r.i or {}) do add(id) end
+  end
 end
 
 ns.On("PLAYER_LOGOUT", function()
@@ -57,6 +67,68 @@ end)
 ---------------------------------------------------------------------------
 -- Inbox
 ---------------------------------------------------------------------------
+local INBOX_ADDON = "EPUGuild_Inbox"
+local function Drop()
+  local d = EPUGuildInboxDrop
+  return type(d) == "table" and d or nil
+end
+
+-- Entries from EPUGuild_Inbox, then any still in the old Inbox.lua, once per id.
+function ns.InboxEntries()
+  local out, seen = {}, {}
+  local function add(list)
+    if type(list) ~= "table" then return end
+    for _, e in ipairs(list) do
+      if type(e) == "table" and e.id ~= nil and not seen[e.id] then seen[e.id] = true; out[#out + 1] = e end
+    end
+  end
+  local d = Drop()
+  add(d and d.entries)
+  add(EPUGuildInbox)
+  return out
+end
+
+-- The last day of Discord guild chat, from either file.
+function ns.InboxChat()
+  local d = Drop()
+  local new, old = d and type(d.chat) == "table" and d.chat or nil, type(EPUGuildDiscordChat) == "table" and EPUGuildDiscordChat or nil
+  if not new or not old then return new or old end
+  local out, seen = {}, {}
+  for _, list in ipairs({ new, old }) do
+    for _, line in ipairs(list) do
+      local id = type(line) == "table" and line.id
+      if id and not seen[id] then seen[id] = true; out[#out + 1] = line end
+    end
+  end
+  table.sort(out, function(a, b) return (tonumber(a.t) or 0) < (tonumber(b.t) or 0) end)
+  return out
+end
+
+-- Where Discord updates are arriving, for the Officer page.
+--   "addon": EPUGuild_Inbox is loaded; "off": it's installed but not loaded
+--   (reason says why); "legacy": only the old Inbox.lua (an older companion).
+function ns.InboxSource()
+  if Drop() then return "addon" end
+  local info = (C_AddOns and C_AddOns.GetAddOnInfo) or GetAddOnInfo
+  if info then
+    local ok, name, _, _, _, reason = pcall(info, INBOX_ADDON)
+    if ok and name then return "off", reason end
+  end
+  return "legacy"
+end
+
+local function NoteInboxSource()
+  local source, reason = ns.InboxSource()
+  if source == "addon" and ns.db then
+    -- The companion empties the old Inbox.lua once it sees this.
+    ns.db.inboxDropSeen = ns.Now()
+  elseif source == "off" and (ns.IsTrusted(ns.me) or (ns.IsSyncHelper and ns.IsSyncHelper(ns.me))) then
+    ns.Print("The EPU Discord inbox addon (EPU Guild Tools: Discord inbox) is installed but not loaded"
+      .. (reason and (" (" .. tostring(reason):lower():gsub("_", " ") .. ")") or "")
+      .. ". Turn it on in the AddOns list at character select so Discord updates reach the game.")
+  end
+end
+
 local function ResolveItem(e)
   if tonumber(e.item) then return tonumber(e.item) end
   if type(e.itemName) == "string" and e.itemName ~= "" then
@@ -89,7 +161,7 @@ function ns.CreateRequestFor(who, item, qty, note, discord, rid, to)
 end
 
 function ns.ProcessInbox()
-  local inbox = EPUGuildInbox
+  local inbox = ns.InboxEntries()
   local g = ns.G()
   if type(inbox) ~= "table" or not g or not ns.db then return end
   ns.db.inboxDone = ns.db.inboxDone or {}
@@ -187,7 +259,7 @@ end
 
 ns.On("PLAYER_ENTERING_WORLD", function(isLogin, isReload)
   if isLogin == false and isReload == false then return end
-  C_Timer.After(15, function() pcall(ns.ProcessInbox) end)
+  C_Timer.After(15, function() pcall(NoteInboxSource); pcall(ns.ProcessInbox) end)
 end)
 
 ---------------------------------------------------------------------------

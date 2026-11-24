@@ -49,6 +49,7 @@ function ns.Changed()
     ns.Debounce("goals", 3, ns.CloseMetGoals)
   end
   if ns.RefreshBagMarkers then ns.Debounce("bagmarkers", 1, ns.RefreshBagMarkers) end
+  if ns.RefreshNeededMatsBank then ns.RefreshNeededMatsBank() end
 end
 
 -- Request states: pending -> approved | rejected -> filled; or cancelled.
@@ -259,6 +260,8 @@ function ns.Prune(g)
     table.sort(ids, function(a, b) return (g.donations[a].t or 0) > (g.donations[b].t or 0) end)
     for i = ns.DONATION_CAP + 1, #ids do g.donations[ids[i]] = nil end
   end
+  -- the same guild bank deposit logged by two officers counts once
+  if ns.MarkDuplicateDonations then ns.MarkDuplicateDonations(g) end
 end
 
 -- catchingUp: this bundle answers our login sync, so don't announce old news

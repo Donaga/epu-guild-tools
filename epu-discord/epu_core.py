@@ -1,7 +1,8 @@
 """EPU Discord companion: the parts that don't need Discord.
 
 * Reads the EPUGuild SavedVariables file that WoW writes on /reload and logout.
-* Writes Inbox.lua, which the addon loads at the next login or /reload.
+* Writes the Discord inbox (EPUGuild_Inbox/Inbox.lua, beside the addon), which
+  the addon loads at the next login or /reload.
 * Works out what changed since the last read (new requests, status changes,
   donations) so the bot can post or edit Discord messages.
 """
@@ -185,9 +186,9 @@ def lua_value(v, indent=0) -> str:
 
 
 INBOX_HEADER = (
-    "-- Written by the EPU Discord companion. Leave this file in place; it is\n"
-    "-- replaced automatically. Entries here are applied by an officer's client\n"
-    "-- at login or /reload.\n"
+    "-- Written by the EPU Discord companion for older copies of EPU. EPU now reads\n"
+    "-- the inbox from the EPUGuild_Inbox addon beside this one, which addon updates\n"
+    "-- can't replace. Entries here are applied once, by id, at login or /reload.\n"
 )
 
 
@@ -249,7 +250,24 @@ def ingame_chat_list(lines: dict, now: float | None = None) -> list:
     return out[-INGAME_CHAT_MAX:]
 
 
+def _write_text(path: str, text: str) -> bool:
+    """Write text to path atomically; False when the file already says that."""
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as existing:
+            if existing.read() == text:
+                return False
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    safe_replace(tmp, path)
+    return True
+
+
 def write_inbox(path: str, entries: list, chat: list | None = None) -> None:
+    """The old inbox, Inbox.lua inside the EPUGuild folder (EPUGuildInbox).
+
+    Addon updates (CurseForge, WowUp, a folder copy) replace that folder, so
+    new addons read the inbox from EPUGuild_Inbox instead (write_inbox_files)."""
     lock = os.path.join(os.path.dirname(os.path.dirname(path)), ".EPUGuild-update.lock")
     if os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 600:
         raise BlockingIOError("The addon updater is installing EPU; queued actions will retry shortly.")
@@ -257,14 +275,135 @@ def write_inbox(path: str, entries: list, chat: list | None = None) -> None:
     if chat is not None:
         text += "-- the last day of the guild's linked Discord chat, added to EPU's Guild chat at login\n"
         text += "EPUGuildDiscordChat = " + lua_value(chat) + "\n"
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as existing:
-            if existing.read() == text:
-                return
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
-    safe_replace(tmp, path)
+    _write_text(path, text)
+
+
+# ---------------------------------------------------------------------------
+# The Discord inbox addon (EPUGuild_Inbox)
+#
+# The EPU download is only the EPUGuild folder, and every addon manager
+# replaces that folder whole on an update. So the companion keeps the inbox
+# in a small addon of its own beside it, EPUGuild_Inbox, which no EPU
+# download contains and so no update can replace. EPUGuild lists it under
+# OptionalDeps, so WoW loads it first; it only sets EPUGuildInboxDrop.
+# ---------------------------------------------------------------------------
+INBOX_ADDON = "EPUGuild_Inbox"
+INBOX_DROP_HEADER = (
+    "-- Written by the EPU Discord companion: requests, approvals and guild chat\n"
+    "-- from Discord, applied by an officer's EPU at login or /reload. This addon\n"
+    "-- is not part of the EPU download, so addon updates leave it alone.\n"
+)
+
+
+def inbox_addon_dir(wow_path: str) -> str:
+    return os.path.join(wow_path, "Interface", "AddOns", INBOX_ADDON)
+
+
+def inbox_drop_path(wow_path: str) -> str:
+    return os.path.join(inbox_addon_dir(wow_path), "Inbox.lua")
+
+
+def _addon_toc(wow_path: str) -> list[str]:
+    toc = os.path.join(wow_path, "Interface", "AddOns", "EPUGuild", "EPUGuild.toc")
+    try:
+        with open(toc, encoding="utf-8-sig") as f:
+            return f.read().splitlines()
+    except OSError:
+        return []
+
+
+def addon_reads_inbox_addon(wow_path: str) -> bool:
+    """True when the installed EPU loads EPUGuild_Inbox (its TOC lists it under OptionalDeps)."""
+    for line in _addon_toc(wow_path):
+        m = re.match(r"\s*##\s*OptionalDeps\s*:(.*)", line, re.I)
+        if m and INBOX_ADDON.lower() in [d.strip().lower() for d in m.group(1).split(",")]:
+            return True
+    return False
+
+
+def inbox_addon_toc(wow_path: str) -> str:
+    interface = "16001, 11509"
+    for line in _addon_toc(wow_path):
+        m = re.match(r"\s*##\s*Interface\s*:\s*(.+?)\s*$", line, re.I)
+        if m:
+            interface = m.group(1)
+            break
+    return ("## Interface: " + interface + "\n"
+            "## Title: EPU Guild Tools: Discord inbox\n"
+            "## Notes: Requests and approvals from Discord, kept by the EPU Discord companion. "
+            "Not part of the EPU download, so updates can't replace it. Keep it enabled on officers' PCs.\n"
+            "## Author: EPU Discord companion\n"
+            "## Version: 1\n"
+            "Inbox.lua\n")
+
+
+def inbox_drop_text(entries: list, chat: list | None = None) -> str:
+    drop = {"v": 1, "entries": entries}
+    if chat is not None:
+        drop["chat"] = chat
+    return INBOX_DROP_HEADER + "EPUGuildInboxDrop = " + lua_value(drop) + "\n"
+
+
+def read_inbox_drop(wow_path: str) -> list:
+    """Entries in EPUGuild_Inbox\\Inbox.lua, or [] when there's none yet."""
+    path = inbox_drop_path(wow_path)
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        drop = parse_saved_variables(f.read()).get("EPUGuildInboxDrop") or {}
+    entries = drop.get("entries") if isinstance(drop, dict) else None
+    entries = list(entries.values()) if isinstance(entries, dict) else (entries or [])
+    return [e for e in entries if isinstance(e, dict)]
+
+
+def read_legacy_inbox(wow_path: str) -> list:
+    """Entries still in the old EPUGuild\\Inbox.lua, to carry into EPUGuild_Inbox."""
+    path = inbox_path(wow_path)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            parsed = parse_saved_variables(f.read()).get("EPUGuildInbox") or []
+    except Exception:
+        return []
+    entries = list(parsed.values()) if isinstance(parsed, dict) else parsed
+    return [e for e in entries if isinstance(e, dict) and isinstance(e.get("id"), str)]
+
+
+def write_inbox_files(wow_path: str, entries: list, chat: list | None = None, seen_at: float = 0) -> str:
+    """Write the Discord inbox where the installed EPU reads it.
+
+    An EPU that loads EPUGuild_Inbox gets it there. WoW only finds a new addon
+    folder when the game starts, so until EPU has said it loaded this
+    EPUGuild_Inbox (seen_at, EPUGuildDB.inboxDropSeen, later than the folder's
+    TOC), the old EPUGuild\\Inbox.lua gets the same entries, which the addon
+    applies once by id. After that the old file is left empty.
+    An older EPU only gets the old file. Returns "addon", "legacy", or
+    "denied" when Windows won't let the companion make EPUGuild_Inbox (the
+    old file is written then, as before)."""
+    if not addon_reads_inbox_addon(wow_path):
+        write_inbox(inbox_path(wow_path), entries, chat)
+        return "legacy"
+    folder = inbox_addon_dir(wow_path)
+    toc = os.path.join(folder, INBOX_ADDON + ".toc")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        _write_text(toc, inbox_addon_toc(wow_path))
+        _write_text(inbox_drop_path(wow_path), inbox_drop_text(entries, chat))
+    except PermissionError:
+        write_inbox(inbox_path(wow_path), entries, chat)
+        return "denied"
+    legacy = inbox_path(wow_path)
+    if os.path.isdir(os.path.dirname(legacy)):
+        try:
+            loaded = isinstance(seen_at, (int, float)) and seen_at > 0 and seen_at >= os.path.getmtime(toc)
+            if loaded:
+                write_inbox(legacy, [])
+            else:
+                write_inbox(legacy, entries, chat)
+        except BlockingIOError:
+            pass  # the updater is replacing EPUGuild; the inbox addon already has everything
+    return "addon"
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +455,71 @@ CRAFT_LABEL = {"pending": "asked", "approved": "accepted", "filled": "made", "re
 def status_label(r: dict) -> str:
     st = status_of(r)
     return CRAFT_LABEL.get(st, st) if is_craft(r) else st
+
+
+GUILD_BANK = "Guild Bank"
+DUP_WINDOW = 3 * 3600
+_LOGGER_RE = re.compile(r"^(.*?):\d+:\d+$")
+
+
+def donation_logger(did) -> str:
+    """Who logged a donation: ids look like "Chris Baker:1700000000:3"."""
+    m = _LOGGER_RE.match(str(did))
+    return m.group(1) if m else str(did)
+
+
+def donation_clusters(donations: dict) -> list[tuple[list[str], list[str]]]:
+    """Group donation records that are one real gift: (all ids, ids to keep).
+
+    Two officers who open the guild bank close together each log the same
+    deposit before the other's record reaches them, under two ids. This
+    matches the addon's GuildBank.lua MarkDuplicateDonations: records to the
+    guild bank with the same who/item/count/gold, each within 3 hours of the
+    next, are one run; the logger who recorded the most of them is kept (ties:
+    the lowest name), so real identical deposits logged by one officer stay.
+    Voided records and mail or trade gifts (logged by one bank alt) stand alone.
+    """
+    groups: dict[tuple, list] = {}
+    out = []
+    for did, d in donations.items():
+        if not isinstance(d, dict) or d.get("void"):
+            continue
+        if d.get("to") != GUILD_BANK:
+            out.append(([str(did)], [str(did)]))
+            continue
+        def num(v):
+            try:
+                return float(v or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        sig = (str(d.get("who")), str(d.get("item") or ""), num(d.get("n")), num(d.get("money")))
+        groups.setdefault(sig, []).append((num(d.get("t")), str(did), donation_logger(did)))
+    for rows in groups.values():
+        rows.sort(key=lambda r: (r[0], r[1]))
+        i = 0
+        while i < len(rows):
+            j = i
+            while j + 1 < len(rows) and rows[j + 1][0] - rows[j][0] <= DUP_WINDOW:
+                j += 1
+            run = rows[i:j + 1]
+            count: dict[str, int] = {}
+            for _, _, by in run:
+                count[by] = count.get(by, 0) + 1
+            keep = min(count, key=lambda by: (-count[by], by))
+            out.append(([r[1] for r in run], [r[1] for r in run if r[2] == keep]))
+            i = j + 1
+    return out
+
+
+def duplicate_donations(donations: dict) -> set[str]:
+    """Ids of guild bank deposits that another officer also logged."""
+    dups = set()
+    for ids, keep in donation_clusters(donations):
+        dups.update(set(ids) - set(keep))
+    return dups
+
+
+NEEDED_MATS_STALE = 30 * 86400   # the addon hides lists nobody has refreshed for 30 days
 
 
 class GuildData:
@@ -391,8 +595,11 @@ class GuildData:
 
     @property
     def donations(self) -> dict:
-        """Donation records, minus ones an officer voided as mistakes."""
-        return {k: d for k, d in (self.g.get("donations") or {}).items() if not (isinstance(d, dict) and d.get("void"))}
+        """Donation records, minus ones an officer voided as mistakes and second
+        copies of a guild bank deposit that two officers both logged."""
+        raw = self.g.get("donations") or {}
+        dups = duplicate_donations(raw)
+        return {k: d for k, d in raw.items() if not (isinstance(d, dict) and d.get("void")) and str(k) not in dups}
 
     @property
     def bank(self) -> dict:
@@ -497,8 +704,10 @@ class GuildData:
         return out
 
     def feed(self) -> list[dict]:
-        """Guild milestones, oldest first."""
-        rows = [{"id": k, **v} for k, v in (self.g.get("feed") or {}).items() if isinstance(v, dict)]
+        """Guild milestones, oldest first. A shout-out for a guild bank deposit
+        that two officers both logged is listed once."""
+        dups = {"don:" + d for d in duplicate_donations(self.g.get("donations") or {})}
+        rows = [{"id": k, **v} for k, v in (self.g.get("feed") or {}).items() if isinstance(v, dict) and str(k) not in dups]
         rows.sort(key=lambda e: e.get("t", 0))
         return rows
 
@@ -642,6 +851,62 @@ class GuildData:
             "requests": counts,
             "updated": max([int(s.get("v") or 0) for _, s in banks] + [int((self.g.get("needs") or {}).get("v") or 0)]),
         }
+
+    def needed_mats(self, now: float | None = None) -> list[dict]:
+        """Guildmates' needed mats, one row per material, by the addon's rules:
+        only characters still on the roster, and only lists refreshed in the
+        last 30 days. Rows: {id, name, total, prof, who: [{who, n, p}]}, where
+        n = 0 means no amount was given. Most-wanted materials first."""
+        now = time.time() if now is None else now
+        members = set(self.members)
+        rows: dict[int, dict] = {}
+        for who, r in (self.g.get("neededMats") or {}).items():
+            if not isinstance(who, str) or who not in members or not isinstance(r, dict):
+                continue
+            try:
+                stamp = float(r.get("t") or 0)
+            except (TypeError, ValueError):
+                continue
+            items = r.get("i")
+            if now - stamp > NEEDED_MATS_STALE or not isinstance(items, dict):
+                continue
+            for item_id, e in items.items():
+                try:
+                    item_id = int(item_id)
+                    n = max(0, int((e or {}).get("n") or 0)) if isinstance(e, dict) else 0
+                except (TypeError, ValueError):
+                    continue
+                if item_id <= 0:
+                    continue
+                prof = e.get("p") if isinstance(e, dict) and isinstance(e.get("p"), str) else None
+                row = rows.setdefault(item_id, {"id": item_id, "name": self.item_name(item_id), "total": 0, "who": []})
+                row["who"].append({"who": who, "n": n, "p": prof})
+                row["total"] += n
+        out = []
+        for row in rows.values():
+            row["who"].sort(key=lambda w: (-w["n"], w["who"]))
+            profs = [w["p"] for w in row["who"] if w["p"]]
+            row["prof"] = max(sorted(set(profs)), key=profs.count) if profs else None
+            out.append(row)
+        out.sort(key=lambda r: (-len(r["who"]), -r["total"], r["name"].lower()))
+        return out
+
+
+def needed_mats_groups(rows: list[dict], max_items: int = 15, max_names: int = 3) -> tuple[list[tuple[str, list[str]]], int]:
+    """The daily "guild needs" post, kept short: the most-wanted materials
+    (up to max_items), grouped by profession, one line each:
+        **Linen Cloth** x40: Tyler Baker (20), Ana Stone (20), +1 more
+    Returns ([(profession, lines)], how many materials were left out)."""
+    shown = rows[:max(0, max_items)]
+    groups: dict[str, list[str]] = {}
+    for row in shown:
+        names = [f"{w['who']} ({w['n']})" if w["n"] else w["who"] for w in row["who"][:max_names]]
+        if len(row["who"]) > max_names:
+            names.append(f"+{len(row['who']) - max_names} more")
+        amount = f" x{row['total']}" if row["total"] else ""
+        groups.setdefault(row["prof"] or "Other", []).append(f"**{row['name']}**{amount}: {', '.join(names)}")
+    order = sorted(groups, key=lambda p: (p == "Other", -len(groups[p]), p))
+    return [(p, groups[p]) for p in order], max(0, len(rows) - len(shown))
 
 
 def load_guild_data(sv_path: str, guild_key: str | None = None) -> GuildData:
@@ -831,6 +1096,23 @@ class State:
         self.save()
         return e
 
+    def adopt_legacy_inbox(self, entries: list) -> int:
+        """Queue entries found in the old EPUGuild\\Inbox.lua that this queue
+        lost track of, so they move into EPUGuild_Inbox. Runs once; the addon
+        applies each id once, and prune_inbox drops them when it has."""
+        if self.data.get("legacy_inbox_adopted"):
+            return 0
+        have = {e.get("id") for e in self.data["inbox"]}
+        added = 0
+        for e in entries:
+            if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"] not in have and not e.get("bridge"):
+                self.data["inbox"].append(dict(e))
+                have.add(e["id"])
+                added += 1
+        self.data["legacy_inbox_adopted"] = True
+        self.save()
+        return added
+
     def prune_inbox(self, inbox_done: dict) -> bool:
         before = len(self.data["inbox"])
         self.data["inbox"] = [e for e in self.data["inbox"] if e["id"] not in inbox_done]
@@ -877,14 +1159,23 @@ def diff(gd: GuildData, state: State) -> dict:
                 out["new_requests"].append((rid, r))
         elif posted.get("status") != st or (posted.get('signature') is not None and posted['signature']!=request_signature(gd,rid,r,state.data['inbox'])):
             out["changed_requests"].append((rid, r))
+    # One thank-you per real gift. A guild bank deposit two officers both
+    # logged arrives as two records, perhaps minutes apart (whichever officer's
+    # save reached the bot first), and which copy is kept can change once the
+    # other arrives, so count what's already been thanked per gift.
     seen = set(state.data.get("donations_seen", []))
     new_seen = []
-    for did, d in gd.donations.items():
-        if did in seen:
+    raw = {str(k): v for k, v in (gd.g.get("donations") or {}).items()}
+    for ids, keep in donation_clusters(raw):
+        fresh_ids = [i for i in ids if i not in seen]
+        if not fresh_ids:
             continue
-        new_seen.append(did)
-        if primed and isinstance(d, dict):
-            out["new_donations"].append(d)
+        thanked = len(ids) - len(fresh_ids)
+        allowance = max(0, len(keep) - thanked)
+        candidates = sorted((i for i in keep if i not in seen), key=lambda i: (raw[i].get("t") or 0, i))
+        new_seen.extend(fresh_ids)
+        if primed:
+            out["new_donations"].extend(raw[i] for i in candidates[:allowance])
     if new_seen:
         state.data["donations_seen"] = (state.data.get("donations_seen", []) + new_seen)[-2000:]
     # milestones: post each once; skip old ones (first run, or the bot was off for a while)
@@ -1152,3 +1443,103 @@ def fetch_latest_release(repo: str, timeout: int = 30) -> dict:
                                  headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return release_info(json.loads(r.read()))
+
+
+# ---------------------------------------------------------------------------
+# CurseForge: announce a release only once CurseForge has approved its file
+# ---------------------------------------------------------------------------
+# A new file on CurseForge waits for moderation (usually within a day) before
+# the CurseForge app offers it. The release announcement waits for that too.
+# Two ways to see what's live:
+#   - CurseForge's own API (api.curseforge.com), with an API key from
+#     console.curseforge.com and the numeric project ID: most reliable; its
+#     files carry fileStatus 4 (Approved) and isAvailable.
+#   - Otherwise CFWidget (api.cfwidget.com), a public mirror of the project's
+#     page that needs no key. It only lists files the public can download, so
+#     a file there has been approved. It can trail CurseForge by a little.
+CF_APPROVED = 4
+
+
+def curseforge_slug(url: str) -> str | None:
+    m = re.search(r"curseforge\.com/wow/addons/([A-Za-z0-9_-]+)", url or "")
+    return m.group(1) if m else None
+
+
+def mentions_version(text: str, version: str) -> bool:
+    """'EPU Guild Tools 0.32.0' or 'EPUGuild-0.32.0.zip' names 0.32.0, but not 0.32.01 or 10.32.0."""
+    return bool(version) and re.search(rf"(?<![\d.]){re.escape(version)}(?![\d])(?!\.\d)", text or "") is not None
+
+
+def curseforge_files_from_api(data: dict) -> list[dict]:
+    """Files from CurseForge's /v1/mods/{id}/files response that the CurseForge app offers."""
+    out = []
+    for f in (data or {}).get("data") or []:
+        if not isinstance(f, dict):
+            continue
+        if f.get("fileStatus") not in (None, CF_APPROVED) or f.get("isAvailable") is False:
+            continue
+        out.append({"display": str(f.get("displayName") or ""), "name": str(f.get("fileName") or "")})
+    return out
+
+
+def curseforge_files_from_widget(data: dict) -> list[dict]:
+    """Files from CFWidget's project response (only publicly downloadable, so approved)."""
+    out = []
+    for f in (data or {}).get("files") or []:
+        if isinstance(f, dict):
+            out.append({"display": str(f.get("display") or ""), "name": str(f.get("name") or "")})
+    return out
+
+
+def curseforge_has_version(files: list[dict], version: str) -> bool:
+    return any(mentions_version(f.get("display", ""), version) or mentions_version(f.get("name", ""), version)
+               for f in files or [])
+
+
+def curseforge_source(cfg: dict) -> str | None:
+    """Where the release check looks for approval: "api", "widget", or None to announce at once."""
+    if not cfg.get("announce_after_curseforge", True):
+        return None
+    if str(cfg.get("curseforge_api_key") or "").strip() and str(cfg.get("curseforge_project_id") or "").strip().isdigit():
+        return "api"
+    if str(cfg.get("curseforge_project_id") or "").strip().isdigit() or curseforge_slug(cfg.get("curseforge_url", "")):
+        return "widget"
+    return None
+
+
+def fetch_curseforge_files(cfg: dict, timeout: int = 30) -> list[dict]:
+    """The approved files CurseForge lists for the project, newest first. Raises when it can't tell
+    (network trouble, CFWidget still indexing the project), so the caller tries again later."""
+    source = curseforge_source(cfg)
+    pid = str(cfg.get("curseforge_project_id") or "").strip()
+    if source == "api":
+        req = urllib.request.Request(f"https://api.curseforge.com/v1/mods/{pid}/files?pageSize=50",
+                                     headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/json",
+                                              "x-api-key": str(cfg["curseforge_api_key"]).strip()})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return curseforge_files_from_api(json.loads(r.read()))
+    if source == "widget":
+        path = pid if pid.isdigit() else "wow/addons/" + curseforge_slug(cfg.get("curseforge_url", ""))
+        req = urllib.request.Request(f"https://api.cfwidget.com/{path}",
+                                     headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if r.status != 200:        # 202: CFWidget is still fetching the project
+                raise RuntimeError(f"CFWidget answered {r.status}")
+            return curseforge_files_from_widget(json.loads(r.read()))
+    return []
+
+
+def release_step(seen: str | None, tag: str, enabled: bool, gated: bool, approved: bool | None) -> str:
+    """What the release check does with GitHub's latest release.
+
+    "none": already announced. "remember": note it without a post (first run,
+    or announcements off). "wait": CurseForge hasn't approved it yet, or
+    couldn't be asked (approved is None); check again later and leave it
+    unannounced. "announce": post it now."""
+    if not tag or seen == tag:
+        return "none"
+    if seen is None or not enabled:
+        return "remember"
+    if gated and not approved:
+        return "wait"
+    return "announce"

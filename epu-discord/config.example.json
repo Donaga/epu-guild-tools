@@ -23,6 +23,9 @@
   "help_post": true,
   "github_repo": "Donaga/epu-guild-tools",
   "announce_releases": true,
+  "announce_after_curseforge": true,
+  "curseforge_project_id": "",
+  "curseforge_api_key": "",
   "addon_url": "https://github.com/Donaga/epu-guild-tools/releases/latest",
   "curseforge_url": "https://www.curseforge.com/wow/addons/epu-guild-tools",
   "discord_roles": true,
@@ -32,5 +35,9 @@
   "adopt_existing_roles": "rank",
   "officer_log_channel_id": "",
   "level_milestones": [60],
-  "members_intent": false
+  "members_intent": false,
+  "guild_needs_post": false,
+  "guild_needs_channel_id": "",
+  "guild_needs_time": "18:00",
+  "guild_needs_max_items": 15
 }
