@@ -67,6 +67,9 @@ def load_config() -> dict:
     cfg.setdefault("wowhead", "https://www.wowhead.com/forever")
     cfg.setdefault("github_repo", "Donaga/epu-guild-tools")
     cfg.setdefault("announce_releases", True)
+    cfg.setdefault("announce_after_curseforge", True)  # wait until CurseForge approves the release's file
+    cfg.setdefault("curseforge_project_id", "")   # optional: numeric project ID (else the slug in curseforge_url)
+    cfg.setdefault("curseforge_api_key", "")      # optional: CurseForge API key; with the project ID, asks CurseForge itself
     cfg.setdefault("item_db", True)               # download the full Forever item list from wago.tools
     cfg.setdefault("item_build_prefix", "1.60.")  # WoW Forever client versions
     cfg.setdefault("item_csv_url", "")            # optional: a direct ItemSparse CSV URL
@@ -567,6 +570,10 @@ def download_embed(rel: dict | None) -> discord.Embed:
 
 
 async def check_release(announce: bool = True):
+    """Announce a new GitHub release, once CurseForge has approved its file.
+
+    The version only counts as announced once it's posted, so a release that
+    waits for CurseForge is checked again on every run of the loop."""
     global latest_release
     try:
         rel = await asyncio.to_thread(core.fetch_latest_release, cfg["github_repo"])
@@ -577,12 +584,28 @@ async def check_release(announce: bool = True):
         return
     latest_release = rel
     seen = state.data.get("last_release")
-    if seen == rel["tag"]:
+    gated = core.curseforge_source(cfg) is not None
+    approved = None
+    if gated and seen not in (None, rel["tag"]) and announce and cfg["announce_releases"]:
+        try:
+            files = await asyncio.to_thread(core.fetch_curseforge_files, cfg)
+            approved = core.curseforge_has_version(files, rel["version"])
+        except Exception as e:
+            log.debug("CurseForge check failed: %s", e)
+    step = core.release_step(seen, rel["tag"], announce and cfg["announce_releases"], gated, approved)
+    if step == "none":
+        return
+    if step == "wait":
+        if state.data.get("release_waiting") != rel["tag"]:
+            state.data["release_waiting"] = rel["tag"]
+            state.save()
+            log.info("EPU Guild Tools %s is on GitHub; announcing it once CurseForge approves it.", rel["version"])
         return
     state.data["last_release"] = rel["tag"]
+    state.data.pop("release_waiting", None)
     state.save()
-    if seen is None or not announce or not cfg["announce_releases"]:
-        return                          # first run: remember the current version without announcing it
+    if step == "remember":
+        return                          # first run, or announcements off: remember the version without a post
     ch = channel()
     if ch is None:
         return
@@ -591,8 +614,12 @@ async def check_release(announce: bool = True):
     notes = rel["notes"][:900] + ("..." if len(rel["notes"]) > 900 else "")
     if notes:
         e.description = notes
-    e.set_footer(text="CurseForge app: it shows up as an update once CurseForge approves it (usually within a day). "
-                      "WowUp and the updater have it now. Then /reload in game.")
+    if gated:
+        e.set_footer(text="It's live on CurseForge, so the CurseForge app offers it as an update. "
+                          "WowUp and the updater have it too. Then /reload in game.")
+    else:
+        e.set_footer(text="CurseForge app: it shows up as an update once CurseForge approves it (usually within a day). "
+                          "WowUp and the updater have it now. Then /reload in game.")
     try:
         await ch.send(embed=e)
     except Exception as ex:

@@ -1443,3 +1443,103 @@ def fetch_latest_release(repo: str, timeout: int = 30) -> dict:
                                  headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return release_info(json.loads(r.read()))
+
+
+# ---------------------------------------------------------------------------
+# CurseForge: announce a release only once CurseForge has approved its file
+# ---------------------------------------------------------------------------
+# A new file on CurseForge waits for moderation (usually within a day) before
+# the CurseForge app offers it. The release announcement waits for that too.
+# Two ways to see what's live:
+#   - CurseForge's own API (api.curseforge.com), with an API key from
+#     console.curseforge.com and the numeric project ID: most reliable; its
+#     files carry fileStatus 4 (Approved) and isAvailable.
+#   - Otherwise CFWidget (api.cfwidget.com), a public mirror of the project's
+#     page that needs no key. It only lists files the public can download, so
+#     a file there has been approved. It can trail CurseForge by a little.
+CF_APPROVED = 4
+
+
+def curseforge_slug(url: str) -> str | None:
+    m = re.search(r"curseforge\.com/wow/addons/([A-Za-z0-9_-]+)", url or "")
+    return m.group(1) if m else None
+
+
+def mentions_version(text: str, version: str) -> bool:
+    """'EPU Guild Tools 0.32.0' or 'EPUGuild-0.32.0.zip' names 0.32.0, but not 0.32.01 or 10.32.0."""
+    return bool(version) and re.search(rf"(?<![\d.]){re.escape(version)}(?![\d])(?!\.\d)", text or "") is not None
+
+
+def curseforge_files_from_api(data: dict) -> list[dict]:
+    """Files from CurseForge's /v1/mods/{id}/files response that the CurseForge app offers."""
+    out = []
+    for f in (data or {}).get("data") or []:
+        if not isinstance(f, dict):
+            continue
+        if f.get("fileStatus") not in (None, CF_APPROVED) or f.get("isAvailable") is False:
+            continue
+        out.append({"display": str(f.get("displayName") or ""), "name": str(f.get("fileName") or "")})
+    return out
+
+
+def curseforge_files_from_widget(data: dict) -> list[dict]:
+    """Files from CFWidget's project response (only publicly downloadable, so approved)."""
+    out = []
+    for f in (data or {}).get("files") or []:
+        if isinstance(f, dict):
+            out.append({"display": str(f.get("display") or ""), "name": str(f.get("name") or "")})
+    return out
+
+
+def curseforge_has_version(files: list[dict], version: str) -> bool:
+    return any(mentions_version(f.get("display", ""), version) or mentions_version(f.get("name", ""), version)
+               for f in files or [])
+
+
+def curseforge_source(cfg: dict) -> str | None:
+    """Where the release check looks for approval: "api", "widget", or None to announce at once."""
+    if not cfg.get("announce_after_curseforge", True):
+        return None
+    if str(cfg.get("curseforge_api_key") or "").strip() and str(cfg.get("curseforge_project_id") or "").strip().isdigit():
+        return "api"
+    if str(cfg.get("curseforge_project_id") or "").strip().isdigit() or curseforge_slug(cfg.get("curseforge_url", "")):
+        return "widget"
+    return None
+
+
+def fetch_curseforge_files(cfg: dict, timeout: int = 30) -> list[dict]:
+    """The approved files CurseForge lists for the project, newest first. Raises when it can't tell
+    (network trouble, CFWidget still indexing the project), so the caller tries again later."""
+    source = curseforge_source(cfg)
+    pid = str(cfg.get("curseforge_project_id") or "").strip()
+    if source == "api":
+        req = urllib.request.Request(f"https://api.curseforge.com/v1/mods/{pid}/files?pageSize=50",
+                                     headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/json",
+                                              "x-api-key": str(cfg["curseforge_api_key"]).strip()})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return curseforge_files_from_api(json.loads(r.read()))
+    if source == "widget":
+        path = pid if pid.isdigit() else "wow/addons/" + curseforge_slug(cfg.get("curseforge_url", ""))
+        req = urllib.request.Request(f"https://api.cfwidget.com/{path}",
+                                     headers={"User-Agent": "EPU-Guild-Tools-bot", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            if r.status != 200:        # 202: CFWidget is still fetching the project
+                raise RuntimeError(f"CFWidget answered {r.status}")
+            return curseforge_files_from_widget(json.loads(r.read()))
+    return []
+
+
+def release_step(seen: str | None, tag: str, enabled: bool, gated: bool, approved: bool | None) -> str:
+    """What the release check does with GitHub's latest release.
+
+    "none": already announced. "remember": note it without a post (first run,
+    or announcements off). "wait": CurseForge hasn't approved it yet, or
+    couldn't be asked (approved is None); check again later and leave it
+    unannounced. "announce": post it now."""
+    if not tag or seen == tag:
+        return "none"
+    if seen is None or not enabled:
+        return "remember"
+    if gated and not approved:
+        return "wait"
+    return "announce"
