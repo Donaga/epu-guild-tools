@@ -100,6 +100,11 @@ def load_config() -> dict:
     cfg.setdefault("guild_needs_max_items", 15)
     cfg.setdefault("group_board_post", True)      # quick groups, help posts and run requests from the Groups page
     cfg.setdefault("group_board_channel_id", "")  # blank: the events channel, else the milestones channel
+    cfg.setdefault("leveling_board_post", True)    # weekly: levels each guildmate gained last week (EPU's leveling board)
+    cfg.setdefault("leveling_board_channel_id", "")  # blank: the guild needs channel (guild_needs_channel_id)
+    cfg.setdefault("leveling_board_day", "monday")   # posts this day about the seven days before it (Monday: Mon-Sun)
+    cfg.setdefault("leveling_board_time", "19:00")   # 24-hour time on this PC's clock
+    cfg.setdefault("leveling_board_max", 15)
     cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
@@ -113,6 +118,17 @@ def load_config() -> dict:
         cfg["guild_needs_max_items"] = max(1, min(40, int(cfg["guild_needs_max_items"])))
     except (TypeError, ValueError):
         cfg["guild_needs_max_items"] = 15
+    cfg["leveling_board_channel_id"] = cfg.get("leveling_board_channel_id") or cfg["guild_needs_channel_id"]
+    if parse_clock(cfg["leveling_board_time"]) is None:
+        print(f"leveling_board_time {cfg['leveling_board_time']!r} isn't a 24-hour time like \"19:00\"; using 19:00.")
+        cfg["leveling_board_time"] = "19:00"
+    if core.parse_weekday(cfg["leveling_board_day"]) is None:
+        print(f"leveling_board_day {cfg['leveling_board_day']!r} isn't a day of the week; using Monday.")
+        cfg["leveling_board_day"] = "monday"
+    try:
+        cfg["leveling_board_max"] = max(1, min(40, int(cfg["leveling_board_max"])))
+    except (TypeError, ValueError):
+        cfg["leveling_board_max"] = 15
     return cfg
 
 
@@ -468,6 +484,7 @@ def help_embed() -> discord.Embed:
         "`/requests`: all open requests.\n"
         "`/craft item:` who in the guild can make something, and what it takes (\u2b50 = guild crafter).\n"
         "`/neededmats`: materials guildmates are collecting for their professions. Send them a stack before you vendor it.\n"
+        "`/levelboard`: levels guildmates have gained this week. Last week's board is posted weekly.\n"
         "The pinned **Guild Bank Status** post shows stock levels, the shopping list and gold at a glance."))
     e.add_field(name="Getting something crafted", inline=False, value=(
         "In game, open the addon's **Recipes** page, pick the recipe and click **Ask ... to craft**. Choose who "
@@ -693,6 +710,97 @@ async def guild_needs_loop():
         await post_guild_needs()
     except Exception:
         log.exception("Couldn't build the daily guild needs post; will retry")
+
+
+# ---------------------------------------------------------------------------
+# Weekly leveling board (levels gained, from the addon's level history)
+# ---------------------------------------------------------------------------
+LEVEL_PLACES = ["\U0001f947", "\U0001f948", "\U0001f949"]   # gold, silver and bronze medals
+
+
+def _day_label(d: datetime) -> str:
+    return f"{d.strftime('%b')} {d.day}"
+
+
+def leveling_board_embed(gd: core.GuildData, start: datetime, end: datetime, title: str | None = None) -> discord.Embed | None:
+    """The leveling board for [start, end), or None when nobody gained a level."""
+    rows = gd.leveling_board(start.timestamp(), end.timestamp())
+    if not rows:
+        return None
+    shown = rows[:cfg["leveling_board_max"]]
+    lines = []
+    for i, r in enumerate(shown):
+        place = LEVEL_PLACES[i] if i < len(LEVEL_PLACES) else f"{i + 1}."
+        lines.append(f"{place} **{r['label']}** {r['from']} \u2192 {r['to']} (+{r['gained']})")
+    if len(rows) > len(shown):
+        lines.append(f"...and {len(rows) - len(shown)} more.")
+    total = sum(r["gained"] for r in rows)
+    last_day = end - timedelta(days=1)
+    e = discord.Embed(title=title or f"Leveling board: {_day_label(start)} to {_day_label(last_day)}",
+                      color=discord.Color.gold(), description=_clip(lines, 3900))
+    people = f"{len(rows)} guildmate" + ("" if len(rows) == 1 else "s")
+    e.set_footer(text=f"{people} gained {total} level{'' if total == 1 else 's'}. "
+                      "See this week so far in game: /epu levelboard")
+    return e
+
+
+def leveling_board_schedule(now: datetime):
+    h, m = parse_clock(cfg["leveling_board_time"]) or (19, 0)
+    return core.leveling_board_period(now, core.parse_weekday(cfg["leveling_board_day"]) or 0, h, m)
+
+
+async def post_leveling_board(now: datetime | None = None) -> bool:
+    """Post last week's board if it's due. Returns True if something was posted.
+    It posts once a week at leveling_board_day / leveling_board_time; if the bot
+    was off then, it posts when it starts, up to two days late."""
+    now = now or datetime.now()
+    if not cfg["leveling_board_post"]:
+        return False
+    at, start, end = leveling_board_schedule(now)
+    week = start.date().isoformat()
+    if state.data.get("leveling_board_week") == week:
+        return False
+    if now - at > timedelta(days=2):
+        return False                      # too late for this week's post: wait for next week's
+    gd = read_latest()
+    if gd is None:
+        return False                      # no SavedVariables yet: try again next minute
+    e = leveling_board_embed(gd, start, end)
+    if e is not None:
+        ch = client.get_channel(int(cfg["leveling_board_channel_id"]))
+        if ch is None:
+            log.warning("leveling_board_channel_id %s isn't a channel the bot can see; skipping this week's leveling board.",
+                        cfg["leveling_board_channel_id"])
+        else:
+            try:
+                await ch.send(embed=e)
+            except Exception as ex:
+                explain(ex, "post the weekly leveling board", cfg["leveling_board_channel_id"])
+                return False              # try again next minute
+    state.data["leveling_board_week"] = week   # a week with no level-ups counts as done
+    state.save()
+    return e is not None
+
+
+@tasks.loop(minutes=1)
+async def leveling_board_loop():
+    try:
+        await post_leveling_board()
+    except Exception:
+        log.exception("Couldn't build the weekly leveling board; will retry")
+
+
+@tree.command(name="levelboard", description="Levels guildmates have gained this week (EPU's leveling board)", guild=GUILD)
+async def levelboard_cmd(interaction: discord.Interaction):
+    gd = read_latest()
+    now = datetime.now()
+    start = datetime(now.year, now.month, now.day) - timedelta(days=now.weekday())
+    e = leveling_board_embed(gd, start, now + timedelta(seconds=1),
+                             title=f"Leveling board: this week so far (since {_day_label(start)})") if gd else None
+    if e is None:
+        await interaction.response.send_message("Nobody has gained a level yet this week.", ephemeral=True)
+        return
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
 
 @tree.command(name="neededmats", description="Materials guildmates are collecting (from EPU's needed mats)", guild=GUILD)
@@ -1978,6 +2086,8 @@ async def on_ready():
         release_loop.start()
     if cfg["guild_needs_post"] and not guild_needs_loop.is_running():
         guild_needs_loop.start()
+    if cfg["leveling_board_post"] and not leveling_board_loop.is_running():
+        leveling_board_loop.start()
     poll.change_interval(seconds=cfg["poll_seconds"])
     if not poll.is_running():
         poll.start()

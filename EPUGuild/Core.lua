@@ -386,6 +386,7 @@ local HELP = {
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
   "|cffffd100/epu ranks|r - action bar buttons still on an old spell rank after training, with one-click updates",
+  "|cffffd100/epu levelboard|r - levels guildmates gained this week (/epu levelboard last for last week)",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
@@ -482,6 +483,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenZoneGuide then ns.OpenZoneGuide(args) end
   elseif cmd == "leveling" or cmd == "advisor" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("advisor") end
+  elseif cmd == "levelboard" then
+    if ns.OpenLevelingBoard then ns.OpenLevelingBoard(args == "last" and "last" or "this") end
   elseif cmd == "dungeons" or cmd == "ready" or cmd == "xpguard" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("dungeons") end
   elseif cmd == "writs" or cmd == "crates" or cmd == "waylaid" then
