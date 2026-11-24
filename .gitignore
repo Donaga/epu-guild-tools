@@ -4,6 +4,8 @@ epu-discord/state.json
 epu-discord/items.json
 epu-discord/items.csv
 epu-discord/.venv/
+epu-discord/bot.lock
+epu-discord/updates.log
 __pycache__/
 *.pyc
 *.tmp

@@ -29,3 +29,8 @@ Assert-That ((Get-Content -LiteralPath (Join-Path $destination 'Core.lua')) -eq 
 $errorsFound = $null
 [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../updater/Update-EPU.ps1'),[ref]$null,[ref]$errorsFound) | Out-Null
 Assert-That ($errorsFound.Count -eq 0) 'updater parses successfully'
+$errorsFound = $null
+[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../epu-discord/Install-Autostart.ps1'),[ref]$null,[ref]$errorsFound) | Out-Null
+Assert-That ($errorsFound.Count -eq 0) 'bot autostart setup parses successfully'
+$bat = Get-Content -LiteralPath (Join-Path $PSScriptRoot '../epu-discord/start.bat')
+Assert-That (($bat | Where-Object { $_ -match 'supervise\.py' }) -match '& pause & exit /b') 'start.bat runs the supervisor and its exit on one line, so an update to it mid-run is safe'
