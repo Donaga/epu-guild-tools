@@ -19,7 +19,7 @@ local function Store(g)
   g.log      = g.log or {}        -- [id] = { t, by, text }                                (officers)
   g.notes    = g.notes or {}      -- [name] = { t, by, text }                              (officers)
   g.joined   = g.joined or {}     -- [name] = { t = first seen, r = recorded, seed = true if already here at install }
-  g.lvlLog   = g.lvlLog or {}     -- [name] = { t1, lvl1, t2, lvl2, ... }  (local to this PC; not synced)
+  g.lvlLog   = g.lvlLog or {}     -- [name] = { t1, lvl1, t2, lvl2, ... }  (local to this PC; not synced; LevelingBoard.lua)
   return g
 end
 
@@ -337,7 +337,12 @@ function ns.TrackRoster(entries)
       g.lvlLog[name] = { now, r.level }
     elseif log[#log] ~= r.level and r.level then
       log[#log + 1] = now; log[#log + 1] = r.level
-      while #log > 16 do table.remove(log, 1); table.remove(log, 1) end
+      -- Keep three weeks, so the leveling board knows each level at the start
+      -- of last week even for someone gaining a dozen a week: drop the oldest
+      -- change only once the next one is older than that too.
+      while #log > 4 and (#log > 120 or (log[3] or now) < now - 21 * DAY) do
+        table.remove(log, 1); table.remove(log, 1)
+      end
     end
     -- join date (officers record and share it)
     if not g.joined[name] and ns.IsTrusted(ns.me) then
