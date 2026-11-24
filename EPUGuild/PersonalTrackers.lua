@@ -15,6 +15,14 @@ local function RealmName()
   return (GetRealmName and SafeStr(GetRealmName())) or "Realm"
 end
 
+-- `local _, cf = UnitClass and UnitClass("player")` keeps only the first
+-- return value, so the class file was always nil and names showed in white.
+local function PlayerClassFile()
+  if not UnitClass then return nil end
+  local _, cf = UnitClass("player")
+  return SafeStr(cf)
+end
+
 local function ClassHex(cf)
   local c = cf and RAID_CLASS_COLORS and RAID_CLASS_COLORS[cf]
   if c then
@@ -62,7 +70,7 @@ local function ScanLockouts()
   local db = DB()
   local realm = RealmName()
   db.lockouts[realm] = db.lockouts[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf = PlayerClassFile()
   local list = {}
   local now = time()
   local n = SafeNum(GetNumSavedInstances()) or 0
@@ -119,7 +127,7 @@ local function ScanCooldowns()
   local db = DB()
   local realm = RealmName()
   db.cooldowns[realm] = db.cooldowns[realm] or {}
-  local _, cf = UnitClass and UnitClass("player")
+  local cf = PlayerClassFile()
   local rec = db.cooldowns[realm][ns.me] or { classFile = cf, cds = {} }
   rec.classFile = cf
   rec.cds = rec.cds or {}
@@ -165,6 +173,25 @@ local function ScanCooldowns()
   db.cooldowns[realm][ns.me] = rec
 end
 
+-- SPELL_UPDATE_COOLDOWN and BAG_UPDATE_COOLDOWN fire on every global
+-- cooldown, so in combat they come several times a second. Profession
+-- cooldowns only change when you craft, so fold a burst of updates into one
+-- scan a few seconds later, and wait for the end of combat to do it.
+local CD_SCAN_DELAY = 3
+local cdScanWaiting = false
+
+local function InCombat()
+  return InCombatLockdown and InCombatLockdown() and true or false
+end
+
+local function QueueCooldownScan()
+  if InCombat() then cdScanWaiting = true; return end
+  ns.Debounce("personalTrackers:cooldowns", CD_SCAN_DELAY, function()
+    if InCombat() then cdScanWaiting = true; return end
+    ScanCooldowns()
+  end)
+end
+
 ---------------------------------------------------------------------------
 -- 3. Farming / Grinding Session Tracker
 ---------------------------------------------------------------------------
@@ -176,7 +203,6 @@ local farm = {
   lastXP = nil,
   cash = 0,
   lootValue = 0,
-  kills = 0,
   drops = {},
 }
 
@@ -194,7 +220,6 @@ local function ResetFarmSession()
   farm.lastXP = UnitXP and SafeNum(UnitXP("player")) or 0
   farm.cash = 0
   farm.lootValue = 0
-  farm.kills = 0
   farm.drops = {}
 end
 
@@ -279,12 +304,10 @@ local activeTab = "lockouts"
 
 function ns.OpenPersonalTrackers(tab)
   if tab then activeTab = tab end
-  local K = ns.UIKit
   if not win then
     local C = ns.InterfaceColors
     win = ns.InterfaceWindow("EPUGuildPersonalTrackers", UIParent, "EPU Personal Trackers", 540, 500)
     win:SetFrameStrata("DIALOG")
-    win.widgets = {}
 
     local scroll = CreateFrame("ScrollFrame", nil, win)
     scroll:SetPoint("TOPLEFT", 12, -44)
@@ -298,18 +321,19 @@ function ns.OpenPersonalTrackers(tab)
       self:SetVerticalScroll(math.min(maxV, math.max(0, self:GetVerticalScroll() - delta * 36)))
     end)
     win.scroll, win.child = scroll, child
+    -- The game never frees a widget, so each refresh reuses the last one's.
+    win.pool = ns.NewWidgetPool(child)
 
     function win:Refresh()
-      for _, w in ipairs(self.widgets) do w:Hide(); w:SetParent(nil) end
-      self.widgets = {}
+      local pool = self.pool
+      pool:ReleaseAll()
       local db = DB()
       local C = ns.InterfaceColors
       local y = -4
-      local function Track(w) self.widgets[#self.widgets + 1] = w; return w end
       local function Row(items)
         local x = 0
         for _, it in ipairs(items) do
-          local btn = Track(K.Btn(child, it[1], it[2], 22, it[4]))
+          local btn = pool:Button(it[1], it[2], 22, it[4])
           btn:SetPoint("TOPLEFT", x, y)
           btn:SetScript("OnClick", function() it[3](); win:Refresh() end)
           x = x + it[2] + 6
@@ -317,13 +341,13 @@ function ns.OpenPersonalTrackers(tab)
         y = y - 28
       end
       local function Heading(t)
-        local h = Track(K.Font(child, 12, C.gold or C.white))
+        local h = pool:Font(12, C.gold or C.white, "heading")
         h:SetPoint("TOPLEFT", 0, y - 4)
         h:SetText(t)
         y = y - 22
       end
       local function Line(txt, col)
-        local f = Track(K.Font(child, 11, col or C.text))
+        local f = pool:Font(11, col or C.text, "line")
         f:SetPoint("TOPLEFT", 4, y)
         f:SetWidth(500)
         f:SetJustifyH("LEFT")
@@ -392,7 +416,7 @@ function ns.OpenPersonalTrackers(tab)
           { farm.running and "Pause" or "Resume", 84, function() ToggleFarmPause() end },
           { "Reset Session", 110, function() ResetFarmSession() end },
         })
-        Line(string.format("Elapsed: |cffffffff%s|r    Kills: |cffffffff%d|r", FormatDuration(elapsed), farm.kills))
+        Line(string.format("Elapsed: |cffffffff%s|r", FormatDuration(elapsed)))
         Line(string.format("XP Gained: |cff4fc3f7%d|r (%d/hr)", farm.xp, xph))
         Line(string.format("Cash Looted: |cffffd100%s|r    Item Vendor Value: |cffffd100%s|r", FormatMoney(farm.cash), FormatMoney(farm.lootValue)))
         Line(string.format("Total Value: |cff4ade80%s|r (%s/hr)", FormatMoney(totalGold), FormatMoney(gph)))
@@ -407,9 +431,9 @@ function ns.OpenPersonalTrackers(tab)
 
       elseif activeTab == "consumables" then
         Heading("Personal Consumables Checklist")
-        local box = Track(K.Box(child, 200, "Item ID or Preset below..."))
+        local box = pool:Input(200, "Item ID or Preset below...", "consumable")
         box:SetPoint("TOPLEFT", 0, y)
-        local addBtn = Track(K.Btn(child, "+ Add (x10)", 96, 22, "accent"))
+        local addBtn = pool:Button("+ Add (x10)", 96, 22, "accent")
         addBtn:SetPoint("LEFT", box, "RIGHT", 6, 0)
         addBtn:SetScript("OnClick", function()
           local id = tonumber(box:GetText())
@@ -465,8 +489,8 @@ function ns.OpenPersonalTrackers(tab)
           local eta = ""
           if fData and st.lastGain and st.lastGain > 0 and fData.maxV > fData.curV then
             local rem = fData.maxV - fData.curV
-            local kills = math.ceil(rem / st.lastGain)
-            eta = string.format("  ·  |cff4fc3f7%d to next rank (~%d gains)|r", rem, kills)
+            local gains = math.ceil(rem / st.lastGain)
+            eta = string.format("  ·  |cff4fc3f7%d to next rank (~%d gains)|r", rem, gains)
           end
           Line(string.format("%s: |cff4ade80+%d|r (%d/hr)%s", fac, st.gained, rph, eta))
         end
@@ -502,16 +526,16 @@ if ns.On then
     end
   end)
   ns.On("UPDATE_INSTANCE_INFO", ScanLockouts)
-  ns.On("SPELL_UPDATE_COOLDOWN", ScanCooldowns)
-  ns.On("BAG_UPDATE_COOLDOWN", ScanCooldowns)
+  ns.On("SPELL_UPDATE_COOLDOWN", QueueCooldownScan)
+  ns.On("BAG_UPDATE_COOLDOWN", QueueCooldownScan)
+  ns.On("PLAYER_REGEN_ENABLED", function()
+    if cdScanWaiting then cdScanWaiting = false; QueueCooldownScan() end
+  end)
   ns.On("PLAYER_XP_UPDATE", function()
     if not farm.running then return end
     local cur = UnitXP and SafeNum(UnitXP("player")) or 0
     if farm.lastXP and cur > farm.lastXP then farm.xp = farm.xp + (cur - farm.lastXP) end
     farm.lastXP = cur
-  end)
-  ns.On("CHAT_MSG_COMBAT_HOSTILE_DEATH", function()
-    if farm.running then farm.kills = farm.kills + 1 end
   end)
   ns.On("CHAT_MSG_MONEY", function(msg)
     if not farm.running or not SafeStr(msg) then return end
@@ -524,10 +548,12 @@ if ns.On then
     if not farm.running or not SafeStr(msg) then return end
     if msg:find("You receive loot:", 1, true) then
       local link = msg:match("(|c%x+|Hitem:.-|h%[.-%]|h|r)")
-      if link then
-        local _, _, q, _, _, _, _, _, _, _, sell = GetItemInfo and GetItemInfo(link)
+      if link and GetItemInfo then
+        -- Called directly: `GetItemInfo and GetItemInfo(link)` kept only the
+        -- name, so quality and sell price were nil and loot value stayed 0.
+        local _, _, q, _, _, _, _, _, _, _, sell = GetItemInfo(link)
         sell = SafeNum(sell) or 0
-        local qty = tonumber(msg:match("x(%d+)")) or 1
+        local qty = tonumber(msg:match("|h|r%s*x(%d+)")) or 1
         farm.lootValue = farm.lootValue + sell * qty
         if SafeNum(q) and q >= 2 then
           farm.drops[#farm.drops + 1] = link .. (qty > 1 and (" x" .. qty) or "")
