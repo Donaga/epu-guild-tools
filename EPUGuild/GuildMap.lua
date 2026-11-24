@@ -2676,7 +2676,7 @@ function ns.ChatMentions(msg)
   if not msg then return false end
   local low = msg:lower()
   for _, w in ipairs(MentionWords()) do
-    local pat = "%f[%w]" .. w:gsub("(%W)", "%%%1") .. "%f[%W]"
+    local pat = "%f[%w']" .. w:gsub("(%W)", "%%%1") .. "%f[^%w']"
     if low:find(pat) then return true end
   end
   return false

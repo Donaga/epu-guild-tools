@@ -42,6 +42,7 @@ LogWindows.lua
 InfoBars.lua
 WorldQoL.lua
 GoldTracker.lua
+PersonalTrackers.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua

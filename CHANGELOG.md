@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:
+  - **Lockouts:** raid and dungeon lockouts for every character you've logged in, with boss progress and time to reset. `/epu lockouts` opens this tab.
+  - **Cooldowns:** long profession cooldowns (Arcanite and the other transmutes, Mooncloth, Salt Shaker) for each character, with time left or READY, and a chat line at login for any that are ready. `/epu cds` opens this tab. A character's cooldowns are read when you log in on it and a few seconds after a cooldown changes, never during combat.
+  - **Session:** a farming session with time played, XP per hour, gold looted and the vendor value of looted items, gold per hour, and the uncommon or better items you looted. Pause, Resume and Reset Session control it. It doesn't count kills, because the game no longer sends the message that would.
+  - **Consumables:** a checklist of consumables with a target count each, showing how many you carry and how many your other characters hold, with quick presets for common potions, flasks and bandages.
+  - **Rep & PvP:** reputation gained per faction this session, per hour and how far to the next rank, plus this session's honor and honorable kills.
+- **Name mentions ignore contractions.** A mention word like "don" no longer matches "don't".
+
 ## 0.32.0
 
 **Before you update (officers).** This version moves the Discord inbox into its own small addon, so do these in order:
