@@ -39,5 +39,7 @@
   "guild_needs_post": false,
   "guild_needs_channel_id": "",
   "guild_needs_time": "18:00",
-  "guild_needs_max_items": 15
+  "guild_needs_max_items": 15,
+  "group_board_post": true,
+  "group_board_channel_id": ""
 }

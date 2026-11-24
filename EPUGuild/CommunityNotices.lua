@@ -155,6 +155,17 @@ ns.Merge=function(sender,b,catchingUp)
           r.who.." wants to run it ("..ns.RUN_PURPOSES[r.purpose].."). Open it to pick the times that suit you.",r.t)
       end
     end
+    -- A new quick group (Groups > Create > Now) near your level, the same way.
+    -- A followed post already got its notice above, so it isn't told twice.
+    for id in pairs(candidates.activityPosts) do
+      local r=g.activityPosts[id]
+      if r and r.kind=="dungeon" and not before.activityPosts[id] and r.who~=ns.me and ns.ActiveActivity(r)
+        and lvl>=r.minLevel-3 and lvl<=r.maxLevel+3 and not s.followed[ns.PersonalToken("activity",id)] then
+        local left=math.max(1,math.ceil((r.expires-ns.Now())/60))
+        ns.QueueCommunityNotice("activities","activity",id,"Quick group: "..r.title,
+          r.who.." wants a group now (levels "..r.minLevel.."–"..r.maxLevel..", "..left.." min left). Open it to join.",r.t)
+      end
+    end
     for id in pairs(candidates.runInterest) do
       local x=g.runInterest[id]; local req=x and g.runRequests[x.request]
       if x and req and x.state=="in" and before.runInterest[id]~=ns.Fingerprint(x)

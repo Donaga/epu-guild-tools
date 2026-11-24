@@ -28,6 +28,7 @@ import epu_core as core
 import shared_bridge as bridge
 import links_roles as lr
 from event_sync import EventSync, KINDS as EVENT_KINDS, time_zone_choices
+from group_board import GroupBoard
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("epu")
@@ -97,11 +98,14 @@ def load_config() -> dict:
     cfg.setdefault("guild_needs_channel_id", "")  # blank: the milestones channel (feed_channel_id)
     cfg.setdefault("guild_needs_time", "18:00")   # 24-hour time on this PC's clock
     cfg.setdefault("guild_needs_max_items", 15)
+    cfg.setdefault("group_board_post", True)      # quick groups, help posts and run requests from the Groups page
+    cfg.setdefault("group_board_channel_id", "")  # blank: the events channel, else the milestones channel
     cfg.setdefault("logo_url", f"https://raw.githubusercontent.com/{cfg['github_repo']}/main/media/epu-logo.png")
     cfg["status_channel_id"] = cfg.get("status_channel_id") or cfg["channel_id"]
     cfg["feed_channel_id"] = cfg.get("feed_channel_id") or cfg["channel_id"]
     cfg["announce_channel_id"] = cfg.get("announce_channel_id") or cfg["channel_id"]
     cfg["guild_needs_channel_id"] = cfg.get("guild_needs_channel_id") or cfg["feed_channel_id"]
+    cfg["group_board_channel_id"] = cfg.get("group_board_channel_id") or cfg.get("events_channel_id") or cfg["feed_channel_id"]
     if parse_clock(cfg["guild_needs_time"]) is None:
         print(f"guild_needs_time {cfg['guild_needs_time']!r} isn't a 24-hour time like \"18:00\"; using 18:00.")
         cfg["guild_needs_time"] = "18:00"
@@ -737,6 +741,8 @@ async def poll():
     if gd is not None:
         try:await events.refresh(gd)
         except Exception as e:explain(e,'update guild events',cfg.get('events_channel_id'))
+        try:await board.refresh(gd)
+        except Exception as e:explain(e,'update the dungeon board',cfg['group_board_channel_id'])
     if gd is None:
         return
     if latest_mtime == polled_mtime:
@@ -1978,6 +1984,7 @@ async def on_ready():
 
 
 events=EventSync(cfg,state,client,read_latest,flush_inbox)
+board=GroupBoard(cfg,state,client)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
