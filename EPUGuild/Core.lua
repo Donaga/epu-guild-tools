@@ -385,6 +385,7 @@ local HELP = {
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
+  "|cffffd100/epu ranks|r - action bar buttons still on an old spell rank after training, with one-click updates",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
@@ -512,6 +513,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenPersonalTrackers then
       ns.OpenPersonalTrackers(cmd == "lockouts" and "lockouts" or (cmd == "cds" and "cooldowns" or nil))
     end
+  elseif cmd == "ranks" or cmd == "spellranks" or cmd == "rank" then
+    if ns.OpenSpellRanks then ns.OpenSpellRanks() end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

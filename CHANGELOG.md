@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Spell rank checker** (`/epu ranks`, or the **Spell ranks** tile in **Member tools**). Forever doesn't put a new spell rank on your action bars when you train it, so buttons keep casting the old one. The checker compares every spell on your bars with the highest rank in your spellbook and lists the buttons that are behind, by bar and button, with the rank they can go to. **Update** puts the highest rank on one button and **Update all** does every listed button; both work only out of combat. For a lower rank you use on purpose, **Keep this rank** stops it being flagged on that character, and **Stop keeping** undoes it. After you log in and after you train, EPU says in chat once when a button is behind; **Remind me in chat** in the window turns that off. Macros aren't checked.
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:

@@ -43,6 +43,7 @@ InfoBars.lua
 WorldQoL.lua
 GoldTracker.lua
 PersonalTrackers.lua
+SpellRanks.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua

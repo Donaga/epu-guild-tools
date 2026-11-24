@@ -34,6 +34,10 @@ local memberTools={
   {key="trackers", title="Personal trackers", hint="Lockouts and profession cooldowns across your alts, farming sessions, consumables, rep and PvP (/epu trackers).",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_02", available=function() return ns.OpenPersonalTrackers~=nil end,
     open=function() ns.OpenPersonalTrackers() end},
+  -- Spell rank checker (SpellRanks.lua); hidden if that file isn't loaded.
+  {key="spellranks", title="Spell ranks", hint="Find action bar buttons still on an old spell rank after training, and update them (/epu ranks).",
+    icon="Interface\\Icons\\INV_Misc_Book_11", available=function() return ns.OpenSpellRanks~=nil end,
+    open=function() ns.OpenSpellRanks() end},
   {key="chat", title="Chat history", hint="Whispers (and, if you choose, guild and officer chat) kept after a reload.",
     icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
