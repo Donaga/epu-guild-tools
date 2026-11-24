@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Bank gear for you** (`/epu bankgear`, **Gear for you** on the main window's **Bank** page, or the **Bank gear for you** tile in **Member tools**). Lists the weapons and armor the guild bank and bank alts hold that this character can use: the required level is yours or up to five levels ahead, the armor is the type your class wears (plate for warriors and paladins and mail for hunters and shamans from level 40), and the weapon is a type your class can train. Each item shows its slot and item level, whether you can wear it now or at which level, and whether it beats what you wear in that slot by item level (an empty slot counts as an upgrade). Upgrades come first, and **Upgrades only** hides the rest. Gear more than ten levels below you only shows when it's an upgrade. At the open guild bank **Pull** takes it into your bags, from tabs your rank can withdraw from; otherwise **Request** asks the bank managers for it. Details: [docs/bank-gear.md](docs/bank-gear.md).
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:

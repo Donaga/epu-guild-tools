@@ -59,6 +59,7 @@ Inbox.lua
 UI.lua
 NeededMatsUI.lua
 NeededMatsBank.lua
+BankGear.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua
