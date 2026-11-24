@@ -14,7 +14,7 @@ EVENT_MODULES={'event_response':'EventBridge.lua','event_create':'EventCreateBri
 # carrying the same one change the same record once.
 OFFICER_KINDS={'status','news','news_remove','checklist','sync_helper'}
 KINDS={'guild_invite','request'} | set(EVENT_MODULES) | OFFICER_KINDS
-FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','memberInfo','inviteRequests','inviteOutcomes','guildEvents','eventResponses'}
+FIELDS={'needs','bank','requests','donations','crafters','recipes','mats','members','memberInfo','inviteRequests','inviteOutcomes','guildEvents','eventResponses','activityPosts','activityReplies','runRequests','runInterest'}
 # Announcements, milestones and the guild MOTD, which the bot posts as the
 # guild's own: exported only by officer helpers and taken only from them.
 OFFICER_FIELDS={'news','feed','motd'}

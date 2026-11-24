@@ -44,5 +44,7 @@
   "leveling_board_channel_id": "",
   "leveling_board_day": "monday",
   "leveling_board_time": "19:00",
-  "leveling_board_max": 15
+  "leveling_board_max": 15,
+  "group_board_post": true,
+  "group_board_channel_id": ""
 }

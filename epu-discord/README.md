@@ -11,6 +11,15 @@ Once a day the bot can post a short **Guild needs** list: the materials guildmat
 
 The list comes from the officer's last save, like the status post, so it's as fresh as the last `/reload`, `/epu save` or logout on this PC. It follows the addon's rules: only characters still in the guild, and only lists refreshed in the last 30 days. Anyone can see the same list privately with `/neededmats`. Restart the bot after changing these settings.
 
+## Dungeon board on Discord
+
+The companion posts the guild's dungeon board from the Groups page in game (`/epu groups`): quick groups ("Now" groups), help posts and run requests. Each one gets a card with the dungeon, levels, who's in (tanks, healers, DPS) and when it ends, or the times a run request suits. The card updates as people sign up and turns grey once the group closes, expires or becomes a guild event. Guild events keep their own cards in the events channel, so they aren't posted twice. Guildmates still join in game; the card says how.
+
+- `"group_board_post"`: on by default. `false` turns it off.
+- `"group_board_channel_id"`: where the cards go. Blank means the events channel (`events_channel_id`) if you set one, otherwise the milestones channel (`feed_channel_id`, which itself falls back to the request channel).
+
+The bot sees a new post when the game data on this PC is saved (logout or `/reload`), or when a sync helper uploads its snapshot (helpers need this version's helper for board posts). A quick group can end before either happens, so for live groups the in-game ping is the fast way: EPU tells guildmates near the group's level about a new quick group or run request as soon as it's posted.
+
 ## Weekly leveling board
 
 Once a week the bot posts a **Leveling board**: who in the guild gained the most levels last week, for example *Tyler Baker 12 → 19 (+7)*, with the top three marked. It's the same board as **Member tools > Leveling board** in game (`/epu levelboard`), and anyone can see this week so far privately with `/levelboard`. It's on by default:
