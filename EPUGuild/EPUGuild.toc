@@ -37,6 +37,7 @@ ZoneGuideUI.lua
 LevelingTools.lua
 GuildRuns.lua
 RaidPrep.lua
+GuildProgress.lua
 LevelingToolsUI.lua
 LogWindows.lua
 InfoBars.lua

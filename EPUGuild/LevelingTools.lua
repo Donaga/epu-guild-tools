@@ -33,7 +33,7 @@ ns.QUEST_BOTTLENECKS = {
 
 -- Dungeon Readiness: Forever custom dungeons + Classic key/attunement dungeons
 ns.DUNGEON_READINESS = {
-  { id = "hall_of_thanes", name = "Hall of Thanes (Forever)", levelRange = {13, 18}, zone = "Ironforge", mapID = 1455, x = 50.0, y = 50.0, faction = "Alliance",
+  { id = "hall_of_thanes", name = "Hall of Thanes (Forever)", levelRange = {13, 18}, zone = "Ironforge", mapID = 1455, x = 43.5, y = 52.0, faction = "Alliance",
     key = "None", quests = {
       { name = "Check Ironforge / Dun Morogh hubs before entering", level = 15, faction = "Alliance", giver = "Ironforge", x = 55.5, y = 47.8 },
     }},
@@ -45,11 +45,11 @@ ns.DUNGEON_READINESS = {
     key = "None", quests = {
       { name = "The Defias Brotherhood", level = 22, faction = "Alliance", giver = "Gryan Stoutmantle", x = 56.3, y = 47.5 },
       { name = "Red Silk Bandanas", level = 17, faction = "Alliance", giver = "Scout Riell", x = 56.7, y = 47.4 },
-      { name = "Collecting Memories / Oh Brother...", level = 18, faction = "Alliance", giver = "Stormwind (Dwarven District)", x = 54.0, y = 18.0 },
+      { name = "Collecting Memories / Oh Brother...", level = 18, faction = "Alliance", mapID = 1453, giver = "Stormwind (Dwarven District)", x = 54.0, y = 18.0 },
     }},
   { id = "wailing_caverns", name = "Wailing Caverns", levelRange = {17, 24}, zone = "The Barrens", mapID = 1413, x = 46.0, y = 36.4, faction = "Neutral",
     key = "None", quests = {
-      { name = "Leaders of the Fang", level = 22, faction = "Horde", giver = "Nara Wildmane (Thunder Bluff)", x = 75.6, y = 31.2 },
+      { name = "Leaders of the Fang", level = 22, faction = "Horde", mapID = 1456, giver = "Nara Wildmane (Thunder Bluff)", x = 75.6, y = 31.2 },
       { name = "Deviate Eradication", level = 21, faction = "Neutral", giver = "Ebru (Above WC cave)", x = 46.0, y = 35.8 },
       { name = "Smart Drinks", level = 18, faction = "Neutral", giver = "Mebok Mizzyrix (Ratchet)", x = 62.4, y = 37.6 },
     }},
@@ -63,25 +63,25 @@ ns.DUNGEON_READINESS = {
     }},
   { id = "gnomeregan", name = "Gnomeregan", levelRange = {29, 38}, zone = "Dun Morogh", mapID = 1426, x = 24.3, y = 39.8, faction = "Neutral",
     key = "Workshop Key (back door shortcut)", keyItemID = 6893, quests = {
-      { name = "Save Techbot's Brain!", level = 26, faction = "Alliance", giver = "Tinkmaster Overspark (Ironforge)", x = 69.8, y = 50.2 },
-      { name = "Rig Wars", level = 35, faction = "Horde", giver = "Nogg (Orgrimmar)", x = 75.8, y = 25.2 },
+      { name = "Save Techbot's Brain!", level = 26, faction = "Alliance", mapID = 1455, giver = "Tinkmaster Overspark (Ironforge)", x = 69.8, y = 50.2 },
+      { name = "Rig Wars", level = 35, faction = "Horde", mapID = 1454, giver = "Nogg (Orgrimmar)", x = 75.8, y = 25.2 },
     }},
   { id = "scarlet_monastery", name = "Scarlet Monastery", levelRange = {29, 44}, zone = "Tirisfal Glades", mapID = 1420, x = 84.9, y = 32.8, faction = "Neutral",
     key = "The Scarlet Key (Armory & Cathedral)", keyItemID = 7146, quests = {
-      { name = "In the Name of the Light", level = 40, faction = "Alliance", giver = "Raleigh the Devout (Southshore)", x = 51.4, y = 58.6 },
-      { name = "Into The Scarlet Monastery", level = 38, faction = "Horde", giver = "Varimathras (Undercity)", x = 56.2, y = 92.2 },
+      { name = "In the Name of the Light", level = 40, faction = "Alliance", mapID = 1424, giver = "Raleigh the Devout (Southshore)", x = 51.4, y = 58.6 },
+      { name = "Into The Scarlet Monastery", level = 38, faction = "Horde", mapID = 1458, giver = "Varimathras (Undercity)", x = 56.2, y = 92.2 },
     }},
-  { id = "drowned_city", name = "The Drowned City (Forever)", levelRange = {35, 40}, zone = "Stranglethorn Vale", mapID = 1434, x = 40.0, y = 50.0, faction = "Neutral",
+  { id = "drowned_city", name = "The Drowned City (Forever)", levelRange = {35, 40}, zone = "Stranglethorn Vale", mapID = 1434, x = 21.4, y = 27.9, faction = "Neutral",
     key = "None", quests = {
       { name = "Check Booty Bay / Grom'gol / Rebel Camp for Naga ruin quests", level = 37, faction = "Neutral", giver = "Booty Bay", x = 27.5, y = 77.5 },
     }},
-  { id = "kroldok_stronghold", name = "Krol'dok Stronghold (Forever)", levelRange = {40, 45}, zone = "Riverglades", mapID = 2548, x = 50.0, y = 50.0, faction = "Neutral",
+  { id = "kroldok_stronghold", name = "Krol'dok Stronghold (Forever)", levelRange = {40, 45}, zone = "Riverglades", mapID = 2548, x = 37.5, y = 37.5, faction = "Neutral",
     key = "None", quests = {
       { name = "Check Riverglades outposts before entering", level = 42, faction = "Neutral", giver = "Riverglades", x = 58.0, y = 45.8 },
     }},
   { id = "zulfarrak", name = "Zul'Farrak", levelRange = {44, 54}, zone = "Tanaris", mapID = 1446, x = 38.7, y = 20.0, faction = "Neutral",
     key = "Mallet of Zul'Farrak (summons Gahz'rilla)", keyItemID = 9240, quests = {
-      { name = "Gahz'rilla (Carrot on a Stick!)", level = 50, faction = "Neutral", giver = "Wizzle Brassbolts (Shimmering Flats)", x = 78.0, y = 77.1 },
+      { name = "Gahz'rilla (Carrot on a Stick!)", level = 50, faction = "Neutral", mapID = 1441, giver = "Wizzle Brassbolts (Shimmering Flats)", x = 78.0, y = 77.1 },
       { name = "Scarab Shells", level = 45, faction = "Neutral", giver = "Tran'rek (Gadgetzan)", x = 51.6, y = 26.8 },
       { name = "Divino-matic Rod", level = 47, faction = "Neutral", giver = "Chief Engineer Bilgewhizzle", x = 52.5, y = 28.5 },
     }},
@@ -92,13 +92,13 @@ ns.DUNGEON_READINESS = {
   { id = "blackrock_depths", name = "Blackrock Depths", levelRange = {52, 60}, zone = "Searing Gorge", mapID = 1427, x = 34.8, y = 85.4, faction = "Neutral",
     key = "Shadowforge Key (inner shortcuts)", keyItemID = 11000, quests = {
       { name = "Attunement to the Core (MC attune)", level = 60, faction = "Neutral", giver = "Lothos Riftwaker (BRM)", x = 34.8, y = 85.4 },
-      { name = "The Princess Saved? / Marshal Windsor", level = 58, faction = "Alliance", giver = "Morgan's Vigil", x = 84.3, y = 68.3 },
+      { name = "The Princess Saved? / Marshal Windsor", level = 58, faction = "Alliance", mapID = 1428, giver = "Morgan's Vigil", x = 84.3, y = 68.3 },
     }},
-  { id = "blackmaw_hold", name = "Blackmaw Hold (Forever)", levelRange = {55, 60}, zone = "Azshara", mapID = 1447, x = 55.0, y = 50.0, faction = "Neutral",
+  { id = "blackmaw_hold", name = "Blackmaw Hold (Forever)", levelRange = {55, 60}, zone = "Azshara", mapID = 1447, x = 38.4, y = 32.6, faction = "Neutral",
     key = "None", quests = {
       { name = "Check Azshara hubs / Timbermaw quests before entering", level = 57, faction = "Neutral", giver = "Azshara", x = 22.0, y = 49.6 },
     }},
-  { id = "shapers_terrace", name = "Shaper's Terrace (Forever)", levelRange = {58, 60}, zone = "Un'Goro Crater", mapID = 1449, x = 50.0, y = 50.0, faction = "Neutral",
+  { id = "shapers_terrace", name = "Shaper's Terrace (Forever)", levelRange = {58, 60}, zone = "Un'Goro Crater", mapID = 1449, x = 48.1, y = 6.1, faction = "Neutral",
     key = "None", quests = {
       { name = "Check Marshal's Refuge before entering Shaper's Terrace", level = 59, faction = "Neutral", giver = "Marshal's Refuge", x = 45.2, y = 5.8 },
     }},
@@ -328,41 +328,54 @@ local function ReadinessStore()
   return g.levelingProgress
 end
 
-function ns.GetMyReadiness()
+local function Mine()
   local store = ReadinessStore()
-  if not store or not ns.me then return {} end
-  store[ns.me] = store[ns.me] or { done = {}, t = 0 }
-  return store[ns.me].done
+  if not store or not ns.me then return end
+  if ns.OwnProgress then return ns.OwnProgress() end
+  store[ns.me] = store[ns.me] or { who = ns.me, done = {}, camp = {}, t = 0 }
+  store[ns.me].done, store[ns.me].camp = store[ns.me].done or {}, store[ns.me].camp or {}
+  return store[ns.me]
 end
 
-function ns.ToggleMyReadiness(keyId, val)
-  local store = ReadinessStore()
-  if not store or not ns.me or not keyId then return end
-  store[ns.me] = store[ns.me] or { done = {}, t = 0 }
-  if val == nil then val = not store[ns.me].done[keyId] end
-  store[ns.me].done[keyId] = val and true or nil
-  store[ns.me].t = ns.Now and ns.Now() or time()
-  if ns.Send then
-    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
+-- Your record changed: the synced guild copy (GuildProgress.lua) goes out,
+-- along with the live message older versions listen for.
+local function Publish(mine)
+  if ns.PublishProgress then
+    ns.MarkProgressChanged()
+    ns.PublishProgress()
+  else
+    mine.t = ns.Now and ns.Now() or time()
+    if ns.Send then ns.Send(READINESS_KIND, { who = ns.me, done = mine.done, camp = mine.camp, t = mine.t }) end
   end
   if ns.Changed then ns.Changed() end
 end
 
+function ns.GetMyReadiness()
+  local mine = Mine()
+  return mine and mine.done or {}
+end
+
+function ns.ToggleMyReadiness(keyId, val)
+  local mine = keyId and Mine()
+  if not mine then return end
+  if val == nil then val = not mine.done[keyId] end
+  mine.done[keyId] = val and true or nil
+  Publish(mine)
+end
+
+-- Keys in your bags and attunement quests you've finished tick themselves.
 function ns.SyncMyKeys()
-  local store = ReadinessStore()
-  if not store or not ns.me then return end
-  store[ns.me] = store[ns.me] or { done = {}, t = 0 }
+  if ns.DetectProgress then return ns.DetectProgress() end
+  local mine = Mine()
+  if not mine then return end
   local changed = false
   for _, d in ipairs(ns.DUNGEON_READINESS or {}) do
-    if d.keyItemID and ns.HasKeyItem(d.keyItemID) and not store[ns.me].done[d.id] then
-      store[ns.me].done[d.id] = true
+    if d.keyItemID and ns.HasKeyItem(d.keyItemID) and not mine.done[d.id] then
+      mine.done[d.id] = true
       changed = true
     end
   end
-  if changed then
-    store[ns.me].t = ns.Now and ns.Now() or time()
-    if ns.Send then ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t }) end
-  end
+  if changed then Publish(mine) end
 end
 
 function ns.GetGuildReadiness(dungeon)
@@ -394,15 +407,10 @@ function ns.GetGuildReadiness(dungeon)
 end
 
 function ns.ToggleMyCampingStation(bpName)
-  local store = ReadinessStore()
-  if not store or not ns.me or not bpName then return end
-  store[ns.me] = store[ns.me] or { done = {}, camp = {}, t = 0 }
-  store[ns.me].camp = store[ns.me].camp or {}
-  store[ns.me].camp[bpName] = not store[ns.me].camp[bpName] and true or nil
-  store[ns.me].t = ns.Now and ns.Now() or time()
-  if ns.Send then
-    ns.Send(READINESS_KIND, { who = ns.me, done = store[ns.me].done, camp = store[ns.me].camp, t = store[ns.me].t })
-  end
+  local mine = bpName and Mine()
+  if not mine then return end
+  mine.camp[bpName] = not mine.camp[bpName] and true or nil
+  Publish(mine)
 end
 
 function ns.GetGuildCampingCoverage(bpName)
@@ -446,7 +454,10 @@ ns.comm[READINESS_KIND] = function(sender, payload, channel)
     if n > 400 then return end
     if type(k) == "string" and #k <= 80 and v == true then cleanCamp[k] = true end
   end
-  store[who] = { done = clean, camp = cleanCamp, t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
+  -- Keep what the synced record carries beyond dungeons (raid status, reputation).
+  store[who] = { who = who, done = clean, camp = cleanCamp, raid = cur and cur.raid, rep = cur and cur.rep,
+    t = tonumber(payload.t) or (ns.Now and ns.Now() or time()) }
+  if ns.Changed then ns.Changed() end
 end
 
 function ns.AddLevelingNeed(itemID, qty, itemName)

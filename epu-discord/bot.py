@@ -786,7 +786,7 @@ async def refresh(gd: core.GuildData):
 # ---------------------------------------------------------------------------
 # Milestones and announcements
 # ---------------------------------------------------------------------------
-FEED_EMOJI = {"level": "\U0001F389", "mount": "\U0001F40E", "prof": "\U0001F528", "donation": "\U0001F4B0", "join": "\U0001F44B"}
+FEED_EMOJI = {"level": "\U0001F389", "mount": "\U0001F40E", "prof": "\U0001F528", "donation": "\U0001F4B0", "join": "\U0001F44B", "attune": "\U0001F511"}
 
 
 def milestone_line(gd: core.GuildData, e: dict) -> str:

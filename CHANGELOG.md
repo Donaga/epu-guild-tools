@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Keys and attunements reach the whole guild.** Each member's dungeon keys, raid attunements, raid status (level, role, Drakefire Amulet, Fire Resistance) and camping stations now sync like needed mats: officers keep everyone's and hand them to whoever logs in later, so the **Readiness** tab shows guildmates who were offline when someone ticked a key. Before, they only reached whoever was online at that moment. Guildmates still on 0.33 keep seeing ticks from this version.
+- **Keys and attunements tick themselves.** Keys in your bags, the Drakefire Amulet, and the Molten Core and Blackwing Lair attunement quests are picked up at login, when you turn in a quest and when your bags change. Custom Forever chains the game can't confirm stay a tick-box. Each new key or attunement is a guild milestone in **News** and on the Discord companion's milestones channel; the first scan after updating adds none, so existing keys don't flood the feed.
+- **Raid attunements on the Readiness tab.** A section lists Onyxia's Lair, Molten Core and Blackwing Lair with your status, who in the guild is attuned and how many level 55+ guildmates still need each one.
+- **Guild reputation.** The Readiness tab lists guildmates' standing with Argent Dawn, Timbermaw Hold, Cenarion Circle, Thorium Brotherhood, the Hydraxian Waterlords, Zandalar Tribe, Brood of Nozdormu and the Wintersaber Trainers. Turn sharing your own standing off with **Stop sharing** on the same page.
+- **Dungeon waypoints fixed.** Hall of Thanes, The Drowned City, Krol'dok Stronghold, Blackmaw Hold and Shaper's Terrace pointed at placeholder spots; they now point at their entrances, in the Readiness tab and the zone guide. Quest givers in a city or another zone (Tinkmaster Overspark, Nogg, Varimathras, Nara Wildmane and others) now get a waypoint on their own map instead of the dungeon's zone.
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:
