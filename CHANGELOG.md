@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Quick groups ping guildmates near the level.** A new "Now" group on the Groups page (`/epu lfg`) now notifies guildmates whose level is within 3 of the group's range, the same way run requests already did. It follows your notification settings (instant, digest or off, quiet hours and mutes), and an edit to the group doesn't notify again. Help posts are unchanged.
+- **The dungeon board on Discord.** The Discord companion posts quick groups, help posts and run requests from the Groups page as cards, with the levels, who's signed up by role and when the group ends, or the times a run request suits. Cards update as people sign up and grey out when the group closes, expires or becomes a guild event; guild events keep their own cards. It's on by default in the events channel, or the milestones channel if you have no events channel; `group_board_channel_id` picks another and `"group_board_post": false` turns it off. The bot sees posts when the game data on its PC is saved (logout or `/reload`) or when a sync helper uploads, so update sync helpers to carry board posts too. Setup: [epu-discord/README.md](epu-discord/README.md#dungeon-board-on-discord).
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:
