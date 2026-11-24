@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.35.0
+
+**After updating, fully restart WoW once** (a /reload isn't enough): this version adds a new file to the addon.
 
 - **Mail tools: Take all from one mail, and AH gold only** (`/epu mailtools`, or the **Mail tools** tile in **Member tools**).
   - **Take all** sits above a mail you open. It takes that mail's gold and then each of its items, one at a time, waiting for the server between takes, and leaves the rest of your inbox alone. It stops when your bags are full (and says what's still in the mail), when the server doesn't hand something over after a second try, or when you close the mailbox. It never pays cash on delivery: a COD mail keeps the button off and points you to Blizzard's Accept. Press **Stop** to stop partway.
