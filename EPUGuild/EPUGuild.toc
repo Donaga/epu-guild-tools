@@ -39,11 +39,14 @@ GuildRuns.lua
 RaidPrep.lua
 GuildProgress.lua
 LevelingToolsUI.lua
+LevelingBoard.lua
 LogWindows.lua
 InfoBars.lua
 WorldQoL.lua
 GoldTracker.lua
+RestedXP.lua
 PersonalTrackers.lua
+SpellRanks.lua
 GatheringMarket.lua
 GatheringSpots.lua
 GatheringRoute.lua
@@ -60,6 +63,7 @@ Inbox.lua
 UI.lua
 NeededMatsUI.lua
 NeededMatsBank.lua
+BankGear.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua

@@ -385,7 +385,10 @@ local HELP = {
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
+  "|cffffd100/epu ranks|r - action bar buttons still on an old spell rank after training, with one-click updates",
+  "|cffffd100/epu levelboard|r - levels guildmates gained this week (/epu levelboard last for last week)",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
+  "|cffffd100/epu bankgear|r - weapons and armor in the guild bank that fit you, with upgrades marked",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
   "|cffffd100/epu sharespots on|off|r - share the gathering spots you record with the guild (on by default)",
@@ -481,12 +484,16 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenZoneGuide then ns.OpenZoneGuide(args) end
   elseif cmd == "leveling" or cmd == "advisor" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("advisor") end
+  elseif cmd == "levelboard" then
+    if ns.OpenLevelingBoard then ns.OpenLevelingBoard(args == "last" and "last" or "this") end
   elseif cmd == "dungeons" or cmd == "ready" or cmd == "xpguard" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("dungeons") end
   elseif cmd == "writs" or cmd == "crates" or cmd == "waylaid" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("writs") end
   elseif cmd == "camping" or cmd == "camp" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("camping") end
+  elseif cmd == "bankgear" or cmd == "mygear" then
+    if ns.ShowBankGear then ns.ShowBankGear() end
   elseif cmd == "gear" or cmd == "drops" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("gear") end
   elseif cmd == "runs" or cmd == "attendance" or cmd == "guildstats" then
@@ -508,10 +515,12 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.HandleWayCommand then ns.HandleWayCommand(args) end
   elseif cmd == "gold" or cmd == "budget" then
     if ns.OpenGoldTracker then ns.OpenGoldTracker() end
-  elseif cmd == "trackers" or cmd == "lockouts" or cmd == "cds" then
+  elseif cmd == "trackers" or cmd == "lockouts" or cmd == "cds" or cmd == "rested" then
     if ns.OpenPersonalTrackers then
-      ns.OpenPersonalTrackers(cmd == "lockouts" and "lockouts" or (cmd == "cds" and "cooldowns" or nil))
+      ns.OpenPersonalTrackers(({ lockouts = "lockouts", cds = "cooldowns", rested = "rested" })[cmd])
     end
+  elseif cmd == "ranks" or cmd == "spellranks" or cmd == "rank" then
+    if ns.OpenSpellRanks then ns.OpenSpellRanks() end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
     ns.UI:Show(); ns.UI:CloseDetails(); ns.UI.search:SetText(""); ns.UI:SetView("activities")

@@ -292,7 +292,7 @@ function ns.GetLevelingAdvice()
   end
 
   local allMilestones = {
-    { minLv = 1, maxLv = 19, title = "Bag & Spell Reminder (Forever)", note = "New bags must be equipped manually and new spell ranks dragged onto your action bars after training." },
+    { minLv = 1, maxLv = 19, title = "Bag & Spell Reminder (Forever)", note = "New bags must be equipped manually and new spell ranks put on your action bars after training (/epu ranks finds and updates them)." },
     { minLv = 10, maxLv = 60, title = "Waylaid Crates & Craftsman's Writs", note = "Turn in filled crates & writs at your faction's supply hub for Merchant's Favor & supply rep." },
     { minLv = 25, maxLv = 45, title = "Artisan First Aid (225–300) — Triage", note = pFaction == "Horde" and "Doctor Gregory Victor in Hammerfall (Arathi, 73.4, 36.9)" or "Doctor Gustaf VanHowzen in Theramore (Dustwallow, 67.8, 49.0)" },
     { minLv = 35, maxLv = 55, title = "Artisan Fishing (225–300) — Nat Pagle", note = "Nat Pagle on Pagle's Pointe island, Dustwallow Marsh (58.6, 60.1)." },

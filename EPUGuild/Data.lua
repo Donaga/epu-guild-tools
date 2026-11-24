@@ -50,6 +50,7 @@ function ns.Changed()
   end
   if ns.RefreshBagMarkers then ns.Debounce("bagmarkers", 1, ns.RefreshBagMarkers) end
   if ns.RefreshNeededMatsBank then ns.RefreshNeededMatsBank() end
+  if ns.RefreshBankGear then ns.RefreshBankGear() end
 end
 
 -- Request states: pending -> approved | rejected -> filled; or cancelled.

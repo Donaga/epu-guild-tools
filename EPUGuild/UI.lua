@@ -1431,6 +1431,10 @@ Views.bank = {
     UI.bankQualityChip=DropChip(bar,96,'Filter by item quality',function()
       return {{label='Any quality',value=false},{label='Poor',value=0},{label='Common',value=1},{label='Uncommon',value=2},{label='Rare',value=3},{label='Epic+',value=4}}
     end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil end)
+    if ns.ShowBankGear then
+      UI.bankGearBtn=bar:Add(Btn(bar,"Gear for you",96,22),"right",function() ns.ShowBankGear() end,
+        "Weapons and armor in the bank that fit your level, class and armor type, with upgrades marked.")
+    end
   end,
   rows = function(g, q)
     if UI.state.bank.mode == 'sort' then return UI.BankSortRows(q) end
