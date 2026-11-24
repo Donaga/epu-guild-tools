@@ -508,9 +508,9 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.HandleWayCommand then ns.HandleWayCommand(args) end
   elseif cmd == "gold" or cmd == "budget" then
     if ns.OpenGoldTracker then ns.OpenGoldTracker() end
-  elseif cmd == "trackers" or cmd == "lockouts" or cmd == "cds" then
+  elseif cmd == "trackers" or cmd == "lockouts" or cmd == "cds" or cmd == "rested" then
     if ns.OpenPersonalTrackers then
-      ns.OpenPersonalTrackers(cmd == "lockouts" and "lockouts" or (cmd == "cds" and "cooldowns" or nil))
+      ns.OpenPersonalTrackers(({ lockouts = "lockouts", cds = "cooldowns", rested = "rested" })[cmd])
     end
   elseif cmd == "calendar" then
     ns.UI.state.activities.kind="events"
