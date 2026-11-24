@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Rested XP across your alts.** A new **Rested XP** tab in Personal trackers (`/epu rested`, or the **Personal trackers** tile in **Member tools**) shows how much rested XP each of your characters on this realm has built up: as a share of a level, in bubbles and in XP, with how long until it's full. Each character saves its rested XP, level and whether it was resting when it logged out, and EPU estimates the rest from the classic rates: 5% of a level every 8 hours in an inn or city, a quarter of that anywhere else, up to 1.5 levels. The character you're on shows its real rested XP. Max-level characters are listed last. A character shows up once you've logged in on it with this version.
+- **Spell rank checker** (`/epu ranks`, or the **Spell ranks** tile in **Member tools**). Forever doesn't put a new spell rank on your action bars when you train it, so buttons keep casting the old one. The checker compares every spell on your bars with the highest rank in your spellbook and lists the buttons that are behind, by bar and button, with the rank they can go to. **Update** puts the highest rank on one button and **Update all** does every listed button; both work only out of combat. For a lower rank you use on purpose, **Keep this rank** stops it being flagged on that character, and **Stop keeping** undoes it. After you log in and after you train, EPU says in chat once when a button is behind; **Remind me in chat** in the window turns that off. Macros aren't checked.
 
 ## 0.33.0
 
