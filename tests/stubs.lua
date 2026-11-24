@@ -218,13 +218,34 @@ __onTaxi = false
 function TakeTaxiNode(slot) end
 function TaxiNodeName(slot) return "Ironforge" end
 function UnitOnTaxi(unit) return __onTaxi end
-function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, "subj", m.money or 0, 0 end end
+function GetInboxHeaderInfo(i) local m = __inbox[i]; if m then return nil, nil, m.sender, m.subject or "subj", m.money or 0, m.cod or 0, m.days or 30, nil, nil, nil, nil, m.canReply end end
+function GetInboxInvoiceInfo(i) local m = __inbox[i]; if m then return m.invoice end end
 function GetInboxItemLink(i, a) local m = __inbox[i]; if m and m.items[a] then return __link(m.items[a][1]) end end
 function GetInboxItem(i, a) local m = __inbox[i]; if m and m.items[a] then return "x", m.items[a][1], "tex", m.items[a][2] end end
 -- Like the game: taking mail is a request to the server; the mailbox changes a moment later.
-function GetInboxNumItems() return #__inbox end
-function TakeInboxItem(i, a) C_Timer.After(0.1, function() if __inbox[i] then __inbox[i].items[a] = nil end __fire("MAIL_INBOX_UPDATE") end) end
-function TakeInboxMoney(i) C_Timer.After(0.1, function() if __inbox[i] then __inbox[i].money = 0 end __fire("MAIL_INBOX_UPDATE") end) end
+-- Mail marked deleteWhenEmpty (auction mail, mail with no text) goes away once
+-- its gold and items are taken, and the mails after it move up one.
+-- Taking from a cash-on-delivery mail would pay it: __codPaid counts that.
+__codPaid = 0; __takes = {}
+function GetInboxNumItems() return #__inbox, __inboxTotal or #__inbox end
+local function __emptied(i)
+  local m = __inbox[i]
+  if m and m.deleteWhenEmpty and (m.money or 0) == 0 and not next(m.items) then table.remove(__inbox, i) end
+end
+function TakeInboxItem(i, a)
+  table.insert(__takes, { "item", i, a })
+  if __inbox[i] and (__inbox[i].cod or 0) > 0 then __codPaid = __codPaid + 1 end
+  C_Timer.After(0.1, function()
+    local m = __inbox[i]
+    if m and m.items[a] and not __bagsFull then m.items[a] = nil; __emptied(i)
+    elseif m and m.items[a] and ERR_INV_FULL then __fire("UI_ERROR_MESSAGE", 3, ERR_INV_FULL) end
+    __fire("MAIL_INBOX_UPDATE")
+  end)
+end
+function TakeInboxMoney(i)
+  table.insert(__takes, { "money", i })
+  C_Timer.After(0.1, function() if __inbox[i] then __inbox[i].money = 0; __emptied(i) end __fire("MAIL_INBOX_UPDATE") end)
+end
 function AutoLootMailItem(i) end
 ATTACHMENTS_MAX_RECEIVE = 12
 function GetTargetTradeMoney() return 0 end

@@ -49,6 +49,10 @@ local memberTools={
   {key="bankgear", title="Bank gear for you", hint="Weapons and armor in the guild bank that fit your level, class and armor type, with upgrades marked (/epu bankgear).",
     icon="Interface\\Icons\\INV_Chest_Chain_05", available=function() return ns.ShowBankGear~=nil end,
     open=function() ns.ShowBankGear() end},
+  -- Mail tools (MailTools.lua); hidden if that file isn't loaded.
+  {key="mailtools", title="Mail tools", hint="Take all from one mail, and collect only the gold from auction house mail (/epu mailtools).",
+    icon="Interface\\Icons\\INV_Letter_02", available=function() return ns.OpenMailTools~=nil end,
+    open=function() ns.OpenMailTools() end},
   {key="mats", title="Needed mats", hint="List the materials you need; guildmates see it on the item's tooltip before they vendor it.",
     icon="Interface\\Icons\\INV_Fabric_Linen_01", open=function() ns.ShowNeededMats() end},
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Mail tools: Take all from one mail, and AH gold only** (`/epu mailtools`, or the **Mail tools** tile in **Member tools**).
+  - **Take all** sits above a mail you open. It takes that mail's gold and then each of its items, one at a time, waiting for the server between takes, and leaves the rest of your inbox alone. It stops when your bags are full (and says what's still in the mail), when the server doesn't hand something over after a second try, or when you close the mailbox. It never pays cash on delivery: a COD mail keeps the button off and points you to Blizzard's Accept. Press **Stop** to stop partway.
+  - **Collect AH gold** sits above the inbox (or **Collect AH gold now** in the Mail tools window, or `/epu ahgold` at a mailbox). It takes only the gold from auction house mail, sales and outbid refunds, and leaves expired, cancelled and won auctions in your inbox with their items. Auction mail is told apart by its invoice, the game's own auction subject lines and the fact that it can't be replied to, so gold players send you is never touched. When more mail waits on the server than the inbox shows, it says to reopen the mailbox and collect again.
+  - The Mail tools window explains both and turns either button off or on.
+
 ## 0.34.1
 
 - **Release announcements post again, and in the channel you pick.** The Discord companion waited for CurseForge to approve each release before announcing it, and when it couldn't see the approval it waited forever: EPU Guild Tools is unlisted on CurseForge, which the public mirror it asks (CFWidget) likely can't read, so 0.33.0 and 0.34.0 were never posted. Now it posts anyway once a release has been on GitHub for 12 hours without the bot seeing it approved (`"curseforge_wait_hours"`, `0` posts at once), and says once in its console why it couldn't ask CurseForge. A new `"release_channel_id"` setting sends release posts to a channel such as `#updates`; blank keeps the request channel. If the bot can't see that channel, the release stays unannounced and posts once it can.
