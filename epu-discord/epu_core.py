@@ -852,6 +852,27 @@ class GuildData:
             "updated": max([int(s.get("v") or 0) for _, s in banks] + [int((self.g.get("needs") or {}).get("v") or 0)]),
         }
 
+    def leveling_board(self, start: float, end: float) -> list[dict]:
+        """Levels each guildmate gained between start and end (epoch seconds),
+        from the level history the officer's EPU keeps as it reads the roster
+        (lvlLog, the same data as the in-game leveling board). Only characters
+        still in the guild who gained a level. Rows:
+        {name, label, from, to, gained, class}, most levels first."""
+        members = set(self.members)
+        info = self.g.get("memberInfo") or {}
+        out = []
+        for name, log in (self.g.get("lvlLog") or {}).items():
+            if not isinstance(name, str) or name not in members:
+                continue
+            a, b = level_span(log, start, end)
+            if a is None or b is None or b <= a:
+                continue
+            cls = (info.get(name) or {}).get("c") if isinstance(info.get(name), dict) else None
+            out.append({"name": name, "label": self.label(name), "from": a, "to": b, "gained": b - a,
+                        "class": cls if isinstance(cls, str) else None})
+        out.sort(key=lambda r: (-r["gained"], -r["to"], r["name"]))
+        return out
+
     def needed_mats(self, now: float | None = None) -> list[dict]:
         """Guildmates' needed mats, one row per material, by the addon's rules:
         only characters still on the roster, and only lists refreshed in the
@@ -890,6 +911,64 @@ class GuildData:
             out.append(row)
         out.sort(key=lambda r: (-len(r["who"]), -r["total"], r["name"].lower()))
         return out
+
+
+def _lua_list(v) -> list:
+    """A Lua array as the SavedVariables reader returns it ({1: a, 2: b} or a list)."""
+    if isinstance(v, list):
+        return v
+    if not isinstance(v, dict):
+        return []
+    keys = sorted(k for k in v if isinstance(k, (int, float)) and not isinstance(k, bool))
+    return [v[k] for k in keys]
+
+
+def level_span(log, start: float, end: float) -> tuple[int | None, int | None]:
+    """The level a character had at the start of [start, end) and at its end,
+    from a level history {t1, lvl1, t2, lvl2, ...} (oldest first). Someone first
+    seen during the window starts at the level they were first seen at. Same
+    rules as ns.LevelSpan in the addon's LevelingBoard.lua."""
+    seq = _lua_list(log)
+    first = last = None
+    for i in range(0, len(seq) - 1, 2):
+        try:
+            at, lv = float(seq[i]), int(seq[i + 1])
+        except (TypeError, ValueError):
+            continue
+        if at < end:
+            last = lv
+            if at <= start or first is None:
+                first = lv
+    return first, last
+
+
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+
+def parse_weekday(text) -> int | None:
+    """ "Monday", "mon" -> 0 ... "Sunday" -> 6; anything else -> None."""
+    t = str(text or "").strip().lower()
+    if len(t) < 3:
+        return None
+    for i, day in enumerate(WEEKDAYS):
+        if day.startswith(t):
+            return i
+    return None
+
+
+def leveling_board_period(now, weekday: int, hh: int, mm: int):
+    """The weekly leveling board's schedule around `now` (a naive local
+    datetime): (when it posts, period start, period end). It posts on
+    `weekday` at hh:mm about the seven whole days before that day, so with
+    the default Monday it covers Monday to Sunday. The post time returned
+    is the latest one at or before now."""
+    from datetime import datetime, timedelta
+    day = now.date() - timedelta(days=(now.weekday() - weekday) % 7)
+    at = datetime(day.year, day.month, day.day, hh, mm)
+    if at > now:
+        at -= timedelta(days=7)
+    end = datetime(at.year, at.month, at.day)
+    return at, end - timedelta(days=7), end
 
 
 def needed_mats_groups(rows: list[dict], max_items: int = 15, max_names: int = 3) -> tuple[list[tuple[str, list[str]]], int]:

@@ -11,6 +11,17 @@ Once a day the bot can post a short **Guild needs** list: the materials guildmat
 
 The list comes from the officer's last save, like the status post, so it's as fresh as the last `/reload`, `/epu save` or logout on this PC. It follows the addon's rules: only characters still in the guild, and only lists refreshed in the last 30 days. Anyone can see the same list privately with `/neededmats`. Restart the bot after changing these settings.
 
+## Weekly leveling board
+
+Once a week the bot posts a **Leveling board**: who in the guild gained the most levels last week, for example *Tyler Baker 12 → 19 (+7)*, with the top three marked. It's the same board as **Member tools > Leveling board** in game (`/epu levelboard`), and anyone can see this week so far privately with `/levelboard`. It's on by default:
+
+- `"leveling_board_post": false` turns it off.
+- `"leveling_board_channel_id"`: where it goes. Blank means the guild needs channel (`guild_needs_channel_id`, which falls back to the milestones channel).
+- `"leveling_board_day"` and `"leveling_board_time"`: when (default `"monday"` at `"19:00"`, a 24-hour time on this PC's clock). It covers the seven whole days before that day, so on Monday it's Monday to Sunday. If the bot is off then, it posts when it starts, up to two days late; after that it waits for next week. A week when nobody gained a level is skipped.
+- `"leveling_board_max"`: how many characters to list (default 15, up to 40). The rest are counted at the end.
+
+The levels come from the level history EPU keeps on this PC as it reads the guild roster, so a level counts when this PC's game sees it: levels gained while nobody played here count in the week this PC next logged in. Only characters still in the guild are listed, alts with their main in brackets. Restart the bot after changing these settings.
+
 ## Guild chat history for EPU (0.28)
 
 The bot reads the last day of the Discord channel linked to guild chat in game (`#in-game-chat` by default) and writes it into the Discord inbox (see below). At login or `/reload`, EPU's Guild chat adds whatever it missed while you were offline. Settings: `"ingame_chat_channel": "in-game-chat"` (matched by name; emoji ignored), or `"ingame_chat_channel_id"` for a channel with another name. `""` turns it off. It needs the **Message Content Intent** (Developer Portal → Bot) and View Channel + Read Message History in that channel. Linked members show under their main character.

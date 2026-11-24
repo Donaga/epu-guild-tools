@@ -38,6 +38,7 @@ LevelingTools.lua
 GuildRuns.lua
 RaidPrep.lua
 LevelingToolsUI.lua
+LevelingBoard.lua
 LogWindows.lua
 InfoBars.lua
 WorldQoL.lua

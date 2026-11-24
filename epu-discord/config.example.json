@@ -39,5 +39,10 @@
   "guild_needs_post": false,
   "guild_needs_channel_id": "",
   "guild_needs_time": "18:00",
-  "guild_needs_max_items": 15
+  "guild_needs_max_items": 15,
+  "leveling_board_post": true,
+  "leveling_board_channel_id": "",
+  "leveling_board_day": "monday",
+  "leveling_board_time": "19:00",
+  "leveling_board_max": 15
 }

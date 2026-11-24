@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Leveling board** (`/epu levelboard`, or the **Leveling board** tile in **Member tools**). Who in the guild gained the most levels this week, Monday to Sunday, with each character's start and end level and alts shown with their main. **Last week** shows the week before. A level counts when your game sees it on the guild roster, so levels gained while you were offline count in the week you next log in. EPU now keeps three weeks of each guildmate's level changes instead of the last eight, so fast levelers are counted in full.
+- **Weekly leveling board on Discord.** The Discord companion posts last week's board every Monday at 19:00 (this PC's clock), top three marked, in the guild needs channel unless you pick another, and skips a week when nobody gained a level. `/levelboard` shows this week so far privately. It's on by default; settings `leveling_board_post`, `leveling_board_channel_id`, `leveling_board_day`, `leveling_board_time` and `leveling_board_max` are in [epu-discord/README.md](epu-discord/README.md#weekly-leveling-board).
+
 ## 0.33.0
 
 - **Personal trackers** (`/epu trackers`, or the **Personal trackers** tile in **Member tools**). One window with five tabs for your own characters on this realm:
