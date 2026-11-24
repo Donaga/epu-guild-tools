@@ -87,6 +87,7 @@ local function OpenRequest(who, id)
   end
   return best, bestR
 end
+ns.OpenBankRequest = OpenRequest   -- also used by Bank gear for you (BankGear.lua)
 
 -- How much one click asks for: what's still needed (one stack when no
 -- amount was given), never more than the bank holds.

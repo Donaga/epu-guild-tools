@@ -45,6 +45,10 @@ local memberTools={
     icon="Interface\\Icons\\INV_Letter_15", open=function() ns.ShowChatHistory() end},
   {key="market", title="Gathering market", hint="Compare gathering prices, craft profit at current prices, and cheap skill-ups.",
     icon="Interface\\Icons\\INV_Misc_Coin_02", open=function() ns.ShowGatheringMarket() end},
+  -- Bank gear for you (BankGear.lua); hidden if that file isn't loaded.
+  {key="bankgear", title="Bank gear for you", hint="Weapons and armor in the guild bank that fit your level, class and armor type, with upgrades marked (/epu bankgear).",
+    icon="Interface\\Icons\\INV_Chest_Chain_05", available=function() return ns.ShowBankGear~=nil end,
+    open=function() ns.ShowBankGear() end},
   {key="mats", title="Needed mats", hint="List the materials you need; guildmates see it on the item's tooltip before they vendor it.",
     icon="Interface\\Icons\\INV_Fabric_Linen_01", open=function() ns.ShowNeededMats() end},
 }

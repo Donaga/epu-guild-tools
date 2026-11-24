@@ -388,6 +388,7 @@ local HELP = {
   "|cffffd100/epu ranks|r - action bar buttons still on an old spell rank after training, with one-click updates",
   "|cffffd100/epu levelboard|r - levels guildmates gained this week (/epu levelboard last for last week)",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
+  "|cffffd100/epu bankgear|r - weapons and armor in the guild bank that fit you, with upgrades marked",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
   "|cffffd100/epu sharespots on|off|r - share the gathering spots you record with the guild (on by default)",
@@ -491,6 +492,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("writs") end
   elseif cmd == "camping" or cmd == "camp" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("camping") end
+  elseif cmd == "bankgear" or cmd == "mygear" then
+    if ns.ShowBankGear then ns.ShowBankGear() end
   elseif cmd == "gear" or cmd == "drops" then
     if ns.OpenLevelingTools then ns.OpenLevelingTools("gear") end
   elseif cmd == "runs" or cmd == "attendance" or cmd == "guildstats" then
