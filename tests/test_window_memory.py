@@ -45,7 +45,7 @@ A.ex('__ns.OpenGoldTracker()')
 A.ex('''local e = __ns.db.goldTracker.entries
 for i = 1, 40 do
   local cats = {"vendor","repair","auction","mail","training","flight","trade","loot"}
-  e[#e+1] = {t = time() - i * 60, who = __ns.me, realm = "Forever", delta = (i % 3 == 0) and 5000 or -2500 * i, cat = cats[i % #cats + 1]}
+  e[#e+1] = {t = time(), who = __ns.me, realm = "Forever", delta = (i % 3 == 0) and 5000 or -2500 * i, cat = cats[i % #cats + 1]}
 end''')
 check('the gold tracker redraws without making new widgets',
       growth('__ns.OpenGoldTracker()', 'EPUGuildGoldTracker:Refresh()') == 0)
