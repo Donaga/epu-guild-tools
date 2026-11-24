@@ -97,7 +97,7 @@ M.CreateFontString = function(...) __made = __made + 1; return fs(...) end
 M.CreateTexture = function(...) __made = __made + 1; return tex(...) end
 local cf = CreateFrame
 CreateFrame = function(...) __made = __made + 1; return cf(...) end''')
-tabs = ['lockouts', 'cooldowns', 'session', 'consumables', 'reppvp']
+tabs = ['lockouts', 'cooldowns', 'session', 'consumables', 'reppvp', 'rested']
 cycle = '; '.join(f'__ns.OpenPersonalTrackers("{t}")' for t in tabs)
 A.ex(cycle)
 A.ex(cycle)
