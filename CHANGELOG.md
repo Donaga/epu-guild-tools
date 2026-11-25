@@ -1,12 +1,5 @@
 # Changelog
 
-## Unreleased
-
-A /reload is enough after updating: this version adds no new files.
-
-- **Gold & Budget: 7 Days and 30 Days now cover the whole week and month.** The tracker keeps each gold change as its own entry, up to 2,000, and every coin you loot is one, so on a long play day (800 or more changes) the list only reached back two or three days and older days dropped out of 7 Days, 30 Days, the 7-day graph and the weekly budget. Changes that roll off the list are now kept as **hourly totals for 90 days**, by character and category, and every figure counts them: Today, 7 Days, 30 Days, All, This Char, the spending charts, the 7-day graph, the budget and the info bar's Today In / Out. Transfers to your alts and the guild bank stay on their own line as before. Only **Recent Transactions** is limited to the last 2,000 changes; when a timeframe reaches past them, a note under that heading says so. **Clear History** clears the totals too. Totals start from the changes that roll off after you update, so days already gone from the list can't come back.
-- **Gold & Budget: changes saved with a blank realm aren't hidden any more.** WoW: Forever can report the realm name as blank, and changes saved that way were left out whenever it came back filled in. They now count for the realm you're on, and new changes made while it reads blank are saved without a realm.
-
 ## 0.38.0
 
 A /reload is enough after updating: this version adds no new files.
@@ -15,6 +8,8 @@ A /reload is enough after updating: this version adds no new files.
   - **Deaths and repairs:** how many times you died this session and the gold you paid for repairs, whether you pressed Repair all, repaired one item at a time or let EPU's auto repair do it. Repairs the guild bank pays aren't your cost, so they're listed separately in the tooltip. **Net gold per hour** already counted repairs, since it follows the gold you carry, and now says how much of it they were; **Gold per hour (loot)** and the Session tab also show what loot comes to after repairs.
   - **Quest XP vs kill XP:** the share of this session's XP from turning in quests and from kills, such as "67% / 17%". The tooltip and Session tab give the XP from each and what's left over from exploring and the like. Kill XP comes from the game's "dies, you gain" XP message, quest XP from the quest reward, counted once. It hides on a max-level character, like the other XP stats.
   - **Profession skill-ups per hour:** points gained in gathering, crafting, cooking, first aid and fishing this session, with each profession and its new skill in the tooltip and on the Session tab. Weapon skills and Defense don't count.
+- **Gold & Budget: 7 Days and 30 Days now cover the whole week and month.** The tracker keeps each gold change as its own entry, up to 2,000, and every coin you loot is one, so on a long play day (800 or more changes) the list only reached back two or three days and older days dropped out of 7 Days, 30 Days, the 7-day graph and the weekly budget. Changes that roll off the list are now kept as **hourly totals for 90 days**, by character and category, and every figure counts them: Today, 7 Days, 30 Days, All, This Char, the spending charts, the 7-day graph, the budget and the info bar's Today In / Out. Transfers to your alts and the guild bank stay on their own line as before. Only **Recent Transactions** is limited to the last 2,000 changes; when a timeframe reaches past them, a note under that heading says so. **Clear History** clears the totals too. Totals start from the changes that roll off after you update, so days already gone from the list can't come back.
+- **Gold & Budget: changes saved with a blank realm aren't hidden any more.** WoW: Forever can report the realm name as blank, and changes saved that way were left out whenever it came back filled in. They now count for the realm you're on, and new changes made while it reads blank are saved without a realm.
 
 ## 0.37.0
 
