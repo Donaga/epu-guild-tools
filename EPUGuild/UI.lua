@@ -1278,7 +1278,7 @@ end
 UI.state = {
   requests = { filter = "open", mine = false, sort = "new" },
   needs = { filter = "all" },
-  bank = { cat = nil, stock = 'all', quality = nil, mode = nil },
+  bank = { cat = nil, stock = 'all', quality = nil, mode = nil, sort = 'category', where = nil },
   crafters = { filter = "all", prof = nil },
   recipes = { prof = nil, online = false, designated = false, crafter = nil, skillup = false },
   roster = { filter = "online", role = nil, review = nil },
@@ -1405,17 +1405,102 @@ Views.shopping = {
 }
 
 -- Bank ----------------------------------------------------------------------
+-- The Bank page's sort and filter choices are saved for each character.
+local BANK_SORTS = { { "category", "By category" }, { "name", "By name" }, { "count", "Most in bank" },
+  { "quality", "Best quality" }, { "ilvl", "Item level" }, { "tab", "By bank tab" } }
+local BANK_SORT_LABEL = {}
+for _, s in ipairs(BANK_SORTS) do BANK_SORT_LABEL[s[1]] = s[2] end
+local BANK_SAVED = { "cat", "stock", "quality", "sort", "where" }
+function UI.SaveBankView()
+  if not ns.cdb then return end
+  local st, saved = UI.state.bank, {}
+  for _, k in ipairs(BANK_SAVED) do saved[k] = st[k] end
+  ns.cdb.bankView = saved
+end
+function UI.LoadBankView()
+  local saved, st = ns.cdb and ns.cdb.bankView, UI.state.bank
+  if type(saved) ~= "table" then return end
+  if type(saved.cat) == "string" then for _, c in ipairs(ns.CATEGORIES) do if c == saved.cat then st.cat = c end end end
+  if saved.stock == "stocked" or saved.stock == "available" or saved.stock == "restock" then st.stock = saved.stock end
+  if type(saved.quality) == "number" and saved.quality >= 0 and saved.quality <= 4 then st.quality = saved.quality end
+  if BANK_SORT_LABEL[saved.sort] then st.sort = saved.sort end
+  if type(saved.where) == "string" then st.where = saved.where end
+end
+
+-- Every place an item sits: each guild bank tab it's in (when the tabs are
+-- known), else the guild bank as a whole, and each bank character.
+local function BankPlaces(g)
+  local places, byKey = {}, {}
+  local tabsKnown = type(g.gbTabs) == "table" and next(g.gbTabs) ~= nil
+  local function Place(key, label, kind, order)
+    if not byKey[key] then
+      byKey[key] = { key = key, label = label, kind = kind, order = order, items = {} }
+      places[#places + 1] = byKey[key]
+    end
+    return byKey[key]
+  end
+  for holder, snap in pairs(g.bank or {}) do
+    if not snap.retired and type(snap.items) == "table" then
+      local inTabs = {}
+      if holder == ns.GB_KEY and tabsKnown then
+        for tab, t in pairs(g.gbTabs) do
+          if type(tab) == "number" and type(t) == "table" then
+            local p = Place("gb:" .. tab, ns.GuildBankTabLabel(tab, t), "tab", tab)
+            for id, n in pairs(type(t.items) == "table" and t.items or {}) do
+              id, n = tonumber(id), tonumber(n)
+              if id and n and n > 0 then p.items[id] = (p.items[id] or 0) + n; inTabs[id] = (inTabs[id] or 0) + n end
+            end
+          end
+        end
+      end
+      for id, n in pairs(snap.items) do
+        id, n = tonumber(id), tonumber(n)
+        local rest = (id and n) and (n - (inTabs[id] or 0)) or 0
+        if rest > 0 then
+          local p = holder == ns.GB_KEY and Place("gb", "Guild bank", "gb", 0) or Place("alt:" .. tostring(holder), tostring(holder), "alt", 1000)
+          p.items[id] = (p.items[id] or 0) + rest
+        end
+      end
+    end
+  end
+  table.sort(places, function(a, b)
+    if a.order ~= b.order then return a.order < b.order end
+    return a.label < b.label
+  end)
+  return places, byKey
+end
+UI.BankPlaces = BankPlaces
+
+local function BankWhereLabel(where, byKey)
+  if not where then return "Anywhere" end
+  if where == "misplaced" then return "Out of place" end
+  local p = byKey and byKey[where]
+  return p and p.label or "Anywhere"
+end
+
+-- /epu banktabs: the Bank page grouped by tab; "tidy" shows only what's out of place.
+function ns.OpenBankTabs(tidy)
+  UI:Show(); UI:CloseDetails(); UI.search:SetText("")
+  UI.state.bank.mode = nil
+  UI:SetView("bank")
+  UI.state.bank.sort = "tab"
+  if tidy then UI.state.bank.where = "misplaced" end
+  UI.SaveBankView()
+  UI:Refresh()
+end
+
 Views.bank = {
   label = "Bank", icon = "Interface\\Icons\\INV_Misc_Bag_10",
   clearFilters = function()
     local st=UI.state.bank
-    if not st.mode then st.cat, st.stock, st.quality=nil,"all",nil end
+    if not st.mode then st.cat, st.stock, st.quality, st.where=nil,"all",nil,nil; UI.SaveBankView() end
   end,
   filtered = function()
     local st=UI.state.bank
-    return not st.mode and (st.cat or st.stock~="all" or st.quality~=nil)
+    return not st.mode and (st.cat or st.stock~="all" or st.quality~=nil or st.where~=nil)
   end,
   tools = function(bar)
+    UI.LoadBankView()
     UI.bankCatChip = DropChip(bar, 116, "Show one kind of item", function()
       local counts = {}
       for id in pairs(ns.BankCatalog()) do local c=ns.ItemCategory(id); counts[c]=(counts[c] or 0)+1 end
@@ -1424,13 +1509,37 @@ Views.bank = {
         if counts[c] then items[#items + 1] = { label = c, value = c, right = tostring(counts[c]), icon = BankCategoryIcon(c) } end
       end
       return items
-    end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil end)
+    end, function() return UI.state.bank.cat or false end, function(v) UI.state.bank.cat = v or nil; UI.SaveBankView() end)
     UI.bankStockChip=DropChip(bar,118,'Filter by recorded stock and open requests',function()
       return {{label='All stock',value='all'},{label='In stock',value='stocked'},{label='Available now',value='available'},{label='Awaiting restock',value='restock'}}
-    end,function() return UI.state.bank.stock end,function(v) UI.state.bank.stock=v end)
+    end,function() return UI.state.bank.stock end,function(v) UI.state.bank.stock=v; UI.SaveBankView() end)
     UI.bankQualityChip=DropChip(bar,96,'Filter by item quality',function()
       return {{label='Any quality',value=false},{label='Poor',value=0},{label='Common',value=1},{label='Uncommon',value=2},{label='Rare',value=3},{label='Epic+',value=4}}
-    end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil end)
+    end,function() if UI.state.bank.quality==nil then return false end; return UI.state.bank.quality end,function(v) UI.state.bank.quality=v~=false and v or nil; UI.SaveBankView() end)
+    UI.bankWhereChip=DropChip(bar,96,'Show one guild bank tab or bank character, or the items that look out of place in their tab',function()
+      local g = ns.G()
+      local items = { { label = "Anywhere", value = false } }
+      if not g then return items end
+      local places = BankPlaces(g)
+      local plan = ns.GuildBankTabPlan(g)
+      for _, p in ipairs(places) do
+        local kinds = 0
+        for _ in pairs(p.items) do kinds = kinds + 1 end
+        local label = p.label
+        local tab = p.kind == "tab" and plan.tabs[p.order]
+        if tab and tab.holdsText and not tab.named then label = label .. " (mostly " .. tab.holdsText .. ")" end
+        items[#items + 1] = { label = label, value = p.key, right = tostring(kinds) }
+      end
+      if #plan.order > 0 then
+        items[#items + 1] = { label = "Out of place in its tab", value = "misplaced", right = tostring(plan.count) }
+      end
+      return items
+    end,function() return UI.state.bank.where or false end,function(v) UI.state.bank.where=v or nil; UI.SaveBankView() end)
+    UI.bankSortChip=DropChip(bar,104,'Order the list',function()
+      local items = {}
+      for _, s in ipairs(BANK_SORTS) do items[#items + 1] = { label = s[2], value = s[1] } end
+      return items
+    end,function() return UI.state.bank.sort or "category" end,function(v) UI.state.bank.sort=v; UI.SaveBankView() end)
     if ns.ShowBankGear then
       UI.bankGearBtn=bar:Add(Btn(bar,"Gear for you",96,22),"right",function() ns.ShowBankGear() end,
         "Weapons and armor in the bank that fit your level, class and armor type, with upgrades marked.")
@@ -1439,6 +1548,7 @@ Views.bank = {
   rows = function(g, q)
     if UI.state.bank.mode == 'sort' then return UI.BankSortRows(q) end
     if UI.state.bank.mode == 'stv' then return UI.StvRows(q) end
+    local st = UI.state.bank
     local totals, holders = {}, {}
     for id in pairs(ns.BankCatalog()) do totals[id]=0 end
     for alt, s in pairs(g.bank) do
@@ -1452,10 +1562,37 @@ Views.bank = {
         end
       end
     end
-    -- grouped by category, each under a header, most plentiful first
-    local groups, order = {}, {}
+    local places, byKey = BankPlaces(g)
+    local plan = ns.GuildBankTabPlan(g)
+    if st.where and st.where ~= "misplaced" and not byKey[st.where] then st.where = nil end
+    if st.where == "misplaced" and #plan.order == 0 then st.where = nil end
+    local where = st.where
+    local onlyPlace = where and byKey[where]
+    local several = #places > 1
+    -- "Tab 1: Mats 20 · Donlock 5", and where an out-of-place stack belongs
+    local function PlaceText(id)
+      local parts = {}
+      for _, p in ipairs(places) do
+        local n = p.items[id]
+        if n then parts[#parts + 1] = p.label .. " " .. n end
+      end
+      return table.concat(parts, "  ·  ")
+    end
+    local function MisplacedText(id, onlyTab)
+      local parts, inTabs = {}, 0
+      for _, p in ipairs(places) do if p.kind == "tab" and p.items[id] then inTabs = inTabs + 1 end end
+      for _, m in ipairs(plan.misplaced[id] or {}) do
+        if not onlyTab or m.tab == onlyTab then
+          parts[#parts + 1] = (onlyTab or inTabs <= 1) and m.why or ("Tab " .. m.tab .. ": " .. m.why:gsub("^%u", string.lower))
+        end
+      end
+      return #parts > 0 and ("|cffffb347" .. table.concat(parts, "; ") .. "|r") or nil
+    end
+    local sortBy = st.sort or "category"
+    local byTab = sortBy == "tab"
+    local groups, order, flat = {}, {}, {}
     for i, c in ipairs(ns.CATEGORIES) do order[c] = i end
-    local only = UI.state.bank.cat
+    local only = st.cat
     local shown,total = 0,0
     for id, c in pairs(totals) do
       -- one odd item mustn't take the whole page down
@@ -1463,21 +1600,51 @@ Views.bank = {
         local name = tostring(ns.ItemName(id, true))
         local okc, cat = pcall(ns.ItemCategory, id)
         cat = (okc and type(cat) == "string") and cat or "Other"
-        local stock=UI.state.bank.stock or 'all'
+        local stock=st.stock or 'all'
         local held,asked,free=ns.BankRequestStock(id)
         local stockMatch=stock=='all' or (stock=='stocked' and held>0) or (stock=='available' and free>0) or (stock=='restock' and (held==0 or asked>held))
-        local quality=select(3,GetItemInfo(id)); local wanted=UI.state.bank.quality
+        local _, _, quality, ilvl = GetItemInfo(id)
+        local wanted=st.quality
         local qualityMatch=wanted==nil or (quality and (wanted==4 and quality>=4 or quality==wanted))
+        local placeMatch = not where or (where == "misplaced" and plan.misplaced[id] ~= nil) or (onlyPlace and onlyPlace.items[id] ~= nil)
         total=total+1
-        if stockMatch and qualityMatch and (not only or cat == only) and Match(q, name, holders[id], cat) then
+        if stockMatch and qualityMatch and placeMatch and (not only or cat == only) and Match(q, name, holders[id], cat, PlaceText(id)) then
           shown=shown+1
-          groups[cat] = groups[cat] or {}
-          table.insert(groups[cat], {
-            key = "item:" .. id, item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
-            title = name, sub = c==0 and "Out of stock · requests wait for restock" or asked>0 and (asked.." requested") or nil,
-            stock=tostring(c), right=tostring(free), rightColor=free>0 and C.green or C.muted, count=c, sort=name,
-            onClick = function() UI:OpenDetails("item", id) end,
-          })
+          local inPlace = onlyPlace and onlyPlace.items[id]
+          local function Row(placeN, placeTab)
+            local misplaced = MisplacedText(id, placeTab or (onlyPlace and onlyPlace.kind == "tab" and onlyPlace.order) or nil)
+            local subs = {}
+            if c==0 then subs[#subs + 1] = "Out of stock · requests wait for restock" elseif asked>0 then subs[#subs + 1] = asked.." requested" end
+            if several and not placeTab and c > 0 then subs[#subs + 1] = PlaceText(id) end
+            if misplaced then subs[#subs + 1] = misplaced end
+            local n = placeN or c
+            return {
+              key = "item:" .. id .. (placeTab and (":" .. placeTab) or ""), item = id, icon = ns.ItemIcon(id), qcolor = QColor(Quality(id)), titleColor = QColor(Quality(id)),
+              title = name, sub = #subs > 0 and table.concat(subs, "  ·  ") or nil,
+              stock=tostring(n), right=tostring(free), rightColor=free>0 and C.green or C.muted, count=n, sort=name,
+              quality=quality or 1, ilvl=tonumber(ilvl) or 0, cat=cat, catOrder=order[cat] or 99,
+              onClick = function() UI:OpenDetails("item", id) end,
+            }
+          end
+          if byTab then
+            local any = false
+            for _, p in ipairs(places) do
+              if p.items[id] and (not onlyPlace or onlyPlace == p) then
+                any = true
+                groups[p.key] = groups[p.key] or {}
+                table.insert(groups[p.key], Row(p.items[id], p.kind == "tab" and p.order or nil))
+              end
+            end
+            if not any then
+              groups.none = groups.none or {}
+              table.insert(groups.none, Row(0))
+            end
+          elseif sortBy == "category" then
+            groups[cat] = groups[cat] or {}
+            table.insert(groups[cat], Row(inPlace))
+          else
+            flat[#flat + 1] = Row(inPlace)
+          end
         end
       end)
       if not ok and not UI.bankItemErr then
@@ -1485,19 +1652,59 @@ Views.bank = {
         ns.Print("Skipped bank item " .. tostring(id) .. " (" .. tostring(err.where) .. "): " .. err.plain .. "  |cff9aa1ab" .. err.raw .. "|r")
       end
     end
-    local cats = {}
-    for cat in pairs(groups) do cats[#cats + 1] = cat end
-    table.sort(cats, function(a, b) return (order[a] or 99) < (order[b] or 99) end)
+    local function ByCount(a, b) if a.count ~= b.count then return a.count > b.count end return a.sort < b.sort end
+    local cmp = ({
+      name = function(a, b) if a.sort ~= b.sort then return a.sort < b.sort end return a.item < b.item end,
+      count = ByCount,
+      quality = function(a, b) if a.quality ~= b.quality then return a.quality > b.quality end if a.ilvl ~= b.ilvl then return a.ilvl > b.ilvl end return a.sort < b.sort end,
+      ilvl = function(a, b) if a.ilvl ~= b.ilvl then return a.ilvl > b.ilvl end return a.sort < b.sort end,
+      tab = function(a, b) if a.catOrder ~= b.catOrder then return a.catOrder < b.catOrder end return a.sort < b.sort end,
+    })[sortBy] or ByCount
     local out = {}
-    if #cats>0 then out[1]={key="bank-columns",title="Item",stock="In bank",right="Available",titleColor=C.muted,rightColor=C.muted} end
-    for _, cat in ipairs(cats) do
-      local list = groups[cat]
-      table.sort(list, function(a, b) if a.count ~= b.count then return a.count > b.count end return a.sort < b.sort end)
-      local total = 0
-      for _, r in ipairs(list) do total = total + r.count end
-      out[#out + 1] = { key = "cat:" .. cat, title = "|cfff2c14e" .. cat .. "|r", icon = BankCategoryIcon(cat),
-        sub = #list .. (#list == 1 and " kind of item" or " kinds of items"), right = tostring(total) }
-      for _, r in ipairs(list) do out[#out + 1] = r end
+    local stockLabel = (onlyPlace or byTab) and "Here" or "In bank"
+    local function Columns() out[#out + 1] = {key="bank-columns",title="Item",stock=stockLabel,right="Available",titleColor=C.muted,rightColor=C.muted} end
+    if byTab then
+      local keys = {}
+      for _, p in ipairs(places) do if groups[p.key] then keys[#keys + 1] = p end end
+      if #keys > 0 or groups.none then Columns() end
+      for _, p in ipairs(keys) do
+        local list = groups[p.key]
+        table.sort(list, cmp)
+        local sub = #list .. (#list == 1 and " kind of item" or " kinds of items")
+        local tab = p.kind == "tab" and plan.tabs[p.order]
+        if tab then
+          sub = sub .. "  ·  " .. (tab.holdsText and ("holds " .. tab.holdsText) or "mixed items")
+          if tab.misplaced > 0 then sub = sub .. "  ·  |cffffb347" .. tab.misplaced .. " out of place|r" end
+        end
+        out[#out + 1] = { key = "place:" .. p.key, title = "|cfff2c14e" .. p.label .. "|r", icon = Views.bank.icon, sub = sub, right = tostring(#list) }
+        for _, r in ipairs(list) do out[#out + 1] = r end
+      end
+      if groups.none then
+        table.sort(groups.none, cmp)
+        out[#out + 1] = { key = "place:none", title = "|cfff2c14eOut of stock|r", sub = "Stocked before; none in the bank now", right = tostring(#groups.none) }
+        for _, r in ipairs(groups.none) do out[#out + 1] = r end
+      end
+    elseif sortBy == "category" then
+      -- grouped by category, each under a header, most plentiful first
+      local cats = {}
+      for cat in pairs(groups) do cats[#cats + 1] = cat end
+      table.sort(cats, function(a, b) return (order[a] or 99) < (order[b] or 99) end)
+      if #cats>0 then Columns() end
+      for _, cat in ipairs(cats) do
+        local list = groups[cat]
+        table.sort(list, ByCount)
+        local sum = 0
+        for _, r in ipairs(list) do sum = sum + r.count end
+        local home = plan.home[cat]
+        out[#out + 1] = { key = "cat:" .. cat, title = "|cfff2c14e" .. cat .. "|r", icon = BankCategoryIcon(cat),
+          sub = #list .. (#list == 1 and " kind of item" or " kinds of items") .. (home and ("  ·  kept in " .. plan.tabs[home].label) or ""),
+          right = tostring(sum) }
+        for _, r in ipairs(list) do out[#out + 1] = r end
+      end
+    else
+      table.sort(flat, cmp)
+      if #flat > 0 then Columns() end
+      for _, r in ipairs(flat) do out[#out + 1] = r end
     end
     return out,total,shown
   end,
@@ -2652,6 +2859,7 @@ local function NewBar(view)
         end
       end
     end
+    self.row1W, self.row2W = left + right - 10, lower > 10 and lower + 6 or 0   -- for the layout tests
     return lower>10
   end
   function bar:Add(w, side, onClick, tip)
@@ -4023,8 +4231,9 @@ function UI:FillDetails()
     if #specs > 0 then det:Buttons(specs) end
   elseif kind == "item" then
     local holders = {}
-    for alt, s in pairs(g.bank) do
-      if not s.retired and s.items and s.items[key] then holders[#holders + 1] = alt .. ": " .. s.items[key] end
+    local places = UI.BankPlaces(g)
+    for _, p in ipairs(places) do
+      if p.items[key] then holders[#holders + 1] = p.label .. ": " .. p.items[key] end
     end
     local held, asked, free=ns.BankRequestStock(key)
     local icon=ns.ItemIcon(key)
@@ -4032,10 +4241,15 @@ function UI:FillDetails()
     local reserved=held-free
     det:ShowItemSummary(icon, free, held, reserved)
     if asked>reserved then det:Text((asked-reserved).." requested beyond current stock", C.muted) end
-    if #holders>0 then det:Section("Bank holders") end
-    table.sort(holders)
+    if #holders>0 then det:Section("Where it is") end
     for _, h in ipairs(holders) do det:Text(h) end
     if #holders == 0 then det:Text("None in the bank right now.", C.muted) end
+    local plan = ns.GuildBankTabPlan(g)
+    for _, m in ipairs(plan.misplaced[key] or {}) do
+      det:Text(m.suggest and ("In Tab " .. m.tab .. ": " .. m.why:gsub("^%u", string.lower)) or (m.why .. "; no tab holds " .. m.cat .. " yet"), C.gold)
+    end
+    local home = plan.home[ns.ItemCategory(key)]
+    if home and not plan.misplaced[key] then det:Text(ns.ItemCategory(key) .. " are kept in " .. plan.tabs[home].label .. ".", C.muted) end
     if held==0 then det:Text('Previously stocked. You can request this item and wait for a restock.',C.muted) end
     det:Gap()
     local request, mail
@@ -4636,6 +4850,13 @@ function UI:Refresh()
     if v == Views.bank then
       local sorting = self.state.bank.mode ~= nil
       self.bankCatChip:SetShown(not sorting); self.bankStockChip:SetShown(not sorting); self.bankQualityChip:SetShown(not sorting)
+      self.bankWhereChip:SetShown(not sorting); self.bankSortChip:SetShown(not sorting)
+      local byKey
+      if g then byKey = select(2, UI.BankPlaces(g)) end
+      self.bankWhereChip:SetLabel(BankWhereLabel(self.state.bank.where, byKey))
+      self.bankWhereChip:SetOn(self.state.bank.where ~= nil)
+      self.bankSortChip:SetLabel(BANK_SORT_LABEL[self.state.bank.sort] or "By category")
+      self.bankSortChip:SetOn((self.state.bank.sort or "category") ~= "category")
       self.bankCatChip:SetLabel(self.state.bank.cat or "All categories")
       self.bankCatChip:SetOn(self.state.bank.cat ~= nil)
       self.bankStockChip:SetLabel(({all='All stock',stocked='In stock',available='Available now',restock='Awaiting restock'})[self.state.bank.stock] or 'All stock')

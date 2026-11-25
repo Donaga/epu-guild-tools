@@ -61,7 +61,7 @@ A.ex("__log={}; __ns.MailBankItem('Pip Baker',30010,1)")
 check('mailing without a mailbox open explains what to do', any('Open a mailbox' in str(m) for m in A.ev('__log').values()))
 A.ex("__ns.UI.state.bank.mode=nil; __ns.UI:Refresh()")
 check('Back returns to the normal bank list', A.ev('__ns.UI.bankCatChip:IsShown()'))
-fits = A.ev('(function() __ns.UI:SetView("bank") local b=__ns.UI.bars.bank return b.leftX+b.rightX end)()')
+A.ex('__ns.UI:SetView("bank")'); fits = A.ev('(function() local b=__ns.UI.bars.bank; b:Fit(480) return math.max(b.row1W,b.row2W) end)()')
 check('the bank toolbar still fits the smallest window (%s)' % fits, fits <= 480)
 
 

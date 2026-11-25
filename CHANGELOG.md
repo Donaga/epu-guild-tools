@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+A /reload is enough after updating: this version adds no new files.
+
+- **Bank page: sort the list, filter by guild bank tab, and spot items in the wrong tab.** Two new buttons on the main window's **Bank** page (or `/epu banktabs`):
+  - **Sort** orders the list **by category** (as before), **by name**, **most in bank**, **best quality**, **item level** or **by bank tab**. By bank tab lists each guild bank tab under its own heading, then each bank character, with what the tab holds and how many items in it look out of place. An item split across tabs shows under each tab with that tab's count.
+  - **Where** shows one guild bank tab or one bank character (the count column then shows how many are there), or **Out of place in its tab**. Each item's row now says where it sits, such as "Tab 1: Mats 20 · Donlock 3", and search matches tab names too.
+  - **Out of place** is worked out from the tab names: a tab named for something ("Herbs", "Recipes", "Gear", "Potions") holds that, a general "Mats" or "Trade goods" tab holds the trade goods no other tab is named for, and an unnamed tab holds whatever fills at least half of it. An item in another tab is marked, in orange, with the tab it belongs in, or that it's not what its tab is for when no tab holds its kind yet. Category headings say which tab keeps that category, and the item's details say the same. Nothing is moved; the hints are there to help officers keep tabs tidy. `/epu banktabs tidy` opens straight to the out-of-place list. Tabs come from the last time someone on your account opened the guild bank, so open it once after updating.
+  - The sort, category, stock, quality and Where choices are saved for each character. **Reset** clears the filters and keeps the sort. On a narrow window the toolbar wraps onto a second row.
+
 ## 0.36.1
 
 A /reload is enough after updating: this version adds no new files.

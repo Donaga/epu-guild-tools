@@ -540,3 +540,151 @@ ns.On("GUILDBANKBAGSLOTS_CHANGED", SlotsChanged)
 ns.On("GUILDBANK_UPDATE_TABS", function() ns.Debounce("gbscan", 1, ns.ScanGuildBank) end)
 ns.On("GUILDBANK_UPDATE_MONEY", function() ns.Debounce("gbscan", 1, ns.ScanGuildBank) end)
 ns.On("GUILDBANKLOG_UPDATE", function() ns.Debounce("gblog", 1, ns.ParseGuildBankLogs) end)
+
+---------------------------------------------------------------------------
+-- Which tab each kind of item belongs in, for the Bank page's tab tools.
+-- A tab holds the categories its name names ("Herbs", "Recipes", "Gear"),
+-- or, with no such word, the one category that fills at least half of it.
+-- Items of another category are out of place when some other tab holds that
+-- category, or when the tab's name says it's for something else. Nothing is
+-- ever moved; the Bank page only points these out.
+---------------------------------------------------------------------------
+local TRADE_CATS = { "Cloth", "Leather", "Metal & Stone", "Herbs", "Cooking", "Enchanting", "Elemental",
+  "Parts & Engineering", "Other Trade Goods" }
+local TAB_WORDS = {
+  { "Cloth", { "cloth", "linen", "silk", "wool" } },
+  { "Leather", { "leather", "hide", "skin" } },
+  { "Metal & Stone", { "metal", "ore", "stone", "mining" } },
+  { "Herbs", { "herb" } },
+  { "Cooking", { "cook", "food", "meat", "fish" } },
+  { "Enchanting", { "enchant", "dust", "essence", "shard" } },
+  { "Elemental", { "elemental" } },
+  { "Parts & Engineering", { "engineer", "parts" } },
+  { "Consumables", { "consum", "potion", "flask", "elixir", "scroll" } },
+  { "Reagents", { "reagent" } },
+  { "Bags", { "bag" } },
+  { "Weapons & Armor", { "gear", "weapon", "armor", "armour", "equip", "twink" } },
+  { "Recipes", { "recipe", "pattern", "plans", "formula", "schematic", "book" } },
+}
+local GENERIC_MATS = { "mats", "material", "trade" }   -- a general materials tab
+
+local function NameClaims(name)
+  local low, claims, any = tostring(name or ""):lower(), {}, false
+  for _, entry in ipairs(TAB_WORDS) do
+    for _, w in ipairs(entry[2]) do
+      if low:find(w, 1, true) then claims[entry[1]] = true; any = true; break end
+    end
+  end
+  local generic = false
+  for _, w in ipairs(GENERIC_MATS) do if low:find(w, 1, true) then generic = true end end
+  return any and claims or nil, generic
+end
+ns.GuildBankTabNameClaims = NameClaims
+
+function ns.GuildBankTabLabel(tab, t)
+  local name = type(t) == "table" and t.name
+  return "Tab " .. tab .. ((name and name ~= "") and (": " .. name) or "")
+end
+
+-- plan.order: tab numbers in order; plan.tabs[tab] = { name, label, kinds,
+-- byCat = {cat = kinds}, holds = {cat = true}, holdsText, named, misplaced };
+-- plan.home[cat] = tab; plan.misplaced[id] = { {tab, n, cat, suggest, why} };
+-- plan.count = misplaced item stacks across all tabs.
+function ns.GuildBankTabPlan(g)
+  g = g or ns.G()
+  local plan = { order = {}, tabs = {}, home = {}, misplaced = {}, count = 0 }
+  if not g or type(g.gbTabs) ~= "table" then return plan end
+  local catOf = {}
+  local function Cat(id)
+    if catOf[id] == nil then
+      local ok, c = pcall(ns.ItemCategory, id)
+      catOf[id] = (ok and type(c) == "string") and c or "Other"
+    end
+    return catOf[id]
+  end
+  for tab, t in pairs(g.gbTabs) do
+    if type(tab) == "number" and type(t) == "table" then plan.order[#plan.order + 1] = tab end
+  end
+  table.sort(plan.order)
+  local generics = {}
+  for _, tab in ipairs(plan.order) do
+    local t = g.gbTabs[tab]
+    local info = { name = t.name, label = ns.GuildBankTabLabel(tab, t), kinds = 0, byCat = {}, holds = {}, misplaced = 0 }
+    for id, n in pairs(type(t.items) == "table" and t.items or {}) do
+      id, n = tonumber(id), tonumber(n) or 0
+      if id and n > 0 then
+        local c = Cat(id)
+        info.kinds = info.kinds + 1
+        info.byCat[c] = (info.byCat[c] or 0) + 1
+      end
+    end
+    local claims, generic = NameClaims(t.name)
+    if claims then
+      info.holds, info.named = claims, true
+    elseif generic then
+      generics[#generics + 1] = tab
+    else
+      local best, bestN = nil, 0
+      for c, n in pairs(info.byCat) do
+        if n > bestN or (n == bestN and best and c < best) then best, bestN = c, n end
+      end
+      if best and bestN >= 2 and bestN * 2 >= info.kinds then info.holds[best] = true end
+    end
+    plan.tabs[tab] = info
+  end
+  -- Home tab per category: a tab named for it first, then the tab mostly made of it.
+  for _, tab in ipairs(plan.order) do
+    local info = plan.tabs[tab]
+    if info.named then for c in pairs(info.holds) do plan.home[c] = plan.home[c] or tab end end
+  end
+  for _, tab in ipairs(plan.order) do
+    local info = plan.tabs[tab]
+    if not info.named then
+      for c in pairs(info.holds) do
+        local cur = plan.home[c]
+        if not cur or (not plan.tabs[cur].named and (info.byCat[c] or 0) > (plan.tabs[cur].byCat[c] or 0)) then plan.home[c] = tab end
+      end
+    end
+  end
+  -- A general materials tab takes every trade good no other tab is named for.
+  for _, tab in ipairs(generics) do
+    local info = plan.tabs[tab]
+    info.named, info.generic = true, true
+    for _, c in ipairs(TRADE_CATS) do
+      if not plan.home[c] or not plan.tabs[plan.home[c]].named then info.holds[c] = true; plan.home[c] = tab end
+    end
+  end
+  for _, tab in ipairs(plan.order) do
+    local info = plan.tabs[tab]
+    local list = {}
+    for _, c in ipairs(ns.CATEGORIES) do if info.holds[c] then list[#list + 1] = c end end
+    info.holdsText = #list > 0 and table.concat(list, ", ") or nil
+    if info.generic then   -- "trade goods", or "trade goods except Herbs"
+      local other = {}
+      for _, c in ipairs(TRADE_CATS) do if not info.holds[c] then other[#other + 1] = c end end
+      info.holdsText = "trade goods" .. (#other > 0 and (" except " .. table.concat(other, ", ")) or "")
+    end
+    for id, n in pairs(type(g.gbTabs[tab].items) == "table" and g.gbTabs[tab].items or {}) do
+      id, n = tonumber(id), tonumber(n) or 0
+      if id and n > 0 then
+        local c = Cat(id)
+        local home = plan.home[c]
+        local why
+        if not info.holds[c] then
+          if home and home ~= tab then
+            why = "Belongs in " .. plan.tabs[home].label
+          elseif info.named then
+            why = "Not what " .. info.label .. " is for"
+          end
+        end
+        if why then
+          plan.misplaced[id] = plan.misplaced[id] or {}
+          table.insert(plan.misplaced[id], { tab = tab, n = n, cat = c, suggest = home ~= tab and home or nil, why = why })
+          info.misplaced = info.misplaced + 1
+          plan.count = plan.count + 1
+        end
+      end
+    end
+  end
+  return plan
+end

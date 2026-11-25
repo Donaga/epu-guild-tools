@@ -198,7 +198,7 @@ B.ex('__ns.UI:Show(); __ns.UI:SetView("bank"); __ns.UI:Refresh()')
 check("the main window's Bank page has a Gear for you button", B.ev('__ns.UI.bankGearBtn ~= nil and __ns.UI.bankGearBtn:IsShown()') == True)
 B.ex('__ns.UI.bankGearBtn:GetScript("OnClick")(__ns.UI.bankGearBtn)')
 check("which opens the window", B.ev('EPUGuildBankGear:IsShown()') == True)
-fits_bar = B.ev('(function() local b = __ns.UI.bars.bank return b.leftX + b.rightX end)()')
+fits_bar = B.ev('(function() local b=__ns.UI.bars.bank; b:Fit(480) return math.max(b.row1W,b.row2W) end)()')
 check("the Bank toolbar still fits the smallest window (%s)" % fits_bar, fits_bar <= 480)
 B.ex('EPUGuildBankGear:Hide()')
 
