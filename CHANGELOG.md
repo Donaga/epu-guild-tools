@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.36.1
+
+A /reload is enough after updating: this version adds no new files.
 
 - **Chat: put the typing box at the bottom of the pop-out Messenger.** A new **Typing box: Top / Bottom** button in Chat settings (the messenger's **Opts** button, **Settings > Pop-out chat and log windows** in the main window, or `/epu logs`; also **Pop-out typing box** in the Chat page's settings) moves the box and **Send** below the messages, the way most chat apps have it. The channel tabs stay at the top, the messages fill the space between, and **Find** opens its search box in the same place. It applies to the tabbed window and to one-window-per-person windows, takes effect at once, and is saved for each character. Top stays the default. Pair it with **Messages: Oldest on top** to keep the newest messages right above the box.
 
