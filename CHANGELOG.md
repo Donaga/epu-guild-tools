@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Rate bar: your session's live rates on a small toolbar** (`/epu bar`, the **Rate bar** tile in **Member tools**, or **Show rate bar** on the **Session** tab of Personal trackers). A small strip you can leave on screen while you play, instead of opening the trackers window. By default it shows **XP per hour**, **time to level** at that rate, **gold per hour** (looted coin plus the vendor value of looted items) and **session time**.
+  - **Pick the stats** in its settings (right-click the bar, or `/epu bar settings`): also XP this session, level progress, rested XP, kills per hour, kills to level, net gold per hour (the change in the gold you carry, after spending), reputation per hour and honor per hour. XP stats hide themselves on a max-level character. Kills are the kills that gave you XP, counted from the game's "dies, you gain" XP message.
+  - **Make it bigger or smaller** with **Smaller** and **Bigger** (60% to 200%) or `/epu bar scale 1.3`, lay it out **across** or **stacked**, and change how see-through the background is.
+  - Drag it where you want it and **Lock in place** (`/epu bar lock`, `/epu bar unlock`). Where it sits and whether it shows are saved for each character; the stats, size and lock are the same on all of them. Hover for the full numbers, left-click for the Session tab, right-click for the settings.
+  - It uses the Session tab's farming session, so **Pause**, **Resume** and **Reset Session** there (or `/epu bar pause`, `resume`, `reset`) act on the bar too. XP per hour no longer drops a level's worth of XP when you level up mid-session, and the Session tab now shows kills that gave XP.
+
 ## 0.35.0
 
 **After updating, fully restart WoW once** (a /reload isn't enough): this version adds a new file to the addon.

@@ -386,6 +386,7 @@ local HELP = {
   "|cffffd100/epu guides|r, |cffffd100calendar|r, |cffffd100quests|r, |cffffd100catchup|r, |cffffd100notifications|r - personal guild tools",
   "|cffffd100/epu zone [name]|r - open the Zone Visitor's Guide (defaults to your current zone)",
   "|cffffd100/epu leveling|r, |cffffd100dungeons|r, |cffffd100writs|r - Forever leveling advisor, dungeon readiness & 12-level XP guard, and Waylaid Crates/Writs",
+  "|cffffd100/epu bar|r - show or hide the rate bar (XP per hour, time to level, gold per hour); /epu bar settings picks stats and size, /epu bar scale 1.2, lock, unlock, reset",
   "|cffffd100/epu ranks|r - action bar buttons still on an old spell rank after training, with one-click updates",
   "|cffffd100/epu levelboard|r - levels guildmates gained this week (/epu levelboard last for last week)",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
@@ -524,6 +525,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenPersonalTrackers then
       ns.OpenPersonalTrackers(({ lockouts = "lockouts", cds = "cooldowns", rested = "rested" })[cmd])
     end
+  elseif cmd == "bar" or cmd == "ratebar" or cmd == "rates" then
+    if ns.RateBarCommand then ns.RateBarCommand(args) end
   elseif cmd == "ranks" or cmd == "spellranks" or cmd == "rank" then
     if ns.OpenSpellRanks then ns.OpenSpellRanks() end
   elseif cmd == "calendar" then
