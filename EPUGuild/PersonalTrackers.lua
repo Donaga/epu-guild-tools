@@ -212,6 +212,12 @@ local farm = {
   repLast = nil,   -- the faction you last gained reputation with
   honor = 0,
   drops = {},
+  deaths = 0,
+  repairs = 0,      -- gold you paid for repairs this session
+  guildRepairs = 0, -- repairs the guild bank paid for
+  questXP = 0,      -- XP from turning in quests
+  skillups = 0,     -- profession skill points gained
+  skills = {},      -- [profession] = { gained = n, rank = n }
 }
 
 local function ReadXP()
@@ -255,6 +261,9 @@ local function ResetFarmSession()
   farm.rep, farm.repLast = 0, nil
   farm.honor = 0
   farm.drops = {}
+  farm.deaths, farm.repairs, farm.guildRepairs = 0, 0, 0
+  farm.questXP = 0
+  farm.skillups, farm.skills = 0, {}
   farm.lastMoney = GetMoney and SafeNum(GetMoney()) or nil
 end
 
@@ -266,6 +275,128 @@ local function ToggleFarmPause()
     farm.startedAt = time()
     farm.running = true
   end
+end
+
+-- Repairs. Repair all (yours or the guild bank's, by hand or EPU's auto
+-- repair) goes through RepairAllItems; the gold leaves a moment later, so the
+-- next drop in your gold within a few seconds is the repair. A single item
+-- repaired with the repair cursor is a drop in gold while the cursor is up.
+local REPAIR_WINDOW = 4
+local pendingRepair
+
+local function OnRepairAll(guild)
+  local cost = GetRepairAllCost and SafeNum((GetRepairAllCost())) or 0
+  if guild then
+    if farm.running and cost > 0 then farm.guildRepairs = farm.guildRepairs + cost end
+    return
+  end
+  pendingRepair = { cost = cost > 0 and cost or nil, t = GetTime and GetTime() or 0 }
+end
+
+-- Called with each drop in the gold you carry; counts what was a repair.
+local function TakeRepairSpend(spent)
+  if spent <= 0 then return end
+  local now = GetTime and GetTime() or 0
+  if pendingRepair and now - pendingRepair.t <= REPAIR_WINDOW then
+    local amt = pendingRepair.cost and math.min(spent, pendingRepair.cost) or spent
+    pendingRepair = nil
+    if farm.running then farm.repairs = farm.repairs + amt end
+  elseif InRepairMode and InRepairMode() then
+    if farm.running then farm.repairs = farm.repairs + spent end
+  end
+end
+
+-- Quest XP arrives twice in most clients: QUEST_TURNED_IN carries the XP
+-- reward and the "Experience gained: N." system line says it again. Count a
+-- reward once, from whichever comes first.
+local lastQuestXP
+
+local function AddQuestXP(amount, source)
+  amount = SafeNum(amount) or 0
+  if amount <= 0 or not farm.running then return end
+  local now = GetTime and GetTime() or 0
+  local l = lastQuestXP
+  if l and l.source ~= source and l.amount == amount and now - l.t <= 3 then
+    lastQuestXP = nil
+    return
+  end
+  lastQuestXP = { amount = amount, source = source, t = now }
+  farm.questXP = farm.questXP + amount
+end
+
+-- Turn a game message format ("Experience gained: %d.") into a pattern.
+local function FormatToPattern(fmt)
+  if type(fmt) ~= "string" then return nil end
+  local p = fmt:gsub("([%(%)%.%+%-%*%?%[%]])", "%%%1")
+  p = p:gsub("%%%d?%$?d", "(%%d+)"):gsub("%%%d?%$?s", "(.+)")
+  return p
+end
+local QUEST_XP_PATTERN = FormatToPattern(ERR_QUEST_REWARD_EXP_I) or "Experience gained: (%d+)%."
+local SKILL_UP_PATTERN = FormatToPattern(SKILL_RANK_UP) or "Your skill in (.+) has increased to (%d+)%."
+
+-- Professions, so weapon skills and Defense going up don't count.
+local PROFESSIONS = {
+  Alchemy = true, Blacksmithing = true, Enchanting = true, Engineering = true, Herbalism = true,
+  Leatherworking = true, Mining = true, Skinning = true, Tailoring = true, Jewelcrafting = true,
+  Inscription = true, Cooking = true, ["First Aid"] = true, Fishing = true,
+}
+local PROFESSION_HEADERS = { Professions = true, ["Secondary Skills"] = true }
+if TRADE_SKILLS then PROFESSION_HEADERS[TRADE_SKILLS] = true end
+if SECONDARY_SKILLS then PROFESSION_HEADERS[SECONDARY_SKILLS] = true end
+
+local function IsProfession(name)
+  if PROFESSIONS[name] then return true end
+  -- Other languages or custom professions: look where the skill sits in the
+  -- skill list.
+  if not GetNumSkillLines or not GetSkillLineInfo then return false end
+  local header
+  for i = 1, (SafeNum(GetNumSkillLines()) or 0) do
+    local n, isHeader = GetSkillLineInfo(i)
+    if isHeader then header = n elseif n == name then return PROFESSION_HEADERS[header] == true end
+  end
+  return false
+end
+
+local function OnSkillUp(msg)
+  local name, rank = msg:match(SKILL_UP_PATTERN)
+  rank = tonumber(rank)
+  if not name or not rank or not IsProfession(name) then return end
+  local rec = farm.skills[name]
+  -- One message per point, but count a jump of more than one if it comes.
+  local gained = (rec and rec.rank and rank > rec.rank) and (rank - rec.rank) or 1
+  if not farm.running then
+    if rec then rec.rank = rank end
+    return
+  end
+  rec = rec or { gained = 0 }
+  rec.gained, rec.rank = rec.gained + gained, rank
+  farm.skills[name] = rec
+  farm.skillups = farm.skillups + gained
+end
+
+-- Kill and quest XP as shares of the session's XP. Anything else
+-- (exploration, gathering, and the like) is what's left.
+local function XPSplit()
+  local total = math.max(farm.xp, farm.questXP + farm.killXP)
+  local other = math.max(0, total - farm.questXP - farm.killXP)
+  local function Pct(n) return total > 0 and math.floor(n / total * 100 + 0.5) or 0 end
+  return { total = total, quest = farm.questXP, kill = farm.killXP, other = other,
+    questPct = Pct(farm.questXP), killPct = Pct(farm.killXP), otherPct = Pct(other) }
+end
+
+local function SkillList()
+  local names = {}
+  for n in pairs(farm.skills) do names[#names + 1] = n end
+  table.sort(names, function(a, b)
+    local ga, gb = farm.skills[a].gained, farm.skills[b].gained
+    if ga ~= gb then return ga > gb end
+    return a < b
+  end)
+  local out = {}
+  for _, n in ipairs(names) do
+    out[#out + 1] = string.format("%s +%d (now %d)", n, farm.skills[n].gained, farm.skills[n].rank or 0)
+  end
+  return out
 end
 
 ---------------------------------------------------------------------------
@@ -457,8 +588,23 @@ function ns.OpenPersonalTrackers(tab)
         Line(string.format("Elapsed: |cffffffff%s|r", FormatDuration(elapsed)))
         Line(string.format("XP Gained: |cff4fc3f7%d|r (%d/hr)", farm.xp, xph))
         Line(string.format("Kills that gave XP: |cff4fc3f7%d|r (%d/hr)", farm.kills, math.floor((farm.kills / elapsed) * 3600)))
+        local split = XPSplit()
+        if split.total > 0 then
+          Line(string.format("XP from quests: |cff4fc3f7%d|r (%d%%)    from kills: |cff4fc3f7%d|r (%d%%)    other: |cff4fc3f7%d|r (%d%%)",
+            split.quest, split.questPct, split.kill, split.killPct, split.other, split.otherPct))
+        end
+        local repairs = string.format("Deaths: |cffff6b6b%d|r    Repairs you paid: |cffffd100%s|r", farm.deaths, FormatMoney(farm.repairs))
+        if farm.guildRepairs > 0 then repairs = repairs .. string.format("    Guild bank paid: |cffffd100%s|r", FormatMoney(farm.guildRepairs)) end
+        Line(repairs)
+        Line(string.format("Profession skill-ups: |cff4ade80%d|r (%d/hr)", farm.skillups, math.floor((farm.skillups / elapsed) * 3600)))
+        for _, sk in ipairs(SkillList()) do Line("   " .. sk) end
         Line(string.format("Cash Looted: |cffffd100%s|r    Item Vendor Value: |cffffd100%s|r", FormatMoney(farm.cash), FormatMoney(farm.lootValue)))
         Line(string.format("Total Value: |cff4ade80%s|r (%s/hr)", FormatMoney(totalGold), FormatMoney(gph)))
+        if farm.repairs > 0 then
+          local after = totalGold - farm.repairs
+          Line(string.format("After repairs: |cff4ade80%s%s|r (%s%s/hr)", after < 0 and "-" or "", FormatMoney(after),
+            after < 0 and "-" or "", FormatMoney(math.floor((after / elapsed) * 3600))))
+        end
         Heading("Notable Drops (" .. #farm.drops .. ")")
         if #farm.drops == 0 then
           Line("No uncommon+ drops looted in this session yet.", C.muted)
@@ -584,6 +730,10 @@ function ns.OpenPersonalTrackers(tab)
   win:Show()
 end
 
+if hooksecurefunc and RepairAllItems then
+  hooksecurefunc("RepairAllItems", function(guild) pcall(OnRepairAll, guild) end)
+end
+
 if ns.On then
   ns.On("PLAYER_LOGIN", function()
     farm.lastXP, farm.lastXPMax = ReadXP()
@@ -625,8 +775,25 @@ if ns.On then
   ns.On("PLAYER_MONEY", function()
     local cur = GetMoney and SafeNum(GetMoney())
     if not cur then return end
-    if farm.running and farm.lastMoney then farm.net = farm.net + (cur - farm.lastMoney) end
+    if farm.lastMoney then
+      if farm.running then farm.net = farm.net + (cur - farm.lastMoney) end
+      TakeRepairSpend(farm.lastMoney - cur)
+    end
     farm.lastMoney = cur
+  end)
+  ns.On("PLAYER_DEAD", function()
+    if not farm.running then return end
+    if UnitIsFeignDeath and UnitIsFeignDeath("player") then return end
+    farm.deaths = farm.deaths + 1
+  end)
+  ns.On("QUEST_TURNED_IN", function(_, xp) AddQuestXP(xp, "event") end)
+  ns.On("CHAT_MSG_SYSTEM", function(msg)
+    if not SafeStr(msg) then return end
+    local amt = msg:match(QUEST_XP_PATTERN)
+    if amt then AddQuestXP(tonumber(amt), "chat") end
+  end)
+  ns.On("CHAT_MSG_SKILL", function(msg)
+    if SafeStr(msg) then OnSkillUp(msg) end
   end)
   ns.On("CHAT_MSG_MONEY", function(msg)
     if not farm.running or not SafeStr(msg) then return end
@@ -766,13 +933,38 @@ local RATE_STATS = {
   { id = "goldhr", label = "Gold/hr", name = "Gold per hour (loot)", on = true, value = function(s)
       local total = farm.cash + farm.lootValue
       local v = PerHour(total, s.elapsed)
-      return FormatMoney(v), FormatMoney(v) .. " per hour from looted coin and the vendor value of looted items ("
+      local long = FormatMoney(v) .. " per hour from looted coin and the vendor value of looted items ("
         .. FormatMoney(total) .. " this session)"
+      if farm.repairs > 0 then
+        long = long .. "; " .. SignedMoney(PerHour(total - farm.repairs, s.elapsed)) .. " per hour after repairs"
+      end
+      return FormatMoney(v), long
     end },
   { id = "nethr", label = "Net/hr", name = "Net gold per hour", value = function(s)
       local v = PerHour(farm.net, s.elapsed)
       return SignedMoney(v), SignedMoney(v) .. " per hour: the change in the gold you carry, after spending ("
-        .. SignedMoney(farm.net) .. " this session)"
+        .. SignedMoney(farm.net) .. " this session" .. (farm.repairs > 0 and (", repairs of " .. FormatMoney(farm.repairs) .. " included") or "") .. ")"
+    end },
+  { id = "deaths", label = "Deaths", name = "Deaths and repairs", value = function(s)
+      local short = farm.deaths .. " |cffa3b0c2Repairs|r " .. FormatMoney(farm.repairs)
+      local long = farm.deaths .. (farm.deaths == 1 and " death" or " deaths") .. " this session. Repairs cost you "
+        .. FormatMoney(farm.repairs) .. " (" .. FormatMoney(PerHour(farm.repairs, s.elapsed)) .. " per hour)"
+      if farm.guildRepairs > 0 then long = long .. "; the guild bank paid " .. FormatMoney(farm.guildRepairs) .. " more" end
+      return short, long .. ". Net gold per hour already counts repairs you paid."
+    end },
+  { id = "xpsplit", label = "Quest/Kill XP", name = "Quest XP vs kill XP", xp = true, value = function()
+      local x = XPSplit()
+      if x.total <= 0 then return "--", "Gain some XP to see how much comes from quests and how much from kills" end
+      return x.questPct .. "% / " .. x.killPct .. "%", string.format(
+        "XP from quests: %s (%d%%). From kills: %s (%d%%). Other, such as exploring: %s (%d%%).",
+        Commas(x.quest), x.questPct, Commas(x.kill), x.killPct, Commas(x.other), x.otherPct)
+    end },
+  { id = "skillhr", label = "Skill-ups/hr", name = "Profession skill-ups/hr", value = function(s)
+      local v = PerHour(farm.skillups, s.elapsed)
+      local long = Commas(v) .. " profession skill-ups per hour (" .. farm.skillups .. " this session)"
+      local list = SkillList()
+      if #list > 0 then long = long .. ": " .. table.concat(list, ", ") end
+      return Commas(v), long
     end },
   { id = "rephr", label = "Rep/hr", name = "Reputation per hour", value = function(s)
       local v = PerHour(farm.rep, s.elapsed)
@@ -1095,6 +1287,8 @@ function ns.OpenRateBarSettings()
         { "Reset session", 110, function() ResetFarmSession() end, nil, "reset" },
         { "Session details", 120, function() ns.OpenPersonalTrackers("session") end, nil, "details" },
       })
+      -- Grow the window to fit the stat list.
+      self:SetHeight(math.max(440, -y + 56))
     end
   end
   barCfg:Refresh()
