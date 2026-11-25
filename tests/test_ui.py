@@ -458,8 +458,11 @@ A.ex('__ns.UI.sortChip:GetScript("OnClick")(__ns.UI.sortChip); EPUGuildMenu.rows
 check("sort dropdown", A.ev('__ns.UI.state.requests.sort') == "item" and A.ev('__ns.UI.sortChip.text:GetText()') == "Sort: Item")
 check("dropdown rows sit above the close-anywhere layer", A.ev('EPUGuildMenu:GetFrameLevel() > EPUGuildMenu.catch:GetFrameLevel()') == True)
 # Toolbars fit the narrowest window (620 wide, minus the sidebar)
-fits = A.ev('(function() local bad = {} for _, k in ipairs({"needs","shopping","bank","requests","donations","crafters","recipes"}) do __ns.UI:SetView(k) local b = __ns.UI.bars and __ns.UI.bars[k] if b and b.leftX + b.rightX > 480 then bad[#bad+1] = k .. "=" .. (b.leftX + b.rightX) end end return table.concat(bad, ",") end)()')
+fits = A.ev('(function() local bad = {} for _, k in ipairs({"needs","shopping","requests","donations","crafters","recipes"}) do __ns.UI:SetView(k) local b = __ns.UI.bars and __ns.UI.bars[k] if b and b.leftX + b.rightX > 480 then bad[#bad+1] = k .. "=" .. (b.leftX + b.rightX) end end return table.concat(bad, ",") end)()')
 check("every toolbar fits at the smallest window size (%s)" % (fits or "ok"), fits == "")
+A.ex('__ns.UI:SetView("bank")')
+bank_fit = A.ev('(function() local b=__ns.UI.bars.bank; b:Fit(480) return math.max(b.row1W,b.row2W) end)()')
+check("the Bank toolbar fits the smallest window on two rows (%s)" % bank_fit, bank_fit <= 480)
 check("addon loads on a client missing CRAFT_SHOW and friends", A.ev('__ns.handlers.TRADE_SKILL_SHOW ~= nil') == True)
 
 # Button position follows the actual map size/shape, with accessible recovery.

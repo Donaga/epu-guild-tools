@@ -44,7 +44,7 @@ A.ex('__ns.CacheItemNames()')
 check('hidden equipment metadata is still exported for Discord',A.ev('__ns.db.itemClass[30001][1]')==2)
 A.ex("__ns.G().bank.Bank.seen[999999]=true; __ns.db.itemNames=__ns.db.itemNames or {}; __ns.db.itemNames[999999]='Unclassified history'")
 check('unclassified historical items wait for metadata',not A.ev('__ns.CanBankRequest(999999)'))
-A.ex("__ns.UI:SetView('bank'); __toolbarFits=__ns.UI.bars.bank.leftX+__ns.UI.bars.bank.rightX<=480")
+A.ex("__ns.UI:SetView('bank'); __toolbarFits=(function() local b=__ns.UI.bars.bank; b:Fit(480) return math.max(b.row1W,b.row2W) end)()<=480")
 check('all bank filters fit the narrowest window',A.ev('__toolbarFits'))
 check('new filters produce no runtime errors',(A.ev('__errors') or 0)==0)
 
