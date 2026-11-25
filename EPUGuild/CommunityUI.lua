@@ -38,7 +38,7 @@ local memberTools={
     icon="Interface\\Icons\\INV_Misc_PocketWatch_02", available=function() return ns.OpenPersonalTrackers~=nil end,
     open=function() ns.OpenPersonalTrackers() end},
   -- Rate bar (PersonalTrackers.lua): shows the bar and its settings.
-  {key="ratebar", title="Rate bar", hint="A small movable bar with XP per hour, time to level, gold per hour and other session rates; pick the stats and size (/epu bar).",
+  {key="ratebar", title="Rate bar", hint="A small movable bar with XP per hour, time to level, gold per hour and other session rates, such as deaths and repairs, quest vs kill XP and profession skill-ups; pick the stats and size (/epu bar).",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_01", available=function() return ns.ShowRateBar~=nil end,
     open=function() ns.ShowRateBar(true); ns.OpenRateBarSettings() end},
   -- Spell rank checker (SpellRanks.lua); hidden if that file isn't loaded.
