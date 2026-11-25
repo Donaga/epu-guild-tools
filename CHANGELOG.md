@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.37.0
 
 A /reload is enough after updating: this version adds no new files.
 
@@ -9,6 +9,7 @@ A /reload is enough after updating: this version adds no new files.
   - **Where** shows one guild bank tab or one bank character (the count column then shows how many are there), or **Out of place in its tab**. Each item's row now says where it sits, such as "Tab 1: Mats 20 · Donlock 3", and search matches tab names too.
   - **Out of place** is worked out from the tab names: a tab named for something ("Herbs", "Recipes", "Gear", "Potions") holds that, a general "Mats" or "Trade goods" tab holds the trade goods no other tab is named for, and an unnamed tab holds whatever fills at least half of it. An item in another tab is marked, in orange, with the tab it belongs in, or that it's not what its tab is for when no tab holds its kind yet. Category headings say which tab keeps that category, and the item's details say the same. Nothing is moved; the hints are there to help officers keep tabs tidy. `/epu banktabs tidy` opens straight to the out-of-place list. Tabs come from the last time someone on your account opened the guild bank, so open it once after updating.
   - The sort, category, stock, quality and Where choices are saved for each character. **Reset** clears the filters and keeps the sort. On a narrow window the toolbar wraps onto a second row.
+- **Also in this release: the pop-out Messenger's typing box can go at the bottom.** 0.36.1 wasn't released on its own, so its change ships here: a **Typing box: Top / Bottom** button in Chat settings (the messenger's **Opts** button, **Settings > Pop-out chat and log windows**, or `/epu logs`) moves the box and **Send** below the messages, the way most chat apps have it. Top stays the default.
 
 ## 0.36.1
 
