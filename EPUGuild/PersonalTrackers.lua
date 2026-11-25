@@ -1,4 +1,5 @@
--- EPU Guild Tools: Personal Trackers (Lockouts, Profession Cooldowns, Farming Session, Consumables, Rep & PvP, Rested XP).
+-- EPU Guild Tools: Personal Trackers (Lockouts, Profession Cooldowns, Farming Session, Consumables, Rep & PvP, Rested XP),
+-- and the rate bar: a small movable strip with the farming session's live rates (/epu bar).
 local _, ns = ...
 
 local function SafeStr(v)
@@ -201,10 +202,39 @@ local farm = {
   pausedElapsed = 0,
   xp = 0,
   lastXP = nil,
+  lastXPMax = nil,
   cash = 0,
   lootValue = 0,
+  net = 0,         -- change in the gold you carry while the session runs
+  kills = 0,       -- kills that gave XP ("X dies, you gain N experience")
+  killXP = 0,
+  rep = 0,
+  repLast = nil,   -- the faction you last gained reputation with
+  honor = 0,
   drops = {},
 }
+
+local function ReadXP()
+  local cur = UnitXP and SafeNum(UnitXP("player")) or 0
+  local max = UnitXPMax and SafeNum(UnitXPMax("player")) or 0
+  return cur, max
+end
+
+-- XP gained since the last update. A level up resets the bar, so the gain is
+-- what was left of the old level plus what's on the new one.
+local function TakeXPGain()
+  local cur, max = ReadXP()
+  local gained = 0
+  if farm.lastXP then
+    if cur > farm.lastXP then
+      gained = cur - farm.lastXP
+    elseif cur < farm.lastXP and (farm.lastXPMax or 0) > farm.lastXP then
+      gained = (farm.lastXPMax - farm.lastXP) + cur
+    end
+  end
+  farm.lastXP, farm.lastXPMax = cur, max
+  return gained
+end
 
 local function FarmElapsed()
   if farm.running then
@@ -217,10 +247,15 @@ local function ResetFarmSession()
   farm.startedAt = time()
   farm.pausedElapsed = 0
   farm.xp = 0
-  farm.lastXP = UnitXP and SafeNum(UnitXP("player")) or 0
+  farm.lastXP, farm.lastXPMax = ReadXP()
   farm.cash = 0
   farm.lootValue = 0
+  farm.net = 0
+  farm.kills, farm.killXP = 0, 0
+  farm.rep, farm.repLast = 0, nil
+  farm.honor = 0
   farm.drops = {}
+  farm.lastMoney = GetMoney and SafeNum(GetMoney()) or nil
 end
 
 local function ToggleFarmPause()
@@ -416,9 +451,12 @@ function ns.OpenPersonalTrackers(tab)
         Row({
           { farm.running and "Pause" or "Resume", 84, function() ToggleFarmPause() end },
           { "Reset Session", 110, function() ResetFarmSession() end },
+          { ns.RateBarShown and ns.RateBarShown() and "Hide rate bar" or "Show rate bar", 110, function() ns.ToggleRateBar() end, "accent" },
+          { "Rate bar settings", 128, function() ns.OpenRateBarSettings() end },
         })
         Line(string.format("Elapsed: |cffffffff%s|r", FormatDuration(elapsed)))
         Line(string.format("XP Gained: |cff4fc3f7%d|r (%d/hr)", farm.xp, xph))
+        Line(string.format("Kills that gave XP: |cff4fc3f7%d|r (%d/hr)", farm.kills, math.floor((farm.kills / elapsed) * 3600)))
         Line(string.format("Cash Looted: |cffffd100%s|r    Item Vendor Value: |cffffd100%s|r", FormatMoney(farm.cash), FormatMoney(farm.lootValue)))
         Line(string.format("Total Value: |cff4ade80%s|r (%s/hr)", FormatMoney(totalGold), FormatMoney(gph)))
         Heading("Notable Drops (" .. #farm.drops .. ")")
@@ -548,7 +586,8 @@ end
 
 if ns.On then
   ns.On("PLAYER_LOGIN", function()
-    farm.lastXP = UnitXP and SafeNum(UnitXP("player")) or 0
+    farm.lastXP, farm.lastXPMax = ReadXP()
+    farm.lastMoney = GetMoney and SafeNum(GetMoney()) or nil
     if RequestRaidInfo then RequestRaidInfo() end
     ScanLockouts()
     ScanCooldowns()
@@ -574,10 +613,20 @@ if ns.On then
     if cdScanWaiting then cdScanWaiting = false; QueueCooldownScan() end
   end)
   ns.On("PLAYER_XP_UPDATE", function()
-    if not farm.running then return end
-    local cur = UnitXP and SafeNum(UnitXP("player")) or 0
-    if farm.lastXP and cur > farm.lastXP then farm.xp = farm.xp + (cur - farm.lastXP) end
-    farm.lastXP = cur
+    -- Read it even while paused, so resuming doesn't count XP from the pause.
+    local gained = TakeXPGain()
+    if farm.running then farm.xp = farm.xp + gained end
+  end)
+  ns.On("CHAT_MSG_COMBAT_XP_GAIN", function(msg)
+    if not farm.running or not SafeStr(msg) then return end
+    local amt = tonumber(msg:match(" dies, you gain (%d+) experience"))
+    if amt then farm.kills = farm.kills + 1; farm.killXP = farm.killXP + amt end
+  end)
+  ns.On("PLAYER_MONEY", function()
+    local cur = GetMoney and SafeNum(GetMoney())
+    if not cur then return end
+    if farm.running and farm.lastMoney then farm.net = farm.net + (cur - farm.lastMoney) end
+    farm.lastMoney = cur
   end)
   ns.On("CHAT_MSG_MONEY", function(msg)
     if not farm.running or not SafeStr(msg) then return end
@@ -612,15 +661,481 @@ if ns.On then
       repSession[fac] = repSession[fac] or { startedAt = time(), gained = 0, lastGain = 0 }
       repSession[fac].gained = repSession[fac].gained + amt
       repSession[fac].lastGain = amt
+      if farm.running then farm.rep = farm.rep + amt; farm.repLast = fac end
     end
   end)
   ns.On("CHAT_MSG_COMBAT_HONOR_GAIN", function(msg)
     if not SafeStr(msg) then return end
     local amt = tonumber(msg:match("(%d+) honor"))
-    if amt then pvpSession.honor = pvpSession.honor + amt end
+    if amt then
+      pvpSession.honor = pvpSession.honor + amt
+      if farm.running then farm.honor = farm.honor + amt end
+    end
     if GetPVPSessionStats then
       local hk = SafeNum(GetPVPSessionStats()) or 0
       if pvpSession.startHKs then pvpSession.hks = math.max(0, hk - pvpSession.startHKs) end
     end
+  end)
+end
+
+---------------------------------------------------------------------------
+-- Rate bar (/epu bar): a small strip with the session's live rates
+---------------------------------------------------------------------------
+-- It reads the same farming session as the Session tab, so Pause and Reset
+-- there pause and reset the bar too. Which rates show, the size, the layout
+-- and the lock are account-wide (ns.db.rateBar); whether the bar is shown and
+-- where it sits are saved per character (ns.cdb.rateBar).
+
+local function Commas(n)
+  n = math.floor((n or 0) + 0.5)
+  local s = tostring(math.abs(n)):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+  return (n < 0 and "-" or "") .. s
+end
+
+-- 12,345 -> 12.3k; 1,234,567 -> 1.23m; small numbers keep their commas.
+local function Short(n)
+  n = n or 0
+  local a = math.abs(n)
+  if a >= 1000000 then return string.format("%.2fm", n / 1000000) end
+  if a >= 10000 then return string.format("%.1fk", n / 1000) end
+  return Commas(n)
+end
+
+local function SignedMoney(copper)
+  copper = math.floor(copper or 0)
+  return (copper < 0 and "-" or "") .. FormatMoney(copper)
+end
+
+-- Short durations for the bar: "1h 12m", "12m", "45s".
+local function BarDuration(secs)
+  secs = math.max(0, math.floor(secs or 0))
+  if secs >= 86400 then return FormatDuration(secs) end
+  local h, m = math.floor(secs / 3600), math.floor((secs % 3600) / 60)
+  if h > 0 then return string.format("%dh %dm", h, m) end
+  if m > 0 then return string.format("%dm", m) end
+  return string.format("%ds", secs)
+end
+
+local function PerHour(amount, elapsed) return (amount or 0) / math.max(1, elapsed) * 3600 end
+
+-- True when this character can't gain XP (max level, or XP turned off).
+local function NoXP()
+  local level = UnitLevel and SafeNum(UnitLevel("player")) or 0
+  local maxLevel = GetMaxPlayerLevel and SafeNum(GetMaxPlayerLevel()) or 60
+  if level >= maxLevel then return true end
+  return IsXPUserDisabled and IsXPUserDisabled() and true or false
+end
+
+-- What the bar can show, in the order it shows them. `xp` stats hide
+-- themselves on a character that can't gain XP. Each value() returns the
+-- bar text and the longer tooltip text.
+local RATE_STATS = {
+  { id = "xphr", label = "XP/hr", name = "XP per hour", on = true, xp = true, value = function(s)
+      local v = PerHour(farm.xp, s.elapsed)
+      return Short(v), Commas(v) .. " XP per hour (" .. Commas(farm.xp) .. " this session)"
+    end },
+  { id = "ttl", label = "Level in", name = "Time to level", on = true, xp = true, value = function(s)
+      local rate = PerHour(farm.xp, s.elapsed)
+      local left = math.max(0, s.xpMax - s.xp)
+      if rate <= 0 or s.xpMax <= 0 then return "--", "Gain some XP to see how long the level takes" end
+      local secs = left / rate * 3600
+      return BarDuration(secs), BarDuration(secs) .. " to level " .. (s.level + 1) .. " at this rate (" .. Commas(left) .. " XP to go)"
+    end },
+  { id = "xp", label = "XP", name = "XP this session", xp = true, value = function()
+      return Short(farm.xp), Commas(farm.xp) .. " XP this session"
+    end },
+  { id = "level", label = "Lvl", name = "Level progress", xp = true, value = function(s)
+      local pct = s.xpMax > 0 and math.floor(s.xp / s.xpMax * 100) or 0
+      return s.level .. " " .. pct .. "%", "Level " .. s.level .. ", " .. pct .. "% of the way to " .. (s.level + 1)
+    end },
+  { id = "rested", label = "Rested", name = "Rested XP", xp = true, value = function(s)
+      local r = GetXPExhaustion and SafeNum(GetXPExhaustion()) or 0
+      local pct = s.xpMax > 0 and math.floor(r / s.xpMax * 100 + 0.5) or 0
+      return pct .. "%", Commas(r) .. " rested XP (" .. pct .. "% of a level)"
+    end },
+  { id = "kills", label = "Kills/hr", name = "Kills per hour", value = function(s)
+      local v = PerHour(farm.kills, s.elapsed)
+      return Commas(v), Commas(v) .. " kills per hour (" .. farm.kills .. " this session that gave XP)"
+    end },
+  { id = "killsleft", label = "Kills to lvl", name = "Kills to level", xp = true, value = function(s)
+      if farm.kills == 0 or farm.killXP <= 0 then return "--", "Kill something that gives XP to see how many kills the level takes" end
+      local per = farm.killXP / farm.kills
+      local n = math.ceil(math.max(0, s.xpMax - s.xp) / per)
+      return Commas(n), "About " .. Commas(n) .. " kills to level, at " .. Commas(per) .. " XP a kill"
+    end },
+  { id = "goldhr", label = "Gold/hr", name = "Gold per hour (loot)", on = true, value = function(s)
+      local total = farm.cash + farm.lootValue
+      local v = PerHour(total, s.elapsed)
+      return FormatMoney(v), FormatMoney(v) .. " per hour from looted coin and the vendor value of looted items ("
+        .. FormatMoney(total) .. " this session)"
+    end },
+  { id = "nethr", label = "Net/hr", name = "Net gold per hour", value = function(s)
+      local v = PerHour(farm.net, s.elapsed)
+      return SignedMoney(v), SignedMoney(v) .. " per hour: the change in the gold you carry, after spending ("
+        .. SignedMoney(farm.net) .. " this session)"
+    end },
+  { id = "rephr", label = "Rep/hr", name = "Reputation per hour", value = function(s)
+      local v = PerHour(farm.rep, s.elapsed)
+      return Short(v), Commas(v) .. " reputation per hour (" .. Commas(farm.rep) .. " this session"
+        .. (farm.repLast and (", last with " .. farm.repLast) or "") .. ")"
+    end },
+  { id = "honorhr", label = "Honor/hr", name = "Honor per hour", value = function(s)
+      local v = PerHour(farm.honor, s.elapsed)
+      return Short(v), Commas(v) .. " honor per hour (" .. Commas(farm.honor) .. " this session)"
+    end },
+  { id = "time", label = "Session", name = "Session time", on = true, value = function(s)
+      local t = BarDuration(s.elapsed)
+      if not farm.running then return t .. " (paused)", "Session paused at " .. t end
+      return t, "Session running for " .. t
+    end },
+}
+local RATE_STAT_BY_ID = {}
+for _, st in ipairs(RATE_STATS) do RATE_STAT_BY_ID[st.id] = st end
+
+local SCALE_MIN, SCALE_MAX, SCALE_STEP = 0.6, 2.0, 0.1
+local BG_STEPS = { 0.85, 0.6, 0.35, 0 }
+
+local function BarDB()
+  if not ns.db then return { stats = {} } end
+  ns.db.rateBar = ns.db.rateBar or {}
+  local db = ns.db.rateBar
+  db.stats = db.stats or {}
+  for _, st in ipairs(RATE_STATS) do
+    if db.stats[st.id] == nil then db.stats[st.id] = st.on and true or false end
+  end
+  db.scale = db.scale or 1
+  if db.locked == nil then db.locked = false end
+  db.layout = db.layout or "across"
+  db.bgAlpha = db.bgAlpha or BG_STEPS[1]
+  return db
+end
+
+local function CharBarDB()
+  if not ns.cdb then return {} end
+  ns.cdb.rateBar = ns.cdb.rateBar or {}
+  return ns.cdb.rateBar
+end
+
+local function Snapshot()
+  local xp, xpMax = ReadXP()
+  return { elapsed = FarmElapsed(), xp = xp, xpMax = xpMax,
+    level = UnitLevel and SafeNum(UnitLevel("player")) or 0, noXP = NoXP() }
+end
+
+-- The stats the bar shows now: the ones picked, minus XP stats on a
+-- character that can't gain XP. Each entry is { stat, barText, tipText }.
+local function VisibleStats()
+  local db, s, out = BarDB(), Snapshot(), {}
+  for _, st in ipairs(RATE_STATS) do
+    if db.stats[st.id] and not (st.xp and s.noXP) then
+      local short, long = st.value(s)
+      out[#out + 1] = { st, short, long }
+    end
+  end
+  return out, s
+end
+
+local bar, barCfg
+
+-- The offsets are saved in screen units (offset x scale), so making the bar
+-- bigger or smaller keeps it where it is instead of sliding it across.
+local function SaveBarPosition()
+  if not bar then return end
+  local point, _, rel, x, y = bar:GetPoint()
+  local scale = (bar.GetScale and bar:GetScale()) or 1
+  local c = CharBarDB()
+  c.point, c.rel = point or "CENTER", rel or point or "CENTER"
+  c.x, c.y = math.floor((x or 0) * scale + 0.5), math.floor((y or 0) * scale + 0.5)
+end
+
+local function PlaceBar()
+  local c = CharBarDB()
+  local scale = BarDB().scale or 1
+  bar:SetScale(scale)
+  bar:ClearAllPoints()
+  if c.point then
+    bar:SetPoint(c.point, UIParent, c.rel or c.point, (c.x or 0) / scale, (c.y or 0) / scale)
+  else
+    bar:SetPoint("TOP", UIParent, "TOP", 0, -120 / scale)
+  end
+end
+
+local function LayoutRateBar()
+  if not bar then return end
+  local db = BarDB()
+  local C = ns.InterfaceColors or {}
+  local bg = C.bg or { 0.05, 0.06, 0.08 }
+  if bar.epuScale ~= db.scale then
+    bar.epuScale = db.scale
+    if not bar.dragging then PlaceBar() end
+  end
+  bar.bg:SetColorTexture(bg[1], bg[2], bg[3], db.bgAlpha)
+  for _, e in ipairs(bar.edges) do e:SetShown(db.bgAlpha > 0) end
+  bar:EnableMouse(true)
+  local stats = VisibleStats()
+  if #stats == 0 then
+    stats = { { { id = "none" }, "Pick some stats: right-click", "" } }
+  end
+  -- Across: one row, each stat after the last. Stacked: one stat a line.
+  local across = db.layout ~= "stacked"
+  local x, y, w, h = 8, -5, 0, 22
+  for i, entry in ipairs(stats) do
+    local fs = bar.cells[i]
+    if not fs then
+      fs = ns.InterfaceFont(bar, 12, C.text)
+      bar.cells[i] = fs
+    end
+    local label = entry[1].label
+    fs:SetText(label and ("|cffa3b0c2" .. label .. "|r " .. entry[2]) or entry[2])
+    fs:ClearAllPoints()
+    fs:Show()
+    local sw = fs:GetStringWidth() or 40
+    if across then
+      fs:SetPoint("LEFT", bar, "LEFT", x, 0)
+      x = x + sw + 14
+      w = x - 6
+    else
+      fs:SetPoint("TOPLEFT", bar, "TOPLEFT", 8, y)
+      y = y - 16
+      w, h = math.max(w, sw + 16), -y + 4
+    end
+  end
+  for i = #stats + 1, #bar.cells do bar.cells[i]:Hide() end
+  bar:SetSize(math.max(60, w), math.max(22, h))
+end
+
+local function RateBarTooltip(self)
+  if not GameTooltip then return end
+  GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+  GameTooltip:ClearLines()
+  GameTooltip:AddLine("EPU rate bar", 1, 1, 1)
+  local stats = VisibleStats()
+  for _, entry in ipairs(stats) do
+    if entry[3] ~= "" then GameTooltip:AddLine(entry[3], 0.85, 0.85, 0.85, true) end
+  end
+  GameTooltip:AddLine(" ")
+  GameTooltip:AddLine("Left-click: session details", 0.5, 0.8, 1)
+  GameTooltip:AddLine("Right-click: pick stats, size and lock", 0.5, 0.8, 1)
+  if not BarDB().locked then GameTooltip:AddLine("Drag to move", 0.5, 0.8, 1) end
+  GameTooltip:Show()
+end
+
+local function EnsureRateBar()
+  if bar then return bar end
+  local C = ns.InterfaceColors or {}
+  bar = CreateFrame("Frame", "EPUGuildRateBar", UIParent)
+  bar:SetFrameStrata("MEDIUM")
+  bar:SetClampedToScreen(true)
+  bar:SetMovable(true)
+  bar:EnableMouse(true)
+  bar:RegisterForDrag("LeftButton")
+  bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+  bar.bg:SetAllPoints()
+  local line = C.line or { 0.2, 0.22, 0.26, 1 }
+  bar.edges = {}
+  for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+                          { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+    local e = bar:CreateTexture(nil, "BORDER")
+    e:SetColorTexture(line[1], line[2], line[3], line[4] or 1)
+    e:SetPoint(side[1]); e:SetPoint(side[2])
+    if side[3] then e:SetHeight(1) else e:SetWidth(1) end
+    bar.edges[#bar.edges + 1] = e
+  end
+  bar.cells = {}
+  bar:SetScript("OnMouseDown", function(self) self.dragged = false end)
+  bar:SetScript("OnDragStart", function(self)
+    if BarDB().locked then return end
+    self.dragging = true
+    self:StartMoving()
+  end)
+  bar:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    SaveBarPosition()
+    self.dragged = true
+    self.dragging = false
+  end)
+  bar:SetScript("OnMouseUp", function(self, button)
+    if self.dragged then self.dragged = false; return end
+    if button == "RightButton" then
+      ns.OpenRateBarSettings()
+    else
+      ns.OpenPersonalTrackers("session")
+    end
+  end)
+  bar:SetScript("OnEnter", RateBarTooltip)
+  bar:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+  -- Redraw once a second while shown; the game only runs OnUpdate for a
+  -- visible frame, so a hidden bar costs nothing.
+  bar.since = 0
+  bar:SetScript("OnUpdate", function(self, dt)
+    self.since = self.since + (dt or 0)
+    if self.since < 1 or self.dragging then return end
+    self.since = 0
+    LayoutRateBar()
+  end)
+  PlaceBar()
+  return bar
+end
+
+function ns.RateBarShown() return bar ~= nil and bar:IsShown() end
+
+function ns.RefreshRateBar()
+  if bar and bar:IsShown() then LayoutRateBar() end
+  if barCfg and barCfg:IsShown() then barCfg:Refresh() end
+end
+
+function ns.ShowRateBar(show)
+  CharBarDB().shown = show and true or false
+  if show then
+    EnsureRateBar()
+    bar:Show()
+    LayoutRateBar()
+  elseif bar then
+    bar:Hide()
+  end
+  if barCfg and barCfg:IsShown() then barCfg:Refresh() end
+  if win and win:IsShown() then win:Refresh() end
+end
+
+function ns.ToggleRateBar() ns.ShowRateBar(not ns.RateBarShown()) end
+
+function ns.SetRateBarScale(s)
+  s = tonumber(s)
+  if not s then return false end
+  s = math.floor(math.max(SCALE_MIN, math.min(SCALE_MAX, s)) * 10 + 0.5) / 10
+  BarDB().scale = s
+  ns.RefreshRateBar()
+  return true, s
+end
+
+function ns.ResetRateBarPosition()
+  local c = CharBarDB()
+  c.point, c.rel, c.x, c.y = nil, nil, nil, nil
+  if bar then PlaceBar() end
+end
+
+function ns.OpenRateBarSettings()
+  if not barCfg then
+    barCfg = ns.InterfaceWindow("EPUGuildRateBarConfig", UIParent, "EPU Rate Bar", 430, 440)
+    barCfg:SetFrameStrata("DIALOG")
+    local body = CreateFrame("Frame", nil, barCfg)
+    body:SetPoint("TOPLEFT", 12, -44)
+    body:SetPoint("BOTTOMRIGHT", -12, 12)
+    barCfg.pool = ns.NewWidgetPool(body)
+
+    function barCfg:Refresh()
+      local pool = self.pool
+      pool:ReleaseAll()
+      local C = ns.InterfaceColors
+      local db = BarDB()
+      local y = 0
+      local function Check(on, text) return (on and "[x] " or "[ ] ") .. text end
+      local function Row(items)
+        local x = 0
+        for _, it in ipairs(items) do
+          local b = pool:Button(it[1], it[2], 22, it[4])
+          b:SetPoint("TOPLEFT", x, y)
+          b.epuAction = it[5]
+          b:SetScript("OnClick", function() it[3](); ns.RefreshRateBar(); barCfg:Refresh() end)
+          x = x + it[2] + 6
+        end
+        y = y - 28
+      end
+      local function Heading(t)
+        local h = pool:Font(12, C.gold or C.white, "heading")
+        h:SetPoint("TOPLEFT", 0, y - 4)
+        h:SetText(t)
+        y = y - 22
+      end
+      local function Note(t)
+        local f = pool:Font(11, C.muted, "note")
+        f:SetPoint("TOPLEFT", 0, y)
+        f:SetWidth(400)
+        f:SetWordWrap(true)
+        f:SetText(t)
+        y = y - 30
+      end
+
+      Row({
+        { Check(ns.RateBarShown(), "Show the rate bar"), 160, function() ns.ToggleRateBar() end, nil, "show" },
+        { Check(db.locked, "Lock in place"), 120, function() db.locked = not db.locked end, nil, "lock" },
+      })
+      Heading("Size and look")
+      Row({
+        { "Smaller", 72, function() ns.SetRateBarScale(db.scale - SCALE_STEP) end, nil, "smaller" },
+        { "Size: " .. math.floor(db.scale * 100 + 0.5) .. "%", 90, function() ns.SetRateBarScale(1) end, nil, "size" },
+        { "Bigger", 72, function() ns.SetRateBarScale(db.scale + SCALE_STEP) end, nil, "bigger" },
+        { db.layout == "stacked" and "Layout: stacked" or "Layout: across", 120, function()
+            db.layout = db.layout == "stacked" and "across" or "stacked"
+          end, nil, "layout" },
+      })
+      Row({
+        { "Background: " .. math.floor(db.bgAlpha * 100 + 0.5) .. "%", 140, function()
+            local nextA = BG_STEPS[1]
+            for i, a in ipairs(BG_STEPS) do
+              if math.abs(a - db.bgAlpha) < 0.01 then nextA = BG_STEPS[(i % #BG_STEPS) + 1] end
+            end
+            db.bgAlpha = nextA
+          end, nil, "background" },
+        { "Put it back at the top", 160, function() ns.ResetRateBarPosition() end, nil, "resetpos" },
+      })
+
+      Heading("Stats to show")
+      local pair = {}
+      for _, st in ipairs(RATE_STATS) do
+        pair[#pair + 1] = { Check(db.stats[st.id], st.name), 196, function() db.stats[st.id] = not db.stats[st.id] end, nil, "stat:" .. st.id }
+        if #pair == 2 then Row(pair); pair = {} end
+      end
+      if #pair > 0 then Row(pair) end
+      Note("XP stats hide themselves on a max-level character. Size, stats and lock are the same on all your characters; whether the bar shows and where it sits is saved for each one.")
+
+      Heading("Session")
+      Row({
+        { farm.running and "Pause" or "Resume", 80, function() ToggleFarmPause() end, nil, "pause" },
+        { "Reset session", 110, function() ResetFarmSession() end, nil, "reset" },
+        { "Session details", 120, function() ns.OpenPersonalTrackers("session") end, nil, "details" },
+      })
+    end
+  end
+  barCfg:Refresh()
+  barCfg:Show()
+end
+
+-- /epu bar [show | hide | lock | unlock | scale <n> | reset | resetpos | settings]
+function ns.RateBarCommand(args)
+  local sub, rest = (args or ""):lower():match("^%s*(%S*)%s*(.-)%s*$")
+  if sub == "" then
+    ns.ToggleRateBar()
+  elseif sub == "show" or sub == "on" then
+    ns.ShowRateBar(true)
+  elseif sub == "hide" or sub == "off" then
+    ns.ShowRateBar(false)
+  elseif sub == "lock" or sub == "unlock" then
+    BarDB().locked = sub == "lock"
+    ns.Print("Rate bar " .. (sub == "lock" and "locked." or "unlocked: drag it to move it."))
+    ns.RefreshRateBar()
+  elseif sub == "scale" or sub == "size" then
+    local ok, s = ns.SetRateBarScale(rest)
+    if not ok then return ns.Print("Usage: /epu bar scale 1.2  (between 0.6 and 2)") end
+    ns.Print("Rate bar size: " .. math.floor(s * 100 + 0.5) .. "%")
+  elseif sub == "reset" then
+    ResetFarmSession()
+    ns.Print("Session reset: the rate bar starts counting again.")
+    ns.RefreshRateBar()
+  elseif sub == "resetpos" then
+    ns.ResetRateBarPosition()
+  elseif sub == "pause" or sub == "resume" then
+    if (sub == "pause") == farm.running then ToggleFarmPause() end
+    ns.RefreshRateBar()
+  else
+    ns.OpenRateBarSettings()
+  end
+end
+
+ns.RateBar = { STATS = RATE_STATS, Visible = VisibleStats, Layout = function() LayoutRateBar() end }
+
+if ns.On then
+  ns.On("PLAYER_LOGIN", function()
+    if CharBarDB().shown then ns.ShowRateBar(true) end
   end)
 end

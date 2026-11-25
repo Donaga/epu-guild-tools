@@ -83,7 +83,7 @@ text = A.ev('__texts()') or ''
 check('looted items add their vendor value to the session', 'Item Vendor Value: |cffffd1004c|r' in text)
 check('an uncommon drop is listed with its count', '[Test Item 30001]|h|r x3' in text)
 check('a common drop is not listed as notable', 'Test Item 30002' not in text)
-check('the session no longer shows a kill count', 'Kills' not in text)
+check('the session counts only kills that gave XP', 'Kills that gave XP:' in text)
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'EPUGuild', 'PersonalTrackers.lua'), encoding='utf-8').read()
 check('the trackers no longer listen for the removed combat death message', 'CHAT_MSG_COMBAT_HOSTILE_DEATH' not in src)
 

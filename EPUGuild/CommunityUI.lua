@@ -37,6 +37,10 @@ local memberTools={
   {key="trackers", title="Personal trackers", hint="Lockouts, profession cooldowns and rested XP across your alts, farming sessions, consumables, rep and PvP (/epu trackers).",
     icon="Interface\\Icons\\INV_Misc_PocketWatch_02", available=function() return ns.OpenPersonalTrackers~=nil end,
     open=function() ns.OpenPersonalTrackers() end},
+  -- Rate bar (PersonalTrackers.lua): shows the bar and its settings.
+  {key="ratebar", title="Rate bar", hint="A small movable bar with XP per hour, time to level, gold per hour and other session rates; pick the stats and size (/epu bar).",
+    icon="Interface\\Icons\\INV_Misc_PocketWatch_01", available=function() return ns.ShowRateBar~=nil end,
+    open=function() ns.ShowRateBar(true); ns.OpenRateBarSettings() end},
   -- Spell rank checker (SpellRanks.lua); hidden if that file isn't loaded.
   {key="spellranks", title="Spell ranks", hint="Find action bar buttons still on an old spell rank after training, and update them (/epu ranks).",
     icon="Interface\\Icons\\INV_Misc_Book_11", available=function() return ns.OpenSpellRanks~=nil end,
