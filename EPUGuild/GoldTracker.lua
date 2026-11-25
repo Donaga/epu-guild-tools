@@ -48,11 +48,23 @@ local function FormatMoney(copper, colored)
   return string.format("%s%dc", prefix, c)
 end
 
+-- Each gold change is kept as its own entry, newest last, up to MAX_ENTRIES.
+-- Looting coin makes one entry per mob, so a long play day can be 800 or more
+-- and the list alone only reaches back two or three days. Entries that roll
+-- off the list are added into hourly totals (db.hourly[hourStart][realm][who]
+-- [category] = { income, spending }), kept for HOURLY_DAYS, so the Today,
+-- 7 Days and 30 Days figures, the 7-day graph and the budget still count them.
+-- Only the transaction list is limited to the entries themselves.
+local MAX_ENTRIES = 2000
+local HOURLY_DAYS = 90
+local HOUR = 3600
+
 local function DB()
-  if not ns.db then return {} end
+  if not ns.db then return { entries = {}, hourly = {}, budgets = {} } end
   ns.db.goldTracker = ns.db.goldTracker or {}
   local db = ns.db.goldTracker
   db.entries = db.entries or {}
+  db.hourly = db.hourly or {}
   db.budgets = db.budgets or {}
   if db.budgets.enabled == nil then db.budgets.enabled = false end
   if db.budgets.dailyGold == nil then db.budgets.dailyGold = 50 end
@@ -135,34 +147,118 @@ local function DetectCategory(delta)
   return "other"
 end
 
+-- The realm name can come back blank on WoW: Forever, so an entry saved with
+-- no realm (or a blank one) belongs to whichever realm you're on, and when the
+-- current realm can't be read every entry counts.
+local function CurrentRealm()
+  local r = GetRealmName and SafeStr(GetRealmName())
+  if r == "" then return nil end
+  return r
+end
+
+local function RealmMatches(r, cur)
+  return cur == nil or r == nil or r == "" or r == cur
+end
+
+-- Add one entry into its hour's totals.
+local function FoldEntry(db, e)
+  local t, delta = SafeNum(e.t), SafeNum(e.delta)
+  if not t or not delta or delta == 0 then return end
+  local h = t - t % HOUR
+  local hb = db.hourly[h]
+  if not hb then hb = {}; db.hourly[h] = hb end
+  local rk = (type(e.realm) == "string" and e.realm) or ""
+  local rb = hb[rk]
+  if not rb then rb = {}; hb[rk] = rb end
+  local who = (type(e.who) == "string" and e.who) or "Player"
+  local wb = rb[who]
+  if not wb then wb = {}; rb[who] = wb end
+  local cat = CAT_MAP[e.cat] and e.cat or "other"
+  local cb = wb[cat]
+  if not cb then cb = { 0, 0 }; wb[cat] = cb end
+  if delta >= 0 then cb[1] = cb[1] + delta else cb[2] = cb[2] - delta end
+end
+
+local function PruneHourly(db)
+  local cutoff = time() - HOURLY_DAYS * 86400
+  for h in pairs(db.hourly) do
+    if type(h) ~= "number" or h + HOUR <= cutoff then db.hourly[h] = nil end
+  end
+end
+
+-- Move entries past the limit into the hourly totals, oldest first.
+local lastPrune = 0
+local function TrimEntries(db)
+  local n = #db.entries
+  if n <= MAX_ENTRIES then return end
+  local extra = n - MAX_ENTRIES
+  for i = 1, extra do FoldEntry(db, db.entries[i]) end
+  local kept = {}
+  for i = extra + 1, n do kept[#kept + 1] = db.entries[i] end
+  db.entries = kept
+  if time() - lastPrune >= HOUR then
+    lastPrune = time()
+    PruneHourly(db)
+  end
+end
+ns.GoldTrackerLimits = { entries = MAX_ENTRIES, hourlyDays = HOURLY_DAYS }
+
 local function TodayStart()
   local d = date("*t")
   d.hour, d.min, d.sec = 0, 0, 0
   return time(d)
 end
 
-function ns.GetGoldSummary(sinceTime, charOnly)
+-- untilTime (optional) stops the summary before that time, for one day's
+-- totals. entries lists only the saved entries, newest first; hourly totals
+-- count in the figures but have no single transactions to list.
+function ns.GetGoldSummary(sinceTime, charOnly, untilTime)
   local db = DB()
-  local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
+  local realm = CurrentRealm()
+  local since, untilT = sinceTime or 0, untilTime or math.huge
   local byCat = {}
   local income, expense, moveIn, moveOut = 0, 0, 0, 0
   local list = {}
+  local fromTotals = false
   for _, c in ipairs(CATEGORIES) do byCat[c.id] = { inc = 0, exp = 0 } end
+  local function Add(cat, inc, exp)
+    local bucket = byCat[cat] or byCat.other
+    local transfer = ns.IsGoldTransfer(cat)
+    if inc > 0 then
+      if transfer then moveIn = moveIn + inc else income = income + inc end
+      bucket.inc = bucket.inc + inc
+    end
+    if exp > 0 then
+      if transfer then moveOut = moveOut + exp else expense = expense + exp end
+      bucket.exp = bucket.exp + exp
+    end
+  end
   for i = #db.entries, 1, -1 do
     local e = db.entries[i]
-    if (e.t or 0) < (sinceTime or 0) then break end
-    if (not e.realm or e.realm == realm) and (not charOnly or e.who == ns.me) then
-      local bucket = byCat[e.cat] or byCat.other
-      local transfer = ns.IsGoldTransfer(e.cat)
-      if (e.delta or 0) >= 0 then
-        if transfer then moveIn = moveIn + e.delta else income = income + e.delta end
-        bucket.inc = bucket.inc + e.delta
-      else
-        local absD = -e.delta
-        if transfer then moveOut = moveOut + absD else expense = expense + absD end
-        bucket.exp = bucket.exp + absD
-      end
+    local t = e.t or 0
+    if t < since then break end
+    if t < untilT and RealmMatches(e.realm, realm) and (not charOnly or e.who == ns.me) then
+      local d = e.delta or 0
+      if d >= 0 then Add(e.cat, d, 0) else Add(e.cat, 0, -d) end
       list[#list + 1] = e
+    end
+  end
+  -- An hour counts when it overlaps the timeframe; midnight starts an hour,
+  -- so Today, single days and the budget come out exact.
+  for h, hb in pairs(db.hourly) do
+    if type(h) == "number" and h + HOUR > since and h < untilT then
+      for rk, rb in pairs(hb) do
+        if RealmMatches(rk, realm) then
+          for who, wb in pairs(rb) do
+            if not charOnly or who == ns.me then
+              for cat, cb in pairs(wb) do
+                local inc, exp = cb[1] or 0, cb[2] or 0
+                if inc > 0 or exp > 0 then fromTotals = true; Add(cat, inc, exp) end
+              end
+            end
+          end
+        end
+      end
     end
   end
   return {
@@ -173,6 +269,7 @@ function ns.GetGoldSummary(sinceTime, charOnly)
     transferOut = moveOut,   -- to your other characters and the guild bank
     byCat = byCat,
     entries = list,
+    fromTotals = fromTotals, -- some of it came from hourly totals of older entries
   }
 end
 
@@ -212,7 +309,7 @@ local function CheckBudgetAlerts()
 end
 
 local function AddEntry(db, delta, cat)
-  local realm = (GetRealmName and SafeStr(GetRealmName())) or "Realm"
+  local realm = CurrentRealm()
   local cf
   if UnitClass then cf = select(2, UnitClass("player")) end
   db.entries[#db.entries + 1] = {
@@ -236,7 +333,7 @@ local function RecordDelta(delta, cat, amount)
   else
     AddEntry(db, delta, cat)
   end
-  while #db.entries > 2000 do table.remove(db.entries, 1) end
+  TrimEntries(db)
   CheckBudgetAlerts()
   if win and win:IsShown() and win.Refresh then win:Refresh() end
 end
@@ -430,12 +527,8 @@ function ns.OpenGoldTracker()
           d.hour, d.min, d.sec = 0, 0, 0
           local ds = time(d)
           local de = ds + 86400
-          local inc, exp = 0, 0
-          for _, e in ipairs(db.entries) do
-            if (e.t or 0) >= ds and (e.t or 0) < de and (scopeAll or e.who == ns.me) and not ns.IsGoldTransfer(e.cat) then
-              if (e.delta or 0) >= 0 then inc = inc + e.delta else exp = exp + (-e.delta) end
-            end
-          end
+          local daySum = ns.GetGoldSummary(ds, not scopeAll, de)
+          local inc, exp = daySum.income, daySum.expense
           maxDay = math.max(maxDay, inc, exp)
           dayTotals[#dayTotals + 1] = { label = date("%a", ds), inc = inc, exp = exp }
         end
@@ -469,7 +562,7 @@ function ns.OpenGoldTracker()
       Row({
         { (b.enabled and "[x] " or "[ ] ") .. "Enable Budget", 130, function() b.enabled = not b.enabled end },
         { (b.warnChat and "[x] " or "[ ] ") .. "Chat Alert", 110, function() b.warnChat = not b.warnChat end },
-        { "Clear History", 104, function() db.entries = {} end },
+        { "Clear History", 104, function() db.entries = {}; db.hourly = {} end },
       })
       if b.enabled then
         Row({
@@ -510,10 +603,16 @@ function ns.OpenGoldTracker()
       end
 
       Heading("Recent Transactions (" .. math.min(25, #sum.entries) .. " of " .. #sum.entries .. ")")
+      if sum.fromTotals then
+        local note = pool:Font(11, C.muted, "older")
+        note:SetPoint("TOPLEFT", 4, y + 2)
+        note:SetText(string.format("Only the last %d gold changes are listed one by one. Older ones are kept\nas hourly totals for %d days, so they still count in the figures above.", MAX_ENTRIES, HOURLY_DAYS))
+        y = y - 32
+      end
       if #sum.entries == 0 then
         local empty = pool:Font(11, C.muted)
         empty:SetPoint("TOPLEFT", 4, y)
-        empty:SetText("No gold transactions recorded in this timeframe yet.")
+        empty:SetText(sum.fromTotals and "None of this timeframe's gold changes are in the last " .. MAX_ENTRIES .. "." or "No gold transactions recorded in this timeframe yet.")
         y = y - 20
       else
         for i = 1, math.min(25, #sum.entries) do
@@ -561,6 +660,11 @@ end
 if ns.On then
   ns.On("PLAYER_LOGIN", function()
     lastMoney = GetMoney and SafeNum(GetMoney()) or 0
+    if ns.db then
+      local db = DB()
+      TrimEntries(db)
+      PruneHourly(db)
+    end
   end)
   ns.On("PLAYER_MONEY", function()
     local cur = GetMoney and SafeNum(GetMoney())
