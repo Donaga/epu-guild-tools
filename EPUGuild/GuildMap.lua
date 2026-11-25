@@ -1496,6 +1496,7 @@ local function Opt()
   if o.mentionColor == nil then o.mentionColor = true end  -- color messages that mention you
   if o.mentionGame == nil then o.mentionGame = true end    -- ...in the game's chat windows too
   if o.enterToAddon == nil then o.enterToAddon = false end -- pressing Enter opens EPU Messenger instead of default chat
+  if o.boxBottom == nil then o.boxBottom = false end       -- pop-out messenger: typing box at the bottom instead of the top
   o.popTabs = o.popTabs or {}                           -- per-channel visibility in pop-out messenger (nil/true = show)
   o.customTabs = o.customTabs or {}                     -- user-created pop-out tabs: { { id="c1", label="Loot", sources={system=true,...} } }
   -- The Combat Log source is gone (it never had any lines); a tab that used it keeps its other sources.
@@ -1508,6 +1509,15 @@ local function Opt()
   return o
 end
 ns.ChatOptions = Opt
+-- Where the pop-out messenger's typing box goes (Chat settings > Typing box).
+function ns.ChatBoxAtBottom() return Opt().boxBottom == true end
+function ns.SetChatBoxAtBottom(on)
+  Opt().boxBottom = on and true or false
+  for _, w in pairs(ns.ChatWindows or {}) do
+    if w and w.PlaceBox then w:PlaceBox() end
+    if w and w.Update and w:IsShown() then w:Update() end
+  end
+end
 -- Reading font for chat: which font, size and outline (Chat settings > Text).
 ns.CHAT_FONTS = {
   { label = "EPU (Inter)", value = "epu" },
@@ -1857,7 +1867,8 @@ end
 
 ---------------------------------------------------------------------------
 -- Pop-out messenger: a small window of its own that you can move, resize and
--- minimize to a title bar. Newest messages on top, reply box at the top.
+-- minimize to a title bar. Newest messages on top, reply box at the top
+-- (or at the bottom: Chat settings > Typing box).
 ---------------------------------------------------------------------------
 local Mgr, Bub
 local function MState()
@@ -2023,12 +2034,8 @@ local function BuildWindow(id)
   f.body:EnableMouse(true)
   Draggable(f.body)
   f.tabs = {}
-  local top = single and -8 or -34
   f.box = K.Box(f.body, 200, "Type a message, Enter to send")
-  f.box:SetPoint("TOPLEFT", 10, top)
-  f.box:SetPoint("TOPRIGHT", -64, top)
   f.send = K.Btn(f.body, "Send", 50, 22, "accent")
-  f.send:SetPoint("TOPRIGHT", -10, top)
   local function Go()
     local key = f:Key()
     if key and Send(key, f.box:GetText()) then
@@ -2041,13 +2048,38 @@ local function BuildWindow(id)
   f.box.onChange = function(self) local key = f:Key(); if key then ns.ChatTypingPing(key, self:GetText()) end; ns.MentionSuggest(self) end
   f.send:SetScript("OnClick", Go)
   f.find = K.Box(f.body, 200, single and "Search this conversation" or "Search chat (2+ letters)")
-  f.find:SetPoint("TOPLEFT", 10, top)
-  f.find:SetPoint("TOPRIGHT", -10, top)
   f.find:Hide()
   f.find.onChange = function() f.focus = nil; f:Update() end
   f.scroll = CreateFrame("ScrollFrame", nil, f.body)
-  f.scroll:SetPoint("TOPLEFT", 12, top - 32)
-  f.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
+  -- The typing box (and the search box, which takes its place) sits at the
+  -- top under the tabs, or at the bottom when Chat settings says so; the
+  -- messages fill the rest.
+  function f:PlaceBox()
+    local bottom = ns.ChatBoxAtBottom()
+    if self.boxAtBottom == bottom then return end
+    self.boxAtBottom = bottom
+    local top = single and -8 or -34
+    for _, w in ipairs({ self.box, self.send, self.find, self.scroll }) do w:ClearAllPoints() end
+    if bottom then
+      -- Send stays clear of the resize grip in the bottom-right corner.
+      self.box:SetPoint("BOTTOMLEFT", 10, 10)
+      self.box:SetPoint("BOTTOMRIGHT", -74, 10)
+      self.send:SetPoint("BOTTOMRIGHT", -20, 10)
+      self.find:SetPoint("BOTTOMLEFT", 10, 10)
+      self.find:SetPoint("BOTTOMRIGHT", -20, 10)
+      self.scroll:SetPoint("TOPLEFT", 12, top)
+      self.scroll:SetPoint("BOTTOMRIGHT", -12, 40)
+    else
+      self.box:SetPoint("TOPLEFT", 10, top)
+      self.box:SetPoint("TOPRIGHT", -64, top)
+      self.send:SetPoint("TOPRIGHT", -10, top)
+      self.find:SetPoint("TOPLEFT", 10, top)
+      self.find:SetPoint("TOPRIGHT", -10, top)
+      self.scroll:SetPoint("TOPLEFT", 12, top - 32)
+      self.scroll:SetPoint("BOTTOMRIGHT", -12, 16)
+    end
+  end
+  f:PlaceBox()
   f.child = CreateFrame("Frame", nil, f.scroll)
   f.child:SetSize(300, 10)
   f.scroll:SetScrollChild(f.child)
@@ -2155,7 +2187,8 @@ local function BuildWindow(id)
     self.child.blockPlain = {}
     local q = self.searching and (self.find:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "") or ""
     self.query = q
-    local empty = "|cff888888No messages yet. Type above to start.|r"
+    self:PlaceBox()
+    local empty = "|cff888888No messages yet. Type " .. (self.boxAtBottom and "below" or "above") .. " to start.|r"
     if self.searching and self.focus then
       local fkey = self.focus.key
       local lines, channel = ns.ChatLinesAround(fkey, self.focus.t), ThreadKey(fkey):sub(1, 2) == "w:" and "whisper" or ThreadKey(fkey)
@@ -2826,6 +2859,11 @@ function ns.OpenPopoutChatSettings()
         { Check(o.combat, "Tuck in combat"), 186, function() o.combat = not o.combat; SyncUI() end },
       })
       Row({
+        { ns.ChatBoxAtBottom() and "Typing box: Bottom" or "Typing box: Top", 186, function()
+          ns.SetChatBoxAtBottom(not ns.ChatBoxAtBottom()); SyncUI()
+        end },
+      })
+      Row({
         { Check(o.fade, "Fade when idle"), 186, function() o.fade = not o.fade; SyncUI() end },
         { Check(o.typing, "Show/send typing..."), 186, function() o.typing = not o.typing; SyncUI() end },
       })
@@ -3195,6 +3233,11 @@ local function FillChatSettings(det)
     { o.convOldestFirst and "Conversations: Oldest first" or "Conversations: Newest first", function()
       o.convOldestFirst = not o.convOldestFirst; Again()
     end, tip = "Flip whisper conversation order in the Chat sidebar" },
+  })
+  det:Buttons({
+    { ns.ChatBoxAtBottom() and "Pop-out typing box: Bottom" or "Pop-out typing box: Top", function()
+      ns.SetChatBoxAtBottom(not ns.ChatBoxAtBottom()); Again()
+    end, tip = "Put the typing box at the top of the pop-out Messenger, under the tabs, or at the bottom" },
   })
   -- people with their own color
   local people = {}
