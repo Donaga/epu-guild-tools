@@ -518,7 +518,7 @@ SlashCmdList.EPUGUILD = function(msg)
     end
   elseif cmd == "bars" or cmd == "infobars" then
     if ns.OpenInfoBarsSettings then ns.OpenInfoBarsSettings() end
-  elseif cmd == "qol" or cmd == "travel" then
+  elseif cmd == "qol" or cmd == "travel" or cmd == "flight" or cmd == "flights" then
     if ns.OpenWorldQoLSettings then ns.OpenWorldQoLSettings() end
   elseif cmd == "way" then
     if ns.HandleWayCommand then ns.HandleWayCommand(args) end

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+A /reload is enough after updating: this version adds no new files.
+
+- **Flight timer: a new look, off by default, and flight times from other addons.** Turn it on, change it and move it under **Settings > Travel, vendor and tooltips** in the main window (or `/epu qol`, also `/epu flight`).
+  - **New look**, after EllesmereUI's flight timer: the destination with the time left over the total (such as **1:23 / 4:19**) above a route track, and the flight master you left from underneath. On a flight with stops, each stop sits on the track by its distance on the flight map and turns green as you pass it, with **Next: Thelsamar · 1 stop left** under the bar. It fades in when you take off and out after you land. Where the game offers early landing, a **Land** button sets you down at the next flight master (that flight isn't counted as the route's time). All drawn with EPU's own style and the game's own flight map icons; nothing is copied from EllesmereUI.
+  - **Options:** **Bar: Thin / Medium / Thick**, **End caps: On / Off** (flight master icons at each end of the track), and **Preview & move**, which shows a sample flight so you can drag the bar where you want it. The place is saved.
+  - **Off for new installs.** If you already had it on, it stays on; untick **Flight Path Timer Bar** to turn it off.
+  - **Times are learned even with the bar off**, so they're ready when you turn it on.
+  - **Routes are kept by flight master**, such as Ironforge to Thelsamar, instead of the subzone you took off from, which split one route into several. Times saved by 0.38.0 carry over the next time you fly from that flight master.
+  - **Every flight corrects the time.** A route's time is the average of your recent flights. A flight far off the average (a disconnect, say) is set aside unless the next one agrees.
+  - **Times from other flight timer addons.** When you open a flight map, EPU fills in routes it doesn't know yet from InFlight, Flight Timer, Flight Timer Classic, FlyTravelTimes, FlightMap, ForeverFlightPath, Forever Flight Timer or EllesmereUI, if you have them installed and turned on. It reads their saved times in your game; it doesn't ship their data. Your own flight then replaces that time. The settings say how many routes EPU knows and which addons gave times. Each addon stores its times its own way, so EPU matches a route only when both ends match the flight masters you're flying between.
+
 ## 0.38.0
 
 A /reload is enough after updating: this version adds no new files.
