@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.38.0
 
 A /reload is enough after updating: this version adds no new files.
 
