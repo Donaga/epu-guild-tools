@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.40.0
 
 Restart WoW fully after updating (quit the game, not just /reload): this version adds a new file, GuildVault.lua.
 
