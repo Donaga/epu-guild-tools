@@ -738,6 +738,19 @@ function ns.FillDonation()
   end
 end
 
+-- Beside the guild bank, or beside EPU's category window when that's open
+-- at the bank (it may stand in for the guild bank window), or the mailbox.
+local function AnchorDonate()
+  local anchor
+  if don.mode == "vault" then
+    anchor = (ns.GuildVaultDonateAnchor and ns.GuildVaultDonateAnchor()) or GuildBankFrame
+  else
+    anchor = MailFrame
+  end
+  don:ClearAllPoints()
+  if anchor then don:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0) else don:SetPoint("RIGHT", UIParent, "RIGHT", -40, 0) end
+end
+
 local function ShowDonate(mode)
   mode = mode or "mail"
   if not Setting("donatePanel", true) or not ns.G() then return end
@@ -746,9 +759,7 @@ local function ShowDonate(mode)
     for _, a in ipairs(ns.BankAlts()) do if a == ns.me then return end end
   end
   don.mode = mode
-  don:ClearAllPoints()
-  local anchor = (mode == "vault") and GuildBankFrame or MailFrame
-  if anchor then don:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0) else don:SetPoint("RIGHT", UIParent, "RIGHT", -40, 0) end
+  AnchorDonate()
   wipe(don.pick)
   don.showAll, don.dismissed, don.offset, don.money = false, false, 0, 0
   don:Show()
@@ -756,6 +767,7 @@ local function ShowDonate(mode)
 end
 ns.ShowDonate = ShowDonate
 function ns.HideDonate(mode) if not mode or don.mode == mode then don:Hide() end end
+function ns.ReanchorDonate() if don:IsShown() and don.mode == "vault" then AnchorDonate() end end
 
 ---------------------------------------------------------------------------
 -- Depositing at the guild bank vault: move each picked stack (or part of

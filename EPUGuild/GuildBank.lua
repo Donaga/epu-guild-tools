@@ -327,6 +327,7 @@ end
 ---------------------------------------------------------------------------
 function ns.GuildBankIsOpen() return isOpen end
 
+
 local pulling = false
 
 -- withdrawals left today on a tab; nil means no limit
@@ -335,6 +336,37 @@ local function WithdrawalsLeft(tab)
   left = tonumber(left)
   if left and left >= 0 then return left end
   return nil
+end
+
+-- What the open guild bank holds, slot by slot, for the category window:
+-- stacks = { {tab, slot, id, n, locked} } from tabs that have loaded; tabs[tab]
+-- = { name, loaded, canDeposit, withdrawalsLeft (nil = no limit), empty = {slots} }.
+-- Also returns how many viewable tabs are still loading.
+function ns.GuildBankLiveStacks()
+  local stacks, tabs, pending = {}, {}, 0
+  if not isOpen then return stacks, tabs, 0 end
+  for tab = 1, NumTabs() do
+    local name, _, viewable, canDeposit = GetGuildBankTabInfo(tab)
+    if viewable then
+      local t = { name = name, loaded = loaded[tab] == true, canDeposit = canDeposit ~= false,
+        withdrawalsLeft = WithdrawalsLeft(tab), empty = {} }
+      tabs[tab] = t
+      if t.loaded then
+        for slot = 1, SLOTS do
+          local id = ns.ItemID(GetGuildBankItemLink(tab, slot))
+          if id then
+            local _, count, locked = GetGuildBankItemInfo(tab, slot)
+            stacks[#stacks + 1] = { tab = tab, slot = slot, id = id, n = tonumber(count) or 1, locked = locked and true or nil }
+          else
+            t.empty[#t.empty + 1] = slot
+          end
+        end
+      else
+        pending = pending + 1
+      end
+    end
+  end
+  return stacks, tabs, pending
 end
 
 -- Steps that take `qty` of `item` from the viewable tabs: { tab, slot, take, whole }.
