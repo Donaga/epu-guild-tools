@@ -1540,6 +1540,10 @@ Views.bank = {
       for _, s in ipairs(BANK_SORTS) do items[#items + 1] = { label = s[2], value = s[1] } end
       return items
     end,function() return UI.state.bank.sort or "category" end,function(v) UI.state.bank.sort=v; UI.SaveBankView() end)
+    if ns.OpenGuildVault then
+      UI.bankVaultBtn=bar:Add(Btn(bar,"Guild bank view",112,22),"right",function() ns.OpenGuildVault() end,
+        "The guild bank grouped by category, like Baganator's bags. At the guild bank it can open beside the bank window or instead of it.")
+    end
     if ns.ShowBankGear then
       UI.bankGearBtn=bar:Add(Btn(bar,"Gear for you",96,22),"right",function() ns.ShowBankGear() end,
         "Weapons and armor in the bank that fit your level, class and armor type, with upgrades marked.")

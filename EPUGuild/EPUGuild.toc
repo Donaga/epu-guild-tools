@@ -65,6 +65,7 @@ UI.lua
 NeededMatsUI.lua
 NeededMatsBank.lua
 BankGear.lua
+GuildVault.lua
 Extras.lua
 CommunityNotices.lua
 EventBubble.lua

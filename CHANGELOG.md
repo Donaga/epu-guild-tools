@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Restart WoW fully after updating (quit the game, not just /reload): this version adds a new file, GuildVault.lua.
+
+- **Guild bank by category.** A window that shows the whole guild bank grouped by kind of item (Cloth, Herbs, Consumables, Weapons & Armor and so on), like Baganator's category view of your bags. Baganator's own guild bank window only shows tabs. Nothing is moved for you.
+  - **Open it** from **Guild bank view** on the main window's **Bank** page, or `/epu vault`. Away from the bank it shows the guild bank as it was last seen.
+  - **One button per item**, with the total across every tab. Hover it for how many each tab holds and whether it's out of place in its tab (marked with an orange dot). Section headers say which tab keeps that kind of item.
+  - **By category or By tab**, a **tab picker** to show one tab, and a **search box**. Click a header to fold it away; that's remembered.
+  - **At the bank:** right-click an item to take a stack into your bags (from a tab where you still have withdrawals today), drag it to pick it up, shift-click to link it. Drop an item from your bags on the window and it goes into the tab its kind lives in, onto a stack of the same item when there's room, else an empty slot.
+  - **With the bank: Off / Beside / Instead** (the menu at the top right, or `/epu vault beside`, `/epu vault instead`, `/epu vault off`). Off by default. **Beside** opens it next to the guild bank window each time. **Instead** opens it in place of the guild bank window: the game's window, and Baganator's if you use it, move off the screen until the bank closes. **Other window** brings them back for that visit (for gold and the bank log). Closing this window then closes the bank.
+
 ## 0.39.0
 
 A /reload is enough after updating: this version adds no new files.

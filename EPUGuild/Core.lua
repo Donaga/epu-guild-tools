@@ -391,6 +391,7 @@ local HELP = {
   "|cffffd100/epu levelboard|r - levels guildmates gained this week (/epu levelboard last for last week)",
   "|cffffd100/epu mats|r - your needed mats list; /epu mats add <item> [amount] puts a material on guildmates' tooltips; /epu mats bank shows the ones the bank already holds",
   "|cffffd100/epu banktabs|r - the Bank page grouped by guild bank tab; /epu banktabs tidy lists items that look out of place in their tab",
+  "|cffffd100/epu vault|r - the guild bank grouped by category; /epu vault beside or instead opens it with the guild bank by itself (off turns that off)",
   "|cffffd100/epu bankgear|r - weapons and armor in the guild bank that fit you, with upgrades marked",
   "|cffffd100/epu market|r - compare gathering prices, craft profit at the current lowest listing for you or the guild, and cheap skill-ups",
   "|cffffd100/epu route|r - follow recorded herb spots in this zone; /epu route ore for mining, next to skip, stop to end",
@@ -501,6 +502,8 @@ SlashCmdList.EPUGUILD = function(msg)
     if ns.OpenLevelingTools then ns.OpenLevelingTools("camping") end
   elseif cmd == "banktabs" or cmd == "tabs" then
     if ns.OpenBankTabs then ns.OpenBankTabs((args or ""):lower():find("tidy", 1, true) ~= nil) end
+  elseif cmd == "vault" or cmd == "gbank" then
+    if ns.GuildVaultCommand then ns.GuildVaultCommand(args) end
   elseif cmd == "bankgear" or cmd == "mygear" then
     if ns.ShowBankGear then ns.ShowBankGear() end
   elseif cmd == "gear" or cmd == "drops" then
