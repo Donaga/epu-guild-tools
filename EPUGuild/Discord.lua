@@ -106,13 +106,18 @@ end
 
 -- Where Discord updates are arriving, for the Officer page.
 --   "addon": EPUGuild_Inbox is loaded; "off": it's installed but not loaded
---   (reason says why); "legacy": only the old Inbox.lua (an older companion).
+--   (reason says why); "legacy": only the old Inbox.lua (an older companion,
+--   or a PC without the inbox folder at all).
+-- EPU lists EPUGuild_Inbox as an optional dependency, so WoW names it on every
+-- PC, with reason MISSING where the folder isn't there. Only the PC that runs
+-- the Discord bot ever has that folder, so MISSING is the normal case for
+-- everyone else and isn't "turned off".
 function ns.InboxSource()
   if Drop() then return "addon" end
   local info = (C_AddOns and C_AddOns.GetAddOnInfo) or GetAddOnInfo
   if info then
     local ok, name, _, _, _, reason = pcall(info, INBOX_ADDON)
-    if ok and name then return "off", reason end
+    if ok and name and tostring(reason or ""):upper() ~= "MISSING" then return "off", reason end
   end
   return "legacy"
 end

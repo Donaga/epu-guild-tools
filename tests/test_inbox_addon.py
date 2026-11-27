@@ -85,6 +85,15 @@ A.ex('__log = {}; __ns.db.inboxDropSeen = nil'); A.ex("__fire('PLAYER_ENTERING_W
 log = [A.ev('__log[%d]' % i) for i in range(1, A.ev('#__log') + 1)]
 check('and officers are told to turn it on', any('Discord inbox' in str(m) and 'turn it on' in str(m).lower() for m in log)
       and A.ev('__ns.db.inboxDropSeen') is None)
+# Any PC without the bot (other officers, sync helpers): WoW names the optional
+# dependency anyway, with reason MISSING. That's not "turned off".
+A.ex("GetAddOnInfo = function(n) if n == 'EPUGuild_Inbox' then return n, nil, nil, false, 'MISSING' end end")
+check('an inbox folder that isn\'t there counts as not installed', A.ev('(__ns.InboxSource())') == 'legacy')
+A.ex('__log = {}'); A.ex("__fire('PLAYER_ENTERING_WORLD', false, true)"); tick(20)
+log = [A.ev('__log[%d]' % i) for i in range(1, A.ev('#__log') + 1)]
+check('and officers without it get no warning', not any('Discord inbox' in str(m) for m in log))
+A.ex("GetAddOnInfo = function(n) if n == 'EPUGuild_Inbox' then return n, 'Discord inbox', '', false, 'INTERFACE_VERSION' end end")
+check('an inbox folder that is there but won\'t load is still spotted', A.ev('(__ns.InboxSource())') == 'off')
 A.ex('GetAddOnInfo = nil')
 check('with neither, only the old file is read', A.ev('__ns.InboxSource()') == 'legacy')
 A.ex("EPUGuildInboxDrop = {entries={}, chat={{id='a',t=1,who='A',msg='new'}}}; EPUGuildDiscordChat = {{id='a',t=1,who='A',msg='new'},{id='b',t=2,who='B',msg='old'}}")
