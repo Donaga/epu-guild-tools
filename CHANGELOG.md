@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+A /reload is enough after updating: this version adds no new files.
+
+- **No more false "Discord inbox addon is installed but not loaded (missing)" warning.** Officers and sync helpers saw it at login on every PC except the one that runs the Discord bot. The inbox addon only ever exists on the bot's PC, so its absence anywhere else is normal. EPU now warns only when the inbox folder is there but WoW didn't load it (turned off in the AddOns list, out of date and so on), and the Officer page no longer says it's turned off when it simply isn't installed.
+
 ## 0.40.0
 
 Restart WoW fully after updating (quit the game, not just /reload): this version adds a new file, GuildVault.lua.
